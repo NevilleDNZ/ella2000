@@ -1,0 +1,342 @@
+DECS layout_tables CONTEXT VOID USE putstrings :
+
+{ " Id: layout_tables.sta,v 1.1 91/10/14 14:30:16 edcad Exp $" }
+configinfo A68CONFIG "$Id: layout_tables.a68,v 34.2 1995/03/29 13:02:56 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:11:90  Extracted from ella_layout, common to simple_layout.  DJS
+13:01:93  Extend classes, and move space computation procedures here.  DJS
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.003 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE INDENTDATA = STRUCT( INT step,
+                              dither );
+
+BOOL format_changes := TRUE;
+
+PROC layout_format_changed = BOOL:
+BEGIN
+BOOL result = format_changes;
+
+    format_changes := FALSE;
+    result
+END;
+
+
+{{ This is a lookup table that converts a character to its appropriate class }}
+VECTOR[ ]INT char_types =
+            ( 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+              0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+              1,  0, 21, 28,  0, 12, 15, 27,  6,  7, 12, 12, 18, 12, 20, 13,
+              5,  5,  5,  5,  5,  5,  5,  5,  5,  5, 19, 20, 12, 25, 12, 22,
+             23,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+              2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2, 10, 29, 11,  0,  4,
+              0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+              4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  8, 24,  9,  0,  0 );
+INT     no_class = 0,
+     space_class = 1,
+     upper_class = 2,
+    fnname_class = 3,
+     lower_class = 4,
+     digit_class = 5,
+       orb_class = 6,
+       crb_class = 7,
+       ocb_class = 8,
+       ccb_class = 9,
+       osb_class = 10,
+       csb_class = 11,
+        op_class = 12,
+     slash_class = 13,
+slashslash_class = 14,
+ ampersand_class = 15,
+    dotdot_class = 16,
+   becomes_class = 17,
+     comma_class = 18,
+     colon_class = 19,
+  stepterm_class = 20,
+    string_class = 21,
+     qmark_class = 22,
+        at_class = 23,
+    stroke_class = 24,
+    equals_class = 25,
+        to_class = 26,
+     prime_class = 27,
+      hash_class = 28,
+ backslash_class = 29,
+forcespace_class = 32,
+     num_classes = 32;
+
+
+{{{ 0 = ILLEGAL  { will cause index out of bounds }
+    1 = SPACE                ( space )
+    2 = LANGUAGE WORD        ( lwd )
+    3 = FUNCTION NAME        ( fnname )
+    4 = LOWERCASE NAME       ( lcname )
+    5 = DIGIT                ( digit )
+    6 = OPEN ROUND BRACKET   ( orb )
+    7 = CLOSE ROUND BRACKET  ( crb )
+    8 = OPEN CURLY BRACKET   ( ocb )
+    9 = CLOSE CURLY BRACKET  ( ccb )
+   10 = OPEN SQUARE BRACKET  ( osb )
+   11 = CLOSE SQUARE BRACKET ( csb )
+   12 = OPERATOR             ( op )
+   13 = SLASH                ( slash )
+   14 = SLASHSLASH           ( slashslash )
+   15 = AMPERSAND            ( and )
+   16 = DOTDOT               ( dotdot )
+   17 = BECOMES              ( becomes )
+   18 = COMMA                ( comma )
+   19 = COLON                ( colon )
+   20 = DOT or SEMICOLON     ( dot, semi )
+   21 = STRING               ( string )
+   22 = QUESTION MARK        ( qmark )
+   23 = AT                   ( at )
+   24 = STROKE               ( stroke  | )
+   25 = EQUALS               ( equals )
+   26 = TO                   ( to )
+   27 = PRIME                ( prime )
+   28 = HASH                 ( hash )
+   29 = BACKSLASH            ( backslash )
+   30
+   31
+   32 = FORCE SPACE          ( Set from outside to force a space )
+}}}
+
+{{  The following table controls the placing of spaces between items.
+    If the items in question are designated A and B such that B follows A
+    then the class of item A selects a column of the table, the class of item
+    B selects a row of the table counting right to left. If the intersect
+    contains a one then a space is required.
+}}
+
+VECTOR[ num_classes ]BITS class_table :=
+                            { 33322222222221111111111
+                              21098765432109876543210987654321         }
+                          ( 2r10000000000000000000000000000000,   {  1 }
+                            2r10001111111111111111110111111110,   {  2 }
+                            2r10001111111111110101100111011110,   {  3 }
+                            2r10001011110111110100100101011110,   {  4 }
+                            2r10001111111111110100100101011110,   {  5 }
+                            2r10001111111111110100101011011110,   {  6 }
+                            2r10001111111111111111111110000110,   {  7 }
+                            2r10001111111111110100101101111110,   {  8 }
+                            2r10001111111111111111111011100110,   {  9 }
+                            2r10001111111111110100101110000110,   { 10 }
+                            2r10001111111111111111111111100110,   { 11 }
+                            2r10001111111111111111111111011110,   { 12 }
+                            2r10001111111111111111101110100110,   { 13 }
+                            2r10001111111111111111101110100110,   { 14 }
+                            2r10001111111111111111111111111110,   { 15 }
+                            2r10001011111011111111101110100110,   { 16 }
+                            2r10001111111111111111111111111110,   { 17 }
+                            2r10001011111011111111101010100000,   { 18 }
+                            2r10001011111111111111101010100010,   { 19 }
+                            2r10001011111011111111101010100000,   { 20 }
+                            2r10001111111111110111111111011110,   { 21 }
+                            2r10001111111111111111101111011110,   { 22 }
+                            2r10001111111111111111111111111110,   { 23 }
+                            2r10001111111111111111111111111110,   { 24 }
+                            2r10001111111111111111111111111110,   { 25 }
+                            2r10001111111111111111111111111110,   { 26 }
+                            2r10001111111111110111111111010110,   { 27 }
+                            2r10001111111111111111111111110110,   { 28 }
+                            2r10001111111111111111101110000110,   { 29 }
+                            2r10000000000000000000000000000000,   { 30 }
+                            2r10000000000000000000000000000000,   { 31 }
+                            2r11111111111111111111111111111111 ); { 32 }
+                            { 33322222222221111111111
+                              21098765432109876543210987654321         }
+
+INT decstep_clause = 1,
+        dec_clause = 2,
+        let_clause = 3,
+       make_clause = 4,
+       join_clause = 5,
+       case_clause = 6,
+         if_clause = 7,
+      print_clause = 8,
+    seqstat_clause = 9,
+        str_clause = 10,
+    newalts_clause = 11,
+      terms_clause = 12,
+      block_clause = 13,
+   serorseq_clause = 14,
+    monadic_clause = 15,
+  num_clause_types = 15;
+
+BITS            dont_fold = 2r0,
+
+        fold_if_gt_dither = 2r01,
+           fold_if_no_fit = 2r10,
+         clause_head_mask = 2r11,
+
+ fold_at_sep_if_necessary = 2r0100,
+    fold_at_sep_if_folded = 2r1000,
+        fold_at_every_sep = 2r1100,
+          clause_sep_mask = 2r1100,
+
+             take_newline = 2r010000,
+            take_extra_nl = 2r100000,
+         clause_tail_mask = 2r110000,
+
+           fold_to_indent = 2r01000000,
+            fold_to_refpt = 2r10000000,
+           fold_mode_mask = 2r11000000,
+
+              mark_indent = 2r0100000000,
+              step_indent = 2r1000000000,
+              indent_mask = 2r1100000000;
+
+VECTOR[ num_clause_types ]BITS clause_states :=
+                                   {   |------------- indent_mode
+                                       | |----------- fold_mode
+                                       | | |--------- clause_tail
+                                       | | | |------- clause_sep
+                                      ||||||||||----- clause_head  }
+                                  ( 2r0010101100,    {  1 decstep  }
+                                    2r1001010100,    {  2 dec      }
+                                    2r1010011100,    {  3 let      }
+                                    2r1010011100,    {  4 make     }
+                                    2r1010011100,    {  5 join     }
+                                    2r1010001001,    {  6 case     }
+                                    2r1010001001,    {  7 if       }
+                                    2r1010011100,    {  8 print    }
+                                    2r0010011010,    {  9 seqstat  }
+                                    2r1110000100,    { 10 str      }
+                                    2r1010000100,    { 11 newalts  }
+                                    2r0010000110,    { 12 terms    }
+                                    2r1001011100,    { 13 block    }
+                                    2r0001011101,    { 14 serorseq }
+                                    2r1110000110 );  { 15 monadic  }
+
+PROC get_clause_state = (INT type )BITS: clause_states[ type ];
+
+PROC set_clause_state = (INT type, BITS item, BOOL state )BITS:
+BEGIN
+REF BITS entry = clause_states[ type ];
+BITS current = entry;
+
+    format_changes := TRUE;
+    entry := IF state THEN current OR item
+                      ELSE current AND NOT item
+             FI;
+    current
+END;
+
+INT next_class := no_class,
+    last_class := space_class;
+
+PROC set_next_class = (INT class )VOID: next_class := class;
+PROC set_last_class = (INT class )VOID: last_class := class;
+
+PROC set_class_table = (INT left, right, BOOL state )BOOL:
+BEGIN
+    IF left <= space_class OREL right <= space_class THEN
+        FALSE
+  ELIF left >= forcespace_class OREL right >= forcespace_class THEN
+        TRUE
+  ELSE
+    BITS col = 2r1 SHL ( left - 1 );
+    REF BITS row = class_table[ right ];
+    BITS current = row AND col;
+
+        format_changes := TRUE;
+        row := IF state THEN row OR col ELSE row AND NOT col FI;
+        current /= 2r0
+    FI
+END;
+
+PROC space_required = (VECTOR[ ]CHAR n )BOOL:
+BEGIN
+INT isize := UPB n;
+INT class = IF next_class /= no_class THEN next_class
+                                      ELSE char_types[ ABS n[ 1 ] + 1 ]
+            FI;
+BOOL need_space = ( ( 2r1 SHL ( last_class - 1 ) AND
+                      class_table[ class ] ) /= 2r0 );
+
+    last_class := IF class = fnname_class ANDTH
+                     char_types[ ABS n[ 1 ] + 1 ] /= upper_class THEN
+                        forcespace_class
+                ELIF isize = 1 OREL
+                      next_class /= no_class OREL
+                      class = string_class   OREL
+                      class = prime_class    OREL
+                      class = upper_class    OREL
+                      class = lower_class    OREL
+                      class = digit_class    THEN
+                        class
+                ELSE
+                        char_types[ ABS n[ isize ] + 1 ]
+                  FI;
+    next_class := no_class;
+    need_space
+END;
+
+INDENTDATA indent_data := ( 3, 3 );
+
+PROC get_indent_data = INDENTDATA: indent_data;
+
+PROC set_indent_data = (INT step, dither )VOID:
+BEGIN
+    format_changes := TRUE;
+    indent_data := ( step, dither )
+END;
+
+
+    SKIP
+KEEP INDENTDATA,
+     no_class, space_class, upper_class, slash_class, op_class,
+     orb_class, crb_class, ocb_class, ccb_class, osb_class, csb_class,
+     digit_class, lower_class, string_class, dotdot_class, slashslash_class,
+     comma_class, colon_class, stepterm_class, ampersand_class,
+     becomes_class, qmark_class, at_class, stroke_class, equals_class,
+     to_class, fnname_class, prime_class, hash_class,
+     backslash_class, forcespace_class, num_classes,
+     set_next_class, set_last_class, set_class_table, space_required,
+     let_clause, make_clause, join_clause, case_clause, if_clause, print_clause,
+     decstep_clause, dec_clause, seqstat_clause, str_clause, newalts_clause,
+     terms_clause, block_clause, monadic_clause, serorseq_clause,
+     num_clause_types,
+     dont_fold, fold_if_no_fit, fold_if_gt_dither, fold_at_sep_if_necessary,
+     fold_at_sep_if_folded, fold_at_every_sep, take_newline,
+     take_extra_nl, clause_head_mask, clause_sep_mask, clause_tail_mask,
+     fold_to_indent, fold_to_refpt, fold_mode_mask,
+     mark_indent, step_indent, indent_mask,
+     get_clause_state, set_clause_state, get_indent_data, set_indent_data,
+     layout_format_changed
+FINISH
