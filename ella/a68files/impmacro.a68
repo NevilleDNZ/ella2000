@@ -1,0 +1,1430 @@
+DECS impmacro CONTEXT VOID USE putstrings, osinterface,  basics,  charset,
+     compmodes, databasebuffers, messageproc:
+
+{ " Id: impmacro.sta,v 1.1 91/10/14 14:27:05 edcad Exp $" }
+configinfo A68CONFIG "$Id: impmacro.a68,v 34.2 1995/03/29 13:03:26 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+               IMPMACRO created, simplify moved from compiler. MGH
+0?:10:88    inkept and syfaultp moved from compiler. EVW
+13:10:88    Porting changes included - use of shorten and test removed. EVW
+04:11:88    Add "-" to text of radix form of minint.  EVW
+15:11:88    implicit_macro changed to give TRUE if either input is flt. MGH
+30:11:88    RSRE Bug 54. Inkept now gives correct outofdate value.  EVW
+06:02:89    R4B092.  outid changed so that nullid is output as ? (INTVAR
+                        prob.). MGH
+10:02:89    R4B103.  Check added to type structure check in
+                        implicit_macro.  MGH
+18:09:89    R4B465.  implicit_macro_type error. Add CASE clause to ensure
+                  when PROC `sttorow' is called that the result is a ROW. MGH
+14:08:89    CR 642. Updated for Kernel Interface.  DCT
+22:11:89    inkeptchar replaced by inkeptid. EVW
+06:02:90    Changes to implicit_macro for constant macro parameters. MGH
+29:03:90    Macros can now have function parameters. JIT
+27:06:90    Fntypes, multiple joins/makes, named outputs. MGH
+16:07:90    Macros can now have macro parameters. JIT
+16:10:90    CNULLT changed to read in type rather than integer.  MGH
+21:03:91    Major change to the way error messages are handled. JIT
+30:05:91    R6B40.   In syfaultp_ext OUSE needed as FLT appears in TYPE,
+                        CTYPE and INTEGER. JIT
+02:08:91    Extension to macro TYPE parameters. JIT
+21:10:91    R6B81. PROC implicit_macro_int simplified.  MGH
+23:10:91    Updated for new assembler modes. JIT
+20:11:91    Module keepsakebuffers renamed databasebuffers.  DCT
+19:03:92    Attribute declaration and use added. JIT
+23:03:92    Constant string can now be a series of strings. JIT
+24:03:92    FNSETs removed. JIT
+06:04:92    Initial work for port names done. JIT
+15:04:92    Implicit_macro_int now called with UNCHECKEDINTs. JIT
+02:06:92    Const-Void added to `inctype' and `outctype'.  MGH
+10:06:92    PROC outtype changed to deliver `()' instead of `void'.  MGH
+30:06:92    R6B114 GETTYPE used in calls of implicit_macro_type. JIT
+11:11:92    R6B130 Correction to charcheck vector for ELLA characters. JIT
+25:02:93    Constant index, trim, repl, cond and attributes added. EVW
+               attribute modes reorganised. EVW
+08:03:92    macro parameters reorganised. EVW
+26:03:93    Change IS/ISNT nullid tests to UPB tests.  DJS
+07:07:93    R6B161. FALSE in implicit_macro always delivers error message.EVW
+02:08:93    R6B165. correction on PROC inmparams to attrname. EVW
+02:08:93    R6B167. transmission of errors in simplify. EVW
+03:08:93    R6B156. scope set to wrong values for MAC macparams in inkept.EVW
+04:08:93    R6B168. wrong order of cprimch/cprimst in inctype. EVW
+04:08:93    R6B169. typeing error in skipast. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.039 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+
+   PROC inkept_ext = (PROC (ID)IDINFO findid, BOOL export,
+                      PROC (IDINFO)REF IDS newextid,
+                      PROC (REF FNDEC)REF FNS newextfn,
+                      PROC INT inkeptint,
+                      PROC ID inkeptid,
+                      REF [] STRUCT (INT type, value) charset,
+                      PROC(INT, VECSTR)VOID fault )VOID:
+
+
+   (  ID id; REF PRIMSET primset;
+      ATTRID attrid; TYPEID typeid; INTID intid; CTYPEID ctypeid;
+      REF VECTOR [] TYPE types;    REF VECTOR [] BOOL old;
+      REF VECTOR [] INTEGER ints;  REF VECTOR [] BOOL oldints;
+      REF VECTOR [] CTYPE ctypes;  REF VECTOR [] BOOL oldctypes;
+      REF VECTOR [] ATTR attrs;    REF VECTOR [] BOOL oldattrs;
+      REF IDINFO idinfo, idinfo1;
+      INT notypes, noints, noctypes, noattrs, nofns, v;
+
+      BOOL outofdate:= FALSE;
+      INT next:=-1;
+
+       PROC in = INT:
+       (  IF next /= -1
+          THEN  INT i = next; next:= -1; i
+          ELSE  inkeptint
+          FI
+       );
+
+      PROC inid = ID:  inkeptid;
+
+      PROC skipinteger = VOID:
+      BEGIN
+        CASE INT ii := in; ii IN
+         CO iconst CO in,
+         CO iname CO  in,
+         CO idop CO   (in; skipinteger; skipinteger),
+         CO imop CO   (in; skipinteger),
+         CO icond CO  (skipinteger; skipinteger; skipinteger),
+         CO iparam CO in,
+         CO ivarmult CO in,
+         CO icheck CO (in; skipinteger; skipinteger),
+         CO iconsttext CO (in; inid)
+         OUT
+            IF ii = idef
+              THEN in
+              ELIF ii = ibracket
+                  THEN skipinteger
+                  ELSE fault(0, "skipinteger")
+            FI
+         ESAC
+      END;
+
+      PROC ininteger = (REF BOOL outofdate) INTEGER:
+      BEGIN
+        CASE INT ii := in; ii IN
+         CO iconst CO in,
+         CO iname CO ( INT index := in;
+                       outofdate := outofdate OREL oldints[index];
+                       ints[index]
+                     ),
+         CO idop CO  ( INT opno = in;
+                       INTEGER l = ininteger(outofdate),
+                               r = ininteger(outofdate);
+                       HEAP INTDOP:= ( opno, l, r )
+                     ),
+         CO imop CO  ( INT opno = in;
+                       INTEGER r = ininteger(outofdate);
+                       HEAP INTMOP:= ( opno, r )
+                     ),
+         CO icond CO ( INTEGER cond = ininteger(outofdate),
+                                  t = ininteger(outofdate),
+                                  f = ininteger(outofdate);
+                       HEAP INTCOND:= ( cond, t, f )
+                     ),
+         CO iparam CO (IPARAM ip; p OF ip := in; ip),
+         CO ivarmult CO  ints[in],
+         CO icheck CO (in; INTEGER ans = ininteger(outofdate); skipinteger;
+                       ans
+                      )
+         OUT
+            IF ii = idef
+              THEN ( INT index := in;
+                     outofdate := outofdate OREL oldints[index];
+                     ints[index]       {holds integer expression}
+                   )
+              ELIF ii = ibracket
+                  THEN HEAP IBRACKET := MAKEIBRACKET ininteger(outofdate)
+              ELIF ii = iconsttext
+                  THEN HEAP INTTEXT := (in, inid)
+                  ELSE fault(0, "ininteger"); flt
+            FI
+         ESAC
+      END;
+
+      PROC instrings = REF STRINGLIST:
+      BEGIN
+         REF STRINGLIST strings := nilstringlist;
+         INT nostrings := in;
+         WHILE nostrings > 0
+         DO strings := HEAP STRINGLIST := (inid, strings);
+            nostrings MINUSAB 1
+         OD;
+         strings
+      END;
+
+      PROC length = (REF STRINGLIST strings) INT:
+      BEGIN
+        INT total := 0;
+        REF STRINGLIST sl := strings;
+        WHILE sl ISNT nilstringlist
+        DO total PLUSAB UPB (id OF sl);
+           sl := rest OF sl
+        OD;
+        total
+      END;
+
+      PROC inattrs = (REF BOOL outofdate) ATTR:
+      BEGIN
+         PROC ast = (REF BOOL outofdate) REF ATTRSTR:
+         ( ATTR a;
+           IF (next:= in)= zero
+           THEN next:=-1; nilattrstr
+           ELSE a := inattrs(outofdate); HEAP ATTRSTR:= (a, ast(outofdate))
+           FI
+         );
+
+        INT attsort = in;
+        IF attsort = attid
+        THEN INT attrno = in;
+             outofdate := outofdate OREL oldattrs[attrno];
+             attrs[attrno]
+        ELIF attsort = attdata
+        THEN ID classname = inid;
+             REF STRINGLIST strings := instrings;
+             HEAP ATTRDATA := (classname, strings)
+        ELIF attsort = attbracket
+        THEN ATTR val = inattrs(outofdate);
+             MAKEABRACKET val
+        ELIF attsort = attstr
+        THEN ast(outofdate)
+        ELSE attrnull
+        FI
+      END;
+
+
+
+
+      PROC intype = (REF BOOL outofdate) TYPE:
+      (  INTEGER i;  TYPE t;  INT index;
+         PROC tst = (REF BOOL outofdate) REF ST:
+         ( TYPE t;
+           IF (next:= in)= end
+           THEN next:=-1; NIL
+           ELSE t := intype(outofdate); HEAP ST:= (t, tst(outofdate))
+           FI
+         );
+
+         CASE INT ii := in; ii-9 IN
+         CO tnull CO  typenull,
+         CO tnamed CO ( index := in;
+                        outofdate := outofdate OREL old[index];
+                        types[index]
+                      ),
+         CO trow CO   ( i:= ininteger(outofdate);
+                        HEAP ROW:= (intype(outofdate), i)
+                      ),
+         CO tst CO    tst(outofdate),
+         CO tparam CO ( index := in;
+                        outofdate := outofdate OREL old[index];
+                        types[index]
+                      ),
+         CO tfn CO    ( t := intype(outofdate);
+                        HEAP FNTYPE:= (t, intype(outofdate))
+                      )
+         OUT IF ii = tbracket
+             THEN HEAP TBRACKET := MAKETBRACKET intype(outofdate)
+             ELIF ii = tstring
+             THEN (i := ininteger(outofdate);
+                   HEAP TSTRING := (i, intype(outofdate))
+                  )
+             ELIF ii = tvoid
+             THEN typevoid
+             ELSE next := ii; SKIP
+             FI
+         ESAC
+      );
+
+
+      PROC palts = (REF BOOL outofdate, INT index, v, scope, TYPE primset)
+                                                                    REF PALTS:
+      (  REF TYPE rt; TYPE t; REF IDINFO idinfo;
+         IF (next:= in)= end THEN next:=-1; NIL ELSE
+            t:= intype(outofdate); rt:= (t | (TNULL) NIL | HEAP TYPE:= t);
+            idinfo := HEAP IDINFO := (scope, v, FALSE, FALSE, TRUE, export,
+                                      inid, PRIMID (primset, index));
+            IF scope = -1 THEN newextid(idinfo) FI;
+            HEAP PALTS:= (idinfo, rt,
+                                 palts(outofdate, index+1, v, scope, primset))
+         FI
+      );
+
+
+      PROC inprimtype = (REF BOOL outofdate, INT tno, v, ID id)TYPE:
+      BEGIN
+         idinfo:= idinfo OF newextid((-1, v, FALSE, FALSE, TRUE, export, id,
+                                                                       notdec));
+         CASE INT ii = in; ii-49 IN
+         CO pidalts CO
+         (  primset:= HEAP PRIMSET;
+            (REF PRIMSET  (primset)):=
+                             (idinfo, tno, palts(outofdate, 1, v, -1, primset))
+         ),
+         CO prange CO
+         (  idinfo1:= idinfo OF newextid((-1, v, FALSE, FALSE, TRUE, export,
+                               inid, PRIMID  (primset:= HEAP PRIMSET, 0) ));
+            INTEGER lwb = ininteger(outofdate),
+                    upb = ininteger(outofdate);
+           (REF PRIMSET  (primset)):= (idinfo, tno, PRANGE  (idinfo1, lwb, upb))
+         )
+        OUT
+          IF ii = pstring
+          THEN (REF CHARALTS chalts := nilcharalts;
+                REF REF CHARALTS charalts := chalts;
+                VECTOR [UPB charset] BOOL charcheck;
+                FORALL i IN charcheck DO i:=FALSE OD;
+                idinfo1:= idinfo OF newextid((-1, v, FALSE,FALSE,TRUE,export,
+                                              inid,
+                                PRIMID  (primset:= HEAP PRIMSET,stringindex)));
+                INT numofalts := in;
+                WHILE INT ij = in; ij/= end
+                DO IF ij = pchar
+                   THEN CHAR c := inid[1];
+                        charcheck[ABS c] := TRUE;
+                        REF REF CHARALTS (charalts) := HEAP CHARALTS
+                                                   := (c, nilcharalts);
+                        charalts := rest OF charalts
+                   ELSE CHAR c1 := inid[1], c2 := inid[1];
+                        CHARSET char1 := charset[ABS c1],
+                                char2 := charset[ABS c2];
+                        INT chartype = type OF char1;
+                        FOR i FROM value OF char1 TO value OF char2
+                        DO FOR j TO UPB charset
+                           DO IF value OF charset[j] = i ANDTH
+                                 type OF charset[j] = chartype
+                              THEN charcheck[j] := TRUE
+                              FI
+                           OD
+                        OD;
+                        REF REF CHARALTS (charalts) := HEAP CHARALTS
+                                := (HEAP CHARRANGE := (c1, c2), nilcharalts);
+                       charalts := rest OF charalts
+                   FI
+                OD;
+                PSTRING pstring1 := (idinfo1,
+                                     HEAP VECTOR [UPB charset] BOOL :=charcheck,
+                                     chalts);
+                (REF PRIMSET (primset)):= (idinfo, tno, pstring1)
+             )
+          ELSE next := ii;
+               TYPE ty = intype(outofdate);
+               CASE ty IN
+               (TNULL) typenull
+               OUT HEAP NAMED:= (idinfo, tno, ty)
+               ESAC
+          FI
+        ESAC
+     END;
+
+      PROC inddecs = (REF BOOL outofdate, INT wherefrom) REF DDECS:
+      (  INT nameno;
+         REF DDECS decs := nildecs;
+         REF REF DDECS decsptr := decs;
+         WHILE (next := in) /= end
+         DO TYPE type = intype(outofdate);
+            REF IDS ids := nilids;
+            REF REF IDS idsptr := ids;
+            WHILE (nameno := in) /= zero
+            DO next := -1;
+               HEAP DECIDS decids :=
+                         (nameno, wherefrom, NIL, type, jtrue, jtrue, flt, flt);
+               HEAP IDINFO idinfo :=
+                         (-1, 0, FALSE, FALSE, TRUE, FALSE, inid, decids);
+               REF REF IDS (idsptr) := HEAP IDS
+                                    := (idinfo, TRUE, attrnull, nilids);
+               idsptr := rest OF idsptr
+            OD;
+            REF REF DDECS (decsptr) := HEAP DDECS := (type, ids, nildecs);
+            decsptr := rest OF decsptr
+         OD;
+         next := -1;
+         decs
+      );
+
+      PROC skipattrs = VOID:
+      (  PROC skip ast = VOID:
+         ( WHILE (next:= in) /= zero DO skipattrs OD;
+           next:=-1
+         );
+         INT attsort = in;
+         IF attsort = attid
+         THEN in
+         ELIF attsort = attdata
+         THEN inid;
+              INT nostrings = in;
+              TO nostrings DO inid OD
+         ELIF attsort = attbracket
+         THEN skipattrs
+         ELIF attsort = attstr
+         THEN skip ast
+         ELSE {attnull} SKIP
+         FI
+      );
+
+      PROC (INT, REF BOOL, INT) REF MPARAMS inmparams;
+
+      PROC infndec = (REF BOOL outofdate, INT fnno, BOOL export) REF FNDEC:
+      ( ID id = inid;
+        INT sort = in;    BOOL macro = (in = 1);
+        INT mparamno = in;
+        REF MPARAMS mp := inmparams(fnno, outofdate, mparamno);
+        skipattrs;{{?? sort out @on FN params }}
+        in; {normal}
+        REF DDECS inputs := inddecs(outofdate, inputtok),
+                  outputs := inddecs(outofdate, outputtok);
+        TYPE param = ddecs_type(inputs),
+              ans = ddecs_type(outputs);
+        HEAP FNINFO fi
+             := ((fnno=1|-1|fnno), 0, fn_ok, FALSE, outofdate, FALSE, export);
+        HEAP FNDEC := (fi, sort, fnno, macro, id, mparamno, mp, NIL,
+                       attrnull, inputs, outputs, param, ans, 0)
+      );
+
+      inmparams := (INT fnno, REF BOOL outofdate, INT num) REF MPARAMS:
+      ( TYPE type;
+        REF MPARAMS ans := nilmparams;
+        REF REF MPARAMS nextptr := ans;
+        FOR index TO num
+        DO INT sort = in;
+           INT macsort = in;
+           MACSORT value =
+             IF macsort = fnstart
+             THEN REF FNDEC fdec = infndec(outofdate, in, FALSE);
+                  in; {fnend}
+                  fdec
+             ELSE inid; {Nullid}
+                  INT declno = in;
+                  in; {attrnull}
+                  HEAP MACINFO macinfo
+                      := (nullid, sort, fnno, index, declno, attrnull);
+                  IF macsort = attrname
+                  THEN REF ATTRVAR avar = MAKEATTRVAR(macinfo);
+                       attrs[declno] := avar;
+                       oldattrs[declno] := FALSE;
+                       avar
+                  ELIF macsort = intname
+                  THEN in; {inull}
+                       REF INTVAR ivar = MAKEINTVAR(macinfo);
+                       ints[declno] := ivar;
+                       oldints[declno] := FALSE;
+                       ivar
+                  ELIF macsort = typename
+                  THEN type := inprimtype(outofdate, declno, 0, nullid);
+                       HEAP TYPEVAR tvar := (macinfo, type);
+                       types[declno] := tvar;
+                       old[declno] := FALSE;
+                       tvar
+                  ELIF macsort = constname
+                  THEN in; {cnullt}
+                       type := intype(outofdate);
+                       HEAP CTYPEVAR cvar := (macinfo, type);
+                       ctypes[declno] := cvar;
+                       oldctypes[declno] := FALSE;
+                       cvar
+                  ELSE fault(0, "inmparams"); SKIP
+                  FI
+              FI;
+            REF REF MPARAMS (nextptr) := HEAP MPARAMS
+                                      := (sort, index, value, NIL);
+            nextptr := rest OF nextptr
+        OD;
+        ans
+      );
+
+
+      PROC skiptype = VOID:
+      (  INTEGER i;  TYPE t;  INT index;
+         PROC tst = VOID:
+           IF (next := in) = end
+           THEN next := -1
+           ELSE skiptype; tst
+           FI;
+
+         PROC skippalts = VOID:
+           IF (next := in) = end
+           THEN next := -1
+           ELSE skiptype; inid; skippalts
+           FI;
+
+         PROC skipchars = VOID:
+           IF (next := in) = end
+           THEN next := -1
+           ELSE INT charsort = in;
+                CASE charsort - 128 IN
+                { pchar     } inid,
+                { pcharange } (inid; inid)
+                OUT SKIP
+                ESAC;
+                skipchars
+           FI;
+
+
+         CASE INT ii := in; ii-9 IN
+         CO tnull CO  SKIP,
+         CO tnamed CO in,
+         CO trow CO   ( skipinteger; skiptype),
+         CO tst CO    tst,
+         CO tparam CO in,
+         CO tfn CO    ( skiptype; skiptype)
+         OUT IF ii = tbracket
+             THEN skiptype
+             ELIF ii = tstring
+             THEN (skipinteger; skiptype)
+             ELIF ii = tvoid
+             THEN SKIP
+             ELIF ii = pidalts
+             THEN skippalts
+             ELIF ii =  prange
+             THEN ( inid; skipinteger; skipinteger)
+             ELIF ii = pstring
+             THEN (inid; in; skipchars)
+             ELSE next := ii; SKIP
+             FI
+         ESAC
+      );
+
+
+      PROC inctype = (REF BOOL outofdate) CTYPE:
+      (  INTEGER i, i2; INT index;  ID id;  TYPE type;   CTYPE ct;
+         REF IDINFO idinfo;
+
+         PROC ptype = (REF BOOL outofdate) TYPE:
+         ( index := in;
+           outofdate := outofdate OREL old[index];
+           types[index]
+         );
+
+         PROC cst = (REF BOOL outofdate) REF CST:
+         ( CTYPE ct;
+           IF (next:= in) = end
+           THEN next:= -1; nilcst
+           ELSE ct := inctype(outofdate);  HEAP CST := (ct, cst(outofdate))
+           FI
+         );
+         PROC calts = (REF BOOL outofdate) REF CALTS:
+         ( CTYPE ct;
+           IF (next:= in) = end
+           THEN next:= -1; nilcalts
+           ELSE ct := inctype(outofdate);  HEAP CALTS := (ct, calts(outofdate))
+           FI
+         );
+         CASE INT ii := in; ii-15 IN
+         CO cprim  CO  ( TYPE pt = ptype(outofdate);
+                         HEAP PRIMID := (pt, in)
+                       ),
+         CO cprimi CO  ( TYPE pt = ptype(outofdate);
+                         HEAP CPINDEX:= (pt, ininteger(outofdate))
+                       ),
+         CO cprimr CO  ( TYPE pt = ptype(outofdate);
+                         INTEGER lwb = ininteger(outofdate),
+                                 upb = ininteger(outofdate);
+                         HEAP CPRANGE:= (pt, lwb, upb)
+                       ),
+         CO cprimu CO  ( TYPE pt = ptype(outofdate);
+                         HEAP PRIMID pi := (pt, in);
+                         HEAP CUNN := (pi, inctype(outofdate))
+                       ),
+         CO cst    CO  cst(outofdate),
+         CO crow   CO  ( i := ininteger(outofdate);
+                         HEAP CROW := (inctype(outofdate), i)
+                       ),
+         CO cnull  CO  ( fault(0, "inctype1"); SKIP ),
+         CO calt   CO  calts(outofdate)
+         OUSE (ii - cstring + 1) IN
+         CO cstring CO ( i := ininteger(outofdate);
+                         HEAP CPSTRING:= (i, inctype(outofdate), nilstringlist)
+                       ),
+         CO cprimch CO ( HEAP CPCHAR := (ptype(outofdate), inid[1]) ),
+         CO cprimst CO ( HEAP PRIMID pi := (ptype(outofdate), -1);
+                         REF STRINGLIST strings := instrings;
+                         HEAP CPSTRING := (length(strings), pi, strings)
+                       ),
+         CO cprimchr CO( type := ptype(outofdate);  id:= inid;
+                         HEAP CPCHRANGE := (type, id[1], inid[1])
+                       )
+         OUSE (ii - cindex) + 1 IN
+         CO cindex CO  ( ct := inctype(outofdate);
+                         i := ininteger(outofdate);
+                         HEAP CINDEX := (ct, i)
+                       ),
+         CO ctrim  CO  ( ct := inctype(outofdate);
+                         i := ininteger(outofdate);
+                         HEAP CTRIM := (ct, i, ininteger(outofdate))
+                       ),
+         CO cvarmultCO ( index := in;
+                         id := inid;
+                         skipattrs;
+                         i := ininteger(outofdate);
+                         i2 := ininteger(outofdate);
+                         HEAP INTVARMULT iv := (index, i, i2, flt);
+                         HEAP INTID itd;
+                         i OF itd := iv;
+                         idinfo := HEAP IDINFO
+                            := (-1, -1, FALSE, FALSE, TRUE, FALSE, id, itd);
+                         ints[index] := iv;
+                         HEAP CREPL:= (HEAP IDS:= (idinfo, TRUE, attrnull, NIL),
+                                       inctype(outofdate))
+                       ),
+         CO cif    CO  ( i := ininteger(outofdate);
+                         ct := inctype(outofdate);
+                         HEAP CCOND := (i, ct, inctype(outofdate))
+                       )
+         OUT  IF ii = cnamed
+              THEN  index := in;
+                    outofdate := outofdate OREL oldctypes[index];
+                    ctypes[index]
+              ELIF ii = cbracket
+              THEN  MAKECBRACKET(inctype(outofdate))
+              ELIF ii = cquery
+              THEN  HEAP CQUERY cq; querytype OF cq := intype(outofdate); cq
+              ELIF ii = c_type
+              THEN  HEAP CNULLT ct; ct OF ct := intype(outofdate); ct
+              ELIF ii = cvoid
+              THEN constvoid
+              ELIF ii = cconc
+              THEN BOOL string = (in = 1); INT sort = in;
+                   ct := inctype(outofdate);
+                   HEAP CCONC := (string, sort, ct, inctype(outofdate))
+              ELIF ii = cattr
+              THEN ct := inctype(outofdate);
+                   skipattrs;
+                   HEAP CATTR := (ct, attrnull)
+              ELSE  fault(0, "inctype2"); SKIP
+              FI
+        ESAC
+      );
+
+
+
+      PROC inexttypes = (INT notypes)VOID:
+      (  INT typeno, vnno; ID id; IDINFO idinfo;
+         types:= HEAP VECTOR [notypes] TYPE;
+         old:= HEAP VECTOR [notypes] BOOL;
+         WHILE id:= inid; id /= nullid
+         DO  typeno:= in;  vnno:= in;
+             idinfo := findid(id);
+             CASE u OF idinfo IN
+             (TYPEID t) ( types[typeno]:= t OF t;
+                          old[typeno]:=
+                             outofdate OF idinfo OREL (vnno OF idinfo /= vnno)
+                        )
+             OUT fault(0, "inexttype")
+             ESAC;
+             skiptype;
+             in
+         OD
+      );
+
+      PROC inextints = (INT noints)VOID:
+      ( INT intno, vnno; ID id; IDINFO idinfo;
+        ints := HEAP VECTOR [noints] INTEGER;
+        oldints := HEAP VECTOR [noints] BOOL;
+        WHILE id:= inid ; id/= nullid
+        DO intno := in; vnno := in ;
+           idinfo := findid(id);
+           CASE u OF idinfo IN
+              (INTID i) ( ints[intno] := i OF i;
+                          oldints[intno]:=
+                             outofdate OF idinfo OREL (vnno OF idinfo /= vnno)
+                        )
+               OUT fault(0, "inextints")
+           ESAC
+        OD
+      );
+
+      PROC inextattrs = (INT noattrs)VOID:
+      ( INT attrno, vnno; ID id; IDINFO idinfo;
+        attrs := HEAP VECTOR [noattrs] ATTR;
+        oldattrs := HEAP VECTOR [noattrs] BOOL;
+        WHILE id:= inid ; id/= nullid
+        DO attrno := in; vnno := in ;
+           idinfo := findid(id);
+           CASE u OF idinfo IN
+           (ATTRID ad) ( attrs[attrno] := a OF ad;
+                         oldattrs[attrno]:=
+                               outofdate OF idinfo OREL (vnno OF idinfo /= vnno)
+                       )
+           OUT fault(0, "inextattrs")
+           ESAC
+        OD
+      );
+
+      PROC inextctypes = (INT noctypes)VOID:
+      ( INT ctypeno, vnno; ID id; IDINFO idinfo;
+        ctypes := HEAP VECTOR [noctypes] CTYPE;
+        oldctypes := HEAP VECTOR [noctypes] BOOL;
+        WHILE id:= inid ; id/= nullid
+        DO ctypeno := in; vnno := in ;
+           idinfo := findid(id);
+           CASE u OF idinfo IN
+           (CTYPEID ci) ( ctypes[ctypeno] := ct OF ci;
+                          oldctypes[ctypeno]:=
+                            outofdate OF idinfo OREL (vnno OF idinfo /= vnno)
+                        )
+               OUT fault(0, "inextctypes")
+           ESAC
+        OD
+      );
+
+      PROC skipddecs = VOID:
+      (  BOOL continue := TRUE;
+         WHILE continue
+         DO IF (next := in) = end
+            THEN next := -1;
+                 continue := FALSE
+            ELSE skiptype;
+                 WHILE in /= zero DO next := -1; inid OD
+            FI
+         OD
+      );
+
+      PROC inextfns = (INT num) VOID:
+      ( WHILE in /= zero
+        DO in; inid; in; in; in; in; in;
+           skipddecs; skipddecs; in; in; in
+        OD
+      );
+
+      CASE in - 64 IN
+      CO ktype CO
+      (  id:= inid; v:= in;
+         noattrs := in; noints:= in; notypes := in;
+         inextattrs(noattrs); inextints(noints); inexttypes(notypes);
+         skipattrs;
+         t OF typeid:= inprimtype(outofdate, -1, v, id);
+         u OF idinfo:= typeid;  outofdate OF idinfo := outofdate
+      ),
+      CO kint CO
+      (  id:= inid; v:= in; noattrs := in; noints:=in;
+         inextattrs(noattrs); inextints(noints);
+         idinfo:= idinfo OF newextid((-1,v,FALSE,FALSE,TRUE,export,id,notdec));
+         skipattrs;
+         INTEGER int1 := ininteger(outofdate);
+         i OF intid  := HEAP INTDEF := (idinfo, -1, int1);
+         u OF idinfo := intid;
+         outofdate OF idinfo := outofdate
+      ) ,
+      CO kfn CO
+      (  nofns := in;
+         TO nofns * 3 DO in OD; {{ skip over inds }}
+         in; {zero}
+         noattrs := in; noints := in; notypes := in; noctypes := in;
+         inextattrs(noattrs); inextints(noints); inexttypes(notypes);
+         inextctypes(noctypes); inextfns(nofns);
+         REF FNDEC fdec = infndec(outofdate, 1, export);
+         vnno OF fninfo OF fdec := in;
+         import OF fninfo OF fdec := (in = 1);
+         newextfn(fdec)
+      ),
+      CO kconst CO
+      (  id:= inid; v:= in;
+         noattrs := in; noints:= in; notypes:= in; noctypes := in;
+         inextattrs(noattrs); inextints(noints);  inexttypes(notypes);
+         inextctypes(noctypes);
+         skipattrs;
+         idinfo:= idinfo OF newextid((-1,v,FALSE,FALSE,TRUE,export,id,notdec));
+         CTYPE ctype1 = inctype(outofdate);
+         ct OF ctypeid  := HEAP CNAMED := (idinfo, -1, ctype1, unset);
+         u OF idinfo := ctypeid;
+         outofdate OF idinfo := outofdate
+      ),
+      CO kattr CO
+      (  id:= inid; v:= in; noattrs := in; inextattrs(noattrs);
+         idinfo:= idinfo OF newextid((-1,v,FALSE,FALSE,TRUE,export,id,notdec));
+         ATTR attr = inattrs(outofdate);
+         a OF attrid := HEAP ATTRDEF := (idinfo, -1, attr);
+         u OF idinfo := attrid;
+         outofdate OF idinfo := outofdate
+      )
+      OUT  SKIP
+      ESAC
+   );
+
+
+
+      PROC syfaultp_ext = (INT no, VECTOR [] ERRPARAM params, REF BOOL
+                           syntaxerror, PROC (INT, VECSTR) VOID fault) VOID:
+
+      BEGIN
+         REF VECTOR [] CHAR m; INT mind := 0; CHAR c;
+         REF VECTOR [] RVC paramstrings = HEAP VECTOR [UPB params] RVC;
+
+         PROC outchar = (CHAR c)VOID:
+         (  IF mind + 1 > UPB m
+            THEN REF VECTOR [] CHAR temp = HEAP VECTOR [mind + 100] CHAR;
+                 temp [1:mind] := m;
+                 m := temp
+            FI;
+            mind PLUSAB 1;
+            m[mind] := c
+         );
+
+         PROC outid = (ID id)VOID:
+         (  IF UPB id > 0
+            THEN  FOR i TO UPB id DO outchar(id[i]) OD
+            ELSE outchar("?")
+            FI
+         );
+
+         PROC outchars = (VECTOR [] CHAR c)VOID:
+         (  FOR i TO UPB c DO outchar(c[i]) OD  );
+
+         PROC outint = (INT i)VOID:  ( outchars(intchars(i)) );
+
+         PROC outmacid = (REF MACINFO mi) VOID:
+            IF (id OF mi) = nullid
+            THEN TO index OF mi DO outchar("?") OD
+            ELSE outid(id OF mi)
+            FI;
+
+         PROC outinteger = (INTEGER i)VOID:
+         (  CASE i IN
+            (INT j)          outint(j),
+            (REF INTTEXT it) outid(text OF it),
+            (REF MAXINT m)   outchars("maxint"),
+            (REF INTDOP idop) ( outinteger(l OF idop);
+                                outchars((opno OF idop|"+","-","*","%","=","/=",
+                                          "<=",">=","<",">","AND","OR"," ","SL",
+                                          "SR","IAND","IOR","MOD"));
+                                outinteger(r OF idop) ),
+            (REF INTMOP imop) (outchars((opno OF imop|"+","-","NOT"," ",
+                                             "INOT","SQRT","ABS"));
+                               outinteger(r OF imop) ),
+            (REF INTCOND icon) (outchars("IF ");outinteger(cond OF icon);
+                                outchars(" THEN ");outinteger(t OF icon);
+                                outchars(" ELSE ");outinteger(f OF icon);
+                                outchars(" FI ") ),
+            (REF INTCHECK ic)   outinteger(integer OF ic),
+            (INULL in) outchar("?"),
+            (IPARAM pa) outchar("?"),                  { add id's to modes ?  }
+            (REF INTVAR ivar)  outmacid(im OF ivar),
+            (REF INTDEF idef) outid(id OF idinfo OF idef),
+            (REF INTVARMULT ivm) outchar("?"),               { id ?,[id] ? }
+            (REF IBRACKET ib) (outchar("("); outinteger(ibracket OF ib);
+                               outchar(")"))
+            OUT outchar("?")
+          ESAC
+         );
+
+         PROC outtype = (TYPE t)VOID:
+         BEGIN
+            REF ST st; REF PALTS pa;
+            CASE t IN
+            (REF PRIMSET p)
+               outid(id OF idinfo OF p),
+            (REF NAMED n)
+               outid(id OF idinfo OF n),
+            (REF ST s)
+            (  outchar("("); st:= s; outtype(t OF s);
+               WHILE (st:= rest OF st)ISNT nilst
+               DO outchar(","); outtype(t OF st) OD;
+               outchar(")")
+            ),
+            (REF FNTYPE f)
+            (  outchar("("); outtype(from OF f); outchars("->");
+               outtype(to OF f); outchar(")")
+            ),
+            (REF ROW r)
+            (  outchar("["); outinteger(size OF r); outchar("]");
+               outtype(t OF r)
+            ),
+            (REF TBRACKET tb)
+            (  outchar("("); outtype(tbracket OF tb); outchar(")") ),
+            (REF TSTRING ts)
+            (  outchars("STRING ["); outinteger(size OF ts); outchar("]");
+               outtype(tstring OF ts)),
+            (REF TYPEVAR tv)
+               outmacid(tm OF tv),
+            (TVOID) outchars("()")
+            OUT
+               outchar("?")
+            ESAC
+         END;
+
+         PROC outfn = (REF FNDEC fd)VOID:
+         (  REF MPARAMS m;
+            outchars((macro OF fd | "MAC " | "FN "));
+            IF mp OF fd ISNT nilmparams THEN
+               outchars(omac); m:= mp OF fd;
+               WHILE CASE value OF m IN
+                     (REF ATTRVAR av)
+                        ( outchars("ATTR "); outmacid(am OF av) ),
+                     (REF INTVAR iv)
+                        ( IF (sort OF im OF iv) = expl_par
+                          THEN outchars("INT ") ELSE outchars("<INT> ")
+                          FI;
+                          outmacid(im OF iv)
+                        ),
+                     (REF TYPEVAR tv)
+                        ( IF (sort OF tm OF tv) = expl_par
+                          THEN outchars("TYPE ") ELSE outchars("<TYPE> ")
+                          FI;
+                          outmacid(tm OF tv)
+                        ),
+                     (REF CTYPEVAR cv)
+                        ( outchars("CONST "); outmacid(cm OF cv) ),
+                     (REF FNDEC fdd)
+                        ( outchars(IF macro OF fdd THEN "MAC " ELSE "FN " FI);
+                          IF (id OF fdd) = nullid
+                          THEN TO mparamno OF m  DO outchar("?") OD
+                          ELSE outid(id OF fdd )
+                          FI
+                        )
+                     OUT SKIP
+                     ESAC;
+                     (m:= rest OF m)ISNT nilmparams
+               DO outchar(",")OD;
+               outchars(cmac)
+            FI;
+            outtype(param OF fd);  outchars("->"); outtype(ans OF fd)
+         );
+
+         PROC outctype = (CTYPE ct) VOID:
+         BEGIN
+            REF CST cst;  REF CALTS calt;
+
+            PROC paltsid = (REF PALTS pa, INT index) ID:
+            (  REF PALTS palts := pa;
+               FOR i TO (index - 1) DO palts := rest OF palts OD;
+               id OF (idinfo OF palts)
+            );
+
+            CASE ct IN
+            (REF CNAMED cn)  outid (id OF idinfo OF cn),
+            (REF CPRANGE cpr)
+                 (CASE (t OF cpr) IN
+                  (REF PRIMSET pr) (CASE (u OF pr) IN
+                                    (PRANGE p) (outid (id OF (idinfo OF p)) )
+                                    OUT fault(0, "outctype")
+                                    ESAC)
+                  OUT fault(0, "outctype")
+                  ESAC;
+                  outchars("/("); outinteger(lwb OF cpr); outchars("..");
+                  outinteger(upb OF cpr); outchar(")")
+                 ),
+            (REF CPINDEX cpi)
+                 (CASE (t OF cpi) IN
+                  (REF PRIMSET pr) (CASE (u OF pr) IN
+                                    (PRANGE p) (outid (id OF (idinfo OF p)) )
+                                    OUT fault(0, "outctype")
+                                    ESAC)
+                  OUT fault(0, "outctype")
+                  ESAC;
+                  outchar("/"); outinteger(index OF cpi)
+                 ),
+            (REF PRIMID pr)
+                 (CASE (type OF pr) IN
+                  (REF PRIMSET p) (CASE (u OF p) IN
+                                   (REF PALTS pa)
+                                           (outid (paltsid (pa, index OF pr))),
+                                   (PSTRING ps)
+                                         outid(id OF (idinfo OF ps))
+                                   OUT fault(0, "outctype")
+                                   ESAC)
+                  OUT fault(0, "outctype")
+                  ESAC
+                 ),
+            (REF CUNN cu)
+                 (outctype(p OF cu); outchar("&"); outctype(ct OF cu)),
+            (REF CROW cr)
+                 (outchar("["); outinteger(size OF cr); outchar("]");
+                  outctype(ct OF cr)
+                 ),
+            (REF CST cs)
+                 (cst := cs;
+                  outchar("("); outctype(cst OF cst);
+                  WHILE (cst := rest OF cst) ISNT nilcst
+                    DO outchar(","); outctype(cst OF cst) OD;
+                  outchar(")")
+                 ),
+            (REF CALTS ca)
+                 (calt := ca;
+                  outchar("("); outctype(calt OF calt);
+                  WHILE (calt := rest OF calt) ISNT nilcalts
+                    DO outchar("|"); outctype(calt OF calt) OD;
+                  outchar(")")
+                 ),
+            (REF CNULLT cn) (outtype(ct OF cn)),
+            (REF CQUERY cq) (outchar("?"); outtype(querytype OF cq)),
+            (REF CBRACKET cb)
+                (outchar("("); outctype(cbracket OF cb); outchar(")") ),
+            (REF CPCHAR cc)
+                 (CASE (t OF cc) IN
+                  (REF PRIMSET pr) (CASE (u OF pr) IN
+                                    (PSTRING p) (outid (id OF (idinfo OF p)) )
+                                    OUT fault(0, "outctype")
+                                    ESAC)
+                  OUT fault(0, "outctype")
+                  ESAC;
+                  outchar("'"); outid(HEAP VECTOR[1] CHAR := char OF cc)
+                 ),
+            (REF CPSTRING cs)
+              IF (strings OF cs) ISNT nilstringlist
+                THEN {CASE ct OF cs IN
+                        (REF PRIMID pid)
+                              CASE (type OF pid) IN
+                                 (REF PRIMSET pr) (CASE (u OF pr) IN
+                                                       (PSTRING p)
+                                                     outid (id OF (idinfo OF p))
+                                                   OUT fault(0, "outctype")
+                                                   ESAC)
+                                  OUT fault(0, "outctype1")
+                              ESAC
+                     OUT fault(0, "outctype2")
+                     ESAC;} outctype(ct OF cs);
+                     REF STRINGLIST sl := strings OF cs;
+                     WHILE sl ISNT nilstringlist
+                     DO outchar("""");
+                        IF UPB (id OF sl) > 0 THEN outid(id OF sl) FI;
+                        outchars(""" ");
+                        sl := rest OF sl
+                     OD
+                ELSE
+                     outchars("STRING ["); outinteger(size OF cs);
+                     outchars("] "); outctype(ct OF cs)
+                     {CASE (ct OF cs) IN
+                     (REF PRIMID pid) CASE type OF pid IN
+                                       (REF PRIMSET pr) (CASE (u OF pr) IN
+                                                         (PSTRING p)
+                                                     outid (id OF (idinfo OF p))
+                                                        OUT fault(0, "outctype")
+                                                         ESAC)
+                                       OUT fault(0, "outctype1")
+                                       ESAC
+                     OUT fault(0, "outctype2")
+                     ESAC;
+                     outchar("'"); outid((string OF cs)[1])}
+               FI,
+             (REF CPCHRANGE cr)
+                 (CASE (t OF cr) IN
+                  (REF PRIMSET pr) (CASE (u OF pr) IN
+                                    (PSTRING p) (outid (id OF (idinfo OF p)) )
+                                    OUT fault(0, "outctype")
+                                    ESAC)
+                  OUT fault(0, "outctype")
+                  ESAC;
+                  outchars("('"); outid(HEAP VECTOR[1] CHAR := lwb OF cr);
+                  outchars(".. '");outid(HEAP VECTOR[1] CHAR := upb OF cr);
+                  outchar(")")
+                 ),
+             (REF CTYPEVAR cv) outid(id OF cm OF cv),
+             (REF CINDEX ci)
+                 ( outctype(ct OF ci);
+                   outchar("["); outinteger(index OF ci); outchar("]")
+                 ),
+             (REF CTRIM ct)
+                 ( outctype(ct OF ct);
+                   outchar("["); outinteger(lwb OF ct); outchars("..");
+                   outinteger(upb OF ct); outchar("]")
+                 ),
+             (REF CCOND cc)
+                 ( outchars("IF "); outinteger(test OF cc);
+                   outchars(" THEN "); outctype(then OF cc);
+                   outchars(" ELSE "); outctype(else OF cc);
+                   outchars(" FI")
+                 ),
+             (REF CCONC cn)
+                 ( outctype(left OF cn); outchars(" CONC ");
+                   outctype(right OF cn)
+                 ),
+             (REF CREPL cp)
+                 ( REF INTVARMULT repl = get_intvarmult(ids OF cp);
+                   outchars("[INT "); outchars(id OF idinfo OF ids OF cp);
+                   outchars(" = ");
+                   outinteger(lwb OF repl); outchars("..");
+                   outinteger(upb OF repl); outchar("]");
+                   outctype(ct OF cp)
+                 ),
+             (REF CATTR ca) outctype(ct OF ca),
+             (CVOID) outchars("()")
+            OUT outchar("?")
+            ESAC
+         END;
+
+         FOR i TO UPB paramstrings
+         DO mind := 0;
+            m := HEAP VECTOR [100] CHAR;
+            ERRPARAM p = params[i];
+            CASE p IN
+            (TYPE ty)    (outtype(ty); paramstrings[i] := m[1:mind]),
+            (ID id)      (outid(id); paramstrings[i] := m[1:mind]),
+            (REF FNDEC fd) (outfn(fd); paramstrings[i] := m[1:mind]),
+            (CTNAME cn)  (outid(context OF cn);
+                          (import OF cn /= nullid | outchar("/");
+                                                    outid(import OF cn));
+                          paramstrings[i] := m[1:mind])
+            OUSE p IN
+            (INTEGER in) (outinteger(in); paramstrings[i] := m[1:mind])
+            OUSE p IN
+            (CTYPE ct)   (outctype(ct); paramstrings[i] := m[1:mind])
+            OUT fault(0, "Syfaultp_ext : Unknown ERRPARAM")
+            ESAC
+         OD;
+         BOOL se = syntaxerror; syntaxerror:= FALSE;
+         fault(no, VRVCTOVSTR paramstrings); syntaxerror:= se
+      END;
+
+
+   PROC implicit_macro = (TYPE a, b, REF FNCALLSTACK fstack,
+                               PROC(INTEGER,BOOL)INTEGER simplify,
+                               PROC(INT, VECSTR)VOID fault,
+                               PROC (REF ST)TYPE sttorow) BOOL:
+   (
+      PROC implicit_macro_int = (INTEGER  a, b, REF FNCALLSTACK fstack) BOOL:
+      (  CASE a IN
+           (REF INTVAR ai)
+             ( IF (nextmp OF fstack ISNT nilnextmp)
+                  ANDTH (REF REF MPARAMS(nextmp OF fstack) ISNT nilmparams)
+                  ANDTH (index OF im OF ai) = mparamno OF nextmp OF fstack
+               THEN REF FNCALL fc = fncall OF fstack;
+                    nextmp OF fstack := rest OF nextmp OF fstack;
+                    REF REF PARAMVALS (nextpvals OF fc) :=
+                                HEAP PARAMVALS := (MAKEINTID b, NIL);
+                    nextpvals OF fc := rest OF nextpvals OF fc
+                FI;
+                TRUE
+             ),
+           (INT ai) CASE b IN
+                    (INT bi)  ai = bi  {{ both ints are known values }}
+                     OUT TRUE       {{ second int is expression with INTVARs }}
+                    ESAC
+        OUT TRUE
+     ESAC
+     );
+
+   PROC implicit_macro_type = (TYPE a, b, REF FNCALLSTACK fstack) BOOL:
+   (  CASE a IN
+      (REF TYPEVAR at1)
+         ( BOOL res = CASE t OF at1 IN
+                      (TNULL) TRUE
+                      OUT implicit_macro_type(primtype(t OF at1, FALSE), b,
+                                              fstack)
+                      ESAC;
+           IF res ANDTH (nextmp OF fstack ISNT nilnextmp)
+                  ANDTH (REF REF MPARAMS(nextmp OF fstack) ISNT nilmparams)
+                  ANDTH (index OF tm OF at1) = mparamno OF nextmp OF fstack
+                  ANDTH (sort OF tm OF at1 /= expl_par)
+           THEN REF FNCALL fc = fncall OF fstack;
+                nextmp OF fstack := rest OF nextmp OF fstack;
+                REF REF PARAMVALS (nextpvals OF fc) :=
+                              HEAP PARAMVALS := (MAKETYPEID b, NIL);
+                nextpvals OF fc := rest OF nextpvals OF fc
+           FI;
+           res
+         ),
+       (REF PRIMSET ap)
+         CASE b IN
+         (REF PRIMSET bp)
+           CASE u OF ap IN
+           (PRANGE app)
+             CASE u OF bp IN
+             (PRANGE bpp) (implicit_macro_int(
+                              UNCHECKEDINT(simplify(lwb OF app, TRUE)),
+                              UNCHECKEDINT(simplify(lwb OF bpp, TRUE)),
+                                                        fstack)
+                           ANDTH
+                           implicit_macro_int(
+                              UNCHECKEDINT(simplify(upb OF app, TRUE)),
+                              UNCHECKEDINT(simplify(upb OF bpp, TRUE)),
+                                                        fstack)
+                          )
+             OUT FALSE
+             ESAC,
+           (REF PALTS apa)
+             CASE u OF bp IN
+             (REF PALTS bpa)
+                (REF PALTS first := apa, second := bpa;
+                 BOOL check := TRUE;
+                 WHILE check ANDTH (first ISNT nilpalts)
+                 DO IF (second IS nilpalts)
+                    THEN check := FALSE
+                    ELSE REF TYPE f = u OF first, s = u OF second;
+                         check :=
+                            IF (f IS niltype) ANDTH (s IS niltype)
+                            THEN TRUE
+                            ELSE (f ISNT niltype) ANDTH (s ISNT niltype) ANDTH
+                                implicit_macro_type(primtype(f, FALSE),
+                                                    primtype(s, FALSE), fstack)
+                           FI;
+                         first := rest OF first;
+                         second := rest OF second
+                    FI
+                 OD;
+                 check ANDTH (second IS nilpalts)
+                )
+             OUT FALSE
+             ESAC,
+           (PSTRING)
+             CASE u OF bp IN (PSTRING) TRUE OUT FALSE ESAC
+           OUT TRUE {No options left}
+           ESAC
+         OUT FALSE
+         ESAC,
+       (REF ROW ar)
+          CASE b IN
+          (REF ROW br)
+             (implicit_macro_int(UNCHECKEDINT(simplify(size OF ar, TRUE)),
+                                 UNCHECKEDINT(simplify(size OF br, TRUE)),
+                                 fstack)
+               ANDTH
+              implicit_macro_type(t OF ar, t OF br, fstack)
+             ),
+          (REF ST bst)
+             IF bst ISNT nilst
+             THEN CASE sttorow(bst) IN
+                  (REF ROW trr) implicit_macro_type(ar, trr, fstack)
+                  OUT FALSE
+                  ESAC
+             ELSE FALSE
+             FI
+          OUT FALSE
+          ESAC,
+       (REF TSTRING ats)
+          CASE b IN
+          (REF TSTRING bts)
+             (implicit_macro_int(UNCHECKEDINT(simplify(size OF ats, TRUE)),
+                                 UNCHECKEDINT(simplify(size OF bts, TRUE)),
+                                 fstack)
+                ANDTH
+              implicit_macro_type(tstring OF ats, tstring OF bts, fstack)
+             )
+          OUT FALSE
+          ESAC,
+       (REF ST as)
+          CASE b IN
+          (REF ST bs)
+             ( REF ST ast := as, bst := bs;
+               BOOL equal := TRUE;
+               WHILE equal ANDTH (ast ISNT nilst)
+               DO IF (bst ISNT nilst)
+                  THEN equal := implicit_macro_type(t OF ast, t OF bst, fstack);
+                       ast := rest OF ast;
+                       bst := rest OF bst
+                  ELSE equal := FALSE
+                  FI
+               OD;
+               equal ANDTH (bst IS nilst)
+             ),
+          (REF ROW br)
+             CASE sttorow(as) IN
+             (REF ROW trr) implicit_macro_type(trr, br, fstack)
+             OUT FALSE
+             ESAC
+          OUT FALSE
+          ESAC,
+       (REF FNTYPE af)
+          CASE b IN
+          (REF FNTYPE bf)
+             ( implicit_macro_type(from OF af, from OF bf, fstack)
+                 ANDTH
+               implicit_macro_type(to OF af, to OF bf, fstack)
+             )
+          OUT FALSE
+          ESAC
+      OUT TRUE
+      ESAC
+     );
+
+   IF CASE a IN (FLT f) TRUE OUSE b IN (FLT f) TRUE OUT FALSE ESAC
+   THEN TRUE
+   ELIF implicit_macro_type(a, b, fstack)
+   THEN TRUE
+   ELSE fault(CO"input incompatible with macro function"CO 152, nullmsg);
+        FALSE
+   FI
+  );
+
+  PROC simplify_ext = (INTEGER i, BOOL simp, PROC(INT, VECSTR)VOID fault)
+                                                                      INTEGER:
+  (   BOOL error := FALSE;
+
+      PROC simplify = (INTEGER i, BOOL simp)INTEGER:
+      (  INTEGER ans := i;
+         CASE i IN
+         (REF INTTEXT it)  ans := int OF it,
+         (REF MAXINT m)
+         (  fault(201, nullmsg CO"integer too large"CO);
+            error := TRUE;
+            ans := maxint
+          ),
+         (REF INTDOP iop)
+         (  INTEGER li, ri;
+            li := simplify(l OF iop, TRUE);
+            ri := simplify(r OF iop, TRUE);
+            ans := HEAP INTDOP := (opno OF iop, li, ri);
+            CASE li IN (INT l)
+               CASE ri IN (INT r)
+               (  BOOL  overflowed:= FALSE;
+                  ans:= CASE opno OF iop IN
+                          ( IF SIGN l = SIGN r
+                            THEN  add with overflow check(l,r,overflowed)
+                            ELSE  l + r
+                            FI
+                          ) ,
+                          ( IF SIGN l + SIGN r = 0
+                            THEN  subtract with overflow check(l,r,overflowed)
+                            ELSE  l - r
+                            FI
+                          ) ,
+                          (
+                            multiply with overflow check(l,r,overflowed)
+                          ) ,
+                          IF r = 0
+                          THEN  overflowed:=  TRUE;  maxint
+                          ELSE  l OVER r
+                          FI ,
+                          ABS (l = r), ABS (l/= r), ABS (l<= r), ABS (l>= r),
+                          ABS (l<r), ABS (l>r), ABS (BIN l AND BIN r),
+                          ABS (BIN l OR BIN r), SKIP,
+                          ABS (BIN l SHL r), ABS (BIN l SHR r),
+                          ABS (BIN l AND BIN r), ABS (BIN l OR BIN r),
+                          IF r = 0
+                          THEN overflowed := TRUE;  maxint
+                          ELIF r = minint
+                              THEN IF l<0 THEN -(minint-l) ELSE l FI
+                              ELSE l MOD r
+                               {{?? is this right value all operand values}}
+                          FI
+                       OUT  fault(0, "simplify");  0
+                       ESAC;
+                  IF overflowed THEN fault(
+                     CO"this expression causes arithmetic overflow"CO
+                     109, nullmsg);
+                     error := TRUE
+                  FI
+               ),
+               (FLT f) (error := TRUE; ans := flt)
+               OUT SKIP
+               ESAC,
+            (FLT f) (error := TRUE; ans := flt)
+            OUT SKIP
+            ESAC
+         ),
+         (REF INTMOP mop)
+         (  IF opno OF mop = 2 ANDTH (r OF mop | (REF MAXINT m) (TRUE) | FALSE)
+            THEN error := TRUE;
+                 ans := CASE r OF mop IN
+                        (REF MAXINT m)
+                            IF UPB text OF m = 0
+                            THEN minint
+                            ELSE ID text = HEAP VECTOR [UPB text OF m + 1] CHAR;
+                                 text[1] := "-";  text[2:] := text OF m;
+                                 HEAP INTTEXT := (minint, text)
+                            FI
+                        OUT sys fault("simplify"); SKIP
+                        ESAC
+            ELSE BOOL overflowed := FALSE, sqrt_fail := FALSE;
+                 INTEGER ri := simplify(r OF mop, TRUE);
+                 ans := HEAP INTMOP := (opno OF mop, ri);
+                 CASE ri IN (INT r)
+                   ans := CASE opno OF mop IN
+                             r,
+                             IF r = minint THEN overflowed := TRUE; maxint
+                             ELSE -r
+                             FI,
+                             ABS (r = 0), 0, ABS NOT BIN r,
+                             IF r >= 0
+                             THEN ENTIER (sqrt(r))
+                             ELSE sqrt_fail := TRUE; -1
+                             FI,
+                             IF r = minint THEN overflowed := TRUE; maxint
+                             ELSE  ABS r
+                             FI
+                           OUT  fault(0, "expandinteger");  0
+                           ESAC,
+                 (FLT f) (error := TRUE; ans := flt)
+                 OUT SKIP
+                 ESAC;
+                 IF overflowed THEN fault(
+                    CO"this expression causes arithmetic overflow"CO
+                    109, nullmsg);
+                    error := TRUE
+                 FI;
+                 IF sqrt_fail THEN fault(
+                    CO"this expression gives a negative square root."CO
+                    137, nullmsg);
+                    error := TRUE
+                 FI
+             FI
+         ),
+         (REF INTCHECK ic)
+         (  ans := HEAP INTCHECK :=
+              (simplify(integer OF ic, simp), simplify(standard OF ic, simp),
+                       test OF ic)
+         ),
+         (REF INTCOND ic)
+           ( INTEGER cond := simplify(cond OF ic, simp);
+             CASE cond IN
+               (INT i1) ans := (i1/= 0|simplify(t OF ic, simp)|
+                                           simplify(f OF ic, simp)),
+               (FLT f)  (error := TRUE; ans := flt)
+               OUT SKIP
+             ESAC
+           ),
+         (REF INTVARMULT ivar)
+           ( INTEGER index = simplify(index OF ivar, simp);
+             ans := CASE index IN
+                    (INT iv1) iv1
+                    OUT HEAP INTVARMULT := ivar
+                    ESAC
+           ),
+        (REF INTDEF idef)
+            ans := simplify(i OF idef, simp),
+        (REF IBRACKET ib) ans := simplify(ibracket OF ib, simp),
+        (FLT flt)  error := TRUE
+         OUT SKIP
+         ESAC;
+
+         IF error OREL simp
+           THEN ans
+           ELSE i
+         FI
+      );
+
+    simplify(i, simp)
+ )
+
+KEEP inkept_ext, syfaultp_ext, implicit_macro, simplify_ext
+
+FINISH
