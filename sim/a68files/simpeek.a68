@@ -1,0 +1,290 @@
+DECS simpeek CONTEXT VOID USE putstrings, simbasics, simtime, kernel, basics:
+
+{ " Id: simpeek.sta,v 2.1 91/02/22 18:37:07 edcad Exp$" }
+configinfo A68CONFIG "$Id: simpeek.a68,v 34.2 1995/03/29 13:05:01 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:05:88  Module created for release 4 using code taken from the release 3
+             module SIMPOINTS.  BJE
+14:09:88  'print signal value' and 'print unrecorded signal' value now
+             construct the strings to output but do not output them
+11:04:89  Monitoring speedup.  R4B134.  PAR.
+27:08:91  Updated for VOID signals. EVW
+27:10:91  Changes made for VOID. JIT
+14:06:93  Minitoring changes clash with STRAIGHT in new OSIF - reworked.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module is responsible for the display of the current simulator time and
+   signal values supplied by the simulator kernel
+}
+
+{
+   UTILITY PROCEDURES
+   ==================
+}
+
+{
+   In normal monitoring, we access 'peek signal value' directly to
+   avoid unnecessary decodes.  However, there are times when it is
+   convenient to have a composite (when there is little chance of
+   avoiding the decode).
+}
+PROC peek and decode = (MNODE mlocation, WORD workspace) SVALUE:
+BEGIN
+   peek signal value(mlocation, workspace);
+   LINE location = CASE node OF mlocation IN (LINE l):l ESAC;
+   STYPE type = type OF wire OF location;
+   decode (workspace, type)
+END;
+
+{
+   SIGNAL OUTPUT
+   =============
+
+   Procedures for outputting a signal value and for calculating the maximum
+   width of the output over all values of a signal type
+}
+
+{ Printing punctuation modifiers, see 'print signal value' below }
+BITS
+   no punctuation = 16r0,
+   ampersands = 16r1,
+   brackets = 16r2,
+   ampersands and brackets = ampersands OR brackets;
+
+{
+   'print unknown signal value' is a service routine for 'print signal value'
+   below.  It prints exactly the right number of "?" characters for the given
+   type.
+
+   NB SFN and SNULL are not valid input types for this procedure.  Empty
+   rows and structures are also not handled.
+}
+PROC print funny signal value = (STYPE type, BITS punc, CHAR char, RCH ch) VOID:
+BEGIN
+   BOOL bk = punc >= brackets;
+   CASE type IN
+      (SPRIM i)       : putstr(ch, char),
+      (REF SROW r)    :
+         BEGIN
+            IF bk THEN putstr(ch, "(") FI;
+            INT n := no OF r;
+            WHILE
+               print funny signal value(type OF r, punc, char, ch);
+               (n -:= 1) > 0
+            DO
+               IF bk THEN putstr(ch, ",") FI;
+               putstr(ch, " ")
+            OD;
+            IF bk THEN putstr(ch, ")") FI
+         END,
+      (REF SSTRING s) : putstr(ch, char),
+      (REF SST s)     :
+         BEGIN
+            IF bk THEN putstr(ch, "(") FI;
+            REF SST p := s;
+            WHILE
+               print funny signal value(t OF p, punc, char, ch);
+               (p := rest OF p) ISNT nil sst
+            DO
+               IF bk THEN putstr(ch, ",") FI;
+               putstr(ch, " ")
+            OD;
+            IF bk THEN putstr(ch, ")") FI
+         END,
+      (REF SFN f)    : print funny signal value (to OF f, punc, char, ch)
+   OUT sys fault ("print funny signal value: SNULL encountered")
+   ESAC
+END;
+
+PROC print unknown signal value = (STYPE type, BITS punc, RCH ch) VOID:
+   print funny signal value (type, punc, "?", ch);
+
+{
+   'print unrecorded signal value' does the same with "-" in place of "?"
+}
+
+PROC print unrecorded signal value = (STYPE type, BITS punc, RCH ch) VOID:
+   print funny signal value (type, punc, "-", ch);
+
+{
+   'print signal value' outputs the value of an arbitrary signal.  The form
+   of the output is modified by the second parameter.  The ampersands that
+   connect the tag and associated types in associations are optional.  Brackets
+   and commas in structures are optional.  The options are chosen by the second
+   argument as follows
+
+      0  No & or (,,)
+      1  & but no (,,)
+      2  (,,) but no &
+      3  & and (,,)
+
+   NB SVNULL is not a valid input value for this procedure.
+}
+PROC print signal value = (SVALUE value, BITS punc, RCH ch) VOID:
+BEGIN
+   PROC (SVALUE, BITS) VOID body;
+
+   PROC print enumerated signal value = (REF SVENUM value, BITS punc) VOID:
+   BEGIN
+      REF SENUM p := type OF value;
+      TO tag OF value - 1 DO p := rest OF p OD;
+      putstr(ch, id OF p);
+      CASE assoc OF value IN
+         (SVNULL n): SKIP
+      OUT
+         IF punc >= ampersands THEN  putstr(ch, " &") FI;
+         putstr(ch, " ");
+         body (assoc OF value, punc)
+      ESAC
+   END;
+
+   PROC print structured signal value = (REF SVST value, BITS punc) VOID:
+   BEGIN
+      BOOL bk = punc >= brackets;
+      IF bk THEN putstr(ch, "(") FI;
+      REF SVST p := value;
+      WHILE
+         body(head OF p, punc);
+         (p := tail OF p) ISNT nil svst
+      DO
+         IF bk THEN putstr(ch, ",") FI;
+         putstr(ch, " ")
+      OD;
+      IF bk THEN putstr(ch, ")") FI
+   END;
+
+   { avoid VECTOR [] OUTMODE coersion calling put - use primitive procedures }
+
+   body := (SVALUE value, BITS punc) VOID:
+   CASE value IN
+      (REF SQUERY q) : print unknown signal value (type OF q, punc, ch),
+      (REF SVINT  i) : BEGIN
+                          putstr(ch, id OF type OF i);
+                          putstr(ch, "/");
+                          add_number(ch, value OF i, 0)
+                       END,
+      (REF SVCHAR c) : BEGIN
+                          putstr(ch, id OF type OF c);
+                          putstr(ch, "'");
+                          putstr(ch, value OF c)
+                       END,
+      (REF SVSTR  s) : BEGIN
+                          putstr(ch, id OF t OF type OF s);
+                          putstr(ch, """");
+                          putstr(ch, value OF s);
+                          putstr(ch, """")
+                       END,
+      (REF SVENUM e) : print enumerated signal value(e, punc),
+      (REF SVST s)   : print structured signal value(s, punc),
+      (REF SVFN f)   : body (to OF f, punc),
+      (SVVOID)       : putstr(ch, "()")
+   OUT sys fault ("print signal value: SVNULL encountered")
+   ESAC;
+
+   body(value, punc)
+END;
+
+{
+   Calculates the maximum number of character positions (not including spaces
+   at either end) to print a signal of the given type
+}
+PROC print width = (STYPE type, BITS punc) INT:
+BEGIN
+
+   PROC enumerated print width = (REF SENUM type, BITS punc) INT:
+   BEGIN
+      INT ans := 0;
+      REF SENUM p := type;
+      WHILE p ISNT nil senum DO
+         INT alt width := UPB id OF p;
+         CASE t OF p IN
+            (SNULL n): SKIP
+         OUT
+            alt width +:= print width (t OF p, punc) + 1;
+            IF punc >= ampersands THEN alt width +:= 2 FI
+         ESAC;
+         ans := max(ans, alt width);
+         p := rest OF p
+      OD;
+      ans
+   END;
+
+   PROC structured print width = (REF SST type, BITS punc) INT:
+   BEGIN
+      BOOL bk = punc >= brackets;
+      INT ans := 0;
+      REF SST p := type;
+      WHILE
+         ans +:= print width(t OF p, punc);
+         (p := rest OF p) ISNT nil sst
+      DO
+         IF bk THEN ans +:= 2 {", "} ELSE ans +:= 1 {" "} FI
+      OD;
+      IF bk THEN ans +:= 2 {"()"} FI;
+      ans
+   END;
+
+   PROC row print width = (REF SROW type, BITS punc) INT:
+   IF punc >= brackets THEN
+      no OF type * (print width(type OF type, punc) + 2 {", ","()"})
+   ELSE
+      no OF type * (print width(type OF type, punc) + 1 {" "}) - 1
+   FI;
+
+   CASE type IN
+      (REF SINT  i)  : UPB id OF i + 1 + max(digits(lwb OF i),digits(upb OF i)),
+      (REF SCHAR c)  : UPB id OF c + 2,
+      (REF SSTRING s): UPB id OF t OF s + no OF s + 2,
+      (REF SENUM e)  : enumerated print width(e, punc),
+      (REF SFN f)    : print width(to OF f, punc),
+      (REF SST s)    : structured print width(s, punc),
+      (REF SROW r)   : row print width (r, punc),
+      (SVOID)        : 2
+   OUT sys fault ("print width: SNULL encountered"); 0
+   ESAC
+END;
+
+SKIP
+
+KEEP
+   peek and decode,
+
+   no punctuation, ampersands, brackets, ampersands and brackets,
+   print unrecorded signal value, print signal value, print width
+
+FINISH
