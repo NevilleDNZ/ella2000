@@ -1,0 +1,407 @@
+DECS kememory CONTEXT VOID USE  putstrings, basics, osinterface, kesave,
+     keambasics:
+
+{ " Id: kememory.sta,v 2.1 91/02/22 18:35:22 edcad Exp$" }
+configinfo A68CONFIG "$Id: kememory.a68,v 34.2 1995/03/29 13:04:53 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+30:11:89  Module created, to implement dynamic memory management in a
+              region of abstract machine memory, extending it as necessary.
+11:12:90  Putstrings added to use list for RVC. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ A region of abstract machine memory whose total size is a power of two
+  may be managed by a "buddy" system (see Knuth, vol 1, pp 442 -- 445).
+  The advantage of this method is that it appears to have very good
+  fragmentation properties, the disadvantage is that it wastes space both
+  by reserving a tag at all times in each allocated region, and by rounding
+  up the sizes of allocated regions to powers of two.
+
+  The complete description of a part of abstract machine memory subject to
+  memory allocation is kept in an object of the mode RESERVATION.
+
+  Procedures are provided to perform allocation and freeing of areas within
+  an area described by a RESERVATION parameter.
+
+  Notice that, at present, the extension to abstract machine memory required
+  to extend a region in which allocation is performed can be done only
+  for a single area.  It is essentially this which limits the present
+  implementation to a single area of managed memory.
+}
+
+
+{ The maximum size possible is determined by the machine word size
+}
+INT log max mem = 32;
+
+
+{ Every block into which memory has been divided has a tag consisting of a
+  single bit of information to distinguish between free blocks and reserved
+  blocks.  All blocks also need to hold the logarithm of their size.
+  This information is represented in a whole word, all but the bottom few
+  bits of which are set to one of two rather special patterns which are
+  unlikely to result from any erroneous overwrite.  The bottom few bits
+  hold the log size.
+}
+INT overhead   = 4;                  { The number of bytes of overhead }
+
+BITS free mark  = 16r80170b80,  { These constants are similar to the }
+     used mark  = 16r80170bc0;  {  gc mark, but never the same. }
+
+BITS size mask   = 16r1f,
+     nosize mask = 16rffffffe0;
+
+
+{ Furthermore, a free area has links to both the next free area of the
+  same size and the previous one.  These are at the offsets "forward"
+  and "backward" respectively from the start of the area.  (The linkage
+  is circular, but the entry into the list is separate).
+}
+INT forward  = 4,
+    backward = 8;
+
+
+{ The result of this overhead is that the minimum useful size to allocate
+  is the next power of two above the overhead.
+}
+INT min useful     = 16,
+    log min useful = 4;
+
+
+{ The information kept for a region in which dynamic allocation is taking
+  place consists of the address and size of the whole region, together
+  with an array of free list entries for each of the sizes of allocated
+  areas.  Since allocations are always rounded to a power of two, and
+  the smallest possible is four words (to accomodate the overhead and the
+  free list pointers), there are 'log max mem' entries in the 'free lists'
+  table, of which the first 'log min useful - 1' are never used.
+}
+MODE RESERVATION = STRUCT (OFFSET base,  INT log total size,
+                           VECTOR [log max mem] OFFSET free lists);
+
+
+{ free list entries are abstract machine addresses, and therefore (at
+  present) not negative.  Free lists are doubly linked, but with a
+  single pointer in from the RESERVATION, which may have to point to
+  no list -- the following value is used to show this case:
+}
+INT empty = -1;
+
+
+{ This allocation method frequently needs log to base 2, rounded up
+  to the next higher integer
+}
+PROC log2 = (INT a) INT:
+BEGIN
+    INT log := 0,
+        p := 1;
+    WHILE p < a DO
+        log +:= 1;
+        p *:= 2
+    OD;
+    log
+END;
+
+
+{ We also need bit-wise XOR
+}
+PRIO XOR = 3;
+OP XOR = (BITS a, b) BITS:  (a AND NOT b) OR (b AND NOT a);
+
+
+{ The free list is extended by this procedure, which takes the descriptor
+  of the whole area, the logarithm of the size of the extension,
+  and the address of the new element
+  The 'free mark' and log size of the new free area are inserted into the
+  tag word to indicate it is free, and to give its size.
+  The last parameter is used to control whether the check is done on the
+  first word to see if it is a valid tag (it will not be if this routine
+  is being used to set up a *new* area).
+}
+PROC add free entry = (REF RESERVATION area, INT log size,
+                       OFFSET address, BOOL check) VOID:
+BEGIN
+    IF check ANDTH (BIN cg peek int (address) AND nosize mask) /= usedmark THEN
+        sysfault ("Simulator memory corrupted")
+    FI;
+    cg poke int (ABS free mark + log size, address);
+    INT existing = (free lists OF area) [log size];
+    IF existing = empty THEN
+        { Adding to empty list -- link entry to itself }
+        (free lists OF area) [log size] := address;
+        cg poke int (address, address + forward);
+        cg poke int (address, address + backward)
+    ELSE
+        { Add just after existing first entry }
+        INT next = cg peek int (existing + forward);
+        cg poke int (next, address + forward);
+        cg poke int (address, next + backward);
+        cg poke int (existing, address + backward);
+        cg poke int (address, existing + forward)
+    FI
+END;
+
+
+{ Boolean values for the above:
+}
+BOOL check   = TRUE,
+     nocheck = FALSE;
+
+
+{ The converse operation is performed by 'remove free entry'
+}
+PROC remove free entry = (REF RESERVATION area, INT log size, address) VOID:
+BEGIN
+    IF (BIN cg peek int (address) AND nosize mask) /= free mark THEN
+        sysfault ("Simulator memory corrupted")
+    FI;
+    cg poke int (ABS used mark + log size, address);
+    INT next = cg peek int (address + forward);
+    IF next = address THEN
+        { Entry linked to itself, so last one }
+        (free lists OF area) [log size] := empty
+    ELSE
+        { General case -- remove element from chain }
+        INT prev = cg peek int (address + backward);
+        cg poke int (next, prev + forward);
+        cg poke int (prev, next + backward);
+        IF (free lists OF area) [log size] = address THEN
+            { We've removed the one we were using as the entry point }
+            (free lists OF area) [log size] := next
+        FI
+    FI
+END;
+
+
+{ 'find a free entry' finds an arbitrary free entry of the stated size,
+  and removes it from the free list.  This is only a convenient grouping
+  of operations and is used exclusively by this module -- it can therefore
+  be safely assumed that it will never be called when the relevant free
+  list is empty.
+}
+PROC find a free entry = (REF RESERVATION area, INT log size) OFFSET:
+BEGIN
+    INT address = (free lists OF area) [log size];
+    remove free entry (area, log size, address);
+    address
+END;
+
+
+{ An initialisation call is required to set up the RESERVATION data, and
+  initialise the "mark" word of the whole memory.  Notice that the
+  initial allocation of space is performed outside this module, since it
+  is conveniently done as part of the setting up in KEINSTANCE.
+  It is assumed that the area provided is exactly a power of two in size,
+  and that if the host machine requires integers to be long-word aligned, so
+  is the area provided.
+}
+PROC initialise area = (REF RESERVATION area, INT size, OFFSET address) VOID:
+BEGIN
+    FORALL list IN free lists OF area DO
+        list := empty
+    OD;
+    log total size OF area := log2 (size);
+    base OF area := address;
+    add free entry (area, log total size OF area, address, nocheck)
+END;
+
+
+{ An area which is already allocated should be freed by the following
+  routine.
+  The supplied address should be the start of the *client* part of the
+  allocated area, ie just after the word of overhead.
+  It is possible to call this routine with an address completely outside
+  the managed memory -- this makes some of the higher level uses more
+  convenient when a given type of object, such as a fanout list, may be
+  in managed memory or in static memory.
+}
+PROC liberate = (REF RESERVATION area, OFFSET address) VOID:
+    IF
+        address >= base OF area
+        AND address <= base OF area + 2 ^ log total size OF area
+    THEN
+        OFFSET start := address - overhead;
+        INT log size := ABS (BIN cg peek int (start) AND size mask);
+        OFFSET buddy;
+        WHILE
+            IF log size = log total size OF area THEN  FALSE
+            ELSE
+                buddy := base OF area
+                         + ABS (BIN (address - base OF area)
+                                XOR (16r1 SHL log size));
+                INT tag = cg peek int (buddy);
+                tag = ABS free mark + log size
+            FI
+        DO
+            { As long as there is a buddy (we're not freeing the entire
+              memory), and that buddy is not split and is free, combine it
+              with the area being freed. }
+            remove free entry (area, log size, buddy);
+            log size +:= 1;
+            IF buddy < start THEN
+                start := buddy
+            FI
+        OD;
+        add free entry (area, log size, start, check)
+    FI;
+
+
+{ The basic allocation routine follows.  It calls the code generator
+  routine 'cg extend space' when it runs out of room, making the
+  assumption that there is only one area of memory in which it is
+  allocating.
+  The returned address is the start of the part of the allocated area
+  which may be used by the client -- there is a word of overhead which
+  remains just below it.
+}
+PROC reserve = (REF RESERVATION area, INT size) OFFSET:
+BEGIN
+    INT k := log2 (size + overhead);
+    IF k < log min useful THEN k := log min useful FI;
+    INT j := k;
+    WHILE  j <= log max mem ANDTH (free lists OF area) [j] = empty DO
+        j +:= 1
+    OD;
+    IF j > log max mem THEN
+        { Failed -- extend memory and try again.  We artificially set up the
+          extension as reserved, initially, and then call "liberate" on it
+          to guarantee it is freed correctly -- including in the unlikely
+          event that it needs to be combined with its buddy (the entire
+          existing memory). }
+        INT extension = 2 ^ (log total size OF area);
+        cg extend space (extension, sysfault);
+        OFFSET new part = base OF area + extension;
+        cg poke int (ABS used mark + log total size OF area, new part);
+        log total size OF area +:= 1;
+        liberate (area, new part + overhead);
+        reserve (area, size)
+    ELSE
+        { 2^j is the smallest satisfactory size of block of which there is
+          a free example, so remove one from the appropriate free list }
+        OFFSET address = find a free entry (area, j);
+        INT size := 2^j;
+        WHILE j > k DO
+            { Split oversize block down to required size }
+            j -:= 1;
+            size %:= 2;
+            add free entry (area, j, address + size, nocheck)
+        OD;
+        cg poke int (ABS used mark + k, address);   { Set correct size in tag }
+        address + overhead
+    FI
+END;
+
+
+{ "extend" is an optimisation which will allocate new memory and copy
+  existing data if necessary, but will try to avoid it by using knowledge
+  of the rounding up done by the underlying allocation routines.
+  This could be optimised further, in the case when the current block
+  is not enough, by checking to see if the buddy of this block is both
+  free and above it -- in which case we can simply merge it in.
+  As for "liberate", it is tolerant of calls for areas which are not in
+  managed memory (in this case it will necessarily do the allocation and
+  copy).
+}
+PROC extend = (REF RESERVATION area, OFFSET address, INT new size) OFFSET:
+    IF
+        INT size to copy := new size;   { In case first condition true }
+        ( address < base OF area
+          OR address > base OF area + 2 ^ log total size OF area)
+        OREL
+        ( INT log existing size = ABS (BIN cg peek int (address - overhead)
+                                       AND size mask);
+          size to copy := 2 ^ log existing size - overhead;
+          size to copy < new size)
+    THEN
+        { Need to allocate and copy }
+        INT new address = reserve (area, new size);
+        cg poke (cg peek (size to copy, address), new address);
+        liberate (area, address);
+        new address
+    ELSE
+        { Just return old address }
+        address
+    FI;
+
+
+{ The externally visible routines at the moment operate on an implicit
+  region of memory.
+}
+
+RESERVATION managed;
+
+PROC initialise am memory = (INT address, size) VOID:
+    initialise area (managed, size, address);
+
+PROC allocate am memory = (INT size) INT:
+    reserve (managed, size);
+
+PROC extend am memory = (INT address, new size) INT:
+    extend (managed, address, new size);
+
+PROC free am memory = (INT address) VOID:
+    liberate (managed, address);
+
+PROC save memory management = (PROC (RVC, FLTPROC) VOID ferry,
+                               FLTPROC flt) VOID:
+BEGIN
+    write int (base OF managed, ferry, flt);
+    write int (log total size OF managed, ferry, flt);
+    FOR i TO log max mem DO
+        write int ((free lists OF managed) [i], ferry, flt)
+    OD
+END;
+
+PROC restore memory management = (PROC (RVC, FLTPROC) VOID ferry,
+                                  FLTPROC flt) VOID:
+BEGIN
+    base OF managed := read int (ferry, flt);
+    log total size OF managed := read int (ferry, flt);
+    FOR i TO log max mem DO
+        (free lists OF managed) [i] := read int (ferry, flt)
+    OD
+END
+
+
+KEEP
+    min useful,
+    initialise am memory, allocate am memory, extend am memory, free am memory,
+    save memory management, restore memory management
+FINISH
+
+
