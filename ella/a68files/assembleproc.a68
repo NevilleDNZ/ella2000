@@ -1,0 +1,1730 @@
+DECS  assembleproc CONTEXT VOID USE  putstrings, messageproc, osinterface,
+      basics, databasebuffers, assmodes, closureprocs, sidanalyser:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: assembleproc.a68,v 34.2 1995/03/29 13:03:14 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+09:09:88  Assembler reoganised - now used PROCSID.   MGH
+             BIOPs, ELLA characters, string, implicit macros and consts added.
+31:10:88  INT sort added to INPUT. EVW
+14:11:88  PROC vnull added.  MGH
+23:11:88  PROC seqpt, seqptflt added. MGH
+28:11:88  VDYASSIGN added to assembler reader. MGH
+25:01:89  R4B037.  PROC typenamepr added and decno removed. MGH
+26:01:89  R4B064.  OP UNCHECKEDFORM added to remove multiple checks in
+                      <bmake>. MGH
+31:10:89  CR 638. CMACPAR, and changes to MACSPEC, MACPARAM,INSTANCE etc. MGH
+                     CTYPE mode changed to STRUCT(TYPE).  EVW
+30:11:89  MESSAGEPROC replaced FLTPROC in assembly_start.  EVW
+30:11:89  CR 636.  Updated to KEEPSAKE.  JIT
+17:12:89  Temporary changes to allow release without updater. Marked by *
+             PROC letnames added - used internally. EVW
+18:12:89  PROC alien added. JIT
+04:01:90  PROC sample added. JIT
+22:01:90  R4B???.  Nested sequence IF statements. MGH
+31:01:90  PROC's needed for time scaling added. JIT
+06:02:90  Multiple lets, const macro params and dynassign added. MGH
+26:03:90  Multiple Makes, Partial Joins, Fntype, Named Outputs added. MGH
+29:03:90  Macros can now have function parameters. JIT
+18:04:90  PROC vfn removed (UIO).  MGH
+27:06:90  Fntypes, multiple joins & makes, named outputs. MGH
+16:07:90  Macros can now have macro parameters. JIT
+06:08:90  joincheck changed form VECTOR to list. EVW
+16:10:90  cttype changed to read in `type' data. MGH
+15:04:91  R6B25  sort out fn specs including FN parameters of macros. EVW
+18:04:91  R6B17:  Module sidanalyser created to remove side effects.  DCT
+24:04:91          "failure" changed for ELLA compiler error recovery.  DCT
+07:05:91  PROC vreplace added. JIT
+09:07:91  Version 7 of assembler modes. EVW
+02:08:91  Extension to macro TYPE parameters. JIT
+21:10:91  NEW CLOSURE mode.  DCT
+13:11:91  layout removed and bodycheck added. EVW
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+16:12:91  UTERMINDEX added and BODYDATA removed.
+             macspec= NIL for FN, null of [size] for MAC. EVW
+03:03:92  Attribute declarations added. EVW
+23:03:92  Constant string can now be a series of strings. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+13:05:92  Tidyup of joincheck creation. EVW
+16:07:92  Minimum changes for CONST / UNIT mode change. JIT
+04:11:92  Updated for 'chars' mode changes. JIT
+08:02:93  BODYPTR removed - merge assemble specs and body. EVW
+18:02:93  Add constant index, trim, repl, cond, conc and attribute. EVW
+12:05:93  Handling of replicators altered. EVW
+15:06:93  Seqrow added. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.044 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+MODE INSTACK    = STRUCT (BOOL b, INT in, REF INSTACK rest),
+     INIDSTACK  = STRUCT (BOOL b, ID inid, REF INIDSTACK rest),
+     TYPESTACK  = STRUCT (BOOL b, TYPE type, REF TYPESTACK rest),
+     FORMULASTACK = STRUCT (BOOL b, FORMULA formula, REF FORMULASTACK rest),
+     CONSTSTACK = STRUCT (BOOL b, UNIT const, REF CONSTSTACK rest),
+     TSTRSTACK   = STRUCT (BOOL b, TYPE type, REF TSTRSTACK rest),
+     NAMESTACK  = STRUCT (BOOL b, ID id, TYPE type, REF NAMESTACK rest),
+     UCHOICESTACK = STRUCT (REF UCHOICES choices, REF UCHOICESTACK rest),
+     ELSESTACK  = STRUCT ( INT choice, BOOL check, REF ELSESTACK rest),
+     INSTSTACK = STRUCT (INT iparams, INSTANCE inst, REF INSTSTACK rest);
+
+
+REF INSTACK nilinstack     = NIL;       REF INIDSTACK nilinidstack = NIL;
+REF TYPESTACK niltypestack = NIL;       REF FORMULASTACK nilformulastack = NIL;
+REF CONSTSTACK nilconststack = NIL;     REF TSTRSTACK niltstrstack = NIL;
+REF NAMESTACK nilnamestack = NIL;       REF UCHOICESTACK nilchoicestack = NIL;
+REF ELSESTACK nilelsestack = NIL;
+REF INSTSTACK nilinststack = NIL;
+
+{Sorts for reading in spec }
+
+INT kfn_spec = 1, body_spec = 2, ext_spec = 3;
+
+OP GIVEINT = (FORMULA in)INT:
+CASE in IN
+    (REF FINT i) int OF i,
+    (REF FCHECK fc) GIVEINT test OF fc,
+    (REF FNULL fn) 0
+  OUT -1
+ESAC;
+
+
+INT  eoflib = 125;
+
+     INT spectype ;
+
+     BOOL exit := FALSE;
+
+      OP UNCHECKEDFORM = (FORMULA a) FORMULA:
+      BEGIN
+         CASE a IN
+            (REF FCHECK fc) UNCHECKEDFORM test OF fc,
+            (REF FDOP  fdop)  HEAP FDOP:= (UNCHECKEDFORM left OF fdop,
+                                            sort OF fdop,
+                                               UNCHECKEDFORM right OF fdop) ,
+            (REF FMOP  fmop)  HEAP FMOP:= (sort OF fmop,
+                                               UNCHECKEDFORM right OF fmop),
+            (REF FCOND fcond) HEAP FCOND:= (UNCHECKEDFORM cond OF fcond,
+                                              UNCHECKEDFORM true OF fcond,
+                                                UNCHECKEDFORM false OF fcond),
+            (REF FBRACKET fb) HEAP FBRACKET :=
+                                 MAKEFBRACKET (UNCHECKEDFORM formula OF fb)
+            OUT  a
+         ESAC
+      END;
+
+
+     INT integer, assinteger;
+     ID  identifier, assidentifier;
+     BUFFER buffer;
+     INT contextno, closureno;
+     BOOL export;
+     MESSAGEPROC flt;
+
+     INT t1hold ;
+
+
+ MODE SEQUENCESTACK = STRUCT (REF SEQUENCE sequence, REF SEQUENCESTACK rest),
+      SEQUENCESTACKR=STRUCT(REF REF SEQUENCE sequence, REF SEQUENCESTACKR rest),
+      SERIESSTACK   = STRUCT (REF SERIES series, REF SERIESSTACK rest),
+      SERIESSTACKR  = STRUCT (REF REF SERIES series, REF SERIESSTACKR rest),
+      UNITSTACK  = STRUCT (UNIT unit, REF UNITSTACK rest),
+      SEQCHOICESTACK = STRUCT (REF SEQCHOICES seqchoice, REF SEQCHOICESTACK rest),
+      SEQSTEPSTACK = STRUCT (SEQSTEP seqstep, REF SEQSTEPSTACK rest),
+      MULTASSIGN = STRUCT (BOOL mult, REF MULTASSIGN rest);
+
+REF SEQUENCESTACK nilsequencestack = NIL;
+REF SEQUENCESTACKR nilsequencestackr = NIL;
+REF SERIESSTACK nilseriesstack = NIL;
+REF SERIESSTACKR nilseriesstackr = NIL;
+REF UNITSTACK nilunitstack = NIL;
+REF SEQCHOICESTACK nilseqchoicestack = NIL;
+REF MULTASSIGN nilmultassign = NIL;
+REF SEQSTEPSTACK nilseqstepstack = NIL;
+
+REF IDS idstack := NIL;
+REF ATTRSTR attrstr := NIL;
+REF REF ATTRSTR nextattr := attrstr;
+REF INSTACK instack := nilinstack;
+REF INIDSTACK inidstack := nilinidstack;
+REF TYPESTACK typestack := niltypestack;
+REF INSTSTACK inststack := nilinststack;
+REF FORMULASTACK formulastack := nilformulastack;
+REF CONSTSTACK conststack := nilconststack;
+REF TSTRSTACK tstrstack := niltstrstack;
+REF UNITSTACK unitstack := nilunitstack;
+REF MULTASSIGN multassign := nilmultassign;
+REF FORMULAS formulas := NIL;
+REF ATTRSTR attrstack := NIL;
+
+ATTR attribute;  TYPE type;   FORMULA formula;   UNIT const;
+
+PROC unstackin = VOID:
+IF instack ISNT nilinstack
+  THEN instack := rest OF instack
+FI;
+
+PROC unstackinid = VOID:
+IF inidstack ISNT nilinidstack
+  THEN inidstack := rest OF inidstack
+FI;
+
+PROC unstackformula = VOID:
+IF formulastack ISNT nilformulastack
+  THEN formulastack := rest OF formulastack
+FI;
+
+PROC unstacktype = VOID:
+IF typestack ISNT niltypestack
+  THEN typestack := rest OF typestack
+FI;
+
+PROC unstackconst = VOID:
+IF conststack ISNT nilconststack
+  THEN conststack := rest OF conststack
+FI;
+
+
+PROC unstackinst = VOID:
+IF inststack ISNT nilinststack
+  THEN inststack := rest OF inststack
+FI;
+
+PROC unstackattr = VOID:
+IF attrstack ISNT nilattrstr
+  THEN attrstack := rest OF attrstack
+FI;
+
+
+PROC  userflt = (VECTOR [] CHAR  mess) VOID: ( flt(user, mess) );
+
+PROC  sysflt = (VECTOR [] CHAR  mess) VOID: ( flt(system, mess) );
+
+REF VECTOR [] REF TYPEDEC  types;
+REF VECTOR [] REF FNDEC  fns;
+REF VECTOR [] REF INTDEC  ints ;
+REF VECTOR [] REF CONSTDEC  consts ;
+REF VECTOR [] REF ATTRDEC  attrs;
+
+MODE INDS = STRUCT (INT num_names, stack);
+REF VECTOR [] REF INDS  inds;
+
+INT charpos;
+REF VECTOR [] CHAR charlist;
+
+PROC find_primno = (INT typeno, CHAR char) INT:
+BEGIN
+  REF TYPEDEC tdec = types[typeno];
+  INT primno := 0;
+  CASE body OF tdec IN
+  (REF NEWCHARS nc) (BOOL found := FALSE;
+                     REF VECTOR [] CHAR chars = chars OF nc;
+                     FOR i TO UPB chars WHILE NOT found
+                     DO IF char = chars[i]
+                        THEN found := TRUE;
+                             primno := i
+                        FI
+                     OD
+                    )
+  OUT sysflt("find_primno")
+  ESAC;
+  primno
+END;
+
+PROC ids_to_rvi = (INT typeno, REF IDS strings) REF VECTOR [] INT:
+BEGIN
+  REF IDS ids := strings;
+  INT count := 0;
+  WHILE ids ISNT nilids
+  DO count PLUSAB UPB id OF ids;
+     ids := rest OF ids
+  OD;
+  REF VECTOR [] INT rvi := HEAP VECTOR [count] INT;
+  IF count > 0
+  THEN ids := strings;
+       INT pos := 0;
+       WHILE ids ISNT nilids
+       DO ID id := id OF ids;
+          FOR i TO UPB id DO rvi[pos + i] := find_primno(typeno, id[i]) OD;
+          pos PLUSAB UPB id;
+          ids := rest OF ids
+       OD
+  FI;
+  rvi
+END;
+
+PROC print = (VECTOR [] OUTMODE line) VOID: put(screen, line);
+
+PROC fault = (INT i, t1) VOID:
+(print((newline,"failure ... i= ",i,"    t1= ",t1,"   "));
+ exit := TRUE
+);
+
+PROC syfaultp = (VECTOR [] CHAR message)VOID:
+( print((newline, message, newline)) );
+
+
+   MODE SEQSTR  = STRUCT(REF SEQUENCESTACK ss, REF SEQUENCESTACKR ssr,
+                         REF SEQCHOICESTACK scs, REF SEQSTEPSTACK sss,
+                         REF SEQUENCE seq, REF REF SEQUENCE nextseq),
+        SERSTR  = STRUCT(REF SERIESSTACK ss, REF SERIESSTACKR ssr,
+                         REF SERIES series, REF REF SERIES nextseries),
+        STASTR  = STRUCT(REF UCHOICESTACK ucs, REF MULTASSIGN multassign,
+                         REF ELSESTACK es, REF JOINS joins),
+        FNSTR   = STRUCT(REF FNDEC fndec, INT macnum,
+                         REF VECTOR [] UNIT stack, INT stackind, INT specsort,
+                         SEQSTR seq, SERSTR ser, STASTR sta);
+
+
+      OUTER extdeclaration;
+      DECLARATION declaration;
+      BOOL fast := FALSE;
+      INT newcount, macnum := 0;
+
+
+      REF PRINTITEMS printitems ;
+      REF REF PRINTITEMS nextprintitems;
+
+      FNBODY body;
+      TYPEBODY typebody;
+
+      REF SEQUENCESTACK sequencestack ;
+      REF SEQUENCESTACKR sequencestackr;
+      REF SEQCHOICESTACK seqchoicestack ;
+      REF SEQSTEPSTACK seqstepstack;
+      REF SEQUENCE sequence;
+      REF REF SEQUENCE nextsequence ;
+
+      REF SERIESSTACK seriesstack ;
+      REF SERIESSTACKR seriesstackr;
+      REF SERIES series ;
+      REF REF SERIES nextseries ;
+
+      REF NAMESTACK namestack ;
+
+      REF UCHOICESTACK uchoicestack ;
+      REF ELSESTACK elsestack ;
+
+      REF JOINS joinstack ;
+
+
+      INT specsort;
+      REF VECTOR [] UNIT   stack;     INT stackind:= 0;
+      INT iparams := 0;
+      REF NAMES names;
+      REF FNDEC fndec;
+      INSTANCE instance;
+
+   MODE FNSTRSTACK = STRUCT(FNSTR val, REF FNSTRSTACK rest);
+   REF FNSTRSTACK fnstrstack ;
+   REF FNSTRSTACK nilfnstrstack = NIL;
+   fnstrstack := nilfnstrstack;
+
+   PROC setup_fnstrstack = VOID:
+   fnstrstack := HEAP FNSTRSTACK
+              := (HEAP FNSTR:=
+                  (fndec, macnum, stack, stackind, specsort,
+                   HEAP SEQSTR:=(sequencestack, sequencestackr, seqchoicestack,
+                                 seqstepstack, sequence, nextsequence),
+                   HEAP SERSTR:=(seriesstack, seriesstackr, series, nextseries),
+                   HEAP STASTR:=(uchoicestack, multassign, elsestack, joinstack)
+                  ),
+                  fnstrstack);
+
+   PROC reset_fnstrstack = VOID:
+   ( IF fnstrstack ISNT nilfnstrstack
+     THEN FNSTR fnstr := val OF fnstrstack; fnstrstack := rest OF fnstrstack;
+          fndec := fndec OF fnstr;
+          macnum := macnum OF fnstr;
+          stack := stack OF fnstr;
+          stackind := stackind OF fnstr;
+          specsort := specsort OF fnstr;
+          sequencestack := ss OF seq OF fnstr;
+          sequencestackr := ssr OF seq OF fnstr;
+          seqchoicestack := scs OF seq OF fnstr;
+          seqstepstack := sss OF seq OF fnstr;
+          sequence := seq OF seq OF fnstr;
+          nextsequence := nextseq OF seq OF fnstr;
+          seriesstack := ss OF ser OF fnstr;
+          seriesstackr := ssr OF ser OF fnstr;
+          series := series OF ser OF fnstr;
+          nextseries := nextseries OF ser OF fnstr;
+          uchoicestack := ucs OF sta OF fnstr;
+          multassign := multassign OF sta OF fnstr;
+          elsestack := es OF sta OF fnstr;
+          joinstack := joins OF sta OF fnstr
+     FI
+  );
+
+   PROC default = VOID:
+   ( specsort := 0;
+     macnum := 0;
+     sequencestack := nilsequencestack;
+     sequencestackr := nilsequencestackr;
+     seqchoicestack := nilseqchoicestack;
+     seqstepstack := nilseqstepstack;
+     sequence := nilsequence;
+     nextsequence := sequence;
+     seriesstack := nilseriesstack;
+     seriesstackr := nilseriesstackr;
+     series := nilseries;
+     nextseries := series;
+     uchoicestack := nilchoicestack;
+     multassign := HEAP MULTASSIGN := (FALSE, nilmultassign);
+     elsestack := nilelsestack;
+     joinstack := niljoins;
+     stackind := 0;
+     formulas := nilformulas;
+     printitems := nilprintitems;
+     nextprintitems := printitems
+    );
+
+
+PROC newseqstep = (SEQSTEP s) VOID:
+   ( nextsequence := IF nextsequence IS nilsequence
+                       THEN REF REF SEQUENCE (nextsequence)
+                       ELSE REF REF SEQUENCE (rest OF nextsequence)
+                     FI
+                  := HEAP SEQUENCE := (s, nilsequence)
+   );
+
+PROC removeseqstep = SEQSTEP:
+   ( SEQSTEP ans = step OF nextsequence;
+     (REF REF SEQUENCE (nextsequence)) := nilsequence;
+     ans
+   );
+
+PROC newstep = (STEP s) VOID:
+   ( (REF REF SERIES (nextseries)) := HEAP SERIES := (s, NIL);
+     nextseries := rest OF nextseries
+   );
+
+
+      PROC tstset = REF TSTR:
+      ( REF TSTR niltstr = NIL;
+        REF TSTR tstr := niltstr;
+        WHILE NOT(b OF tstrstack)
+        DO tstr := HEAP TSTR := (type OF tstrstack, tstr);
+           tstrstack := rest OF tstrstack
+        OD;
+        tstrstack := rest OF tstrstack ;
+        tstr
+      );
+
+
+
+PROC reader = LEX:
+   IF exit
+   THEN  (eoflib, EMPTY)
+   ELSE  IF (t1hold := read il tok(buffer)) = numb_tok
+         THEN  assinteger := integer := int OF buffer
+         ELIF t1hold = ident_tok
+         THEN  assidentifier := identifier := MAKEID ident OF buffer
+         FI;
+         (t1hold, EMPTY)
+   FI;
+
+PROC failure = (INTERNALS error) VOID:
+   fault(type OF lex OF error, stind OF error);
+
+PROC fail = (VECTOR [] OUTMODE line) VOID: put(screen, line);
+
+PROC return = RESULT: (exit := TRUE; HEAP RESULT := ABS exit);
+
+PROC idproc = VOID: (idstack := HEAP IDS := (identifier, idstack) );
+
+PROC inproc = VOID: (instack := HEAP INSTACK := (FALSE, integer, instack));
+
+PROC inidproc = VOID:
+           (inidstack := HEAP INIDSTACK := (FALSE, identifier, inidstack));
+
+PROC typeproc = VOID: (typestack := HEAP TYPESTACK := (FALSE, type, typestack)
+                      );
+
+PROC ctypestartp = VOID:
+   (conststack := HEAP CONSTSTACK := (TRUE, unull, conststack));
+
+PROC ctypeproc = VOID:
+   (conststack := HEAP CONSTSTACK := (FALSE, const, conststack));
+
+PROC integerproc = VOID:
+   (formulastack := HEAP FORMULASTACK := (FALSE, formula, formulastack) );
+
+PROC stackattr = VOID:
+   (attrstack := HEAP ATTRSTR := (attribute, attrstack) );
+
+PROC stackinst = VOID:
+   (inststack := HEAP INSTSTACK := (iparams, instance, inststack));
+
+
+PROC replicator = VOID:
+   ( RANGE rg = (formula OF formulastack, formula);
+     unstackformula;
+     ints[in OF instack] := HEAP INTDEC
+            := (localdec, inid OF inidstack, elem OF attrstack, rg, nilusage);
+     formulastack := HEAP FORMULASTACK
+                  := (FALSE, MAKEFNAME (in OF instack), formulastack);
+     unstackattr; unstackin; unstackinid
+   );
+
+PROC attrproc = VOID:
+   ( REF REF ATTRSTR (nextattr) := HEAP ATTRSTR := (attribute, nilattrstr);
+     nextattr := rest OF nextattr
+   );
+
+PROC attrname = VOID: attribute := MAKEATTRNAME(integer);
+
+PROC attrdata = VOID:
+    ( attribute := HEAP ATTRDATA := (inid OF inidstack, idstack);
+      unstackinid;
+      idstack := nilids
+    );
+
+PROC attrbracket = VOID: attribute := MAKEATTRBRACKET attribute;
+
+PROC attrnullp = VOID:  attribute := attrnull;
+
+PROC attrstart = VOID:
+   ( attrstr := nilattrstr;  nextattr := attrstr ); { assumes no nesting }
+
+PROC attrstrp = VOID:  attribute := attrstr;
+
+
+PROC iconst = VOID: (formula := HEAP FINT := (integer, nullid));
+
+PROC iconsttext = VOID: (formula := HEAP FINT := (in OF instack, identifier);
+                         unstackin );
+
+PROC iname = VOID: formula := MAKEFMACPAR(integer);
+
+PROC idop = VOID: (INT op; FORMULA l1, r1;
+                   op := in OF instack; unstackin;
+                   r1 := formula;
+                   l1 := formula OF formulastack; unstackformula;
+                   formula := HEAP FDOP := (l1, op, r1)
+                  );
+
+PROC imop = VOID: (INT op; FORMULA r1;
+                   op := in OF instack; unstackin;
+                   r1 := formula;
+                   formula := HEAP FMOP := (op, r1)
+                  );
+
+PROC icond = VOID: (FORMULA b1, l1, r1;
+                    r1 := formula;
+                    l1 := formula OF formulastack; unstackformula;
+                    b1 := formula OF formulastack; unstackformula;
+                    formula := HEAP FCOND := (b1, l1, r1)
+                   );
+
+PROC iparam = VOID: (formula := MAKEFARITH integer);
+
+
+PROC intcheck = VOID: (INT test; FORMULA integer1, standard;
+                       test := in OF instack; unstackin;
+                       integer1 := formula OF formulastack; unstackformula;
+                       standard := formula;
+                       formula := HEAP FCHECK := (test, integer1, standard)
+                      );
+
+PROC idef = VOID: (formula := MAKEFNAME integer);
+
+PROC ibracket = VOID: (formula := MAKEFBRACKET formula);
+
+PROC inull = VOID: (formula := fnull);
+
+PROC tnullp = VOID: (type := tnull);
+
+PROC tvoidp = VOID: type := tvoid;
+
+PROC tnamed = VOID: (type := MAKETNAME integer; SKIP);
+
+PROC trow = VOID: (type := HEAP TROW := (formula OF formulastack, type);
+                   unstackformula
+                  );
+
+PROC tparam = VOID: type := MAKETMACPAR(integer);
+
+PROC tfn = VOID: (type := HEAP TFN := (type OF typestack, type); unstacktype);
+
+PROC tstring = VOID: (type := HEAP TSTRING := (formula OF formulastack,type);
+                       unstackformula);
+
+PROC tstp = VOID: (type := tstset);
+
+PROC tststartp = VOID: tstrstack := HEAP TSTRSTACK := (TRUE, tnull, tstrstack);
+
+PROC tsttype = VOID: tstrstack := HEAP TSTRSTACK := (FALSE, type, tstrstack);
+
+PROC tbracket = VOID: type := MAKETBRACKET type;
+
+PROC cnamed = VOID: (const := MAKECNAME integer; SKIP);
+
+PROC cprim = VOID: (const := HEAP CPRIM := (in OF instack, integer);
+                    unstackin
+                   );
+
+PROC cprimi = VOID: (const := HEAP CINT := (in OF instack, formula);
+                     unstackin
+                    );
+
+PROC cprimr = VOID: (RANGE ra := (formula OF formulastack, formula);
+                     const := HEAP CRANGE := (in OF instack, ra);
+                     unstackin; unstackformula
+                    );
+
+PROC cprimu = VOID: (INT a,b;
+                     a := in OF instack; unstackin;
+                     b := in OF instack; unstackin;
+                     const := HEAP UASSOC := (b, a, const)
+                    );
+
+
+PROC calt = VOID:  ( REF UALTS calts := nilualts;
+                     WHILE NOT(b OF conststack)
+                     DO calts := HEAP UALTS := (const OF conststack, calts);
+                        unstackconst
+                     OD;
+                     unstackconst;
+                     const := calts
+                   );
+
+PROC cst = VOID:   ( REF USTR cstr := nilustr;
+                     WHILE NOT(b OF conststack)
+                     DO cstr := HEAP USTR := (const OF conststack, cstr);
+                        unstackconst
+                     OD;
+                     unstackconst;
+                     const := cstr
+                   );
+
+PROC crow = VOID: (const := HEAP UROW := (formula OF formulastack, const);
+                   unstackformula
+                  );
+
+PROC cnullp = VOID: (const := unull);
+
+PROC cvoidp = VOID: const := cvoid;
+
+PROC cttype = VOID: const := MAKECTYPE type;
+
+PROC cquery = VOID:  const := MAKECQUERY type;
+
+PROC cbracket = VOID: const := MAKEUBRACKET const;
+
+PROC cstring = VOID:
+     (const := HEAP USTRING := (formula OF formulastack, const);
+      unstackformula);
+
+PROC cprimch = VOID:
+     (INT typeno = in OF instack;
+      const := HEAP CPRIM := (typeno, find_primno(typeno, identifier[1]));
+      unstackin);
+
+PROC cprimst = VOID:
+     (INT typeno = in OF instack;
+      const := HEAP CQUOTE := (typeno, ids_to_rvi(typeno, idstack));
+      idstack := nilids;
+      unstackin);
+
+PROC cprimchr = VOID:
+     (INT typeno = in OF instack;
+      const := HEAP CPRIMRANGE :=
+              ( typeno, find_primno(typeno, (inid OF inidstack)[1]),
+                        find_primno(typeno, identifier[1]));
+      unstackin; unstackinid);
+
+PROC cparam = VOID: const := MAKECNAME(integer);
+
+PROC cindex = VOID:
+   ( const := HEAP UINDEX := (const, formula) );
+
+PROC ctrim = VOID:
+   ( RANGE rg = (formula OF formulastack, formula);
+     const := HEAP UTRIM := (const, rg);
+     unstackformula
+   );
+
+PROC crepl = VOID:
+   ( const := HEAP UREPL := (formula OF formulastack, const);
+     unstackformula
+   );
+
+PROC ccond = VOID:
+   ( const := HEAP UCOND
+           := (formula OF formulastack, const OF conststack, const);
+     unstackconst; unstackformula
+   );
+
+PROC cconc = VOID:
+   ( INT sort = in OF instack;  unstackin;
+     const := HEAP UCONC :=
+         ((in OF instack)=1, sort, const OF conststack, const);
+     unstackconst;  unstackin
+   );
+
+PROC cattr = VOID:
+   ( const := HEAP UATTR := (const, attribute) );
+
+PROC pidalts = VOID:
+   ( HEAP VECTOR [newcount] ALTERNATIVE newnames;
+     WHILE (NOT (b OF namestack)) ANDTH (newcount/=0)
+     DO newnames[newcount] := (id OF namestack, type OF namestack);
+        newcount MINUSAB 1;
+        namestack := rest OF namestack
+     OD;
+     namestack := rest OF namestack;
+     typebody := newnames
+   );
+
+PROC prange = VOID:
+   ( RANGE ra = (formula OF formulastack, formula);
+     unstackformula;
+     HEAP NEWINTS newints := (inid OF inidstack, ra);
+     unstackinid;
+     typebody := newints
+   );
+
+PROC pstringst = VOID:
+   ( charpos := 0;
+     charlist := HEAP VECTOR [integer] CHAR
+   );
+
+PROC pstring = VOID:
+   ( HEAP NEWCHARS newchars := (inid OF inidstack, charlist);
+     unstackinid;
+     typebody := newchars
+   );
+
+PROC pchar = VOID:
+   ( charpos PLUSAB 1;
+     charlist[charpos] := identifier[1]
+   );
+
+PROC pcharange = VOID:
+   ( INT first = ABS (inid OF inidstack)[1],
+         last  = ABS identifier[1];
+     FOR i FROM first TO last
+     DO charlist[charpos + i - first + 1] := REPR i OD;
+     charpos PLUSAB (last - first + 1);
+     unstackinid
+   );
+
+PROC primsetp = VOID:
+   ( namestack := HEAP NAMESTACK := (TRUE, nilid, tnull, namestack);
+     newcount := 0
+   );
+
+PROC primset1 = VOID:
+   ( namestack := HEAP NAMESTACK
+               := (FALSE, identifier, type OF typestack, namestack);
+     newcount PLUSAB 1;
+     unstacktype
+   );
+
+PROC namestp = VOID:
+   ( names := nilnames );
+
+PROC idloop = VOID:
+   ( INT numb = in OF instack;
+     unstackin;
+     (nametypes OF fndec)[numb] := (inid OF inidstack, type, attribute);
+     unstackinid;
+     names := HEAP NAMES := (numb, names)
+   );
+
+
+PROC attrlistpr = VOID:
+   ( attr OF (nametypes OF fndec)[in OF instack] := attribute;
+     unstackin
+   );
+
+
+
+PROC instance1 = VOID:
+   ( INT fnno = in OF instack;  unstackin;
+     iparams := 0;
+     instance :=
+       (fnno,
+        IF integer /= -1 THEN HEAP VECTOR[integer]MACPARAM ELSE nilmacparams FI,
+        attrnull
+       )
+   );
+
+PROC instancep = VOID:
+   ( attr OF instance := attribute );
+
+
+PROC attrcall = VOID:
+   ( (macparams OF instance)[iparams PLUSAB 1] :=
+        ( IF (in OF instack)=1 THEN explicitmacpar ELSE implicitmacpar FI,
+          MAKEATTRTAG attribute );
+     unstackin
+   );
+
+PROC integercall = VOID:
+   ( (macparams OF instance)[iparams PLUSAB 1] :=
+        ( IF (in OF instack)=1 THEN explicitmacpar ELSE implicitmacpar FI,
+          MAKEFORMULATAG formula );
+     unstackin
+   );
+
+PROC typecall = VOID:
+   ( (macparams OF instance)[iparams PLUSAB 1] :=
+        ( IF (in OF instack)=1 THEN explicitmacpar ELSE implicitmacpar FI,
+          MAKETYPETAG type );
+     unstackin
+   );
+
+PROC ctypecall = VOID:
+   ( (macparams OF instance)[iparams PLUSAB 1] :=
+        ( IF (in OF instack)=1 THEN explicitmacpar ELSE implicitmacpar FI,
+          MAKEUNITTAG const );
+     unstackin
+   );
+
+
+PROC fnparamcall = VOID:
+   ( INSTANCE parinst = instance;
+     instance := inst OF inststack;
+     iparams := iparams OF inststack;
+     unstackinst;
+     (macparams OF instance)[iparams PLUSAB 1] :=
+        (IF (in OF instack)=1 THEN explicitmacpar ELSE implicitmacpar FI,
+         parinst);
+     unstackin
+   );
+
+PROC exttypes = VOID:
+   ( integer := in OF instack;  unstackin;
+     HEAP USAGE usage := (contextno, 0, integer, 0, FALSE, FALSE);
+     types[in OF instack] := HEAP TYPEDEC :=
+       (outerdec, inid OF inidstack, attrnull, typebody, usage);
+     unstackin; unstackinid
+   );
+
+PROC extattrs = VOID:
+   ( HEAP USAGE usage := (contextno, 0, integer, 0, FALSE, FALSE);
+     attrs[in OF instack] := HEAP ATTRDEC
+                          := (outerdec, identifier, attrnull, usage);
+     unstackin
+   );
+
+PROC extints = VOID:
+   ( HEAP USAGE usage := (contextno, 0, integer, 0, FALSE, FALSE);
+     ints[in OF instack] := HEAP INTDEC
+                         := (outerdec, identifier, attrnull, fnull, usage);
+     unstackin
+   );
+
+PROC extctypes = VOID:
+   ( HEAP USAGE usage := (contextno, 0, integer, 0, FALSE, FALSE);
+     consts[in OF instack] := HEAP CONSTDEC :=
+        (outerdec, identifier, attrnull, MAKECTYPE(tnull), usage);
+     unstackin
+   );
+
+
+PROC extfns = VOID:
+   ( BOOL import = (integer = 1);
+     INT vnno = in OF instack; unstackin;
+     usage OF fndec := HEAP USAGE := (contextno, 0, vnno, 0, import, FALSE)
+   );
+
+PROC fnstartp = VOID:
+   ( setup_fnstrstack;
+     default
+   );
+
+PROC fnendp = VOID:
+( INT fnno = in OF instack; unstackin;
+  fns[fnno] := fndec;
+  declaration := MAKEFNNAME fnno;
+  reset_fnstrstack
+);
+
+PROC fndecl = VOID:
+   ( fnbody OF fndec := body );
+
+
+PROC usagep = VOID:
+   IF (usage OF fndec) ISNT nilusage
+   THEN libv_body OF usage OF fndec := integer
+   FI;
+
+PROC fnspecinput = VOID:
+( inputs OF fndec := names );
+
+PROC fnspecoutput = VOID:
+( outputs OF fndec := names );
+
+PROC spec1 = VOID:
+( specsort := kfn_spec );
+
+PROC spec2 = VOID:
+( specsort := body_spec );
+
+PROC spec3 = VOID:
+( specsort := ext_spec );
+
+PROC fnspec1 = VOID:
+(  BOOL macro = ( integer = 1 );
+   INT sort = in OF instack; unstackin;
+   BOOL use_inds = NOT (specsort = body_spec ANDTH sort = outerdec);
+
+   INT fnno = IF (specsort = kfn_spec) THEN 1 ELSE in OF instack FI;
+                { note leave fnno on stack }
+   REF INDS inds = inds[fnno];
+   stack := IF use_inds
+            THEN HEAP VECTOR [stack OF inds]UNIT
+            ELSE stack
+            FI;
+   stackind := 0;
+   REF VECTOR [] NAMETYPE nametypes :=
+          IF use_inds
+          THEN HEAP VECTOR [num_names OF inds] NAMETYPE
+          ELSE NIL
+          FI;
+   fndec :=
+     IF use_inds
+     THEN HEAP FNDEC :=
+            (sort, macro, identifier,
+             IF macro THEN nullmacspecs ELSE nilmacspecs FI, attrnull,
+             nilnames, nilnames, nametypes, bodynull, nilusage
+            )
+    ELSE fns[1] {fndec already created by kfn }
+    FI
+);
+
+PROC fnspec2 = VOID:
+( attr OF fndec := attribute );
+
+PROC macspecp = VOID:
+( INT sort = ( (in OF instack)=1 | explicitmacpar | implicitmacpar );
+  unstackin;
+  (macspecs OF fndec)[macnum] := (sort, declaration);
+  macnum PLUSAB 1
+);
+
+PROC arith = VOID: body := MAKEARITH formula;
+
+PROC biop1 = VOID:
+   ( instance := (-1,
+       IF integer /= -1 THEN HEAP VECTOR[integer]MACPARAM ELSE nilmacparams FI,
+                  attrnull);
+     iparams := 0
+   );
+
+PROC biop = VOID:
+   ( body:= HEAP ALIENCODE := (TRUE, inid OF inidstack, macparams OF instance);
+     unstackinid
+   );
+
+PROC alien = VOID:
+   ( body:= HEAP ALIENCODE := (FALSE, inid OF inidstack, macparams OF instance);
+     unstackinid
+   );
+
+PROC idelay = VOID:
+   ( FORMULA delaytime := formula OF formulastack;
+     BOOL check = (in OF instack) = 1; unstackin;
+     body := HEAP IDELAY := (const, delaytime);
+     IF check THEN body := HEAP BODYCHECK := (nilints, TRUE, body) FI;
+     unstackformula
+   );
+
+PROC adelay = VOID:
+   ( UNIT c = const OF conststack; unstackconst;
+     FORMULA f := formula OF formulastack; unstackformula;
+     BOOL check = (in OF instack) = 1; unstackin;
+     body := HEAP ADELAY
+          := (in OF instack, const OF conststack, f, c, formula);
+     IF check THEN body := HEAP BODYCHECK := (nilints, TRUE, body) FI;
+     unstackconst; unstackin
+   );
+
+PROC sample = VOID:
+   ( BOOL check = (in OF instack) = 1; unstackin;
+     body := HEAP SAMPLE := (in OF instack, formula OF formulastack,
+                             const OF conststack, formula);
+     IF check THEN body := HEAP BODYCHECK := (nilints, TRUE, body) FI;
+     unstackconst; unstackin; unstackformula
+   );
+
+PROC faster = VOID: fast := TRUE;
+
+PROC slower = VOID: fast := FALSE;
+
+PROC timescale = VOID:
+   ( INT sort = in OF instack; unstackin;
+     BOOL check = (in OF instack) = 1; unstackin;
+     INSTANCE inst := instance;
+     attr OF inst := attribute;
+     body := HEAP TIMESCALE := (fast, sort, inst, formula OF formulastack,
+                                const OF conststack, formula);
+     IF check THEN body := HEAP BODYCHECK := (nilints, TRUE, body) FI;
+     unstackformula; unstackconst
+   );
+
+PROC ramp = VOID:
+   ( body := MAKERAM(const OF conststack);
+     IF (in OF instack) = 1
+     THEN body := HEAP BODYCHECK := (nilints, TRUE, body)
+     FI;
+     unstackconst; unstackin
+   );
+
+PROC reformpr = VOID:
+   body := IF integer = 1
+           THEN HEAP BODYCHECK := (nilints, TRUE, FNBODY(reform))
+           ELSE reform
+           FI;
+
+PROC imported = VOID:  body := nilimport;
+
+PROC unit = VOID: body := MAKEUNITTAG stack[stackind];
+
+
+PROC vvarmultp = VOID:
+   ( stack[stackind]:= HEAP UREPL := (formula OF formulastack, stack[stackind]);
+     unstackformula
+   );
+
+PROC vconst = VOID: (stack[stackind PLUSAB 1] := MAKECNAME integer );
+
+PROC vconc = VOID:
+   ( stack[stackind-1] := HEAP UCONC
+                       := ((in OF instack)=1, integer, stack[stackind-1],
+                           stack[stackind]);
+     unstackin;
+     stackind MINUSAB 1
+   );
+
+PROC vprim = VOID:
+   ( stack[stackind PLUSAB 1] := HEAP CPRIM := (in OF instack, integer);
+     unstackin
+   );
+
+PROC vprimi = VOID:
+   ( stack[stackind PLUSAB 1] := HEAP CINT := (in OF instack, formula);
+     unstackin
+   );
+
+PROC vprimc = VOID: stack[stackind PLUSAB 1] := MAKECNAME (integer);
+
+PROC vname = VOID:
+   ( stack[stackind PLUSAB 1] := HEAP UNAME := (in OF instack, integer);
+     unstackin
+   );
+
+PROC vtrim = VOID:
+   ( RANGE rg = (formula OF formulastack, formula);
+     unstackformula;
+     stack[stackind] := HEAP UTRIM := (stack[stackind], rg)
+   );
+
+PROC vindex = VOID:
+   ( stack[stackind] := HEAP UINDEX := (stack[stackind], formula) );
+
+PROC vtermindex = VOID:
+   ( INT fnno = in OF instack; unstackin;
+     INT nameno = integer;
+     stack[stackind] := HEAP UPORTNAME := (stack[stackind], fnno, nameno)
+   );
+
+PROC vcallm = VOID:
+   ( stack[stackind] := HEAP UMINST := (instance, stack[stackind]) );
+
+PROC vcalld = VOID:
+   ( stackind MINUSAB 1;
+     stack[stackind] := HEAP UDINST
+                     := (stack[stackind], instance, stack[stackind+1])
+   );
+
+PROC vunn = VOID:
+   ( stack[stackind] := HEAP UASSOC:= (in OF instack, integer, stack[stackind]);
+     unstackin
+   );
+
+PROC vsharp = VOID:
+   ( stack[stackind] := HEAP UEXTRACT
+                     := (stack[stackind], in OF instack, integer);
+     unstackin
+   );
+
+PROC vrow = VOID:
+   ( stack[stackind] := HEAP UROW := (formula, stack[stackind]) );
+
+PROC vcasestart = VOID:
+   ( uchoicestack := HEAP UCHOICESTACK := (niluchoices, uchoicestack));
+
+PROC vcase = VOID:
+   ( REF UCHOICES res := niluchoices;
+     REF UCHOICES ustack := choices OF uchoicestack;
+     WHILE ustack ISNT niluchoices
+     DO res := HEAP UCHOICES
+            := (check OF ustack, sort OF ustack, test OF ustack,
+                output OF ustack, res);
+        ustack := rest OF ustack
+     OD;
+     uchoicestack := rest OF uchoicestack;
+     stack[stackind] := HEAP UCASE := (stack[stackind], res)
+   );
+
+PROC vquery = VOID: stack[stackind PLUSAB 1] := MAKECQUERY type;
+
+PROC vcoll = VOID:
+   ( REF USTR ust := nilustr;
+     TO integer
+     DO ust := HEAP USTR := (stack[stackind], ust);
+        stackind MINUSAB 1
+     OD;
+     stack[stackind PLUSAB 1] := ust
+   );
+
+PROC vfip = VOID:
+   ( stackind MINUSAB 1;
+     stack[stackind] := HEAP UCOND
+              := (formula OF formulastack, stack[stackind],stack[stackind+1]);
+     unstackformula
+   );
+
+PROC vseqstart = VOID:
+   ( sequencestack := HEAP SEQUENCESTACK := (sequence, sequencestack);
+     sequencestackr := HEAP SEQUENCESTACKR := (nextsequence, sequencestackr);
+     sequence := nilsequence;
+     nextsequence := sequence
+   );
+
+PROC vseqp = VOID:
+   ( stack[stackind] := HEAP USEQUENCE := (sequence, stack[stackind]);
+     sequence := sequence OF sequencestack;
+     sequencestack := rest OF sequencestack;
+     nextsequence := sequence OF sequencestackr;
+     sequencestackr := rest OF sequencestackr
+   );
+
+PROC vparstart = VOID:
+   ( seriesstack := HEAP SERIESSTACK := (series, seriesstack);
+     seriesstackr := HEAP SERIESSTACKR:=(nextseries, seriesstackr);
+     series := nilseries;
+     nextseries := series
+   );
+
+PROC vparp = VOID:
+   ( stack[stackind] := HEAP USERIES := (series, stack[stackind]);
+     series := series OF seriesstack;
+     seriesstack := rest OF seriesstack;
+     nextseries := series OF seriesstackr;
+     seriesstackr := rest OF seriesstackr
+   );
+
+PROC vdynstart = VOID:  {{?? do  you really need to stack here }}
+   ( unitstack := HEAP UNITSTACK := (stack[stackind], unitstack);
+     stackind MINUSAB 1
+   );
+
+PROC vdynindexp = VOID:
+   ( UNIT u = unit OF unitstack;
+     unitstack := rest OF unitstack;
+     stack[stackind] := HEAP UDYINDEX := (u, stack[stackind])
+   );
+
+PROC vreplace = VOID:
+   (stack[stackind - 2] := HEAP UREPLACE
+                := (stack[stackind - 2], stack[stackind - 1], stack[stackind]);
+    stackind MINUSAB 2
+   );
+
+PROC vbracket = VOID: stack[stackind] := MAKEUBRACKET (stack[stackind]);
+
+PROC vnull = VOID: stack[stackind PLUSAB 1] := unull;
+
+PROC vvoid = VOID: stack[stackind PLUSAB 1] := cvoid;
+
+PROC vstring = VOID:
+      stack[stackind] := HEAP USTRING := (formula, stack[stackind]);
+
+PROC vprimch = VOID:
+   ( INT typeno = in OF instack;
+     stack[stackind PLUSAB 1] := HEAP CPRIM
+                              := (typeno, find_primno(typeno, identifier[1]));
+     unstackin
+   );
+
+PROC vprimst = VOID:
+   ( INT typeno = in OF instack;
+     stack[stackind PLUSAB 1] := HEAP CQUOTE := (typeno,
+                                                 ids_to_rvi(typeno, idstack));
+     idstack := nilids;
+     unstackin
+   );
+
+PROC addattr = VOID:
+   ( CASE stack[stackind] IN
+     (REF UMINST umin)  attr OF inst OF umin := attribute,
+     (REF UDINST udin)  attr OF inst OF udin := attribute
+      OUT CASE attribute IN
+          (REF ATTRNULL) SKIP
+          OUT stack[stackind] := HEAP UATTR := (stack[stackind], attribute)
+          ESAC
+      ESAC
+   );
+
+PROC vnormal = VOID:
+   elsestack := HEAP ELSESTACK := (normalchoice, FALSE, elsestack);
+
+PROC velsep = VOID:
+   elsestack := HEAP ELSESTACK := (elsechoice, FALSE, elsestack);
+
+PROC velseof = VOID:
+   elsestack := HEAP ELSESTACK := (elseofchoice, FALSE, elsestack);
+
+PROC vnoelse = VOID:
+   elsestack := HEAP ELSESTACK := (noelsechoice, FALSE, elsestack);
+
+PROC vcheck = VOID: check OF elsestack := (integer = 1);
+
+PROC vcaserep = VOID:
+   ( BOOL check = check OF elsestack;
+     INT sort = choice OF elsestack;
+     elsestack := rest OF elsestack;
+     UNIT u = stack[stackind];
+     stackind MINUSAB 1;
+     choices OF uchoicestack := HEAP UCHOICES
+             := (check, sort, const OF conststack,u, choices OF uchoicestack);
+     unstackconst
+   );
+
+PROC unitcheck = VOID:
+   (  FCHECK fcheck :=
+        CASE formula IN (REF FCHECK fc) fc OUT (0,fnull,fnull) ESAC;
+      stack[stackind] := HEAP UCHECK := (stack[stackind], fcheck)
+   );
+
+
+PROC seqnullp = VOID:
+   ( newseqstep(seqnull) );
+
+PROC seqvoidstart = VOID:
+   ( sequencestack := HEAP SEQUENCESTACK := (sequence, sequencestack);
+     sequencestackr := HEAP SEQUENCESTACKR
+                    := (nextsequence, sequencestackr);
+     sequence := nilsequence;
+     nextsequence := sequence;
+     multassign := HEAP MULTASSIGN := (FALSE, multassign)
+   );
+
+PROC seqvoid = VOID:
+   ( REF SEQUENCE s = sequence;
+     sequence := sequence OF sequencestack;
+     nextsequence := sequence OF sequencestackr;
+     sequencestackr := rest OF sequencestackr;
+     sequencestack := rest OF sequencestack;
+     IF (mult OF multassign)  {{ IL stores multi assignment with extra SEQVOID}}
+     THEN CASE step OF s IN
+          (REF SEQASSIGN sa)
+             ( multassign := rest OF multassign;
+               newseqstep(sa)
+             )
+          OUT sysflt("multseqassign")
+          ESAC
+     ELSE newseqstep(s)
+     FI
+   );
+
+PROC seqlet = VOID:
+   ( LET let = (names, stack[stackind]);
+     REF SEQLET seqlet = MAKESEQLET let;
+     stackind MINUSAB 1;
+     newseqstep(seqlet)
+   );
+
+PROC seqvar = VOID:
+   ( LET seqlet = (names, stack[stackind]);
+     REF SEQVAR seqvar =MAKESEQVAR seqlet;
+     stackind MINUSAB 1;
+     newseqstep(seqvar)
+   );
+
+PROC seqper = VOID:
+   ( HEAP SEQPVAR seqpvar := (names, const OF conststack);
+     unstackconst;
+     newseqstep(seqpvar)
+   );
+
+PROC seqassignval1 = VOID:
+   ( unitstack := HEAP UNITSTACK := (stack[stackind], unitstack);
+     CASE stack[stackind] IN
+     (REF USTR us) mult OF multassign := TRUE
+     OUT mult OF multassign := FALSE
+     ESAC;
+     stackind MINUSAB 1
+   );
+
+PROC seqassignval2 = VOID:
+   ( UNIT uhold = unit OF unitstack;
+     unitstack := rest OF unitstack;
+     newseqstep( HEAP SEQASSIGN := (uhold, stack[stackind]));
+     stackind MINUSAB 1
+   );
+
+PROC seqcasestart = VOID:
+   ( seqchoicestack := HEAP SEQCHOICESTACK := (nilseqchoices, seqchoicestack);
+     unitstack := HEAP UNITSTACK := (stack[stackind], unitstack);
+     stackind MINUSAB 1
+   );
+
+PROC seqcase = VOID:
+   ( REF SEQCHOICES ans := nilseqchoices;
+     REF SEQCHOICES seqstack := seqchoice OF seqchoicestack;
+     WHILE seqstack ISNT nilseqchoices
+     DO ans := HEAP SEQCHOICES
+            := (check OF seqstack, sort OF seqstack,
+                test OF seqstack, output OF seqstack, ans);
+        seqstack := rest OF seqstack
+     OD;
+     seqchoicestack := rest OF seqchoicestack;
+     UNIT u = unit OF unitstack;
+     unitstack := rest OF unitstack;
+     newseqstep(HEAP SEQCASE := (u, ans))
+   );
+
+PROC seqvarmult = VOID:
+   ( newseqstep( HEAP SEQREPL := (formula OF formulastack, removeseqstep));
+     unstackformula
+   );
+
+PROC seqrow = VOID:
+     newseqstep( HEAP SEQROW := (formula, removeseqstep));
+
+PROC seqdecl = VOID:
+     newseqstep(declaration);
+
+PROC attrdecl = VOID:
+   ( INT sort = IF macnum = 0 THEN localdec ELSE macpardec FI;
+     attrs[in OF instack] := HEAP ATTRDEC
+                     := (sort, inid OF inidstack, attribute, nilusage);
+     declaration := MAKEATTRNAME in OF instack;
+     unstackin; unstackinid
+   );
+
+PROC intdecl = VOID:
+   ( INT sort = IF macnum = 0 THEN localdec ELSE macpardec FI;
+     ints[in OF instack] := HEAP INTDEC
+            := (sort, inid OF inidstack, elem OF attrstack, formula, nilusage);
+     declaration := MAKEFNAME in OF instack;
+     unstackattr; unstackin; unstackinid
+   );
+
+PROC typedecl = VOID:
+   ( INT sort = IF macnum = 0 THEN localdec ELSE macpardec FI;
+     types[in OF instack] := HEAP TYPEDEC :=
+            (sort, inid OF inidstack, elem OF attrstack, typebody, nilusage);
+     declaration := MAKETNAME in OF instack;
+     unstackattr; unstackin; unstackinid
+   );
+
+PROC constdecl = VOID:
+   ( INT sort = IF macnum = 0 THEN localdec ELSE macpardec FI;
+     consts[in OF instack] := HEAP CONSTDEC
+              := (sort, inid OF inidstack, elem OF attrstack, const, nilusage);
+     declaration := MAKECNAME in OF instack;
+     unstackattr; unstackin; unstackinid
+   );
+
+
+PROC seqrepstep = VOID:
+   ( BOOL check = check OF elsestack;
+     INT sort = choice OF elsestack;
+     elsestack := rest OF elsestack;
+     seqchoice OF seqchoicestack := HEAP SEQCHOICES
+                     := (check, sort, const OF conststack, removeseqstep,
+                         seqchoice OF seqchoicestack);
+     unstackconst
+   );
+
+PROC seqif = VOID:
+   seqstepstack := HEAP SEQSTEPSTACK := (removeseqstep, seqstepstack);
+
+PROC seqfip = VOID:
+   ( SEQSTEP false = removeseqstep;
+     newseqstep( HEAP SEQCOND := (formula OF formulastack,
+                                  seqstep OF seqstepstack, false));
+     unstackformula;
+     seqstepstack := rest OF seqstepstack
+   );
+
+PROC seqpt = VOID:
+   ( FORMULA cond = formula OF formulastack; unstackformula;
+     HEAP PRINT print := (cond, printitems);
+     printitems := nilprintitems;
+     nextprintitems := printitems;
+     newseqstep(print)
+   );
+
+PROC seqptflt = VOID:
+   ( FORMULA cond = formula OF formulastack; unstackformula;
+     HEAP FAULT fault := (cond, printitems);
+     printitems := nilprintitems;
+     nextprintitems := printitems;
+     newseqstep(fault)
+   );
+
+
+PROC typenotprim = VOID: ( typebody := MAKETYPETAG type );
+
+
+PROC multint = VOID:
+   ( formulas := HEAP FORMULAS := (formula, formulas) );
+
+
+PROC makerow = (REF FORMULAS makeints, TYPE type) TYPE:
+   IF makeints IS nilformulas
+   THEN type
+   ELSE HEAP TROW := (UNCHECKEDFORM (formula OF makeints),
+                      makerow(rest OF makeints, type))
+   FI;
+
+PROC bmake1 = VOID:
+   ( { sets up type for use by idloop }
+     TYPE ty2 = type OF typestack; unstacktype;
+     TYPE ty1 = type OF typestack; unstacktype;
+     type := makerow(formulas, HEAP TFN := (ty1, ty2))
+   );
+
+PROC bmake = VOID:
+   ( { reverse order of names }
+     REF NAMES makenames := nilnames;
+     WHILE names ISNT nilnames
+     DO makenames := HEAP NAMES := (nameno OF names, makenames);
+        names := rest OF names
+     OD;
+     HEAP MAKE make := (formulas, instance, makenames);
+     formulas := nilformulas;
+     newstep(make)
+   );
+
+PROC bfor = VOID:
+   ( formulas := nilformulas;
+     joinstack := niljoins
+   );
+
+PROC bjoin = VOID:
+   ( HEAP JOIN join := (stack[stackind-1], stack[stackind]);
+     stackind MINUSAB 2;
+     newstep(join)
+   );
+
+PROC bjoins = VOID:
+   ( REF FORMULAS repls := nilformulas;
+     REF JOINS joins := niljoins;
+     WHILE formulas ISNT nilformulas
+     DO repls := HEAP FORMULAS := (formula OF formulas, repls);
+        formulas := rest OF formulas
+     OD;
+     WHILE joinstack ISNT niljoins
+     DO joins := HEAP JOINS := (join OF joinstack, joins);
+        joinstack := rest OF joinstack
+     OD;
+     newstep( HEAP REPLJOIN := (repls, joins))
+   );
+
+PROC bjoins1 = VOID:
+   ( joinstack := HEAP JOINS
+               := ((stack[stackind-1], stack[stackind]), joinstack);
+     stackind MINUSAB 2
+   );
+
+PROC pardecl = VOID: newstep(declaration);
+
+
+PROC biddec2 = VOID:
+   ( HEAP LET let := (names, stack[stackind]);
+     stackind MINUSAB 1;
+     newstep(let)
+   );
+
+PROC pt = VOID:
+   ( FORMULA cond = formula OF formulastack; unstackformula;
+     HEAP PRINT print := (cond, printitems);
+     printitems := nilprintitems;
+     nextprintitems := printitems;
+     newstep(print)
+   );
+
+PROC ptflt = VOID:
+   ( FORMULA cond = formula OF formulastack; unstackformula;
+     HEAP FAULT fault := (cond, printitems);
+     printitems := nilprintitems;
+     nextprintitems := printitems;
+     newstep(fault)
+   );
+
+PROC bvar1 = VOID:
+   ( formulas := HEAP FORMULAS := (formula OF formulastack, formulas);
+     unstackformula
+   );
+
+PROC strmessage = VOID:
+   ( REF REF PRINTITEMS (nextprintitems) := HEAP PRINTITEMS
+                                         := (identifier, nilprintitems);
+     nextprintitems := rest OF nextprintitems
+   );
+
+PROC printint = VOID:
+   ( REF REF PRINTITEMS (nextprintitems) := HEAP PRINTITEMS
+                                  := (MAKEFORMULATAG formula, nilprintitems);
+     nextprintitems := rest OF nextprintitems
+   );
+
+PROC ktypein = VOID:
+   ( types := HEAP VECTOR [integer] REF TYPEDEC;
+     ints := HEAP VECTOR [in OF instack] REF INTDEC;
+     unstackin;
+     attrs := HEAP VECTOR [in OF instack] REF ATTRDEC;
+     unstackin;
+     HEAP USAGE usage := (contextno, closureno, in OF instack, 0, FALSE, FALSE);
+     types[1] := HEAP TYPEDEC :=
+        (outerdec, inid OF inidstack, attrnull, MAKETYPETAG(tnull), usage);
+     unstackinid; unstackin
+   );
+
+PROC ktypep = VOID:
+   ( body OF types[1] := typebody;
+     attr OF types[1] := elem OF attrstack;
+     unstackattr;
+     spectype := outertype
+   );
+
+PROC kintp = VOID:
+   ( value OF ints[1] := formula;
+     attr OF ints[1] := elem OF attrstack;
+     unstackattr;
+     spectype := outerint
+   );
+
+PROC kintin = VOID:
+   ( ints := HEAP VECTOR [integer] REF INTDEC;
+     attrs := HEAP VECTOR [in OF instack] REF ATTRDEC;
+     unstackin;
+     HEAP USAGE usage := (contextno, closureno, in OF instack, 0, FALSE, FALSE);
+     ints[1] := HEAP INTDEC
+             := (outerdec, inid OF inidstack, attrnull, fnull, usage);
+     unstackin;  unstackinid
+  );
+
+PROC kconstin = VOID:
+   ( consts := HEAP VECTOR [integer] REF CONSTDEC;
+     types:= HEAP VECTOR [in OF instack] REF TYPEDEC;
+     unstackin;
+     ints := HEAP VECTOR [in OF instack] REF INTDEC;
+     unstackin;
+     attrs := HEAP VECTOR [in OF instack] REF ATTRDEC;
+     unstackin;
+     HEAP USAGE usage := (contextno, closureno, in OF instack, 0, FALSE, FALSE);
+     consts[1] := HEAP CONSTDEC
+            := (outerdec, inid OF inidstack, attrnull, unull, usage);
+     unstackin;  unstackinid
+   );
+
+PROC kconstp = VOID:
+   ( value OF consts[1] := const;
+     attr OF consts[1] := elem OF attrstack;
+     unstackattr;
+     spectype := outerconst
+   );
+
+PROC kattrin = VOID:
+   ( attrs := HEAP VECTOR [integer] REF ATTRDEC;
+     HEAP USAGE usage := (contextno, closureno, in OF instack, 0, FALSE, FALSE);
+     attrs[1] := HEAP ATTRDEC := (outerdec, inid OF inidstack, attrnull, usage);
+     unstackinid;  unstackin
+  );
+
+PROC kattrp = VOID:
+  ( value OF attrs[1] := attribute;
+    spectype := outerattr
+  );
+
+PROC kfnenv = VOID:
+(  consts := HEAP VECTOR [integer] REF CONSTDEC;
+   types:= HEAP VECTOR [in OF instack] REF TYPEDEC;
+   unstackin;
+   ints := HEAP VECTOR [in OF instack] REF INTDEC;
+   unstackin;
+   attrs := HEAP VECTOR [in OF instack] REF ATTRDEC;
+   unstackin
+);
+
+PROC kfnin = VOID:
+   ( spectype := outerfn;
+     BOOL import = (integer = 1);
+     INT libvspec = in OF instack;
+     unstackin;
+     usage OF fndec := HEAP USAGE
+                    := (contextno, closureno, libvspec, 0, import, export);
+     fns[1] := fndec;
+     declaration := MAKEFNNAME 1
+   );
+
+PROC macin = VOID:
+  IF integer /= 0
+  THEN macspecs OF fndec := HEAP VECTOR [integer] MACSPEC;
+       macnum := 1
+  FI;
+
+PROC macend = VOID: macnum := 0;
+
+PROC kinds = VOID:
+   ( fns := HEAP VECTOR [integer] REF FNDEC;
+     inds := HEAP VECTOR [integer] REF INDS
+   );
+
+
+PROC checkloop = VOID:
+   CASE body IN
+   (REF BODYCHECK bc)
+     ( joincheck OF bc := HEAP INTS := (integer, joincheck OF bc) )
+   OUT HEAP BODYCHECK newbc := (HEAP INTS := (integer, nilints), FALSE, body);
+       body := newbc
+   ESAC;
+
+
+PROC endp = VOID:
+   ( HEAP ENVIRON environ := (attrs, ints, types, consts, fns);
+     extdeclaration := (closureno, spectype, environ);
+     exit := TRUE
+  );
+
+
+PROC indsp = VOID:
+   ( INT stack = in OF instack; unstackin;
+     INT num_names = in OF instack; unstackin;
+     inds[integer] := HEAP INDS := (num_names, stack)
+   );
+
+PROC fncallp = VOID:
+   ( fnbody OF fndec := body;
+     INT fnno = in OF instack; unstackin;
+     fns[fnno] := fndec;
+     declaration := MAKEFNNAME fnno
+   );
+
+
+PROC assemble_start = ( INT no, closno, BOOL ex, BUFFER specbuf,
+                        MESSAGEPROC pflt ) VOID:
+( exit:= FALSE;
+  buffer := specbuf;
+  contextno := no;
+  closureno := closno;
+  export := ex;
+  flt := pflt;
+
+  attrs := nullattrdecs;
+  ints := nullintdecs;
+  types := nulltypedecs;
+  consts := nullconstdecs;
+  fns := nullfndecs;
+  inds := HEAP VECTOR [0] REF INDS;
+  idstack := nilids;
+  instack := nilinstack;
+  inidstack := nilinidstack;
+  typestack := niltypestack;
+  attrstr := nilattrstr;
+  nextattr := attrstr;
+  formulastack := nilformulastack;
+  conststack := nilconststack;
+  tstrstack := niltstrstack;
+  unitstack := nilunitstack;
+  type := tnull;
+  formula := fnull;
+  const := unull;
+
+  default
+);
+
+PROC assemble_body = (BUFFER bodybuffer) VOID:
+( exit := FALSE;
+  buffer := bodybuffer;
+  default
+);
+
+SKIP
+
+KEEP  LEXVAL, LEX, RESULT, INTERNALS, extdeclaration, declaration,
+      reader, failure, return, fail, exit, print, assemble_start, assemble_body,
+      assinteger,  assidentifier,
+
+   fncallp,   endp,   kconstp,   ktypep, kattrin, kattrp, kfnin, spec1, spec2,
+   spec3, extattrs, idproc, kfnenv, replicator,
+   attrname, attrdata, attrstart, attrproc, attrstrp, attrnullp, attrbracket,
+   inidproc, integerproc,   macin,    typeproc,   inproc,   kintin,   kintp,
+   ktypein,   intcheck,   idef,   inull,   ibracket,
+   iparam,   icond,   imop,   idop,   iname,   iconst,   exttypes,   extints,
+   extfns,   tbracket,   tfn,   tparam,   tststartp,   tstp,   trow,   tnamed,
+   tnullp,   tsttype,   indsp,   prange,   primsetp,
+   pidalts,   primset1,  usagep,  macend,
+   fnspec1,  fnspec2,  fnspecinput,  fnspecoutput, stackattr,
+   idloop,   unit, arith,   imported,   biop1, biop,  alien,  reformpr,
+   ctypestartp, ctypeproc,   ramp,   adelay,   idelay,   stackinst,
+   vvarmultp,   vbracket,   vdynstart, vdynindexp,   vparstart,   vparp,
+   vseqstart,   vseqp, vfip,   vcoll,   vquery,   vcasestart,   vcase,   vrow,
+   vsharp,   vunn,   vcalld,   vcallm,   vindex,   vtermindex, vtrim,   vname,
+   vprimi,   vprim,   vconc,   fnstartp,  fnendp,   ptflt,   pt,
+   biddec2,   pardecl,   bfor,
+   bjoins,   bjoin,   bmake1,  bmake,   printint,   strmessage,
+   typenotprim,   bvar1,   bjoins1,   attrcall, integercall,   fndecl,
+   intdecl,   seqvarmult,
+   seqif,   seqfip,   seqcasestart,   seqcase,   seqassignval1,   seqassignval2,
+   seqper,   seqvar,   seqlet,   seqvoidstart,   seqvoid,   seqnullp,
+   seqrow,  seqdecl,   cquery,
+   cttype,   cbracket,   calt,   cnullp,   crow,   cst,   cprimu,   cprimr,
+   cprimi,   cprim,  cindex,  ctrim,  crepl,  ccond,  cconc,  cattr,
+   seqrepstep,   vnoelse,   vnormal,   velsep,   velseof,
+   vcaserep,   vcheck,
+   tstring, cstring, cprimch, cprimst, cprimchr, pstringst, pstring, pchar,
+   pcharange, vstring, vprimch, vprimst, unitcheck,
+   cnamed,   extctypes,  vconst,  attrdecl, constdecl,  kconstin,  kinds,
+   iconsttext, vnull, seqpt, seqptflt, typedecl,
+   ctypecall, cparam, vprimc, sample, faster, slower,
+   timescale, multint, tvoidp, cvoidp, vvoid,    checkloop,
+   fnparamcall, vreplace, addattr,
+   attrlistpr, instance1, instancep, namestp, typecall,
+   macspecp
+
+FINISH

@@ -1,0 +1,188 @@
+DECS  ptcomp  CONTEXT VOID  USE  putstrings,  messageproc, osinterface,  basics,
+      compshell, databasebuffers,  charset,  libmodes, ioprocs:
+
+{ " Id: ptcomp.sta,v 1.1 91/10/14 14:31:02 edcad Exp $" }
+configinfo A68CONFIG "$Id: ptcomp.a68,v 34.2 1995/03/29 13:03:31 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+03:04:84  Taken from  :ellasystem.ellaptcomp(16)  on  3 April 1984
+18:04:84  Updated to use new  "ella_reader"  segment and to interface to
+             the library system - autonomous version now needs shell on FLEX
+30:08:84  faults tidied
+05:02:85  BFOR and REFORM added. (Bug - 3 can also mean unchecked)
+02:09:85  Bug mended.  IDs have been extended.
+             Changes made so that ptcomp can be called from the ELLA library.
+28:11:85  Brought to Perq, 1906 removed
+20:03:86  CR 250.  Attprim and Attcall added.  EVW.
+06:10:86  CR 180.  Sequences. - various seq.. words and vdynindex added. EVW.
+16:10:86  Updated for new osinterface  DCT
+31:10:86  Updated for break-in  DCT
+09:02:87  CR 408.  vthen and seqthen added. EVW
+02:10:87  Change made to print of p in outints to make it portable.  JER
+09:09:88  BIOPs, ELLA characters, strings and CONSTs added.  MGH
+13:10:88  Porting change in parameter to PROC compile.  EVW
+08:02:89  CR 642. Updated to kernel. EVW
+27:10:89  CR 636. Adam replaced by su_keepsake. JIT
+22:11:89  inkeptchar replaced by inkeptid. EVW
+18:12:89  "88" replaced by "Alien". JIT
+03:01:90  "100" replaced by "Sample". JIT
+19:01:90  "Faster" (145) and "Slower" (146) added. JIT
+06:02:90  Multiple lets and constant macro parameters added.  MGH
+17:07:90  LIBINTERFACE replaced by LIBMODES. EVW
+08:08:90  Add REF to outstring. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+23:11:90  "Bjoinend" (147), "Tvoid" (148) and "Vvoid" (149) added. JIT
+20:02:91  KEEPSAKE now accessed through KEEPSAKEBUFFERS only.  DCT
+26:02:91  Error message removed from call of compile and PROCs xcompflt and
+             xinput changed. JIT
+26:04:91  "Vreplace" (150) added. JIT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+19:03:92  Attribute declaration and use added. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+21:05:92  Cvoid (142) replaces Vdynassign. MGH
+01:03:93  Cindex, Ctrim, Cvarmult, Cif, Cconc and Cattr added. EVW
+23:02:93  OSIF level 1 - now uses "compshell" instead of "reader".  DCT
+15:06:93  Seqrow added. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.036 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT  fnstart = 43,   unchecked = 3;
+
+PROC  il word = (INT  i) VECTOR [] CHAR:
+BEGIN
+   CASE (i+1) IN
+   "Zero",
+   "Iconst",  "Iname",   "Idop",    "Imop",    "Icond",   "Iparam",  "Ivarmult",
+   "Icheck",  "Iconsttext",
+   "Tnull",   { <- 10 }  "Tnamed",  "Trow",    "Tst",     "Tparam",  "Tfn",
+   "Cprim",   "Cprimi",  "Cprimr",  "Cprimu",  "Cst",     { <- 20 }  "Crow",
+   "Cnull",   "Calt",
+   "Vconc",   "Vprim",   "Vprimi",  "Vname",   "Vtrim",   "Vindex",  "Vcallm",
+   { <- 30 }  "Vcalld",  "Vunn",    "Vsharp",  "Vrow",    "Vcase",   "Vquery",
+   "Vcoll",   "Vif",     "Vtermindex",  "Vvarmult", { <- 40 } "Vconst",
+   "End",     "Fnstart", "Fnend",   "Bmake",   "Bjoin",   "Bfor"  ,  "Typename",
+   "Biddec",  "Pidalts", { <- 50 }  "Prange",  "Idelay",  "Adelay",  "Pt",
+   "Ptflt",   "Str",     "57",  "Dummy",   "Velseof", "Velse",   { <- 60 }
+   "Vfi",     "Ram",     "63", "Vvarmultend",
+   "Ktype",   "Kint",    "Kfn",     "Kconst",  "Kattr",     "Kend", { <- 70 }
+   "71",  "Kilend",     "73",  "Reform",  "Cconc", "Cattr",
+   "Vcelse",  "Vnormal", "Vnoelse", "Vseq", { <-80 }   "Vpar",    "Vdynindex",
+   "Vbracket", "Ibracket", "Tbracket", "Cbracket", "Biop", "Alien", "Parend",
+   "Seqend",  { <- 90 }  "Seqnull", "Seqvoid", "Seqlet",  "Seqvar",  "Seqper",
+   "Seqassign",    "Seqcase", "Seqif",   "Seqvarmult", "Sample", { <- 100 }
+   "Cindex", "Ctrim", "Cvarmult", "Cif", "Seqbecomes",  "Seqassignend",
+   "Seqrow",  "Seqelse",  "Seqfi", "Seqvarmultend",  { <- 110}
+   "Vthen",    "Seqthen", "Cttype", "Cquery", "Imported", "Inull", "Normal",
+   "Brief",    "Inst", "Macparam", { <- 120 }
+   "Intname", "Idef", "Multjoin", "124", "Eoflib",
+   "In", "Inid-127", "Pstring", "Pchar", "Pcharange",  { <- 130 }
+   "Cstring", "Cprimch", "Cprimst", "Cprimchr", "Vstring", "Vprimch",
+   "Vprimst", "Tstring", "Cnamed", "Constname", { <- 140 }
+   "Vnull", "Cvoid", "Cparam", "Vprimc", "Faster", "Slower",
+   "Bjoinend", "Tvoid", "Vvoid", "Vreplace", { 150 <- }
+   "Attrname", "Attid", "Attdata", "Attbracket", "Attstr", "Attnull", "157",
+   "158", "Inid"
+   OUT  "Not recognised"
+   ESAC
+END;
+
+BOOL  initialise:= TRUE;  {{{ For PROCs which only need to be called once}}}
+PROC (REF VECTOR [] CHAR, BOOL) INT  lookup;
+REF [] CHARSET  charset;
+
+*3 MODE FILE = INT;
+
+PROC  ptcomp = (FILE  file,  MESSAGEPROC  flt) VOID:
+BEGIN
+
+   PROC  msg = (MSGNO  no,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(no)
+      THEN  put(screen, ("Closing file ", file_name(file), newline));
+            close_file(file, flt)
+      FI;
+      flt(no, params)
+   END;
+
+   BOOL  kept fn:= TRUE;
+
+   PROC  outints = (VECTOR [] INT  p) VOID:
+   BEGIN
+      IF UPB p = 1 ANDTH p[1] = unchecked
+      THEN put(out, "Unchecked ")
+      ELSE
+         put(out, (il word(p[1]), " "));
+         FOR i FROM 2 TO UPB p DO  put(out, (p[i], " "))  OD
+      FI;
+      IF p[1] = 70 OREL  p[1] = 72 THEN  newline(out); newline(out) FI
+   END;
+
+   PROC  outid = (ID  id) VOID:  put(out, ("""", id, """ "));
+
+   PROC outstring = (REF VECTOR [] CHAR  str) VOID:
+      put(out, ("'", str, "' "));
+
+   PROC import = (ID  rename, name, CTNAME  ctn) VOID:
+   (  outid(rename); outid(name); outid(context OF ctn); outid(import OF ctn) );
+
+   PROC  mname = (ID  id) VOID: ( SKIP );
+
+
+   IF isnilptr(discfile, rootptrs[1])
+   THEN  put(out, ("Compiled outside a context", newline, newline))
+   ELSE  put(out, ( "Compiled in context  ", CTOS currentct OF library,
+                    newline, newline ))
+   FI;
+
+   REF CONTXT  ct = get_context(context OF currentct OF library);
+   CREGION  cr = get_region(ct, import OF currentct OF library);
+
+   BOOL  failed_compilation:= FALSE;
+   compile_shell( TRUE, cr, file, outints, outid,
+                  outstring, import, mname, failed_compilation, msg );
+   IF failed_compilation
+   THEN  put(screen, ("Failed to compile", newline))
+   ELSE  put(screen, ("ELLA Compiled", newline))
+   FI;
+
+   close_file(file, flt)
+END
+
+
+KEEP  ptcomp
+
+FINISH
