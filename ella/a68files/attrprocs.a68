@@ -1,0 +1,518 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRPROCS.STA }
+{ *3    10-MAR-1989 16:52:33 ELLADEV "Updated provisional with fixes for R4B216. BGH" }
+{ *2    21-JAN-1989 11:07:39 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *1    11-NOV-1988 15:50:47 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRPROCS.STA }
+DECS attrprocs CONTEXT VOID
+USE basics, putstrings, messageproc, ioprocs, libmodes, attrmodes, attrlevel1,
+    attrlevel2, attrtrans, assmodes, closureprocs:
+
+{                    " Id: attrprocs.sta,v 1.1 91/10/14 14:26:01 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrprocs.a68,v 34.2 1995/03/29 13:03:18 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+08:02:89   CR ???   FLTPROC -> MESSAGEPROC.  EVW
+06:03:89   R4B216.  Fix to `isopen' following comments by Liz.  TK
+19:07:90   Changes so that level2 attributes ignore system attributes. EVW
+19:11:90   Declaration attributes merged onto update 26. JIT
+18:11:91   Textattributes added. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.005 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{  Defines operations on the ALGOL68 level 2 attribute state.  These
+   operations are used by the attribute command procedures defined in module
+   `attrcmds'.
+
+   Note that data or attributes held in the Algol68 attribute state MUST be
+   written to the library before the addition or removal of classes in order
+   to avoid inconsistencies.
+}
+{             ********************************************      }
+
+{ Level2 attributes need to ignore system level attributes.  }
+{ This may latter be true for other attributes as well.      }
+
+INT textattributes_key;  {?? should be in LIBMODES }
+
+PROC is_system_attribute = (INT key) BOOL:
+   ( key = body_key OREL key = info_key OREL key = spacemap_key );
+
+{ The Algol68 level 2 attribute system state.}
+
+ID attcontext;
+{ The current context for attribute editing purposes. If libary data is being
+  edited, 'attcontext' is set to 'nullid'.}
+
+ATTDATA attdata;
+{ This holds the context or library attribute data which is currently being
+  edited by the data editor.  It is read from the library at the start of
+  a data editing session and is written back to the library at the end of
+  the data editing session.}
+
+REF ATTRIBS attribs;
+{ This holds the attributes (ie data associated with nodeset names) for the
+  context corresponding to 'attcontext'.  It is read from the library at
+  the start of an attribute editing session and is written back to the library
+  at the end of that session.}
+
+NODESET curnodeset;  { The nodeset associated with the data being edited.}
+
+{ Change indicators; the data will be written to the ELLA library only if the
+  corresponding indicator is 'TRUE'.}
+
+BOOL attdatachanged,
+     attribschanged;
+
+{ Current closure - used to output text attributes }
+
+CLOSURE attclosure;
+
+
+{ 'Zeroes' the Algol68 attribute state.}
+
+PROC init_state = VOID:
+BEGIN
+   attcontext := nullid;
+   attdata := nilattdata;
+   attribs := nilattribs;
+   attdatachanged := FALSE;
+   attribschanged := FALSE;
+   attclosure := make_closure
+END;
+
+{ Returns number of classes that currently exist }
+
+PROC nclasses = INT:
+BEGIN
+   INT result := 0;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      result PLUSAB 1;
+      TRUE
+   END;
+   scan_classes(action);
+   result
+END;
+
+{                     ******************************                  }
+
+{ Returns the position of a class in the class list; this position is used as
+  an index into `attdata' and `attribs'.  Returns 0 if class doesn't exist.}
+
+PROC find_index = (ID classname) INT:
+BEGIN
+   INT index := 0;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      name /= classname
+   END;
+   IF scan_classes(action) THEN index ELSE 0 FI
+END;
+
+{ Determines if a class is open }
+
+PROC isopen = (ID class) BOOL:
+BEGIN
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, npword) BOOL:
+      NOT (name = class ANDTH login);
+   scan_classes(action)
+END;
+
+{                     ******************************                      }
+
+{ Operations on data lists.}
+
+PROC deleteitem = (REF REF DATALIST datalist, INT position,
+                                              MESSAGEPROC flt) VOID:
+BEGIN
+   INT pos := 0;
+   REF REF DATALIST dlist := datalist;
+   WHILE (dlist ISNT nildatalist) ANDTH (pos PLUSAB 1) < position
+   DO dlist := rest OF dlist OD;
+   IF pos /= position OR position < 1
+   THEN flt(user, "Data position doesn't exist")
+   ELSE REF REF DATALIST(dlist) := rest OF dlist
+   FI
+END;
+
+PROC insdata = (REF REF DATALIST datalist, INT position,
+                RVC data, MESSAGEPROC flt) VOID:
+BEGIN
+   INT pos := 0;
+   REF REF DATALIST dlist := datalist;
+   WHILE (dlist ISNT nildatalist) ANDTH (pos PLUSAB 1) < position
+   DO dlist := rest OF dlist OD;
+   IF pos /= position OR position < 1
+   THEN flt(user, "Data position doesn't exist")
+   ELSE REF REF DATALIST(dlist) := HEAP DATALIST := (data, dlist)
+   FI
+END;
+
+PROC printdatalist = (REF DATALIST datalist, RCH outch) VOID:
+BEGIN
+   IF datalist IS nildatalist
+   THEN put(outch, ("No data", newline))
+   ELSE
+      REF DATALIST dlist := datalist;
+      WHILE dlist ISNT nildatalist
+      DO put(outch, ("   >", data OF dlist, "<", newline));
+         dlist := rest OF dlist
+      OD
+   FI
+END;
+
+{                      *******************************                   }
+
+{ Operations on nodeset names.}
+
+{ Conversion procedure for nodeset names.}
+
+PROC nodesetstring = (NODESET nodeset) RVC:
+BEGIN
+   PROC nodeliststring = (REF NODELIST nodelist) RVC:
+   BEGIN
+      PROC nodestring = (NODE node) RVC:
+      BEGIN
+         PROC decnodestring = (DECNODE decnode) RVC:
+         BEGIN
+            INT level = level OF decnode;
+            IF level = 1
+            THEN decname OF decnode
+            ELSE oneline((decname OF decnode, "(", intchars(level), ")"))
+            FI
+         END;
+
+         CASE node IN
+         (DECNODE decnode) decnodestring(decnode)
+        ,(INSTNODE instnode)
+            oneline((decnodestring(decnode OF instnode),
+                     ":", instname OF instnode))
+         ESAC
+      END;
+
+      IF rest OF nodelist IS nilnodelist
+      THEN nodestring(node OF nodelist)
+      ELSE oneline((nodestring(node OF nodelist), ".",
+                    nodeliststring(rest OF nodelist)))
+      FI
+   END;
+
+   CASE nodeset IN
+   (REF NODELIST nodelist) nodeliststring(nodelist)
+  ,(IMPNODE impnode)
+      (RVC rest = nodeliststring(nodes OF impnode);
+       IF UPB rest = 0
+       THEN oneline(("/",region OF impnode))
+       ELSE oneline(("/",region OF impnode,".",rest))
+       FI)
+   ESAC
+END;
+
+{ Equality operators for nodeset names.}
+
+OP = = (DECNODE dec1, dec2) BOOL:
+  (decname OF dec1 = decname OF dec2) AND (level OF dec1 = level OF dec2);
+
+OP = = (INSTNODE inst1, inst2) BOOL:
+  (decnode OF inst1 = decnode OF inst2)
+  AND (instname OF inst1 = instname OF inst2);
+
+OP = = (NODE node1, node2) BOOL:
+  CASE node1 IN
+  (DECNODE dec1) CASE node2 IN (DECNODE dec2) dec1 = dec2 OUT FALSE ESAC
+ ,(INSTNODE inst1) CASE node2 IN (INSTNODE inst2) inst1 = inst2 OUT FALSE ESAC
+  OUT FALSE
+  ESAC;
+
+OP = = (REF NODELIST nlist1, nlist2) BOOL:
+BEGIN
+   REF NODELIST nl1 := nlist1, nl2 := nlist2;
+   BOOL ok := TRUE;
+   WHILE ok AND (nl1 ISNT nilnodelist) AND (nl2 ISNT nilnodelist)
+   DO ok := (node OF nl1 = node OF nl2);
+      nl1 := rest OF nl1; nl2 := rest OF nl2
+   OD;
+   ok AND (nl1 IS nilnodelist) AND (nl2 IS nilnodelist)
+END;
+
+OP = = (NODESET nodeset1, nodeset2) BOOL:
+   CASE nodeset1 IN
+   (REF NODELIST nlist1)
+      CASE nodeset2 IN (REF NODELIST nlist2) nlist1 = nlist2 OUT FALSE ESAC
+  ,(IMPNODE imp1)
+      CASE nodeset2 IN
+      (IMPNODE imp2) (region OF imp1 = region OF imp2
+                      ANDTH nodes OF imp1 = nodes OF imp2)
+      OUT FALSE
+      ESAC
+   ESAC;
+
+{                            ********************                       }
+
+{ Operations on the 'attribs' component of the attribute system state.}
+
+PROC find_nodeset = (NODESET nodeset) BOOL:
+BEGIN
+   BOOL found := FALSE;
+   REF ATTRIBS attr := attribs;
+   WHILE (attr ISNT nilattribs) ANDTH NOT found
+   DO found := (nodeset = nodeset OF attr);
+      attr := rest OF attr
+   OD;
+   found
+END;
+
+PROC print_attdata = (ATTDATA attdata, RCH outch) VOID:
+BEGIN
+   INT index := 0;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      IF NOT is_system_attribute(key) ANDTH login
+      THEN put(outch, (name, ":", newline));
+           printdatalist(attdata[index], outch)
+      FI;
+      TRUE
+   END;
+   scan_classes(action)
+END;
+
+PROC find_attdata = (NODESET nodeset) ATTDATA:
+BEGIN
+   REF ATTRIBS attr := attribs;
+   WHILE NOT (nodeset = nodeset OF attr) DO attr := rest OF attr OD;
+   attdata OF attr
+END;
+
+PROC append_nodeset = (NODESET nodeset) VOID:
+BEGIN
+   REF REF ATTRIBS attr := attribs;
+   WHILE attr ISNT nilattribs DO attr := rest OF attr OD;
+   ATTDATA attdata = HEAP VECTOR[nclasses]REF DATALIST;
+   FOR i TO UPB attdata DO attdata[i] := nildatalist OD;
+   REF REF ATTRIBS(attr) := HEAP ATTRIBS
+                         := (nodeset,attdata,nilattribs)
+END;
+
+PROC deletenodeset = (NODESET nodeset) VOID:
+BEGIN
+   REF REF ATTRIBS attr := attribs;
+   WHILE NOT (nodeset = nodeset OF attr) DO attr := rest OF attr OD;
+   REF REF ATTRIBS(attr) := rest OF attr
+END;
+
+PROC add_attdata = (NODESET nodeset) VOID:
+BEGIN
+   REF ATTRIBS attr := attribs;
+   WHILE NOT (nodeset = nodeset OF attr) DO attr := rest OF attr OD;
+   attdata OF attr := attdata
+END;
+
+{ Copies the attdata for the desired nodeset into the system state
+  component 'attdata'; it is copied because user may wish to quit edit session}
+
+PROC get_nattdata = (NODESET nodeset) VOID:
+BEGIN
+   PROC copydlist = (REF DATALIST dlist) REF DATALIST:
+      IF dlist IS nildatalist
+      THEN nildatalist
+      ELSE HEAP DATALIST
+              := (HEAP VECTOR[UPB data OF dlist]CHAR := data OF dlist,
+                  copydlist(rest OF dlist)
+                 )
+      FI;
+
+   ATTDATA nattdata = find_attdata(nodeset);
+   attdata := HEAP VECTOR [nclasses] REF DATALIST;
+   FOR i TO UPB attdata
+   DO attdata[i] := copydlist(nattdata[i]) OD
+END;
+
+{     ******************************************************   }
+
+{ Interactions between the ELLA library and the Algol68 attribute state.}
+
+{ In the following read and write operations,
+  if 'attcontext' is 'nullid', then the library data is read into 'attdata';
+  otherwise the data or attributes for context 'attcontext' is read into
+  'attdata' or 'attribs' respectively.
+  Information is not read or written for unopened classes.}
+
+PROC read_attdata = (MESSAGEPROC flt) VOID:
+BEGIN
+   attdata := HEAP VECTOR [nclasses] REF DATALIST;
+   INT index := 0;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      attdata[index] :=
+          IF NOT is_system_attribute(key) ANDTH login
+          THEN CASE get_info(attcontext,key,TRUE,flt) IN
+               (REF DATALIST datalist) datalist
+               OUT nildatalist
+               ESAC
+          ELSE nildatalist
+          FI;
+      TRUE
+   END;
+   scan_classes(action)
+END;
+
+PROC write_attdata = (MESSAGEPROC flt) VOID:
+BEGIN
+   INT index := 0;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      IF NOT is_system_attribute(key) ANDTH login
+      THEN put_info(attcontext, key, attdata[index], flt)
+      FI;
+      TRUE
+   END;
+   scan_classes(action)
+END;
+
+{ The attribute information is read into an intermediate mode 'TEMPATTR'
+  which closely reflects the structure of the attribute information in the
+  ELLA library.  It is subsequently converted into mode 'REF ATTRIBS'; vice
+  versa for writing.}
+
+MODE TEMPATTR = REF VECTOR[]REF NODEDATA;
+
+PROC read_temp = (MESSAGEPROC flt) TEMPATTR:
+BEGIN
+   TEMPATTR temp := HEAP VECTOR [nclasses] REF NODEDATA;
+   INT index := 0;
+
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      temp[index] :=
+          IF NOT is_system_attribute(key) ANDTH login
+          THEN  IF (key = textattributes_key) ANDTH
+                   (outers OF attclosure ISNT nilouters)
+                THEN translate_textattributes(attclosure, MAKERVC name, flt)
+                ELSE CASE get_info(attcontext,key,FALSE,flt) IN
+                     (REF NODEDATA nodedata) nodedata
+                     OUT nilnodedata
+                     ESAC
+                FI
+          ELSE nilnodedata
+          FI;
+      TRUE
+   END;
+   scan_classes(action);
+   temp
+END;
+
+PROC read_attribs = (MESSAGEPROC flt) VOID:
+BEGIN
+   PROC add_dlist = (NODESET nodeset, REF DATALIST datalist, INT class) VOID:
+   BEGIN
+      REF ATTRIBS attr := attribs;
+      WHILE NOT (nodeset = nodeset OF attr) DO attr := rest OF attr OD;
+      (attdata OF attr)[class] := datalist
+   END;
+
+   TEMPATTR temp = read_temp(flt);
+   attribs := nilattribs;
+   FOR class TO UPB temp
+   DO REF NODEDATA ndata := temp[class];
+      WHILE ndata ISNT nilnodedata
+      DO IF NOT find_nodeset(nodeset OF ndata)
+         THEN append_nodeset(nodeset OF ndata)
+         FI;
+         add_dlist(nodeset OF ndata, datalist OF ndata, class);
+         ndata := rest OF ndata
+      OD
+   OD
+END;
+
+PROC write_temp = (TEMPATTR temp, MESSAGEPROC flt) VOID:
+BEGIN
+   INT index := 0;
+
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      index PLUSAB 1;
+      IF NOT is_system_attribute(key) ANDTH login
+      THEN put_info(attcontext, key, temp[index], flt)
+      FI;
+      TRUE
+   END;
+   scan_classes(action)
+END;
+
+PROC write_attribs = (MESSAGEPROC flt) VOID:
+BEGIN
+   PROC add_nodedata =
+    (NODESET nodeset, REF DATALIST datalist, REF REF NODEDATA nodedata) VOID:
+   BEGIN
+      REF REF NODEDATA ndata := nodedata;
+      WHILE ndata ISNT nilnodedata DO ndata := rest OF ndata OD;
+      REF REF NODEDATA(ndata) := HEAP NODEDATA
+                              := (nodeset,datalist,nilnodedata)
+   END;
+
+   TEMPATTR temp = LOC VECTOR[nclasses]REF NODEDATA;
+   FOR i TO UPB temp DO temp[i] := nilnodedata OD;
+   REF ATTRIBS attr := attribs;
+   WHILE attr ISNT nilattribs
+   DO ATTDATA attd = attdata OF attr;
+      FOR j TO UPB attd
+      DO IF attd[j] ISNT nildatalist
+         THEN add_nodedata(nodeset OF attr, attd[j], temp[j])
+         FI
+      OD;
+      attr := rest OF attr
+   OD;
+   write_temp(temp,flt)
+END;
+SKIP
+
+KEEP is_system_attribute, textattributes_key,
+     attcontext, attdata, attribs, curnodeset,
+     attdatachanged, attribschanged,  attclosure,
+     isopen, find_index, nclasses,
+     init_state, = (NODESET,NODESET),
+     TEMPATTR, read_temp,
+     read_attdata, write_attdata,
+     read_attribs, write_attribs,
+     deleteitem, insdata, printdatalist, appenddlist,
+     nodesetstring, print_attdata, add_attdata, find_attdata, get_nattdata,
+     deletenodeset, find_nodeset, append_nodeset
+FINISH
