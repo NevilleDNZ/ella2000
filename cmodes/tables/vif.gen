@@ -1,0 +1,2406 @@
+
+% $Id: vif.gen,v 2.2 1995/03/29 13:16:44 ella Exp $
+
+% 
+%     ************************************************************************
+%     This Program is the property of the Secretary of State for Defence
+%     (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+%     reproduction, production of amended versions and/or transfer of this
+%     Program is permitted provided that:
+% 
+%   (a)  this legend be preserved on any such reproduction and amended version,
+%   (b)  any amended version of this Program be clearly marked to show the
+%        nature of the amendment and of the name of the amending organisation,
+%   and
+%   (c)  any recipient  of such reproduction or amended version accept the
+%        conditions set out in this legend.
+% 
+%                          Crown Copyright, (c)   1994
+% 
+%                              All rights reserved.
+% 
+%     The Secretary of State for Defence (United Kingdom) acting through his
+%     Defence Research Agency (DRA) gives no warranty that any element of the
+%     Software is suitable for any purpose and he shall not be liable for any
+%     loss or damage including loss or damage resulting in injury or death
+%     howsoever caused which results from the use of the Software, or any
+%     developments adaptions modifications translations and enhancements
+%     thereof.
+% 
+%     The original authors may be contacted via email on ella@dra.hmg.gb or by
+%     writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+%     ************************************************************************
+% 
+%   ------------------------- Change History ---------------------------
+% 23:02:95   1.001  DJS   Insert into configured database.
+% 29:03:95   2.002  ELLA  Change copyright message
+% ??:??:??   ?.???  ????
+
+SIGNATURE V01_VIF
+
+TABLE VIF
+
+NODE ACCESS_TYPE_DECL
+NODE ALIAS_DECL
+NODE ALLOCATED
+NODE ALLOCATOR
+NODE ARCHITECTURE_BODY
+NODE ASCENDING_RANGE_CONSTRAINT
+NODE ASSERTION_STM
+NODE ATTRIBUTE_DECL
+NODE ATTRIBUTE_SPEC
+NODE BINARY_OPERATION
+NODE BINDING_INDICATION
+NODE BIT_STRING_LITERAL
+NODE BIT_STRING_LITERAL_SUB_AGG
+NODE BLOCK_CONFIG
+NODE BLOCK_STM
+NODE CASE_ALTERNATIVE_FOR_DISCRETE
+NODE CASE_ALTERNATIVE_FOR_STRING
+NODE CASE_STM
+NODE CHAR_LITERAL_DECL
+NODE CLOSURE
+NODE COMP_INSTANTIATE_STM
+NODE COMPLETE_ASSOCIATION_OF_FORMAL
+NODE COMPONENT_CONFIG
+NODE COMPONENT_DECL
+NODE CONCURRENT_ASSERTION_STM
+NODE CONCURRENT_PROC_CALL_STM
+NODE COND_ALTERNATIVE
+NODE CONDITIONAL_SIGNAL_ASSIGN_STM
+NODE CONDITIONAL_WAVEFORM_ALT
+NODE CONFIGURATION_DECL
+NODE CONFIGURATION_SPEC
+NODE CONSTANT_DECL
+NODE CONSTRAINED_ARRAY_TYPE_DECL
+NODE CONVERSION_FUNCTION_ON_ASSOC
+NODE CONVERSION_FUNCTION_ON_PARTIAL_FORMAL
+NODE DESCENDING_RANGE_CONSTRAINT
+NODE DESIGN_LIBRARY
+NODE DESIGN_UNIT
+NODE DISCONNECTION_SPEC
+NODE ELEMENT_DECL
+NODE ENTITY_DECL
+NODE ENTITY_INSTANTIATE_STM
+NODE ENUM_LITERAL_DECL
+NODE ENUM_TYPE_DECL
+NODE EXIT_STM
+NODE FILE_DECL
+NODE FILE_TYPE_DECL
+NODE FLOATING_TYPE_DECL
+NODE FOR_GENERATION
+NODE FOR_ITERATION
+NODE FUNC_BODY
+NODE FUNC_CALL
+NODE FUNC_DECL
+NODE GATHERED_PARTIAL_ASSOCIATIONS
+NODE GENERAL_NAMED_ENTITY
+NODE GENERAL_SUBTYPE_DECL
+NODE GENERAL_USED_OBJECT
+NODE GENERATE_STM
+NODE GENERIC_PARAM_DECL
+NODE GROUP_DECL
+NODE GROUP_TEMPLATE_DECL
+NODE GROUP_TEMPLATE_ENTRY
+NODE IF_GENERATION
+NODE IF_STM
+NODE IMPLICIT_FUNC_DECL
+NODE IMPLICIT_OPERATOR_DECL
+NODE IMPLICIT_PROC_DECL
+NODE INCOMPLETE_TYPE_DECL
+NODE INDEX_CONSTRAINT
+NODE INDEXED
+NODE INDEXED_ATTRIBUTE_REF
+NODE INDEXED_FUNC_CALL
+NODE INDEXED_FUNC_DECL
+NODE INT_32_RANGE
+NODE INT_32_VALUE
+NODE INT_64_VALUE
+NODE INTEGER_TYPE_DECL
+NODE LABEL_DECL
+NODE LOOP_STM
+NODE NAMED_AGG_ASSOC
+NODE NAMED_ARRAY_AGG
+NODE NAMED_SUB_AGG
+NODE NEXT_STM
+NODE NON_CONSTRAINT
+NODE NON_STATIC_ARRAY_AGG
+NODE NON_STATIC_SUB_AGG
+NODE NULL_ARRAY_AGG
+NODE NULL_LITERAL
+NODE NULL_STM
+NODE NULL_SUB_AGG
+NODE NULL_WAVEFORM_ELEMENT
+NODE NUMERIC_VALUE
+NODE OPERATOR_DECL
+NODE OTHERS_AGG_ASSOC
+NODE OTHERS_CASE_ALTERNATIVE
+NODE OTHERS_SELECTED_WAVEFORM_ALT
+NODE PACKAGE_BODY
+NODE PACKAGE_DECL
+NODE PARTIAL_ASSOCIATION_OF_FORMAL
+NODE PHY_UNIT_DECL
+NODE PHYSICAL_TYPE_DECL
+NODE PHYSICAL_VALUE
+NODE PORT_DECL
+NODE POSITIONAL_AGG_ASSOC
+NODE POSITIONAL_ARRAY_AGG
+NODE POSITIONAL_SUB_AGG
+NODE PRE_DEFINED_ATT_DECL
+NODE PROC_BODY
+NODE PROC_CALL_STM
+NODE PROC_DECL
+NODE PROCESS_STM
+NODE QUALIFIED
+NODE RANGE_ATTRIBUTE_CONSTRAINT
+NODE REAL_VALUE
+NODE RECORD_AGG
+NODE RECORD_TYPE_DECL
+NODE REPORT_STM
+NODE RESOLVABLE_SUBTYPE_DECL
+NODE RETURN_STM
+NODE REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+NODE SELECTED_ELEMENT
+NODE SELECTED_SIGNAL_ASSIGN_STM
+NODE SELECTED_WAVEFORM_ALT_FOR_DISCRETE
+NODE SELECTED_WAVEFORM_ALT_FOR_STRING
+NODE SHARED_VARIABLE_DECL
+NODE SIGNAL_ASSIGN_STM
+NODE SIGNAL_DECL
+NODE SIGNAL_DISCONNECT_SPEC
+NODE SIGNAL_SPEC_AGG
+NODE SIGNAL_SPEC_ASSOC
+NODE SIMPLE_ATTRIBUTE_REF
+NODE SLICE
+NODE STRING_LITERAL
+NODE STRING_LITERAL_SUB_AGG
+NODE STRING_VALUE
+NODE SUBP_PARAM_DECL
+NODE SUBTYPE_INDICATOR
+NODE SYMBOL_ENTRY_IN_TABLE
+NODE TYPE_CONVERSION
+NODE TYPE_CONVERSION_ON_ASSOC
+NODE TYPE_CONVERSION_ON_PARTIAL_FORMAL
+NODE UNARY_OPERATION
+NODE UNCONNECTED
+NODE UNCONSTRAINED_ARRAY_TYPE_DECL
+NODE UNIV_INTEGER_TYPE_DECL
+NODE UNIV_REAL_TYPE_DECL
+NODE USE_CLAUSE
+NODE VARIABLE_ASSIGN_STM
+NODE VARIABLE_DECL
+NODE WAIT_STM
+NODE WAVEFORM_ELEMENT
+NODE WHILE_ITERATION
+
+CLASS ASSOCIATIONS =
+(
+NAMED_AGG_ASSOC
+OTHERS_AGG_ASSOC
+POSITIONAL_AGG_ASSOC
+COMPLETE_ASSOCIATION_OF_FORMAL
+PARTIAL_ASSOCIATION_OF_FORMAL
+)
+
+CLASS AGG_ASSOC =
+(
+NAMED_AGG_ASSOC
+OTHERS_AGG_ASSOC
+POSITIONAL_AGG_ASSOC
+)
+
+CLASS ATTRIBUTE =
+(
+ATTRIBUTE_DECL
+PRE_DEFINED_ATT_DECL
+)
+
+CLASS ATTRIBUTE_FORM_RANGE_CONSTRAINT =
+(
+RANGE_ATTRIBUTE_CONSTRAINT
+REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+)
+
+CLASS BOUNDED_FORM_RANGE_CONSTRAINT =
+(
+ASCENDING_RANGE_CONSTRAINT
+DESCENDING_RANGE_CONSTRAINT
+)
+
+CLASS CASE_ALTERNATIVE =
+(
+CASE_ALTERNATIVE_FOR_DISCRETE
+CASE_ALTERNATIVE_FOR_STRING
+OTHERS_CASE_ALTERNATIVE
+)
+
+CLASS CONCURRENT_STM =
+(
+BLOCK_STM
+COMP_INSTANTIATE_STM
+CONCURRENT_ASSERTION_STM
+CONCURRENT_PROC_CALL_STM
+CONDITIONAL_SIGNAL_ASSIGN_STM
+ENTITY_INSTANTIATE_STM
+GENERATE_STM
+PROCESS_STM
+SELECTED_SIGNAL_ASSIGN_STM
+)
+
+CLASS CONFIG_ITEM =
+(
+BLOCK_CONFIG
+COMPONENT_CONFIG
+)
+
+CLASS ENUMERATION_LITERAL =
+(
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+)
+
+CLASS FORMAL_PART =
+(
+CONVERSION_FUNCTION_ON_ASSOC
+GENERAL_USED_OBJECT
+TYPE_CONVERSION_ON_ASSOC
+)
+
+CLASS FUNC_DEF =
+(
+FUNC_DECL
+IMPLICIT_FUNC_DECL
+IMPLICIT_OPERATOR_DECL
+INDEXED_FUNC_DECL
+OPERATOR_DECL
+)
+
+CLASS GENERATION =
+(
+FOR_GENERATION
+IF_GENERATION
+)
+
+CLASS ITERATION =
+(
+FOR_ITERATION
+WHILE_ITERATION
+)
+
+CLASS LIBRARY_UNIT_ITEM =
+(
+ARCHITECTURE_BODY
+CONFIGURATION_DECL
+ENTITY_DECL
+PACKAGE_BODY
+PACKAGE_DECL
+)
+
+CLASS OBJECT_ITEM =
+(
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+ALIAS_DECL
+CONSTANT_DECL
+FILE_DECL
+FOR_GENERATION
+FOR_ITERATION
+GENERIC_PARAM_DECL
+PORT_DECL
+SHARED_VARIABLE_DECL
+SIGNAL_DECL
+SUBP_PARAM_DECL
+VARIABLE_DECL
+)
+
+CLASS OBJ_NAME =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+)
+
+CLASS PROC_DEF =
+(
+IMPLICIT_PROC_DECL
+PROC_DECL
+)
+
+CLASS RANGE_CONSTRAINT_CLASS =
+(
+RANGE_ATTRIBUTE_CONSTRAINT
+REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+ASCENDING_RANGE_CONSTRAINT
+DESCENDING_RANGE_CONSTRAINT
+)
+
+CLASS REGION_PART =
+(
+FUNC_DECL
+IMPLICIT_FUNC_DECL
+IMPLICIT_OPERATOR_DECL
+INDEXED_FUNC_DECL
+OPERATOR_DECL
+IMPLICIT_PROC_DECL
+PROC_DECL
+ARCHITECTURE_BODY
+BLOCK_CONFIG
+BLOCK_STM
+COMPONENT_DECL
+CONFIGURATION_DECL
+DESIGN_LIBRARY
+ENTITY_DECL
+FUNC_BODY
+GENERATE_STM
+LOOP_STM
+PACKAGE_BODY
+PACKAGE_DECL
+PROC_BODY
+PROCESS_STM
+RECORD_TYPE_DECL
+)
+
+CLASS SCHEME =
+(
+FOR_GENERATION
+IF_GENERATION
+FOR_ITERATION
+WHILE_ITERATION
+)
+
+CLASS SELECTED_ALTERNATIVE =
+(
+OTHERS_SELECTED_WAVEFORM_ALT
+SELECTED_WAVEFORM_ALT_FOR_DISCRETE
+SELECTED_WAVEFORM_ALT_FOR_STRING
+)
+
+CLASS SEQUENTIAL_STM =
+(
+ASSERTION_STM
+CASE_STM
+EXIT_STM
+IF_STM
+LOOP_STM
+NEXT_STM
+NULL_STM
+PROC_CALL_STM
+REPORT_STM
+RETURN_STM
+SIGNAL_ASSIGN_STM
+VARIABLE_ASSIGN_STM
+WAIT_STM
+)
+
+CLASS STATEMENT =
+(
+BLOCK_STM
+COMP_INSTANTIATE_STM
+CONCURRENT_ASSERTION_STM
+CONCURRENT_PROC_CALL_STM
+CONDITIONAL_SIGNAL_ASSIGN_STM
+ENTITY_INSTANTIATE_STM
+GENERATE_STM
+PROCESS_STM
+SELECTED_SIGNAL_ASSIGN_STM
+ASSERTION_STM
+CASE_STM
+EXIT_STM
+IF_STM
+LOOP_STM
+NEXT_STM
+NULL_STM
+PROC_CALL_STM
+REPORT_STM
+RETURN_STM
+SIGNAL_ASSIGN_STM
+VARIABLE_ASSIGN_STM
+WAIT_STM
+)
+
+CLASS STATIC_VALUE =
+(
+INT_32_VALUE
+INT_64_VALUE
+PHYSICAL_VALUE
+REAL_VALUE
+STRING_VALUE
+)
+
+CLASS SUBP_BODY =
+(
+FUNC_BODY
+PROC_BODY
+)
+
+CLASS SUBTYPE_DECL =
+(
+GENERAL_SUBTYPE_DECL
+RESOLVABLE_SUBTYPE_DECL
+)
+
+CLASS SUB_AGG =
+(
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+)
+
+CLASS SUB_ELEMENT =
+(
+INT_32_RANGE
+INT_32_VALUE
+)
+
+CLASS TARGET =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+NAMED_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+)
+
+CLASS TOP_LEVEL_AGG =
+(
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+)
+
+CLASS TYPE_DECL =
+(
+ACCESS_TYPE_DECL
+CONSTRAINED_ARRAY_TYPE_DECL
+ENUM_TYPE_DECL
+FILE_TYPE_DECL
+FLOATING_TYPE_DECL
+INCOMPLETE_TYPE_DECL
+INTEGER_TYPE_DECL
+PHYSICAL_TYPE_DECL
+RECORD_TYPE_DECL
+UNCONSTRAINED_ARRAY_TYPE_DECL
+UNIV_INTEGER_TYPE_DECL
+UNIV_REAL_TYPE_DECL
+)
+
+CLASS TYPE_MARK_DECL =
+(
+GENERAL_SUBTYPE_DECL
+RESOLVABLE_SUBTYPE_DECL
+ACCESS_TYPE_DECL
+CONSTRAINED_ARRAY_TYPE_DECL
+ENUM_TYPE_DECL
+FILE_TYPE_DECL
+FLOATING_TYPE_DECL
+INCOMPLETE_TYPE_DECL
+INTEGER_TYPE_DECL
+PHYSICAL_TYPE_DECL
+RECORD_TYPE_DECL
+UNCONSTRAINED_ARRAY_TYPE_DECL
+UNIV_INTEGER_TYPE_DECL
+UNIV_REAL_TYPE_DECL
+)
+
+CLASS USED_BLOCK =
+(
+ARCHITECTURE_BODY
+BLOCK_STM
+GENERATE_STM
+)
+
+CLASS WAVEFORM_ELEM =
+(
+NULL_WAVEFORM_ELEMENT
+WAVEFORM_ELEMENT
+)
+
+CLASS AGGREGATE =
+(
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+)
+
+CLASS ALTERNATIVE =
+(
+CASE_ALTERNATIVE_FOR_DISCRETE
+CASE_ALTERNATIVE_FOR_STRING
+OTHERS_CASE_ALTERNATIVE
+OTHERS_SELECTED_WAVEFORM_ALT
+SELECTED_WAVEFORM_ALT_FOR_DISCRETE
+SELECTED_WAVEFORM_ALT_FOR_STRING
+COND_ALTERNATIVE
+CONDITIONAL_WAVEFORM_ALT
+)
+
+CLASS CONSTRAINT =
+(
+RANGE_ATTRIBUTE_CONSTRAINT
+REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+ASCENDING_RANGE_CONSTRAINT
+DESCENDING_RANGE_CONSTRAINT
+INDEX_CONSTRAINT
+NON_CONSTRAINT
+)
+
+CLASS ITEM =
+(
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+FUNC_DECL
+IMPLICIT_FUNC_DECL
+IMPLICIT_OPERATOR_DECL
+INDEXED_FUNC_DECL
+OPERATOR_DECL
+ARCHITECTURE_BODY
+CONFIGURATION_DECL
+ENTITY_DECL
+PACKAGE_BODY
+PACKAGE_DECL
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+ALIAS_DECL
+CONSTANT_DECL
+FILE_DECL
+FOR_GENERATION
+FOR_ITERATION
+GENERIC_PARAM_DECL
+PORT_DECL
+SHARED_VARIABLE_DECL
+SIGNAL_DECL
+SUBP_PARAM_DECL
+VARIABLE_DECL
+IMPLICIT_PROC_DECL
+PROC_DECL
+FUNC_BODY
+PROC_BODY
+GENERAL_SUBTYPE_DECL
+RESOLVABLE_SUBTYPE_DECL
+ACCESS_TYPE_DECL
+CONSTRAINED_ARRAY_TYPE_DECL
+ENUM_TYPE_DECL
+FILE_TYPE_DECL
+FLOATING_TYPE_DECL
+INCOMPLETE_TYPE_DECL
+INTEGER_TYPE_DECL
+PHYSICAL_TYPE_DECL
+RECORD_TYPE_DECL
+UNCONSTRAINED_ARRAY_TYPE_DECL
+UNIV_INTEGER_TYPE_DECL
+UNIV_REAL_TYPE_DECL
+ATTRIBUTE_DECL
+ATTRIBUTE_SPEC
+COMPONENT_DECL
+CONFIGURATION_SPEC
+DESIGN_LIBRARY
+DISCONNECTION_SPEC
+ELEMENT_DECL
+GROUP_DECL
+GROUP_TEMPLATE_DECL
+LABEL_DECL
+PHY_UNIT_DECL
+PRE_DEFINED_ATT_DECL
+USE_CLAUSE
+)
+
+CLASS NAME_EXP =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+ALLOCATOR
+BINARY_OPERATION
+FUNC_CALL
+INDEXED_ATTRIBUTE_REF
+INDEXED_FUNC_CALL
+NULL_LITERAL
+NUMERIC_VALUE
+QUALIFIED
+SIMPLE_ATTRIBUTE_REF
+TYPE_CONVERSION
+UNARY_OPERATION
+)
+
+CLASS PARTIAL_FORMAL_PART =
+(
+INT_32_RANGE
+INT_32_VALUE
+CONVERSION_FUNCTION_ON_PARTIAL_FORMAL
+TYPE_CONVERSION_ON_PARTIAL_FORMAL
+)
+
+CLASS SIGNAL_SPECS =
+(
+SIGNAL_DISCONNECT_SPEC
+SIGNAL_SPEC_AGG
+)
+
+CLASS ACTUAL_PART =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+ALLOCATOR
+BINARY_OPERATION
+FUNC_CALL
+INDEXED_ATTRIBUTE_REF
+INDEXED_FUNC_CALL
+NULL_LITERAL
+NUMERIC_VALUE
+QUALIFIED
+SIMPLE_ATTRIBUTE_REF
+TYPE_CONVERSION
+UNARY_OPERATION
+CONVERSION_FUNCTION_ON_ASSOC
+GATHERED_PARTIAL_ASSOCIATIONS
+TYPE_CONVERSION_ON_ASSOC
+UNCONNECTED
+)
+
+CLASS CHOICE =
+(
+RANGE_ATTRIBUTE_CONSTRAINT
+REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+ASCENDING_RANGE_CONSTRAINT
+DESCENDING_RANGE_CONSTRAINT
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+INT_32_RANGE
+INT_32_VALUE
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+ALLOCATOR
+BINARY_OPERATION
+FUNC_CALL
+INDEXED_ATTRIBUTE_REF
+INDEXED_FUNC_CALL
+NULL_LITERAL
+NUMERIC_VALUE
+QUALIFIED
+SIMPLE_ATTRIBUTE_REF
+TYPE_CONVERSION
+UNARY_OPERATION
+SUBTYPE_INDICATOR
+)
+
+CLASS IMPORTED_ITEM =
+(
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+FUNC_DECL
+IMPLICIT_FUNC_DECL
+IMPLICIT_OPERATOR_DECL
+INDEXED_FUNC_DECL
+OPERATOR_DECL
+ARCHITECTURE_BODY
+CONFIGURATION_DECL
+ENTITY_DECL
+PACKAGE_BODY
+PACKAGE_DECL
+CHAR_LITERAL_DECL
+ENUM_LITERAL_DECL
+ALIAS_DECL
+CONSTANT_DECL
+FILE_DECL
+FOR_GENERATION
+FOR_ITERATION
+GENERIC_PARAM_DECL
+PORT_DECL
+SHARED_VARIABLE_DECL
+SIGNAL_DECL
+SUBP_PARAM_DECL
+VARIABLE_DECL
+IMPLICIT_PROC_DECL
+PROC_DECL
+FUNC_BODY
+PROC_BODY
+GENERAL_SUBTYPE_DECL
+RESOLVABLE_SUBTYPE_DECL
+ACCESS_TYPE_DECL
+CONSTRAINED_ARRAY_TYPE_DECL
+ENUM_TYPE_DECL
+FILE_TYPE_DECL
+FLOATING_TYPE_DECL
+INCOMPLETE_TYPE_DECL
+INTEGER_TYPE_DECL
+PHYSICAL_TYPE_DECL
+RECORD_TYPE_DECL
+UNCONSTRAINED_ARRAY_TYPE_DECL
+UNIV_INTEGER_TYPE_DECL
+UNIV_REAL_TYPE_DECL
+DESIGN_UNIT
+SYMBOL_ENTRY_IN_TABLE
+)
+
+CLASS INDEX_SPEC =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+BIT_STRING_LITERAL_SUB_AGG
+NAMED_SUB_AGG
+NON_STATIC_SUB_AGG
+NULL_SUB_AGG
+POSITIONAL_SUB_AGG
+STRING_LITERAL_SUB_AGG
+BIT_STRING_LITERAL
+NAMED_ARRAY_AGG
+NON_STATIC_ARRAY_AGG
+NULL_ARRAY_AGG
+POSITIONAL_ARRAY_AGG
+RECORD_AGG
+STRING_LITERAL
+ALLOCATOR
+BINARY_OPERATION
+FUNC_CALL
+INDEXED_ATTRIBUTE_REF
+INDEXED_FUNC_CALL
+NULL_LITERAL
+NUMERIC_VALUE
+QUALIFIED
+SIMPLE_ATTRIBUTE_REF
+TYPE_CONVERSION
+UNARY_OPERATION
+SUBTYPE_INDICATOR
+)
+
+CLASS NAMED_ENTITY =
+(
+ALLOCATED
+GENERAL_USED_OBJECT
+INDEXED
+SELECTED_ELEMENT
+SLICE
+GENERAL_NAMED_ENTITY
+INDEXED_ATTRIBUTE_REF
+SIMPLE_ATTRIBUTE_REF
+)
+
+
+
+NODE ACCESS_TYPE_DECL 
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    STATIC_VALUE * has_value_type                      
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    STATIC_VALUE has_value_constraint                
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE ALIAS_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    OBJ_NAME has_aliased_object                  
+    STATIC_VALUE * has_value                           
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    FUNC_DECL * has_resolution                      
+)
+
+NODE ALLOCATED
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT  * has_constraint                      
+    NAME_EXP has_prefix                          
+    ITEM * has_base_obj_def                    
+    ID has_srcpos                          
+)
+
+NODE ALLOCATOR
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT *  has_constraint                      
+    STATIC_VALUE has_value_constraint                
+    NAME_EXP has_init_val                        
+    ID has_srcpos                          
+)
+
+NODE ARCHITECTURE_BODY
+= (                            
+                                 
+    ID has_srcpos                          
+    ENTITY_DECL * has_entity_name                     
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    REGION_PART *  has_enclosing_scope                 
+    OBJECT_ITEM *  has_guard                           
+    VECTOR ITEM has_stm_s                           
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE ASCENDING_RANGE_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    INT has_direction                       
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+    INT has_null_range_indicator            
+    NAME_EXP has_left_bound                      
+    NAME_EXP has_right_bound                     
+)
+
+NODE ASSERTION_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_report_exp                      
+    NAME_EXP has_severity_exp                    
+    NAME_EXP has_assert_exp                      
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE ATTRIBUTE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+)
+
+NODE ATTRIBUTE_SPEC
+= (                            
+                                 
+    ID has_srcpos                          
+    ATTRIBUTE_DECL *  has_attribute_def                   
+    NAME_EXP has_value_exp                       
+)
+
+NODE BINARY_OPERATION
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ID has_srcpos                          
+    NAME_EXP has_left_exp                        
+    NAME_EXP has_right_exp                       
+    STATIC_VALUE has_value                           
+    FUNC_DEF * has_func_name                       
+)
+
+NODE BINDING_INDICATION
+= (                            
+                                 
+    VECTOR GENERIC_PARAM_DECL has_generic_assoc_s                 
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_port_assoc_s                    
+    SYMBOL_ENTRY_IN_TABLE has_bound_body_name                 
+    ARCHITECTURE_BODY * has_bound_body                      
+    CONFIGURATION_DECL  * has_bound_config                    
+    ENTITY_DECL * has_bound_entity                    
+)
+
+NODE BIT_STRING_LITERAL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    INT has_dimension                       
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+)
+
+NODE BIT_STRING_LITERAL_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    INT has_dimension                       
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+)
+
+NODE BLOCK_CONFIG
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    USED_BLOCK * has_block                           
+    ID has_end_srcpos                      
+    VECTOR USE_CLAUSE has_imported_name_s                 
+    INDEX_SPEC has_index_spec                      
+    VECTOR CONFIG_ITEM has_next_level_s                    
+)
+
+NODE BLOCK_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    ID has_end_srcpos                      
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_generic_assoc_s                 
+    VECTOR GENERIC_PARAM_DECL has_generic_s                       
+    OBJECT_ITEM *  has_guard                           
+    NAME_EXP  has_guard_exp                       
+    LABEL_DECL has_label                           
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_port_assoc_s                    
+    VECTOR PORT_DECL has_port_s                          
+    VECTOR ITEM has_stm_s                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE CASE_ALTERNATIVE_FOR_DISCRETE
+= (                            
+                                 
+    STATIC_VALUE is_associated_up_to                 
+    VECTOR ITEM has_stm_s                           
+    CASE_ALTERNATIVE * has_same_stm                        
+)
+
+NODE CASE_ALTERNATIVE_FOR_STRING
+= (                            
+                                 
+    STRING_VALUE is_associated_to_str                
+    VECTOR ITEM has_stm_s                           
+    CASE_ALTERNATIVE * has_same_stm                        
+)
+
+NODE CASE_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ALTERNATIVE has_alternative_s                   
+    NAME_EXP has_case_exp                        
+    ID has_end_srcpos                      
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE CHAR_LITERAL_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE CLOSURE
+= (
+    VECTOR DESIGN_UNIT has_design_unit_s
+)
+
+NODE COMP_INSTANTIATE_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    CONFIGURATION_SPEC * has_config_spec                     
+    COMPONENT_DECL * has_component                       
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_generic_assoc_s                 
+    LABEL_DECL has_label                           
+    VECTOR  COMPLETE_ASSOCIATION_OF_FORMAL has_port_assoc_s                    
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE COMPLETE_ASSOCIATION_OF_FORMAL
+= (                            
+                                 
+    ACTUAL_PART has_actual                          
+    FORMAL_PART has_formal                          
+)
+
+NODE COMPONENT_CONFIG
+= (                            
+                                 
+    ID has_srcpos                          
+    BINDING_INDICATION has_binding                         
+    VECTOR COMP_INSTANTIATE_STM * has_configured_CI_s                 
+    BLOCK_CONFIG has_next_level                      
+)
+
+NODE COMPONENT_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR GENERIC_PARAM_DECL has_generic_s                       
+    VECTOR PORT_DECL has_port_s                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE CONCURRENT_ASSERTION_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    ASSERTION_STM has_assertion_stm                   
+    LABEL_DECL has_label                           
+    INT has_postponed                       
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE CONCURRENT_PROC_CALL_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    PROC_CALL_STM has_proc_call_stm                   
+    LABEL_DECL has_label                           
+    INT has_postponed                       
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE COND_ALTERNATIVE
+= (                            
+                                 
+    NAME_EXP has_condition                       
+    VECTOR ITEM has_stm_s                           
+)
+
+NODE CONDITIONAL_SIGNAL_ASSIGN_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    TARGET has_signal_name                     
+    INT has_transport                       
+    OBJECT_ITEM *  has_guard                           
+    VECTOR CONDITIONAL_WAVEFORM_ALT has_conditional_waveform_s          
+    LABEL_DECL has_label                           
+    INT has_postponed                       
+    NAME_EXP has_reject_time                     
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE CONDITIONAL_WAVEFORM_ALT
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_condition                       
+    VECTOR WAVEFORM_ELEM has_waveform_s                      
+)
+
+NODE CONFIGURATION_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    ENTITY_DECL * has_entity_name                     
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    BLOCK_CONFIG has_config                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    REGION_PART *  has_enclosing_scope                 
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE CONFIGURATION_SPEC
+= (                            
+                                 
+    ID has_srcpos                          
+    BINDING_INDICATION has_binding                         
+    VECTOR COMP_INSTANTIATE_STM * has_configured_CI_s                 
+)
+
+NODE CONSTANT_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    NAME_EXP has_value_exp                       
+    STATIC_VALUE * has_value                           
+    CONSTANT_DECL * has_deferred_decl                   
+)
+
+NODE CONSTRAINED_ARRAY_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_dimension                       
+    SUBTYPE_INDICATOR has_elem_subtype                    
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT has_access_subelement               
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE CONVERSION_FUNCTION_ON_ASSOC
+= (                            
+                                 
+    FUNC_DEF * has_convert_func_name               
+    CONSTRAINT * has_constraint                      
+    NAME_EXP has_converted_exp                   
+)
+
+NODE CONVERSION_FUNCTION_ON_PARTIAL_FORMAL
+= (                            
+                                 
+    FUNC_DEF * has_convert_func_name               
+    CONSTRAINT * has_constraint                      
+    SUB_ELEMENT has_converted_subelement            
+)
+
+NODE DESCENDING_RANGE_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    INT has_direction                       
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+    INT has_null_range_indicator            
+    NAME_EXP has_left_bound                      
+    NAME_EXP has_right_bound                     
+)
+
+NODE DESIGN_LIBRARY
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+)
+
+NODE DESIGN_UNIT
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR USE_CLAUSE has_import_s                        
+    VECTOR DESIGN_LIBRARY has_referenced_lib_s                
+    LIBRARY_UNIT_ITEM has_unit                            
+    INT has_vhdl_kind                       
+)
+
+NODE DISCONNECTION_SPEC
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_value_exp                       
+)
+
+NODE ELEMENT_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    FUNC_DECL * has_resolution                      
+    INT has_int_32                          
+)
+
+NODE ENTITY_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    VECTOR GENERIC_PARAM_DECL has_generic_s                       
+    VECTOR PORT_DECL has_port_s                          
+    VECTOR ITEM has_stm_s                           
+    VECTOR USE_CLAUSE * has_use_clause_s                    
+    VECTOR ITEM * has_subprogram_decl_s               
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE ENTITY_INSTANTIATE_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    LABEL_DECL has_label                           
+    SYMBOL_ENTRY_IN_TABLE  has_bound_body_name                 
+    ARCHITECTURE_BODY * has_bound_body                      
+    CONFIGURATION_DECL * has_bound_config                    
+    ENTITY_DECL * has_bound_entity                    
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_generic_assoc_s                 
+    VECTOR COMPLETE_ASSOCIATION_OF_FORMAL has_port_assoc_s                    
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE ENUM_LITERAL_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT  * has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE ENUM_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    VECTOR ENUMERATION_LITERAL has_enumeral_s                      
+    ID has_srcpos                          
+    INT is_char_type                        
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE EXIT_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_condition                       
+    LOOP_STM *  has_loop_stm                        
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE FILE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    NAME_EXP has_logical_name                    
+    INT has_mode                            
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    NAME_EXP has_file_mode                       
+)
+
+NODE FILE_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    STATIC_VALUE * has_value_type                      
+    STATIC_VALUE has_value_constraint                
+)
+
+NODE FLOATING_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE FOR_GENERATION
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+)
+
+NODE FOR_ITERATION
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+)
+
+NODE FUNC_BODY
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    ID has_end_srcpos                      
+    REGION_PART *  has_enclosing_scope                 
+    IMPORTED_ITEM * has_name                            
+    VECTOR ITEM has_stm_s                           
+)
+
+NODE FUNC_CALL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    ID has_srcpos                          
+    FUNC_DEF * has_func_name                       
+    STATIC_VALUE has_value                           
+)
+
+NODE FUNC_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    SUBP_BODY * has_body_decl                       
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    INT has_pureness                        
+)
+
+NODE GATHERED_PARTIAL_ASSOCIATIONS
+= (                            
+                                 
+    INT has_dimension                       
+    CONSTRAINT * has_constraint                      
+    VECTOR PARTIAL_ASSOCIATION_OF_FORMAL has_gathered_assoc_s                
+    INT has_high_bound                      
+    INT has_low_bound                       
+)
+
+NODE GENERAL_NAMED_ENTITY
+= (                            
+                                 
+    ID has_srcpos                          
+    IMPORTED_ITEM * has_named_entity_def                
+)
+
+NODE GENERAL_SUBTYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE GENERAL_USED_OBJECT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    OBJECT_ITEM * has_obj_def                         
+    ID has_srcpos                          
+    STATIC_VALUE * has_value                           
+)
+
+NODE GENERATE_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    ID has_end_srcpos                      
+    LABEL_DECL has_label                           
+    SCHEME has_scheme                          
+    OBJECT_ITEM *  has_guard                           
+    VECTOR ITEM has_stm_s                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE GENERIC_PARAM_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_class                           
+    NAME_EXP has_default                         
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT has_mode                            
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE GROUP_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    GROUP_TEMPLATE_DECL * has_group_template                  
+    VECTOR NAMED_ENTITY has_constituent_s                   
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE GROUP_TEMPLATE_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    VECTOR GROUP_TEMPLATE_ENTRY has_group_template_entry_s          
+    INT has_repeat_last_entry               
+)
+
+NODE GROUP_TEMPLATE_ENTRY
+= (                            
+                                 
+    INT has_entity_class                    
+)
+
+NODE IF_GENERATION
+= (                            
+                                 
+    NAME_EXP has_condition                       
+)
+
+NODE IF_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ALTERNATIVE has_alternative_s                   
+    LABEL_DECL has_label                           
+    ID has_end_srcpos                      
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE IMPLICIT_FUNC_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    INT has_pureness                        
+)
+
+NODE IMPLICIT_OPERATOR_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    INT has_operator                        
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    INT has_pureness                        
+)
+
+NODE IMPLICIT_PROC_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE INCOMPLETE_TYPE_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+)
+
+NODE INDEX_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    VECTOR SUBTYPE_INDICATOR has_index_range_s                   
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+)
+
+NODE INDEXED
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ITEM * has_base_obj_def                    
+    ID has_srcpos                          
+    VECTOR NAME_EXP has_index_exp_s                     
+    NAME_EXP has_prefix                          
+)
+
+NODE INDEXED_ATTRIBUTE_REF
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ATTRIBUTE * has_attribute                       
+    ID has_srcpos                          
+    NAME_EXP has_index                           
+    NAMED_ENTITY has_attribute_prefix                
+    STATIC_VALUE has_value                           
+)
+
+NODE INDEXED_FUNC_CALL
+= (                            
+                                 
+    ID has_srcpos                          
+    CONSTRAINT * has_constraint                      
+    VECTOR NAME_EXP has_index_exp_s                     
+)
+
+NODE INDEXED_FUNC_DECL
+= (                            
+                                 
+    FUNC_DEF * has_func_name                       
+)
+
+NODE INT_32_RANGE
+= (                            
+    INT has_direction                       
+    INT has_low_bound                       
+    INT has_high_bound                      
+)
+
+NODE INT_32_VALUE
+= (                            
+    INT has_int_32                          
+)
+
+NODE INT_64_VALUE
+= (                            
+     INT has_int_64                          
+)
+
+NODE INTEGER_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE LABEL_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    LABEL_DECL * has_labeled_stm                     
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE LOOP_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    LABEL_DECL has_label                           
+    SCHEME has_scheme                          
+    ID has_end_srcpos                      
+    VECTOR ITEM has_stm_s                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE NAMED_AGG_ASSOC
+= (                            
+                                 
+    NAME_EXP has_associated_exp                  
+    STATIC_VALUE is_associated_up_to                 
+)
+
+NODE NAMED_ARRAY_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    ID has_srcpos                          
+    INT has_dimension                       
+)
+
+NODE NAMED_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE NEXT_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_condition                       
+    LOOP_STM *  has_loop_stm                        
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE NON_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+)
+
+NODE NON_STATIC_ARRAY_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    NAME_EXP has_associated_exp                  
+    STATIC_VALUE is_associated_to                    
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE NON_STATIC_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    NAME_EXP has_associated_exp                  
+    STATIC_VALUE is_associated_to                    
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE NULL_ARRAY_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    NAME_EXP has_associated_exp                  
+    STATIC_VALUE is_associated_to                    
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE NULL_LITERAL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ID has_srcpos                          
+)
+
+NODE NULL_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE NULL_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    NAME_EXP has_associated_exp                  
+    STATIC_VALUE is_associated_to                    
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE NULL_WAVEFORM_ELEMENT
+= (                            
+                                 
+    NAME_EXP has_time_exp                        
+)
+
+NODE NUMERIC_VALUE
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+)
+
+NODE OPERATOR_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT has_operator                        
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    SUBP_BODY * has_body_decl                       
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    INT has_pureness                        
+)
+
+NODE OTHERS_AGG_ASSOC
+= (                            
+                                 
+    NAME_EXP has_associated_exp                  
+)
+
+NODE OTHERS_CASE_ALTERNATIVE
+= (                            
+                                 
+    VECTOR ITEM has_stm_s                           
+)
+
+NODE OTHERS_SELECTED_WAVEFORM_ALT
+= (                            
+                                 
+    VECTOR WAVEFORM_ELEM has_waveform_s                      
+)
+
+NODE PACKAGE_BODY
+= (                            
+                                 
+    ID has_srcpos                          
+    IMPORTED_ITEM * has_name                            
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE PACKAGE_DECL
+= (                            
+                                 
+    ID has_srcpos                          
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    VECTOR CONSTANT_DECL *  has_deferred_constant_s             
+    VECTOR TYPE_MARK_DECL * has_type_decl_s                     
+    VECTOR USE_CLAUSE * has_use_clause_s                    
+    VECTOR ITEM * has_subprogram_decl_s               
+)
+
+NODE PARTIAL_ASSOCIATION_OF_FORMAL
+= (                            
+                                 
+    ACTUAL_PART has_actual                          
+    PARTIAL_FORMAL_PART has_formal_subelement               
+)
+
+NODE PHY_UNIT_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE PHYSICAL_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    PHY_UNIT_DECL has_base                            
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR PHY_UNIT_DECL has_secondary_s                     
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE PHYSICAL_VALUE
+= (                            
+    STATIC_VALUE has_value                           
+    PHY_UNIT_DECL * has_base                            
+)
+
+NODE PORT_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT  has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_class                           
+    NAME_EXP has_default                         
+    SIGNAL_SPECS has_disconnect_specs                
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT  has_guarded_kind                    
+    INT has_mode                            
+    FUNC_DECL * has_resolution                      
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE POSITIONAL_AGG_ASSOC
+= (                            
+                                 
+    NAME_EXP has_associated_exp                  
+)
+
+NODE POSITIONAL_ARRAY_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE POSITIONAL_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    INT has_dimension                       
+    ID has_srcpos                          
+)
+
+NODE PRE_DEFINED_ATT_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_attribute_number                
+)
+
+NODE PROC_BODY
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    ID has_end_srcpos                      
+    REGION_PART *  has_enclosing_scope                 
+    IMPORTED_ITEM * has_name                            
+    VECTOR ITEM has_stm_s                           
+)
+
+NODE PROC_CALL_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    PROC_DEF * has_proc_name                       
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE PROC_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    REGION_PART *  has_enclosing_scope                 
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_srcpos                          
+    VECTOR SUBP_PARAM_DECL has_param_s                         
+    SUBP_BODY * has_body_decl                       
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE PROCESS_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    VECTOR ITEM has_decl_s                          
+    VECTOR ITEM has_implicit_decl_s                 
+    ID has_end_srcpos                      
+    VECTOR NAME_EXP has_sensitivity_s                   
+    LABEL_DECL has_label                           
+    VECTOR ITEM has_stm_s                           
+    REGION_PART *  has_enclosing_scope                 
+    INT has_postponed                       
+)
+
+NODE QUALIFIED
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ID has_srcpos                          
+    NAME_EXP has_qualified_exp                   
+    STATIC_VALUE * has_value                           
+)
+
+NODE RANGE_ATTRIBUTE_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+    INT has_direction                       
+    NAME_EXP has_index                           
+    NAME_EXP * has_left_bound                      
+    INT has_null_range_indicator            
+    NAMED_ENTITY has_attribute_prefix                
+    NAME_EXP * has_right_bound                     
+)
+
+NODE REAL_VALUE
+= (                            
+    INT has_real                            
+)
+
+NODE RECORD_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    VECTOR ASSOCIATIONS has_assoc_s                         
+    ID has_srcpos                          
+)
+
+NODE RECORD_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    ID has_end_srcpos                      
+    VECTOR ELEMENT_DECL has_element_s                       
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT has_access_subelement               
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE REPORT_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_report_exp                      
+    NAME_EXP has_severity_exp                    
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE RESOLVABLE_SUBTYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    FUNC_DECL * has_resolve_func                    
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE RETURN_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_return_exp                      
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE REVERSE_RANGE_ATTRIBUTE_CONSTRAINT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    TYPE_DECL *  is_type                             
+    TYPE_MARK_DECL *  is_subtype                          
+    TYPE_MARK_DECL *  in_enclosing_decl                   
+    INT has_direction                       
+    NAME_EXP has_index                           
+    NAME_EXP * has_left_bound                      
+    INT has_null_range_indicator            
+    NAMED_ENTITY has_attribute_prefix                
+    NAME_EXP * has_right_bound                     
+)
+
+NODE SELECTED_ELEMENT
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ITEM * has_base_obj_def                    
+    ID has_srcpos                          
+    NAME_EXP has_prefix                          
+    ELEMENT_DECL * has_suffix                          
+)
+
+NODE SELECTED_SIGNAL_ASSIGN_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    TARGET has_signal_name                     
+    INT has_transport                       
+    OBJECT_ITEM *  has_guard                           
+    NAME_EXP has_select_exp                      
+    VECTOR SELECTED_ALTERNATIVE has_selected_waveform_s             
+    LABEL_DECL has_label                           
+    INT has_postponed                       
+    NAME_EXP has_reject_time                     
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE SELECTED_WAVEFORM_ALT_FOR_DISCRETE
+= (                            
+                                 
+    STATIC_VALUE is_associated_up_to                 
+    VECTOR WAVEFORM_ELEM has_waveform_s                      
+    SELECTED_ALTERNATIVE * has_same_waveform                   
+)
+
+NODE SELECTED_WAVEFORM_ALT_FOR_STRING
+= (                            
+                                 
+    STRING_VALUE is_associated_to_str                
+    VECTOR WAVEFORM_ELEM has_waveform_s                      
+    SELECTED_ALTERNATIVE * has_same_waveform                   
+)
+
+NODE SHARED_VARIABLE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    NAME_EXP has_value_exp                       
+)
+
+NODE SIGNAL_ASSIGN_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    TARGET has_signal_name                     
+    INT has_transport                       
+    VECTOR WAVEFORM_ELEM has_waveform_s                      
+    LABEL_DECL has_label                           
+    NAME_EXP has_reject_time                     
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE SIGNAL_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    SIGNAL_SPECS has_disconnect_specs                
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT  has_guarded_kind                    
+    FUNC_DECL * has_resolution                      
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    NAME_EXP has_value_exp                       
+)
+
+NODE SIGNAL_DISCONNECT_SPEC
+= (                            
+                                 
+    DISCONNECTION_SPEC * has_disconnection_spec              
+)
+
+NODE SIGNAL_SPEC_AGG
+= (                            
+                                 
+    VECTOR SIGNAL_SPEC_ASSOC has_spec_s                          
+)
+
+NODE SIGNAL_SPEC_ASSOC
+= (                            
+                                 
+    SIGNAL_SPECS has_associated_spec                 
+    CHOICE is_associated_to                    
+)
+
+NODE SIMPLE_ATTRIBUTE_REF
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ATTRIBUTE * has_attribute                       
+    ID has_srcpos                          
+    NAMED_ENTITY has_attribute_prefix                
+    STATIC_VALUE * has_value                           
+)
+
+NODE SLICE
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    ITEM * has_base_obj_def                    
+    ID has_srcpos                          
+    SUBTYPE_INDICATOR * has_index_range                     
+    NAME_EXP has_prefix                          
+)
+
+NODE STRING_LITERAL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    INT has_dimension                       
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+)
+
+NODE STRING_LITERAL_SUB_AGG
+= (                            
+                                 
+    INT has_evaluation_time                 
+    INT has_dimension                       
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+)
+
+NODE STRING_VALUE
+= (                            
+    ID has_str_rep                         
+)
+
+NODE SUBP_PARAM_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_class                           
+    NAME_EXP has_default                         
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT  has_guarded_kind                    
+    INT has_mode                            
+    SUBP_PARAM_DECL * has_spec_param_decl                 
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE SUBTYPE_INDICATOR
+= (                            
+                                 
+    FUNC_DECL * has_resolve_func                    
+    CONSTRAINT has_constraint                      
+)
+
+NODE SYMBOL_ENTRY_IN_TABLE
+= (                            
+                                 
+    VECTOR ITEM * has_def_s                           
+    SYMBOL_ENTRY_IN_TABLE * has_next_st_element                 
+    INT has_h_value                         
+    ITEM * has_def                             
+    VECTOR SYMBOL_ENTRY_IN_TABLE * has_profile_s 
+    SYMBOL_ENTRY_IN_TABLE * has_name_prefix                     
+    ID has_simple_name                     
+)
+
+NODE TYPE_CONVERSION
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    NAME_EXP has_converted_exp                   
+    ID has_srcpos                          
+    STATIC_VALUE * has_value                           
+)
+
+NODE TYPE_CONVERSION_ON_ASSOC
+= (                            
+                                 
+    NAME_EXP has_converted_exp                   
+    CONSTRAINT * has_constraint                      
+)
+
+NODE TYPE_CONVERSION_ON_PARTIAL_FORMAL
+= (                            
+                                 
+    SUB_ELEMENT has_converted_subelement            
+    CONSTRAINT * has_constraint                      
+)
+
+NODE UNARY_OPERATION
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT * has_constraint                      
+    ID has_srcpos                          
+    STATIC_VALUE has_value                           
+    NAME_EXP has_right_exp                       
+    FUNC_DEF * has_func_name                       
+)
+
+NODE UNCONNECTED
+= (                            
+                                 
+    ID has_srcpos                          
+)
+
+NODE UNCONSTRAINED_ARRAY_TYPE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    INT has_dimension                       
+    SUBTYPE_INDICATOR has_elem_subtype                    
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    INT has_access_subelement               
+    VECTOR SUBTYPE_INDICATOR has_index_range_s                   
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+)
+
+NODE UNIV_INTEGER_TYPE_DECL
+= (                            
+                                 
+    REGION_PART *  has_enclosing_scope                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+)
+
+NODE UNIV_REAL_TYPE_DECL
+= (                            
+                                 
+    REGION_PART *  has_enclosing_scope                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+)
+
+NODE USE_CLAUSE
+= (                            
+                                 
+    IMPORTED_ITEM * has_name                            
+    DESIGN_LIBRARY * has_library                         
+)
+
+NODE VARIABLE_ASSIGN_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_assigned_exp                    
+    TARGET has_variable_name                   
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE VARIABLE_DECL
+= (                            
+                                 
+    INT has_evaluation_time                 
+    CONSTRAINT has_constraint                      
+    SYMBOL_ENTRY_IN_TABLE has_id                              
+    REGION_PART *  has_enclosing_scope                 
+    ID has_srcpos                          
+    VECTOR ATTRIBUTE_SPEC  *  has_user_att_s                      
+    NAME_EXP  has_value_exp                       
+)
+
+NODE WAIT_STM
+= (                            
+                                 
+    ID has_srcpos                          
+    NAME_EXP has_condition                       
+    VECTOR NAME_EXP has_sensitive_s                     
+    NAME_EXP has_time_limit                      
+    LABEL_DECL has_label                           
+    REGION_PART *  has_enclosing_scope                 
+)
+
+NODE WAVEFORM_ELEMENT
+= (                            
+                                 
+    NAME_EXP has_time_exp                        
+    NAME_EXP has_waveform_value_exp              
+)
+
+NODE WHILE_ITERATION
+= (                            
+                                 
+    NAME_EXP has_condition                       
+)
+

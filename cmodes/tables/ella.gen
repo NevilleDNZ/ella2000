@@ -1,0 +1,325 @@
+
+% $Id: ella.gen,v 2.2 1995/03/29 13:16:45 ella Exp $
+
+% 
+%     ************************************************************************
+%     This Program is the property of the Secretary of State for Defence
+%     (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+%     reproduction, production of amended versions and/or transfer of this
+%     Program is permitted provided that:
+% 
+%   (a)  this legend be preserved on any such reproduction and amended version,
+%   (b)  any amended version of this Program be clearly marked to show the
+%        nature of the amendment and of the name of the amending organisation,
+%   and
+%   (c)  any recipient  of such reproduction or amended version accept the
+%        conditions set out in this legend.
+% 
+%                          Crown Copyright, (c)   1994
+% 
+%                              All rights reserved.
+% 
+%     The Secretary of State for Defence (United Kingdom) acting through his
+%     Defence Research Agency (DRA) gives no warranty that any element of the
+%     Software is suitable for any purpose and he shall not be liable for any
+%     loss or damage including loss or damage resulting in injury or death
+%     howsoever caused which results from the use of the Software, or any
+%     developments adaptions modifications translations and enhancements
+%     thereof.
+% 
+%     The original authors may be contacted via email on ella@dra.hmg.gb or by
+%     writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+%     ************************************************************************
+% 
+%   ------------------------- Change History ---------------------------
+% 23:02:95   1.001  DJS   Insert into configured database.
+% 29:03:95   2.002  ELLA  Change copyright message
+% ??:??:??   ?.???  ????
+
+SIGNATURE V06_ELLA_AssDmp
+
+TABLE ELLA
+
+NODE ATTRLOCDEC = ( INT locattrno )
+
+NODE ATTRMACSPEC = ( INT specattrno )
+
+NODE ATTRNAME = ( INT attrno )
+
+NODE ATTRDATA = ( ID classname VECTOR ID strings )
+
+NODE ATTRSTR = ( VECTOR ATTR attrs )
+
+NODE ATTRBRACKET = ( ATTR attr )
+
+NODE ATTRNULL = ( )
+
+CLASS ATTR = ( ATTRNAME ATTRDATA ATTRSTR ATTRBRACKET ATTRNULL )
+
+NODE ATTRTAG = ( ATTR tag )
+
+NODE FINT = ( INT int ID text )
+
+NODE FCHECK = ( INT sort FORMULA test FORMULA standard )
+
+NODE FARITH = ( INT nameno )
+
+NODE FLOCDEC = ( INT locintno )
+
+NODE FMACSPEC = ( INT specintno )
+
+NODE FNAME = ( INT intno )
+
+NODE FDOP = ( FORMULA left INT sort FORMULA right )
+
+NODE FMOP = ( INT sort FORMULA right )
+
+NODE FCOND = ( FORMULA cond FORMULA true FORMULA false )
+
+NODE FBRACKET = ( FORMULA formula )
+
+NODE FMACPAR = ( INT macparno )
+
+NODE FNULL = ( )
+
+CLASS FORMULA = ( FINT FCHECK FARITH FNAME FDOP FMOP FCOND FBRACKET FMACPAR
+                  FNULL )
+
+NODE FORMULATAG = ( FORMULA tag )
+
+NODE RANGE = ( FORMULA lwb FORMULA upb )
+
+CLASS FORMULARANGE = ( FINT FCHECK FARITH FNAME FDOP FMOP FCOND FBRACKET
+                       FMACPAR FNULL RANGE )
+
+NODE TLOCDEC = ( INT loctypeno )
+
+NODE TMACSPEC = ( INT spectypeno )
+
+NODE TNAME = ( INT typeno )
+
+NODE TROW = ( FORMULA size TYPE elem )
+
+NODE TSTR = ( VECTOR TYPE types )
+
+NODE TFN = ( TYPE to TYPE from )
+
+NODE TBRACKET = ( TYPE type )
+
+NODE TSTRING = ( FORMULA size TYPE char )
+
+NODE TVOID = ( )
+
+NODE TMACPAR = ( INT macparno )
+
+NODE TNULL = ( )
+
+CLASS TYPE = ( TNAME TROW TSTR TFN TBRACKET TSTRING TVOID TMACPAR TNULL )
+
+NODE TYPETAG = ( TYPE tag )
+
+NODE NEWCHARS = ( ID tagname ID chars )
+
+NODE ALTERNATIVE = ( ID altname TYPE assoc )
+
+NODE RVALTERNATIVE = ( VECTOR ALTERNATIVE alternatives )
+
+NODE NEWINTS = ( ID tagname RANGE range )
+
+CLASS TYPEBODY = ( RVALTERNATIVE NEWINTS TYPETAG NEWCHARS )
+
+NODE CLOCDEC = ( INT locconstno )
+
+NODE CMACSPEC = ( INT specconstno )
+
+NODE CNAME = ( INT constno )
+
+NODE CPRIM = ( INT typeno INT primno )
+
+NODE CINT = ( INT typeno FORMULA index )
+
+NODE CQUERY = ( TYPE querytype )
+
+NODE CQUOTE = ( INT typeno VECTOR INT string )
+
+NODE CVOID = ( )
+
+NODE CTYPE = ( TYPE type )
+
+NODE CRANGE = ( INT typeno RANGE range )
+
+NODE CPRIMRANGE = ( INT typeno INT firstno INT lastno )
+
+NODE UALTS = ( VECTOR UNIT alts )
+
+NODE UNAME = ( INT sort INT nameno )
+
+NODE UFN = ( UNIT sink UNIT source )
+
+NODE UASSOC = ( INT typeno INT altno UNIT assoc )
+
+NODE UEXTRACT = ( UNIT extract INT typeno INT altno )
+
+NODE UPORTNAME = ( UNIT unit INT fnno INT nameno )
+
+NODE UINDEX = ( UNIT unit FORMULA index )
+
+NODE UTRIM = ( UNIT unit RANGE range )
+
+NODE UDYINDEX = ( UNIT unit UNIT index )
+
+NODE UREPLACE = ( UNIT unit UNIT index UNIT from )
+
+NODE UROW = ( FORMULA size UNIT elem )
+
+NODE USTR = ( VECTOR UNIT elems )
+
+NODE UCONC = ( INT string INT sort UNIT left UNIT right )
+
+NODE UMINST = ( INSTANCE inst UNIT right )
+
+NODE UDINST = ( UNIT left INSTANCE inst UNIT right )
+
+NODE UCHOICES = ( INT check INT sort UNIT test UNIT output )
+
+NODE UCASE = ( UNIT input VECTOR UCHOICES choices )
+
+NODE UCOND = ( FORMULA cond UNIT true UNIT false )
+
+NODE UREPL = ( FORMULA repl UNIT body )
+
+NODE USEQUENCE = ( VECTOR SEQUENCE body UNIT output )
+
+NODE USERIES = ( VECTOR STEP body UNIT output )
+
+NODE UATTR = ( UNIT unit ATTR attr )
+
+NODE UCHECK = ( UNIT unit FCHECK fcheck )
+
+NODE UBRACKET = ( UNIT unit )
+
+NODE USTRING = ( FORMULA size UNIT char )
+
+NODE UNULL = ( )
+
+CLASS UNIT = ( CNAME CPRIM CINT CQUERY CQUOTE CVOID CTYPE CRANGE CPRIMRANGE
+               UALTS UNAME UFN UASSOC UEXTRACT UPORTNAME UINDEX UTRIM
+               UDYINDEX UREPLACE UROW USTR UCONC UMINST UDINST UCASE UCOND
+               UREPL USEQUENCE USERIES UATTR UCHECK UBRACKET USTRING UNULL )
+
+NODE UNITTAG = ( UNIT tag )
+
+NODE FNLOCDEC = ( INT locfnno )
+
+NODE FNMACSPEC = ( INT specfnno )
+
+NODE MACPARAM = ( INT sort MPARAM param )
+
+NODE INSTANCE = ( INT fnno VECTOR MACPARAM macparams ATTR attr )
+
+CLASS MPARAM = ( ATTRTAG FORMULATAG TYPETAG UNITTAG INSTANCE )
+
+NODE IDTAG = ( ID tag )
+
+CLASS PRINTITEMS = ( IDTAG FORMULATAG )
+
+NODE PRINT = ( FORMULA cond VECTOR PRINTITEMS print )
+
+NODE FAULT = ( FORMULA cond VECTOR PRINTITEMS fault )
+
+NODE LET = ( VECTOR INT letnames UNIT unit )
+
+NODE SEQLET = ( LET seqlet )
+
+NODE SEQVAR = ( LET seqvar )
+
+NODE SEQPVAR = ( LET seqpvar )
+
+NODE SEQASSIGN = ( UNIT to UNIT from )
+
+NODE SEQCHOICES = ( INT check INT sort UNIT test SEQSTEP output )
+
+NODE SEQCASE = ( UNIT input VECTOR SEQCHOICES choices )
+
+NODE SEQCOND = ( FORMULA cond SEQSTEP true SEQSTEP false )
+
+NODE SEQREPL = ( FORMULA repl SEQSTEP body )
+
+NODE SEQROW = ( FORMULA size SEQSTEP body )
+
+NODE SEQNULL = ( )
+
+NODE SEQUENCE = ( VECTOR SEQSTEP step )
+
+CLASS SEQSTEP = ( ATTRLOCDEC FLOCDEC TLOCDEC CLOCDEC FNLOCDEC PRINT FAULT SEQLET
+                  SEQVAR SEQPVAR SEQASSIGN SEQCASE SEQCOND SEQREPL SEQNULL
+                  SEQUENCE SEQROW )
+
+NODE MAKE = ( VECTOR FORMULA sizes INSTANCE inst VECTOR INT makenames )
+
+NODE JOIN = ( UNIT from UNIT to )
+
+NODE REPLJOIN = ( VECTOR FORMULA repls VECTOR JOIN joins )
+
+NODE STEPNULL = ( )
+
+CLASS STEP = ( ATTRLOCDEC FLOCDEC TLOCDEC CLOCDEC FNLOCDEC PRINT FAULT LET MAKE
+               JOIN REPLJOIN STEPNULL )
+
+NODE ALIENCODE = ( INT biop ID name VECTOR MACPARAM macparams )
+
+NODE ARITH = ( FORMULA output )
+
+NODE REFORM = ( )
+
+NODE CTNAME = ( ID contextno ID import )
+
+NODE IMPORT = ( ID name INT contextno CTNAME ctname )
+
+NODE ADELAY = ( INT sort UNIT init FORMULA ambigtime UNIT ambig
+                  FORMULA delaytime )
+
+NODE IDELAY = ( UNIT init FORMULA delaytime )
+
+NODE RAM = ( UNIT init )
+
+NODE SAMPLE = ( INT sort FORMULA interval UNIT init FORMULA skew )
+
+NODE TIMESCALE = ( INT faster INT sort INSTANCE inst FORMULA scale
+                     UNIT init FORMULA skew )
+
+NODE BODYCHECK = ( VECTOR INT joincheck INT check FNBODY fnbody )
+
+NODE BODYNULL = ( )
+
+CLASS FNBODY = ( UNITTAG ALIENCODE ARITH REFORM IMPORT ADELAY IDELAY RAM 
+                 SAMPLE TIMESCALE BODYCHECK BODYNULL )
+
+CLASS MACSPECBODY = ( ATTRMACSPEC FMACSPEC TMACSPEC CMACSPEC FNMACSPEC )
+
+NODE MACSPEC = ( INT sort MACSPECBODY spec )
+
+NODE NAMETYPE = ( ID name TYPE type ATTR attr )
+
+NODE USAGE = ( INT contextno INT closureno INT libv_spec INT libv_body
+                 INT import INT export )
+
+NODE ATTRDEC = ( INT sort ID attrname ATTR value USAGE usage )
+
+NODE INTDEC = ( INT sort ID intname ATTR attr FORMULARANGE value USAGE usage )
+
+NODE TYPEDEC = ( INT sort ID typename ATTR attr TYPEBODY body USAGE usage )
+
+NODE CONSTDEC = ( INT sort ID constname ATTR attr UNIT value USAGE usage )
+
+NODE FNDEC = ( INT sort INT macro ID fnname VECTOR MACSPEC macspecs
+                 ATTR attr VECTOR INT inputs VECTOR INT outputs
+                 VECTOR NAMETYPE nametypes FNBODY fnbody USAGE usage )
+
+NODE ENVIRON = ( VECTOR ATTRDEC attrs VECTOR INTDEC ints
+                   VECTOR TYPEDEC types VECTOR CONSTDEC consts
+                   VECTOR FNDEC fns )
+
+NODE OUTER = ( INT closureno INT sort ENVIRON environ )
+
+NODE CLOSURE = ( VECTOR OUTER outers )
