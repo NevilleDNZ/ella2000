@@ -1,0 +1,532 @@
+DECS  assmodes CONTEXT VOID  USE  putstrings, basics:
+
+{ " Id: assmodes.sta,v 1.1 91/10/14 14:25:52 edcad Exp $" }
+configinfo A68CONFIG "$Id: assmodes.a68,v 34.2 1995/03/29 13:02:51 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+13:05:88  4th Draft of modes
+30:06:88  5th Draft of modes
+22:08:88  6th Draft of modes
+30:09:88  Addition of BOOL string to UCONC
+27:10:88  Addition of INT sort to INPUT retains info about fntypes.  EVW
+08:12:88  CMACPAR added, MACSPEC and MACPARAM altered.  EVW
+             CTYPE mode corrected to be STRUCT(TYPE)
+             ENVINT etc and STEPNULL added
+30:11:89  Updated for KEEPSAKE.  JIT
+17:12:89  FNBIOP replaced by ALIENCODE, TIMESCALE and SAMPLE added. EVW
+             BOOL macro added to INSTANCE
+22:03:90  UNAME, MAKE, JOIN, IOSPEC changed for multiple makes
+             partial joins and function-type outputs. MGH
+29:03:90  Macros can now have function parameters. JIT
+18:04:90  UIO removed. MGH
+04:07:90  Extra "sort" added for UNAME.  EVW
+11:07:90  su_keepsake replaced by su_keepsake_modes.  DCT
+06:08:90  Change from VECTOR to list for joincheck of BODYDATA.  EVW
+06:11:90  Add integer assembler_version_no  DJS
+18:02:91  su_keepsake removed for external transformation environment.  DCT
+26:06:91  7th version of modes. EVW
+10:10:91  New form of CLOSURE to allow decl order and random access.  DCT
+21:10:91  Ids table - used to save space in .ELA file.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+16:12:91  UTERMINDEX add. BODYDATA removed. EVW
+26:02:92  Modify heading to suit module management utility.  DJS
+02:03:92  Attribute declarations added. EVW
+17:03:92  Multiple strings in CQUOTE. EVW
+15:07:92  Modes CONST, CONSTTAG, CASSOC, CROW, CSTR, CBRACKET, CSTRING, and
+             CNULL removed; CALTS changed to UALTS; CTYPE, CRANGE, CCHARRANGE
+             and UALTS added to UNIT. UTERMINDEX renamed UPORTNAME. JIT
+05:08:92  SEQROW added. JIT
+03:11:92  CBASIC and CCHAR -> CPRIM; CCHARRANGE -> CPRIMRANGE; changes to
+             CQUOTE, NEWCHARS and some 'sort' constant names; CHARRANGE,
+             CHARALT and CHARALTS deleted; assembler_version_no changed. JIT
+08:03:93  BODYPTR removed from modes. EVW
+19:04:93  alter handling of replicators. EVW
+27:09:93  Remaining reference to DISCPTR removed.  DCT
+
+   items kept from basics  ID = REF VECTOR [] CHAR,
+                                nullid = HEAP VECTOR [0] CHAR,
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.030 { Scoped:  MAKEID (CHAR),
+                                  MAKEID (VECTOR [] CHAR), } and CTNAME =
+                                  STRUCT (ID context, import) 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+MODE      IDS = STRUCT (ID id, REF IDS rest),
+         INTS = STRUCT (INT int, REF INTS rest),
+
+ATTR,
+     ATTRNAME = STRUCT (INT attrno),
+     ATTRDATA = STRUCT (ID classname, REF IDS strings),
+      ATTRSTR = STRUCT (ATTR elem, REF ATTRSTR rest),
+  ATTRBRACKET = STRUCT (ATTR attr),
+     ATTRNULL = STRUCT (INT attrnull),
+
+         ATTR = UNION (REF ATTRNAME, REF ATTRDATA, REF ATTRSTR, REF ATTRBRACKET,
+                       REF ATTRNULL),
+      ATTRTAG = STRUCT (ATTR tag),
+
+FORMULA,
+         FINT = STRUCT (INT int, ID text),
+       FCHECK = STRUCT (INT sort, FORMULA test, standard),
+       FARITH = STRUCT (INT nameno),
+        FNAME = STRUCT (INT intno),
+         FDOP = STRUCT (FORMULA left, INT sort, FORMULA right),
+         FMOP = STRUCT (INT sort, FORMULA right),
+        FCOND = STRUCT (FORMULA cond, true, false),
+     FBRACKET = STRUCT (FORMULA formula),
+      FMACPAR = STRUCT (INT macparno),
+        FNULL = STRUCT (INT fnull),
+
+      FORMULA = UNION (REF FINT, REF FCHECK, REF FARITH, REF FNAME, REF FDOP,
+                       REF FMOP, REF FCOND, REF FBRACKET, REF FMACPAR,
+                       REF FNULL),
+   FORMULATAG = STRUCT (FORMULA tag),
+
+     FORMULAS = STRUCT (FORMULA formula, REF FORMULAS rest),
+
+        RANGE = STRUCT (FORMULA lwb, upb),
+ FORMULARANGE = UNION (FORMULA, RANGE),
+
+
+TYPE,
+     TNAME = STRUCT (INT typeno),
+      TROW = STRUCT (FORMULA size, TYPE elem),
+      TSTR = STRUCT (TYPE elem, REF TSTR rest),
+       TFN = STRUCT (TYPE from, to),
+  TBRACKET = STRUCT (TYPE type),
+   TSTRING = STRUCT (FORMULA size, TYPE char),
+     TVOID = STRUCT (INT tvoid),
+   TMACPAR = STRUCT (INT macparno),
+     TNULL = STRUCT (INT tnull),
+
+      TYPE = UNION (REF TNAME, REF TROW, REF TSTR, REF TFN, REF TBRACKET,
+                    REF TSTRING, REF TVOID, REF TMACPAR, REF TNULL),
+   TYPETAG = STRUCT (TYPE tag),
+
+  NEWCHARS = STRUCT (ID tagname, REF VECTOR [] CHAR chars),
+ALTERNATIVE= STRUCT (ID altname, TYPE assoc),
+   NEWINTS = STRUCT (ID tagname, RANGE range),
+  TYPEBODY = UNION(REF VECTOR [] ALTERNATIVE, REF NEWINTS, REF TYPETAG,
+                     REF NEWCHARS),
+
+
+     CNAME = STRUCT (INT constno),
+     CTYPE = STRUCT (TYPE type),
+     CPRIM = STRUCT (INT typeno, primno),
+      CINT = STRUCT (INT typeno, FORMULA index),
+    CRANGE = STRUCT (INT typeno, RANGE range),
+    CQUERY = STRUCT (TYPE querytype),
+CPRIMRANGE = STRUCT (INT typeno, firstno, lastno),
+    CQUOTE = STRUCT (INT typeno, REF VECTOR [] INT string),
+     CVOID = STRUCT (INT cvoid),
+
+UNIT, INSTANCE, SERIES, SEQUENCE,
+     UNAME = STRUCT (INT sort, nameno),
+       UFN = STRUCT (UNIT sink, source),
+    UASSOC = STRUCT (INT typeno, altno, UNIT assoc),
+  UEXTRACT = STRUCT (UNIT extract, INT typeno, altno),
+ UPORTNAME = STRUCT (UNIT unit, INT fnno, nameno),
+    UINDEX = STRUCT (UNIT unit, FORMULA index),
+     UTRIM = STRUCT (UNIT unit, RANGE range),
+  UDYINDEX = STRUCT (UNIT unit, index),
+  UREPLACE = STRUCT (UNIT unit, index, from),
+      UROW = STRUCT (FORMULA size, UNIT elem),
+      USTR = STRUCT (UNIT elem, REF USTR rest),
+     UALTS = STRUCT (UNIT alt, REF UALTS rest),
+     UCONC = STRUCT (BOOL string, INT sort, UNIT left, right),
+    UMINST = STRUCT (INSTANCE inst, UNIT right),
+    UDINST = STRUCT (UNIT left, INSTANCE inst, UNIT right),
+  UCHOICES = STRUCT (BOOL check, INT sort, UNIT test, output,
+                     REF UCHOICES rest),
+     UCASE = STRUCT (UNIT input, REF UCHOICES choices),
+     UCOND = STRUCT (FORMULA cond, UNIT true, false),
+     UREPL = STRUCT (FORMULA repl, UNIT body),
+ USEQUENCE = STRUCT (REF SEQUENCE body, UNIT output),
+   USERIES = STRUCT (REF SERIES body, UNIT output),
+     UATTR = STRUCT (UNIT unit, ATTR attr),
+    UCHECK = STRUCT (UNIT unit, FCHECK check),
+  UBRACKET = STRUCT (UNIT unit),
+   USTRING = STRUCT (FORMULA size, UNIT char),
+     UNULL = STRUCT (INT unull),
+
+     UNIT = UNION (REF CNAME,  REF CPRIM,  REF CINT,  REF CQUERY,
+                   REF CQUOTE,  REF CVOID,
+                   REF CTYPE,  REF CRANGE,  REF CPRIMRANGE,  REF UALTS,
+                   REF UNAME,  REF UFN, REF UASSOC,  REF UEXTRACT,
+                   REF UPORTNAME, REF UINDEX,
+                   REF UTRIM,  REF UDYINDEX,  REF UREPLACE,  REF UROW,
+                   REF USTR,  REF UCONC,  REF UMINST,  REF UDINST,  REF UCASE,
+                   REF UCOND,  REF UREPL,  REF USEQUENCE,  REF USERIES,
+                   REF UATTR,  REF UCHECK,  REF UBRACKET,  REF USTRING,
+                   REF UNULL),
+  UNITTAG = STRUCT (UNIT tag),
+
+
+    FNNAME = STRUCT (INT fnno),
+    MPARAM = UNION (ATTRTAG, FORMULATAG, TYPETAG, UNITTAG, INSTANCE),
+  MACPARAM = STRUCT (INT sort, MPARAM param),
+  INSTANCE = STRUCT (INT fnno, REF VECTOR [] MACPARAM macparams, ATTR attr),
+
+DECLARATION = UNION (ATTRNAME, FNAME, TNAME, CNAME, FNNAME),
+
+PRINTITEMS = STRUCT ( UNION(ID, REF FORMULATAG) item, REF PRINTITEMS rest),
+     PRINT = STRUCT (FORMULA cond, REF PRINTITEMS print),
+     FAULT = STRUCT (FORMULA cond, REF PRINTITEMS fault),
+
+     NAMES = STRUCT (INT nameno, REF NAMES rest),
+       LET = STRUCT (REF NAMES letnames, UNIT unit),
+
+SEQSTEP,
+    SEQLET = STRUCT (LET seqlet),
+    SEQVAR = STRUCT (LET seqvar),
+   SEQPVAR = STRUCT (REF NAMES pvarnames, UNIT init),
+ SEQASSIGN = STRUCT (UNIT to, from),
+SEQCHOICES = STRUCT (BOOL check, INT sort, UNIT test, SEQSTEP output,
+                     REF SEQCHOICES rest),
+   SEQCASE = STRUCT (UNIT input, REF SEQCHOICES choices),
+   SEQCOND = STRUCT (FORMULA cond, SEQSTEP true, false),
+   SEQREPL = STRUCT (FORMULA repl, SEQSTEP body),
+    SEQROW = STRUCT (FORMULA size, SEQSTEP elem),
+   SEQNULL = STRUCT (INT seqnull),
+
+   SEQSTEP = UNION (DECLARATION,  REF PRINT,  REF FAULT,  REF SEQLET,
+                    REF SEQVAR,  REF SEQPVAR,  REF SEQASSIGN,  REF SEQCASE,
+                    REF SEQCOND,  REF SEQREPL,  REF SEQNULL,  REF SEQUENCE,
+                    REF SEQROW),
+
+  SEQUENCE = STRUCT (SEQSTEP step, REF SEQUENCE rest),
+
+
+      MAKE = STRUCT (REF FORMULAS sizes, INSTANCE inst, REF NAMES makenames),
+      JOIN = STRUCT (UNIT from, to),
+     JOINS = STRUCT (JOIN join, REF JOINS rest),
+  REPLJOIN = STRUCT (REF FORMULAS repls, REF JOINS joins),
+  STEPNULL = STRUCT (INT stepnull),
+
+      STEP = UNION (DECLARATION,  REF PRINT,  REF FAULT,  REF LET,  REF MAKE,
+                    REF JOIN,  REF REPLJOIN, REF STEPNULL),
+    SERIES = STRUCT (STEP step, REF SERIES rest),
+
+FNBODY,
+ ALIENCODE = STRUCT (BOOL biop, ID name, REF VECTOR [] MACPARAM macparams),
+     ARITH = STRUCT (FORMULA output),
+    REFORM = STRUCT (INT reform),
+    IMPORT = STRUCT (ID name, INT contextno, CTNAME ctname),
+    ADELAY = STRUCT (INT sort,  UNIT init, FORMULA ambigtime,
+                     UNIT ambig,  FORMULA delaytime),
+    IDELAY = STRUCT (UNIT init, FORMULA delaytime),
+       RAM = STRUCT (UNIT init),
+    SAMPLE = STRUCT (INT sort, FORMULA interval, UNIT init, FORMULA skew),
+ TIMESCALE = STRUCT (BOOL faster, INT sort, INSTANCE inst, FORMULA scale,
+                     UNIT init, FORMULA skew),
+ BODYCHECK = STRUCT (REF INTS joincheck, BOOL check, FNBODY fnbody),
+  BODYNULL = STRUCT (INT bodynull),
+
+    FNBODY = UNION (REF UNITTAG,  REF ALIENCODE,  REF ARITH,  REF REFORM,
+                    REF IMPORT,  REF ADELAY,  REF IDELAY,  REF RAM, REF SAMPLE,
+                    REF TIMESCALE, REF BODYCHECK, REF BODYNULL),
+
+   MACSPEC = STRUCT (INT sort, DECLARATION spec),
+
+  NAMETYPE = STRUCT (ID name, TYPE type, ATTR attr),
+
+     USAGE = STRUCT (INT contextno, closureno, libv_spec, libv_body,
+                     BOOL import, export),
+
+
+   ATTRDEC = STRUCT (INT sort, ID attrname, ATTR value, REF USAGE usage),
+    INTDEC = STRUCT (INT sort, ID intname, ATTR attr, FORMULARANGE value,
+                     REF USAGE usage),
+   TYPEDEC = STRUCT (INT sort, ID typename, ATTR attr, TYPEBODY body,
+                     REF USAGE usage),
+  CONSTDEC = STRUCT (INT sort, ID constname, ATTR attr, UNIT value,
+                     REF USAGE usage),
+
+     FNDEC = STRUCT (INT sort, BOOL macro, ID fnname,
+                     REF VECTOR [] MACSPEC macspecs, ATTR attr,
+                     REF NAMES inputs, outputs,
+                     REF VECTOR [] NAMETYPE nametypes,
+                     FNBODY fnbody,
+                     REF USAGE usage),
+
+   ENVIRON = STRUCT (REF VECTOR [] REF ATTRDEC attrs,
+                     REF VECTOR [] REF INTDEC ints,
+                     REF VECTOR [] REF TYPEDEC types,
+                     REF VECTOR [] REF CONSTDEC consts,
+                     REF VECTOR [] REF FNDEC fns
+                    ),
+
+
+     OUTER = STRUCT (INT  closureno, sort, REF ENVIRON environ),
+    OUTERS = STRUCT (OUTER  outer,  REF OUTERS  rest),
+OUTERSLIST = STRUCT (REF VECTOR [] OUTERS  outers,  REF OUTERSLIST  rest),
+
+CLOSUREDAT = STRUCT ( INT  max_closureno,  { Public access via procedure only }
+                      REF OUTERS  outers,  { Public access }
+                                  freelist,  { Private - recycle closurenos }
+                      REF OUTERSLIST  outerslist  { Private - optimised lookup }
+                    ),
+   CLOSURE = REF CLOSUREDAT;
+
+REF TSTR    niltstr    = NIL;
+REF UALTS   nilualts   = NIL;     REF USTR    nilustr    = NIL;
+REF UCHOICES niluchoices = NIL;   REF UNITTAG nilunit    = NIL;
+REF IDS     nilids     = NIL;     REF PRINTITEMS nilprintitems = NIL;
+REF NAMES   nilnames   = NIL;     REF INTS    nilints    = NIL;
+REF SEQCHOICES nilseqchoices = NIL;     REF SEQUENCE nilsequence = NIL;
+REF JOINS niljoins = NIL;
+REF SERIES  nilseries  = NIL;     REF IMPORT  nilimport  = NIL;
+REF ATTRDEC nilattrdec = NIL;
+REF INTDEC nilintdec = NIL;       REF TYPEDEC niltypedec = NIL;
+REF CONSTDEC nilconstdec = NIL;   REF FNDEC nilfndec = NIL;
+REF VECTOR [] MACPARAM nilmacparams = NIL;
+REF FORMULAS nilformulas = NIL;
+REF USAGE nilusage = NIL;         REF ATTRSTR nilattrstr = NIL;
+REF VECTOR [] MACSPEC nilmacspecs = NIL;   REF ENVIRON nilenviron = NIL;
+REF OUTERS nilouters = NIL;       REF OUTERSLIST  nilouterslist = NIL;
+
+HEAP VECTOR [0] ID nullids;              HEAP VECTOR [0] NAMETYPE nullnametypes;
+HEAP VECTOR [0] MACPARAM nullmacparams;  HEAP VECTOR [0] MACSPEC nullmacspecs;
+HEAP VECTOR [0] REF ATTRDEC nullattrdecs;
+HEAP VECTOR [0] REF INTDEC nullintdecs;
+HEAP VECTOR [0] REF TYPEDEC nulltypedecs;
+HEAP VECTOR [0] REF CONSTDEC nullconstdecs;
+HEAP VECTOR [0] REF FNDEC nullfndecs;
+HEAP VECTOR [0] REF OUTERS  nullouters;
+
+OUTER  nullouter = (0, 0, nilenviron);
+
+{{ Operators for making up ALGOL structs which contain one element }}
+OP MAKEATTRNAME = (INT attrno) REF ATTRNAME:
+   ( HEAP ATTRNAME attrname;  attrno OF attrname := attrno;  attrname );
+
+OP MAKEATTRBRACKET = (ATTR attr) REF ATTRBRACKET:
+   ( HEAP ATTRBRACKET attrbracket;  attr OF attrbracket := attr;  attrbracket );
+
+OP MAKEATTRTAG = (ATTR tag) REF ATTRTAG:
+   ( HEAP ATTRTAG attrtag;  tag OF attrtag := tag;  attrtag );
+
+OP MAKEFARITH = (INT nameno) REF FARITH:
+   ( HEAP FARITH farith;  nameno OF farith := nameno;  farith );
+
+OP MAKEFNAME = (INT intno) REF FNAME:
+   ( HEAP FNAME fname;  intno OF fname := intno;  fname );
+
+OP MAKEFMACPAR = (INT macparno) REF FMACPAR:
+   ( HEAP FMACPAR fmacpar;  macparno OF fmacpar := macparno;  fmacpar );
+
+OP MAKEFBRACKET = (FORMULA formula) REF FBRACKET:
+   ( HEAP FBRACKET fbracket;  formula OF fbracket := formula;  fbracket );
+
+OP MAKEFORMULATAG = (FORMULA tag) REF FORMULATAG:
+   ( HEAP FORMULATAG ftag;  tag OF ftag := tag;  ftag );
+
+OP MAKETNAME = (INT typeno) REF TNAME:
+   ( HEAP TNAME tname;  typeno OF tname := typeno;  tname );
+
+OP MAKETMACPAR = (INT macparno) REF TMACPAR:
+   ( HEAP TMACPAR tmacpar;  macparno OF tmacpar := macparno;  tmacpar );
+
+OP MAKETBRACKET = (TYPE type) REF TBRACKET:
+   ( HEAP TBRACKET tbracket;  type OF tbracket := type;  tbracket );
+
+OP MAKETYPETAG = (TYPE tag) REF TYPETAG:
+   ( HEAP TYPETAG typetag;  tag OF typetag := tag;  typetag );
+
+OP MAKECNAME = (INT constno) REF CNAME:
+   ( HEAP CNAME cname;  constno OF cname := constno;  cname );
+
+OP MAKECTYPE = (TYPE type) REF CTYPE:
+   ( HEAP CTYPE ctype;  type OF ctype := type;  ctype );
+
+OP MAKECQUERY = (TYPE type) REF CQUERY:
+   ( HEAP CQUERY cquery;  querytype OF cquery := type;  cquery );
+
+OP MAKEUBRACKET = (UNIT unit) REF UBRACKET:
+   ( HEAP UBRACKET ubracket;  unit OF ubracket := unit;  ubracket );
+
+OP MAKEUNITTAG = (UNIT tag) REF UNITTAG:
+   ( HEAP UNITTAG unittag;  tag OF unittag := tag;  unittag );
+
+OP MAKESEQLET = (LET let) REF SEQLET:
+   ( HEAP SEQLET seqlet;  seqlet OF seqlet := let;  seqlet );
+
+OP MAKESEQVAR = (LET let) REF SEQVAR:
+   ( HEAP SEQVAR seqvar;  seqvar OF seqvar := let;  seqvar );
+
+OP MAKEFNNAME = (INT fnno) REF FNNAME:
+   ( HEAP FNNAME fnname;  fnno OF fnname := fnno;  fnname );
+
+OP MAKEARITH = (FORMULA output) REF ARITH:
+   ( HEAP ARITH arith;  output OF arith := output;  arith );
+
+OP MAKERAM = (UNIT init) REF RAM:
+   ( HEAP RAM ram; init OF ram := init; ram );
+
+
+ATTRNULL attrnull;  attrnull OF attrnull := ABS 16r6e756c6c;
+FNULL fnull;  fnull OF fnull := ABS 16r6e756c6c;
+TNULL tnull;  tnull OF tnull := ABS 16r6e756c6c;
+UNULL unull;  unull OF unull := ABS 16r6e756c6c;
+SEQNULL seqnull;  seqnull OF seqnull := ABS 16r6e756c6c;
+STEPNULL stepnull;  stepnull OF stepnull := ABS 16r6e756c6c;
+BODYNULL bodynull;  bodynull OF bodynull := ABS 16r6e756c6c;
+REFORM reform;      reform OF reform := ABS 16r6e743352;
+TVOID tvoid;  tvoid OF tvoid := ABS 16r766f6964;
+CVOID cvoid;  cvoid OF cvoid := ABS 16r766f6964;
+
+{{ Uses of INT sort in various modes }}
+
+{CONC}    INT flattenleft = 1,  flattenright = 2, flattenboth = 3;
+{CHOICES} INT normalchoice = 1,  elseofchoice = 2,  elsechoice = 3,
+              noelsechoice = 4;
+{MACPARAM}INT explicitmacpar = 0,  implicitmacpar = 1;
+{FCHECK}  INT checktypeoutput = -1,
+              checktype = 1, checkle = 2, checkge = 3, checkeq = 4, checkne = 5;
+{FMOP}    INT fplus = 1, fminus = 2, fnot = 3, finot = 5, fsqrt = 6, fabs = 7;
+{FDOP}    INT fmult = 3, fidiv = 4, feq = 5, fne = 6, fle = 7, fge = 8,
+              flth = 9, fgth = 10, fand = 11, for = 12, fsl = 14, fsr = 15,
+              fiand = 16, fior = 17, fmod = 18;
+{ADELAY}  INT constint = 1,  constint2 = 2,  const2int = 3,  const2int2 = 4;
+{IDELAY}  INT idelayintcon = 5;
+{SAMPLE}  INT int1 = 1, int2 = 2;
+{UNAME}   INT usource = 1, usink = 2, uiosource = 3, uiosink = 4;
+{DEC}     INT outerdec = 1, localdec = 2, macpardec = 3;
+{OUTER}   INT outerattr = 1, outerint = 2, outertype = 3, outerconst = 4,
+              outerfn = 5;
+
+
+INT assembler_version_no = 921103;  { Integer used for continuity checking with
+                                      WRITE_ELLA and the assembler dumper etc }
+
+
+{ ID hash table - use "make_id" to enter STR in table - used to save space
+                  in the HEAP and .ELA file.   It would be better to have
+                  MODE ID = STRUCT (RVC  str,  INT  hash) - but this requires
+                  changes to existing software - not worth while.
+}
+
+MODE  IDSTABLE = REF VECTOR [] REF IDS;
+IDSTABLE  idstable:= LOC VECTOR [0] REF IDS;
+INT  assembler_libno:= -1;   { Used to control the life time of the IDSTABLE }
+INT  ids_hash_size = 32;     { Hash width for IDSTABLE }
+
+PROC  make_id = (STR  str) ID:
+   IF UPB  str = 0
+   THEN  nullid
+   ELIF INT  hash_width = UPB idstable;
+        hash_width > 0
+   THEN  INT  hash:= ABS str[1];
+         FORALL c IN str[2:] DO  hash PLUSAB ABS c  OD;
+         hash:= hash MOD hash_width;
+         REF REF IDS  ptr:= idstable[hash+1];
+         WHILE  (ptr ISNT nilids)  ANDTH  (id OF ptr /= str)
+         DO  ptr:= rest OF ptr  OD;
+         IF ptr IS nilids
+         THEN  REF REF IDS (ptr):= HEAP IDS:= (MAKERVC str, nilids)
+         FI;
+         id OF ptr
+   ELSE  MAKERVC str
+   FI;
+
+OP (STR) ID  MAKEID = make_id;
+OP  MAKEID = (CHAR  c) ID:  make_id(c);
+
+
+
+SKIP
+KEEP   CTNAME,  ID,  nullid,
+       IDS, INTS,
+       ATTR, ATTRNAME, ATTRDATA, ATTRSTR, ATTRBRACKET, ATTRNULL, ATTRDEC,
+       ATTRTAG,
+       FORMULA,  FINT,  FCHECK,  FARITH,  FNAME,  FDOP,  FMOP,
+       FCOND,  FBRACKET,  FMACPAR, FNULL,  FORMULATAG, FORMULAS,
+       INTDEC,  RANGE,  FORMULARANGE,
+       TYPE,  TNAME,  TROW,  TSTR,  TFN,  TBRACKET,  TNULL,  TYPETAG,
+       NEWCHARS, TSTRING, TMACPAR, TVOID,
+       ALTERNATIVE,  NEWINTS,  TYPEBODY,  TYPEDEC,
+       CNAME,  CTYPE,  CPRIM,  CINT,  CRANGE,  CQUERY,  CONSTDEC,
+       CPRIMRANGE, CQUOTE, CVOID,
+       UNIT,
+       UNAME,  UASSOC,   UEXTRACT, UINDEX,  UTRIM,  UDYINDEX,  UREPLACE, UALTS,
+       UROW,  USTR,  UCONC,  UMINST,  UDINST,  UCHOICES,  UCASE,  UCOND,  UREPL,
+       USEQUENCE,  USERIES,  UATTR,  UCHECK,  UBRACKET,  UNULL,  UNITTAG,
+       USTRING, UFN, UPORTNAME,
+       FNNAME,  MPARAM,  MACPARAM,  INSTANCE,  DECLARATION,
+       PRINTITEMS,  PRINT,  FAULT,  NAMES,
+       SEQLET,  SEQVAR,  SEQPVAR,  SEQASSIGN,  SEQCHOICES,  SEQCASE,  SEQCOND,
+       SEQREPL,  SEQNULL,  SEQSTEP,  SEQUENCE, SEQROW,
+       LET,  MAKE,  JOIN,  JOINS,  REPLJOIN,  STEPNULL,  STEP,  SERIES,
+       ALIENCODE,  ARITH,  REFORM,  IMPORT,  ADELAY,  IDELAY,  RAM,  SAMPLE,
+       TIMESCALE,  BODYCHECK, BODYNULL,  FNBODY,
+       MACSPEC,  NAMETYPE,
+       FNDEC,  USAGE,  ENVIRON,
+       OUTER, OUTERS, OUTERSLIST, CLOSUREDAT, CLOSURE,
+
+       niltstr,  nilualts,  nilustr,  niluchoices,  nilunit,
+       nilids,  nilints, nilprintitems,  nilnames,  nilseqchoices,  nilsequence,
+       niljoins,  nilseries,  nilimport,
+       nilattrdec,  nilintdec,  niltypedec, nilconstdec,  nilfndec,
+       nilmacparams, nilformulas, nilusage, nilattrstr,
+       nilmacspecs, nilenviron, nilouters, nilouterslist,
+
+       nullids,  nullmacparams,  nullmacspecs,  nullnametypes,
+       nullattrdecs, nullintdecs, nulltypedecs, nullconstdecs, nullfndecs,
+       nullouters, nullouter,
+
+       MAKEFARITH(INT),  MAKEFNAME(INT), MAKEFBRACKET(FORMULA),
+       MAKEFORMULATAG(FORMULA),  MAKETNAME(INT),  MAKETBRACKET(TYPE),
+       MAKETYPETAG(TYPE),  MAKECNAME(INT),  MAKECTYPE(TYPE),  MAKECQUERY(TYPE),
+       MAKESEQLET(LET),
+       MAKESEQVAR(LET),  MAKEUBRACKET(UNIT),  MAKEUNITTAG(UNIT),
+       MAKEFNNAME(INT), MAKEARITH(FORMULA),  MAKERAM(UNIT),
+       MAKEFMACPAR(INT), MAKETMACPAR(INT), MAKEATTRNAME(INT), MAKEATTRTAG(ATTR),
+       MAKEATTRBRACKET(ATTR),
+       attrnull, fnull,  tnull,  unull,  seqnull,  stepnull, bodynull,
+       reform, tvoid, cvoid,
+
+       flattenleft, flattenright, flattenboth, normalchoice,
+       elseofchoice, elsechoice, noelsechoice, explicitmacpar, implicitmacpar,
+       checktypeoutput,  checktype, checkle, checkge, checkeq, checkne, fplus,
+       fminus, fnot, finot, fsqrt, fabs, fmult, fidiv, feq, fne, fle, fge,
+       fgth, flth, fand, for, fsl, fsr, fiand, fior, fmod, constint, constint2,
+       const2int, const2int2, idelayintcon, int1, int2,
+       usource, usink, uiosource, uiosink, outerdec, localdec, macpardec,
+       outerattr, outerint, outertype, outerconst, outerfn,
+       assembler_version_no, idstable, assembler_libno, ids_hash_size,
+       make_id,  MAKEID (STR),  MAKEID (CHAR)
+
+FINISH
