@@ -1,0 +1,181 @@
+DECS simrun CONTEXT VOID USE putstrings, osinterface, basics, { simhistory, }
+     simnode, simtime, simmonitor, simpast, kernel:
+
+{ " Id: simrun.sta,v 2.1 91/02/22 18:37:10 edcad Exp Locker: miker$" }
+configinfo A68CONFIG "$Id: simrun.a68,v 34.2 1995/03/29 13:05:02 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+31:01:88  Module created for release 4 using code taken from the release 3
+             module SIM.  BJE
+13:10:88  `simulate and monitor' acquires interrupted and stopped args
+26:01:89  `replay and monitor' made more consistent with release 3.
+             R4B040.  BJE
+13:04:89  *** TEMPORARY addition of 'clear interrupts'.  R4B110.  PAR.
+03:10:90  Corrected simulate and monitor to cope with next event
+             optimisation. MDR.
+20:08:93  Remove reference to history.  DJS
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module is responsible for controlling the progression of present mode
+   simulation.
+}
+
+{
+   If 'monitors pending' is TRUE then this signifies that no output for the
+   current simulation time has been produced by the system.  This can occur at
+   as a result of an output fault and signifies that if time is
+   incremented the diagnostic display should include signal values for the
+   initial time
+}
+BOOL monitors pending;
+
+{
+   This shell for 'simulate' silently returns TRUE by default unless 'simulate'
+   resorts to its fault procedure in which case the associated error message is
+   output and the procedure returns FALSE *without* calling its own fault proc
+}
+PROC simulated ok = (REF INT increment, REF BOOL stable, FLTPROC flt) BOOL:
+BEGIN
+   BOOL ans := TRUE;
+
+   PROC local flt = (VECTOR[] CHAR msg) VOID:
+   BEGIN
+      put (out, (msg, newline));
+      ans := FALSE;
+      GOTO exit
+   END;
+
+   simulate (increment, stable, local flt);
+exit:
+   ans
+END;
+
+{
+   This procedure attempts to increment time by the given amount (or just
+   reevaluate combinatorial-logic if that amount is zero).  It may fail to
+   achieve all that it has set out as a result of i) a soft interrupt, ii) a
+   hard interrupt or iii) a machine arithmetic overflow.  It produces the
+   correct amount of diagnostic (monitoring) output for the cirumstances.
+
+   The 'stable' parameter is used as an input to 'simulate' to signal to the
+   run time interface that the instance data may have been changed in
+   between calls to 'simulate and monitor'.  ie. For every call to
+   'simulate and monitor', the value passed in to 'simulate' is false on
+   the first call and true on subsequent calls.
+
+   The 'stable' parameter as an output actually has a slighly different
+   meaning, it will be set to false by 'simulate' when an interrupt
+   or exception has stopped the simulation.
+ }
+PROC simulate and monitor = (INT increment, REF BOOL interrupted, stopped,
+                             FLTPROC flt) VOID:
+BEGIN
+   INT bite, residue := increment;
+   BOOL stable := FALSE;
+   interrupted := stopped := FALSE;
+   clear interrupts;                       { *** TEMPORARY *** }
+   WHILE
+      bite := IF monitors pending THEN 0 ELSE residue FI;
+      interrupted := NOT simulated ok (bite, stable, flt);
+      residue -:= bite;
+      INT old time = IF bite = 0 THEN active time ELSE active time+1 FI;
+      active time +:= bite;
+{  Remove history: DJS
+      set history write time (active time, flt);
+}
+      IF stable THEN
+         monitors pending:= FALSE;
+         stopped := do monitors (old time, flt)
+      FI;
+      stable ANDTH NOT stopped ANDTH NOT interrupted ANDTH residue > 0
+   DO SKIP OD;
+   pttime
+END;
+
+{
+   'replay and monitor' is the past mode analogue of 'simulate and monitor'
+   in SIMRUN.STA.  If 'increment' is positive then it will produce monitoring
+   output for all time intervals between 'active time' and 'active time +
+   increment'  and set 'active time' to the latter (which must not exceed the
+   last time simulated to in present mode).  However if 'dont stop' is FALSE
+   and a breakpoint is activated earlier then the procedure works over a
+   truncated range to this point.  If 'increment' is negative then 'active time'
+   is decreased by 'increment' (which must not cause 'active time' to be set
+   negative) and monitoring output is produced for the new time interval only
+}
+PROC replay and monitor = (INT increment, BOOL dont stop, FLTPROC flt) VOID:
+IF increment > 0 THEN
+   INT residue := increment;
+   WHILE
+      IF active time < saved active time THEN
+         residue -:= 1;
+         active time +:= 1;
+{  Remove history: DJS
+         set history read time (active time, flt);
+}
+         (NOT do monitors (active time, flt) OREL dont stop) ANDTH residue > 0
+      ELSE
+         { The next line added for compatibility with release 3 }
+         IF residue = increment THEN do monitors (active time, flt) FI;
+         put (out, (
+            newline,
+           "You have not yet run the simulation beyond time ",
+            saved active time, newline
+         ));
+         FALSE
+      FI
+   DO SKIP OD;
+   pttime
+ELSE
+   { Clear testpoint last values }
+   CLEAR testpoints;
+   active time +:= increment;
+{  Remove history: DJS
+   set history read time (active time, flt);
+}
+   do monitors (active time, flt);
+   pttime
+FI;
+
+SKIP
+
+KEEP
+   monitors pending,
+   simulate and monitor,
+   replay and monitor
+
+FINISH
