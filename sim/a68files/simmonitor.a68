@@ -1,0 +1,1473 @@
+DECS simmonitor CONTEXT VOID USE iobasics, putstrings, osinterface, simbasics,
+     { simhistory, } simmonmode, simtable, simnode, simpast, simpeek, simtime,
+     kernel, basics, ioprocs:
+
+{ " Id: simmonitor.sta,v 2.4 91/07/30 15:15:01 miker Exp$" }
+configinfo A68CONFIG "$Id: simmonitor.a68,v 34.3 1995/03/29 13:04:59 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:05:88  Module created for release 4 using code taken from the release 3
+             module SIMPOINTS.  BJE
+09:09:88  Testpoint handles introduced for EPI
+14:09:88  Tabulated style no longer faults if one column exceed the page
+             width, instead the column output is truncated and the truncation
+             marked with "..".  'do monitor' now produces EPI messages.
+13:10:88 `list monitors' can no longer fault.
+07:12:88  `new testpoints' raises EPI_M_TESTPOINT messages.  EPI
+             CR 51.  BJE.
+07:12:88  `remove monitor' raises EPI_M_OLD_TESTPOINT message.  EPI
+             CR 83.  BJE.
+20:12:88  EPI_M_OLD_TESTPOINT suppressed for keeps.  EPI CR74.  AAP
+20:12:88  'empty value' introduced; FIRST messages removed.
+             changes monitors always active at time zero for EPI.  AAP
+21:12:88  BOOL parameter added to 'do monitor' to suppress EPI
+             messages before the testpoint has been delivered.
+             EPI CR80.  AAP
+22:12:88  OP MATCH(SVALUE,SVALUE) corrected for REF SVST. EPI CR82.  AAP
+17:01:88  `remove monitor' now calls `close history column' and so
+             needs FLTPROC.  Bug 121.  BJE.
+23:01:89  `print current style' takes no action if current style is
+             no print.  OP CLEAR added. R4B040.  BJE.
+07:02:89  `list monitors' matches on the pathname supplied rather than
+             the circuit location given.  Correction to `remove monitor'.
+             R4B096.  BJE.
+08:02:89  Correction to OP CLEAR.  R4B105.  BJE.
+13:02:89  Correction to correction to R4B096.  R4B111. BJE.
+14:02:89  `open write history column added'.  R4B131.  BJE.
+09:02:89  EPI CR 99. pttime generates EPI_M_SIM_TIME message.  R4B145. AAP.
+02:03:89  'list monitors' corrected.  R4B178. AAP.
+13:03:89  past mode testpoints and events suppressed for EPI. R4B172. AAP.
+23:03:89  R4B172 fix fixed.. R4B263. AAP.
+14:04:89  Speedup by using WORD representations.  R4B134.  PAR.
+21:04:89  Fixed NIL workspace (R4B306) and decoding 'no value' (R4B305). PAR.
+24:04:89  Fixed tests on 'no value' (R4B311) and decoding 'empty value'
+             (continuation of R4B305).  PAR.
+24:04:89  Changes to 'get first blocks' to fix R4B310. MDR.
+04:12:89  Monitoring optimisation changes.  PAR.
+18:12:89  Changes to monitoring for Probe Functions. MDR.
+
+15:12:89  Additions and Modifications for time scaling support.  MHC
+               - 'time width' enlarged
+               - 'pttime tabulated' changes print style for scaled regions
+               - 'pttime freeform'  changes print style for scaled regions
+               - 'TIME' headings change in scaled regions ('monitor heading')
+               - 'pttime freeform scaled' added to KEEP list
+05:10:90  Made 'do monitor[s]' loop over time to correct 'always' action.
+             'OP CLEAR' sets the global monitor flags so correct
+             values are decoded when going from past to present mode. MDR.
+
+23:01:91  Fixed addition of monitoring separation character. MDR.
+31:01:91  page width updated to Release 6 ioprocs.  DCT
+05:02:91  Added guard to pttime tabulated in do monitor. Prevents
+             multiple time messages in freeform mode.
+             Made the default tabulated mode field widths as per rel4. MDR.
+
+13:05:91  Added optimisation to avoid looping over time in do monitors
+             when no 'always' testpoints are set. Half Fixes set-separator bug
+             which produced time messages & empty columns with no monitor
+             activity. We need to defer the output of separators really.
+             MDR.
+13:05:91  Made Separator output per monitor, was per column. MDR.
+16:05:91  Merged with R5 v 2.2 from CG.  DCT
+24:07:91  Fixed tabulated format with separators included. MDR.
+07:12:92  R6B136: Extra check in PROC do monitor for decoded OF m = NIL.
+             {replay followed by ti + number > 1 was causing a crash.} JIT
+14:06:93  Changes to to output (see simpeek and putstrings).  DCT
+13:08:93  epi commented out.  DCT
+20:08:93  Remove reference to history.  DJS
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.039 
+05:12:94  33.002  DJS   CmplxNos   Change to MODE CHANNEL. Collateral
+                                   assignment in 'print tabulated' needs
+                                   altering. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module is responsible for managing the simulator shell's testpoint
+   array
+}
+
+{
+   GLOBAL DATA
+   ===========
+}
+
+{
+   'empty value' is used as the initial value of the last value
+   of a monitor.  Note that it is not the same as 'no value'
+   (absent from history file).  The name 'empty value' is not
+   used in tests, since the only efficient yet safe way of
+   testing for it is 'UPB x = 0'
+}
+
+WORD empty value := HEAP VECTOR [0] CHAR;
+
+{
+   'printed time' stores the last time that was output on the screen for the
+   current function or the illegal time -1 if no time has been output.
+   'printed time style' and 'printed time mode' store the style and mode used
+   when the time was last printed.  They should be initialised at the same time
+   as 'print style' and 'time mode' to the same values.
+
+   The initialisation is done in SIMSTART
+}
+INT
+   printed time,
+   printed time style,
+   printed time mode;
+
+{
+   The current print style may take one of three values
+}
+INT print style;
+
+INT
+   freeform  = 1,
+   tabulated = 2,
+   noprint   = 3;
+
+{
+  This is the testpoints array.  The linked list has one element for each
+  active testpoint set by the user.  The list is ordered by date of creation
+  with 'testpoints' pointing to the most senior
+}
+REF MONITORLIST testpoints := NIL;
+
+{
+   UTILITY PROCEDURES
+   ==================
+}
+
+
+{
+ Remove any function type 'from' fields from wire description to enable correct
+ monitoring.
+ This rather complex procedure is required *ONLY* to achieve compatibility
+ with release 3 -- it would be much easier to monitor the input side of
+ function types as well as their outputs.
+}
+PROC make wire monitorable = (REF WIRE wire) REF WIRE:
+BEGIN
+   { This procedure returns the first blocks which describe a signal 'size'
+     bytes long, and removes them from the input block list.
+     It assumes that it will never be required to divide an indirect block.
+   }
+   PROC get first blocks = (INT size, REF REF VECTOR [] BLOCK original blocks)
+                                        REF REF VECTOR [] BLOCK:
+
+   IF size = 0 THEN
+      HEAP REF VECTOR [] BLOCK := HEAP VECTOR [0] BLOCK
+   ELSE
+       INT skip size := size;
+       INT last block := 1;
+       WHILE skip size -:= size OF  original blocks [last block];
+             skip size > 0
+       DO
+           last block +:= 1
+       OD;
+       HEAP REF VECTOR [] BLOCK first := HEAP VECTOR [last block] BLOCK :=
+                       original blocks [: last block];
+       size OF first [last block] +:= skipsize;
+
+       original blocks :=
+           IF last block < UPB original blocks THEN
+             HEAP VECTOR [UPB original blocks - last block] BLOCK first
+                  := original blocks[last block+1 :];
+             IF skipsize < 0 THEN
+                size OF first [1] := -skipsize
+             FI;
+             first
+           ELIF skipsize < 0 {AND last block = UPB original blocks}
+           THEN
+              HEAP VECTOR [1] BLOCK first := original blocks [last block];
+              size OF first [1] := -skipsize;
+              first
+           ELSE
+              HEAP VECTOR [0] BLOCK
+           FI;
+       first
+   FI;
+
+   { Walk type tree recovering the blocks we need to monitor &
+     also build a new STYPE to represent the path we've taken}
+   PROC build monitored blocks = (REF WIRE wire) REF WIRE:
+      CASE type OF wire IN
+      (REF SFN sfn):
+         BEGIN
+            REF VECTOR [] BLOCK ignore = get first blocks(machine width
+                                              (from OF sfn), blocks OF wire);
+            make wire monitorable (HEAP WIRE := (to OF sfn, blocks OF wire))
+         END,
+      (REF SST sst):
+         BEGIN
+            REF VECTOR [] BLOCK result blocks := HEAP VECTOR [0] BLOCK;
+            SST result type;
+            rest OF result type := nil sst;
+            REF REF SST newstr := rest OF result type;
+            REF SST scan := sst;
+            WHILE scan ISNT nil sst DO
+               WIRE newwire = make wire monitorable(
+                                HEAP WIRE := (t OF scan, blocks OF wire));
+               REF SST(newstr) := HEAP SST := (type OF newwire, nil sst);
+               result blocks := result blocks + blocks OF newwire;
+               newstr := rest OF newstr;
+               scan := rest OF scan
+            OD;
+            HEAP WIRE := (t OF result type, result blocks)
+         END,
+      (REF SROW srow):
+         BEGIN
+            REF VECTOR [] BLOCK result blocks := HEAP VECTOR [0] BLOCK;
+            HEAP SROW result row := srow;
+            FOR i TO no OF srow DO
+               WIRE newwire = make wire monitorable(
+                               HEAP WIRE := (type OF srow, blocks OF wire));
+               result blocks := result blocks + blocks OF newwire
+            OD;
+            HEAP WIRE := (result row, result blocks)
+         END
+      OUT
+         HEAP WIRE := (type OF wire,
+                       get first blocks(machine width(type OF wire),
+                                        blocks OF wire))
+      ESAC;
+
+   { Walk type tree to find if it contains any TFNs}
+   PROC contains function types = (STYPE wire type) BOOL:
+      BEGIN
+         BOOL result := FALSE;
+         CASE wire type IN
+         (REF SFN sfn): result := TRUE,
+         (REF SST sst):
+            BEGIN
+               REF SST scan := sst;
+               WHILE NOT result ANDTH (scan ISNT nil sst) DO
+                  result := contains function types (t OF scan);
+                  scan := rest OF scan
+               OD
+            END,
+         (REF SROW srow):
+            result := contains function types (type OF srow)
+         OUT SKIP
+         ESAC;
+         result
+      END;
+
+   { Main body of make wire monitorable}
+   IF contains function types (type OF wire) THEN
+      build monitored blocks (HEAP WIRE := (type OF wire, blocks OF wire))
+   ELSE
+      wire
+   FI
+END; { of make wire monitorable}
+
+
+{
+  Given a fully validated path, 'line' returns a corresponding signal line,
+  coercing function instances to their outputs and calling the above to
+  remove function type inputs.
+}
+PROC line = (REF PATH path) MNODE:
+BEGIN
+   REF PATH last := path;
+   WHILE rest OF last ISNT nil path DO last := rest OF last OD;
+   MNODE mnode := node OF bind OF last;
+   node OF mnode :=
+      CASE node OF mnode IN
+         (LINE l):LINE(make wire monitorable (wire OF l), instance OF l),
+         (BOX b) :LINE(make wire monitorable (
+                          HEAP WIRE := outputs OF lookup function(fn OF b)),
+                       instance OF b)
+      ESAC;
+   mnode
+END;
+
+{
+   'NEW' makes a copy of the specified MONITORLIST.  'lastvalues' and
+   'testvalues' are copied because these are continually updated.  The 'sizes'
+   and 'columns' vectors are not as they are written once only when they are
+   allocated.  Also, the 'workspace' is not copied as its use is very
+   temporary.
+}
+OP NEW = (REF MONITORLIST list) REF MONITORLIST:
+BEGIN
+   REF MONITORLIST
+      result := nil monitorlist,
+      scan   := list;
+   REF REF MONITORLIST last := result;
+   WHILE scan ISNT nil monitorlist DO
+      REF MONITORLIST new = HEAP MONITORLIST := scan;
+      IF testvalues OF monitor OF new ISNT no value THEN
+        testvalues OF monitor OF new :=
+           HEAP VECTOR [UPB testvalues OF monitor OF new] CHAR :=
+              testvalues OF monitor OF new
+      FI;
+      IF lastvalues OF monitor OF new ISNT no value THEN
+         lastvalues OF monitor OF new :=
+            HEAP VECTOR [UPB lastvalues OF monitor OF new] CHAR :=
+               lastvalues OF monitor OF new
+      FI;
+      IF decoded OF monitor OF new ISNT REF SVALUE (NIL) THEN
+         decoded OF monitor OF new := HEAP SVALUE :=
+            decoded OF monitor OF new
+      FI;
+      REF REF MONITORLIST (last) := new;
+      last := rest OF new;
+      scan := rest OF scan
+   OD;
+   result
+END;
+
+{
+   'CLEAR' clears the `lastvalues' fields of the list to `novalue'.
+}
+OP CLEAR = (REF MONITORLIST list) VOID:
+BEGIN
+   REF MONITORLIST scan := list;
+   WHILE scan ISNT nil monitorlist DO
+      {Ensure values can be decoded by 'do monitor'}
+      IF flag address OF monitor OF scan /= -1 THEN
+         cg poke int(1, flag address OF monitor OF scan)
+      FI;
+      lastvalues OF monitor OF scan := empty value;
+      decoded OF monitor OF scan := NIL;
+      scan := rest OF scan
+   OD
+END;
+
+{
+   This procedure flattens a signal value to a structure of primitive values
+   SVNULL is not a valid input.
+
+   This must be a fairly expensive procedure in terms of CPU time and heap usage
+   and it is called for every tabulated mode signal display.  If this becomes
+   a problem then the solution would be to add a further field to MODE MONITOR
+   to cache the flattened signal value.
+}
+PROC flatten signal value = (SVALUE v) REF SVST:
+BEGIN
+
+   OP + = (REF SVST a, b) REF SVST:
+   BEGIN
+      REF SVST aa := a;
+      REF REF SVST p := aa;
+      WHILE p ISNT nil svst DO p := tail OF p OD;
+      REF REF SVST (p) := b;
+      aa
+   END;
+
+   PROC flatten query signal value = (SQUERY q) REF SVST:
+   BEGIN
+      INT upb = signal width (type OF q);
+      REF SST ptr := trim signal (type OF q, 1, upb);
+      REF SVST ans := nil svst;
+      WHILE ptr ISNT nil sst DO
+         HEAP SQUERY q;
+         type OF q := t OF ptr;
+         ans := ans + HEAP SVST := (q, nil svst);
+         ptr := rest OF ptr
+      OD;
+      ans
+   END;
+
+   CASE v IN
+      (REF SQUERY q)  : flatten query signal value (q),
+      (REF SVST s)    :
+         BEGIN
+            REF SVST ans := nil svst;
+            REF SVST ptr := s;
+            WHILE ptr ISNT nil svst DO
+               ans := ans + flatten signal value (head OF ptr);
+               ptr := tail OF ptr
+            OD;
+            ans
+         END
+   OUT HEAP SVST := (v, nil svst)
+   ESAC
+END;
+
+{
+   TABULATED OUTPUT PROCEDURES
+   ===========================
+}
+
+
+{Column separator char}
+CHAR monitoring separator := " ";
+
+PROC INT  page width = current_width;
+
+{
+   Width of time in tabulated mode (the full machine integer width), and the
+   first column following it after a suitable space.
+}
+INT basic time width = 10;
+INT time width := basic time width;
+INT first column := time width + 3;
+
+
+{Prints time string when scaling is in effect.  Time is printed in the  }
+{form "whole part: x" where whole part is time DIV scale time and x is  }
+{time MOD scale time.                                                   }
+
+PROC pttime tabulated scaled = (INT active time, scale time, time width) VOID :
+
+BEGIN
+  INT scale time field size = UPB intchars (scale time);
+
+  put (out, (justify (intchars (active time OVER scale time),
+                      (time width - scale time field size - 3)
+                     ),
+             " : ",
+             width (intchars (active time MOD scale time),
+                    scale time field size
+                   )
+            )
+      )
+END;   {PROC pttime tabulated scaled}
+
+
+{
+   'pttime tabulated' prints the current simulated time in tabulated style
+   if it has not been already. If the value of scale time exceeds 1 then
+   time string is printed in scaled style.
+}
+
+PROC pttime tabulated = (INT a time) VOID:
+
+IF charnumber (out) = 1 THEN
+
+  IF (scale time > 1) THEN
+    pttime tabulated scaled (a time, scale time, time width)
+  ELSE
+    put (out, justify (intchars (a time), time width))
+  FI;
+
+  printed time := a time;
+  printed time mode := time mode;
+  printed time style := tabulated
+
+FI;
+
+
+{
+   The following 'layout' procedures package the deferred output of newlines
+   in tabulated mode - which is done so that the correct line wrap-around is
+   done whenever a line of output is produced, but blank lines are suppressed
+   if there are no active monitors.
+
+   If the monitoring separator character is set to something other than space
+   then newlines cannot be suppressed as the character must be output
+   at the start of every column. PROC layout handles this case.
+
+   'pending newlines' is the number of deferred newlines to be output.
+}
+INT pending newlines;
+REF MONITORLIST first layout monitor;
+{
+   'start layout' should be called at the start of a sequence of monitors.
+   It sets the pending newlines to -1 (not zero - in case the first one
+   is not active).
+}
+
+
+PROC start layout = VOID:
+BEGIN
+   pending newlines := -1;
+   first layout monitor := testpoints
+END;
+
+{
+   'layout' is called on the 'columns' field of any monitor (apart from
+   breakpoints) whose values are not being output, so as to update the record
+   of the number of deferred newlines.
+
+  NB if the current print style is not tabulated then columns may be NIL }
+PROC layout = (REF MONITORLIST ml) VOID:
+IF print style = tabulated THEN
+   REF VECTOR [] INT columns = columns OF monitor OF ml;
+   FOR i TO UPB columns DO
+      IF columns [i] <= first column THEN
+          { ie this is a line wrap-around point }
+          pending newlines +:= 1
+      FI
+   OD
+FI;
+
+{
+   'do layout' is called to actually output the remaining deferred newlines.
+}
+PROC do layout = (REF MONITORLIST ml)VOID:
+BEGIN
+   IF monitoring separator /= " " THEN
+         REF MONITORLIST currmon := first layout monitor;
+         WHILE (currmon ISNT nil monitorlist) ANDTH (currmon ISNT ml)
+         DO
+            INT padding = (columns OF monitor OF currmon)[1] - charnumber (out);
+            IF padding < 1 ANDTH (columns OF monitor OF currmon)[1] <= first column THEN
+               { This is used to encode a line wrap-around point }
+               put (out, (newline, ((first column - 2) * " ")+ monitoring separator))
+            ELSE
+               put (out, (((padding-1) * " ")+ monitoring separator))
+            FI;
+            currmon := rest OF currmon
+         OD;
+         first layout monitor := IF ml IS nil monitorlist THEN ml ELSE rest OF ml FI
+   ELSE
+      TO pending newlines DO newline (out) OD;
+      IF pending newlines >= 0 THEN
+         INT padding = first column - charnumber (out);
+         put (out, padding * " ")
+      FI
+   FI;
+   pending newlines := 0
+END;
+
+{
+   'print tabulated' outputs data from one monitor in tabulated style.
+    Note it is never called upon to handle EVENTs, as these are always
+    printed in freeform style. It assumes that the 'columns' positions
+    are set to values which adequately separate the values.  }
+PROC print tabulated = (INT a time, REF MONITORLIST  ml, REF SVALUE value) VOID:
+BEGIN
+   pttime tabulated(a time);
+   do layout(ml); { Handle any deferred newlines }
+   REF MONITOR m = monitor OF ml;
+   REF SVST ptr :=
+      IF value IS REF SVALUE (NIL) THEN NIL
+      ELSE flatten signal value (value)
+      FI;
+   CHAR sep := monitoring separator;
+   FOR i TO UPB columns OF m DO
+      INT padding = (columns OF m) [i] - charnumber (out);
+      IF padding < 1 ANDTH (columns OF m) [i] <= first column THEN
+         { This is used to encode a line wrap-around point }
+         put (out, (newline, spaces(first column - 2), sep))
+      ELSE
+         put (out, (spaces(padding - 1), sep))
+      FI;
+      sep := " ";
+      IF value IS REF SVALUE (NIL)
+      THEN  putstr(out, "-")
+      ELSE  { Avoid HEAP generation (see putstrings) - alter with care !!!!!! }
+            STRUCT 1025 CHAR  buff;
+            RVC  display;   { can not declare identity after label }
+            CHANNEL  ch:= (1, 0, 0, 500, 500, io_ok, buff, TRUE, FALSE, FALSE,
+                           nullputbuffer, nullgetbuffer);
+
+            PROC  putbuffer = (STR  s) VOID:
+            BEGIN    { if called, will restart with bigger buf }
+               buffer OF ch:= HEAP VECTOR [UPB buffer OF ch * 2] CHAR;
+               width OF ch:= UPB buffer OF ch - 1;
+               GOTO  restart         { ++++++++++++++ }
+            END;
+
+            putbuffer OF ch:= putbuffer;
+
+restart:                             { ++++++++++++++ }
+            print signal value (head OF ptr, no punctuation, ch);
+
+            display:= (buffer OF ch)[: charnumber OF ch - 1];
+
+            IF first column + UPB display - 1 > page width
+            THEN  putstr(out, display [:page width - first column -1]);
+                  putstr(out, "..")
+            ELSE  putstr(out, display)
+            FI;
+
+            ptr := tail OF ptr
+      FI
+   OD
+END;
+
+{
+   'id end' handles the size of the signal name used in a heading in
+   tabulated style.  Its result is the next available column after the
+   header and a space.  If a new line must be started for the name, the
+   position parameter will be assigned a new value.  }
+PROC id end = (ID id, REF INT pos) INT:
+BEGIN
+   INT id width = UPB id;
+   IF id width + pos - 1 > page width THEN
+      { Wrap around before doing this monitor }
+      pos := first column
+   FI;
+   pos + id width + 2
+END;
+
+{
+   'set single' sets the 'column' and 'sizes' fields for a single
+   monitor, advancing the 'pos' variable which specifies the position along
+   the line.  }
+PROC set single = (REF MONITOR mon, REF INT pos) VOID:
+BEGIN
+
+   { set up 'sizes', if not already done }
+   IF sizes OF mon IS REF VECTOR [] INT (NIL) THEN
+      LINE location of mon = CASE node OF location OF mon IN (LINE
+l):l ESAC;
+      STYPE type = type OF wire OF location of mon;
+      INT upb = signal width (type);
+      { this flattens the type and must return a REF SST }
+      sizes OF mon := HEAP VECTOR [upb] INT;
+      REF SST ptr := trim signal (type, 1, upb);
+      { trim signal will ensure conformity }
+      FOR i TO upb DO
+         (sizes OF mon)[i] := print width (t OF ptr, ampersands);
+         {
+            To achieve maximum conformity with release 3 it is necessary to
+            reserve space for " & " in associations although only " " is
+            actually used
+         }
+         ptr := rest OF ptr
+      OD
+   FI;
+   INT upb = UPB sizes OF mon;
+
+   { allocate space for 'columns' if not already done }
+   IF columns OF mon IS REF VECTOR [] INT (NIL) THEN
+      columns OF mon := HEAP VECTOR[upb] INT
+   FI;
+
+   { calculate columns }
+   INT min := id end (id OF mon, pos);
+   FOR i TO upb DO
+      (columns OF mon)[i] := pos;
+      INT width = (sizes OF mon)[i] + 1 {allow one separating space};
+      pos +:= width;
+      IF pos > page width ANDTH (columns OF mon) [1] > first column
+THEN
+         { The whole monitor should start on a new line }
+         INT distance = (columns OF mon) [1] - first column;
+         FOR j TO i DO
+            (columns OF mon) [j] -:= distance
+         OD;
+         min -:= distance;
+         pos -:= distance
+      FI;
+      IF pos > page width THEN
+         { The monitor must be split across the line break }
+         (columns OF mon) [i] := first column;
+         pos := first column + width;
+         min := first column
+      FI
+   OD;
+   pos := max (pos+1, min) { Note extra space of 1 between monitors }
+END;
+
+{
+   FREEFORM OUTPUT PROCEDURES
+   ========================== }
+
+{Prints the time as "whole part: remainder/scale time" in freeform
+mode} {The remainder/scale time fraction is reduced to it's lowest
+form. If } {the fraction is zero it is not printed.  }
+
+PROC pttime freeform scaled = (INT active time, scale time) VOID :
+BEGIN
+
+  PROC gcd = (INT top, bottom) INT :
+  BEGIN
+    {Geatest Common Divisor by Euclid's Algorithm}
+
+    INT remainder = top MOD bottom ;
+    IF remainder = 0 THEN
+      bottom
+    ELSE
+      gcd (bottom, remainder)
+    FI
+
+  END; {PROC gcd}
+
+  INT remainder = active time MOD scale time;
+
+  {Calculate the reduced top & bottom of the fraction}
+
+  INT top = remainder OVER gcd (remainder, scale time);
+  INT bottom = scale time OVER gcd (remainder, scale time);
+
+  {Build the fraction string with zero suppression}
+
+  VECTOR [] CHAR fraction string = IF (top = 0) THEN
+                                     " "
+                                   ELSE
+                                     intchars (top) +
+                                     "/" +
+                                     intchars (bottom)
+                                   FI;
+
+  put (out, (" *** time = ",
+             intchars (active time OVER scale time),
+             " ",
+             fraction string,
+             " ***", newline
+            )
+      )
+
+END; {PROC pttime freeform scaled}
+
+
+{
+   'pttime freeform' prints the current simulated time in freeform
+style
+   if it has not been already.  }
+
+PROC pttime freeform = (INT a time)
+VOID:
+IF a time /= printed time
+   OREL time mode /= printed time mode
+   OREL printed time style /= freeform
+THEN
+   IF printed time style /= freeform THEN newline (out) FI;
+
+   IF (scale time > 1) THEN
+     pttime freeform scaled (a time, scale time)
+   ELSE
+     put (out, ("  *** time = ", a time, " ***", newline))
+   FI;
+
+   printed time mode := time mode;
+   printed time style := freeform;
+   printed time := a time
+
+FI;
+
+
+{
+   'print freeform' outputs the value of a monitored signal in freeform
+   style (including the signal's identifier).
+   The current time is printed if it has not already been.
+   The 'form' parameter determines the nature of the output as follows:
+       2   <identifier> := <value>
+       1   <identifier> = <value>
+      -1   EVENT <identifier> = <value>      (on a separate line)
+      -2   EVENT <identifier> := <value>     (on a separate line)
+}
+INT
+   print becomes = 2,
+   print equals = 1,
+   print event equals = -1,
+   print event becomes = - 2;
+
+PROC print freeform = (INT a time, REF MONITOR m, REF SVALUE value,
+                       INT form) VOID:
+BEGIN
+   pttime freeform (a time);
+   IF charnumber (out) /= 1 THEN
+      IF form < 0 THEN  newline (out)
+      ELSE  put (out, ", ")
+      FI
+   FI;
+   IF form < 0 THEN  put (out, "EVENT ")  FI;
+   putstr(out, id OF m);
+   IF ABS form = 1 THEN  putstr(out, " = ")  ELSE  putstr(out, " := ")  FI;
+   IF value IS REF SVALUE (NIL)
+   THEN  LINE location of m = CASE node OF location OF m IN (LINE l):l ESAC;
+         print unrecorded signal value ( type OF wire OF location of m,
+                                         no punctuation, out )
+   ELSE  print signal value (value, no punctuation, out)
+   FI;
+   IF form < 0 THEN  newline (out)  FI
+END;
+
+{
+   GENERALIZED OUTPUT PROCEDURES
+   =============================
+}
+
+{
+   'pttime' prints the time in the current style if it has not already been
+   printed as a result of printing an active monitor.
+}
+PROC pttime = VOID:
+BEGIN
+ { IF active time /= printed time
+   THEN
+      epi_send_message(m_epi_m_sim_time, BIN active time)
+   FI;
+ } IF active time /= printed time OREL time mode /= printed time mode
+   THEN
+      IF print style = tabulated THEN
+         pttime tabulated(active time);
+         newline (out)
+      ELSE { This includes 'noprint' }
+         pttime freeform(active time)
+      FI
+   FI
+END;
+
+PROC print current style = (INT a time, REF MONITORLIST ml, REF SVALUE value,
+                            INT form) VOID:
+BEGIN
+  { IF a time /= printed time
+    THEN
+       epi_send_message(m_epi_m_sim_time, BIN a time)
+    FI;
+  } IF print style = freeform
+    THEN print freeform (a time, monitor OF ml, value, form)
+    ELIF print style = tabulated THEN print tabulated (a time, ml, value)
+    { ELIF print style = noprint THEN SKIP }
+    FI
+END;
+
+{
+   MONITOR PROCESSING
+   ==================
+}
+
+{Prints a neat time heading when scaling is in effect }
+{A scale time greater than 9999999 is printed as "Big"}
+
+PROC print heading scaled = (INT scale time) VOID :
+  IF scale time = 1 THEN
+     time width := basic time width;
+     first column := time width +3;
+     put (out, "      TIME")
+  ELSE
+     VECTOR [] CHAR scale time string = intchars (scale time);
+     INT scale time field size = UPB scale time string;
+     time width := basic time width + scale time field size;
+     first column := time width +3;
+     put (out, ("      TIME :/", scale time string))
+   FI;   {PROC print heading scaled}
+
+{
+   To output a contiguous chunk of monitoring output, 'monitor heading' is
+   called once followed by one or more calls to 'do monitors', with no
+   intervening output (unless a fault procedure is called).  These
+   procedures assume that pattern of use.
+
+    'monitor heading' actually only has work to do in tabulated mode.  It is
+   responsible for calculating the columns of the table as distributed through
+   the testpoints array in the 'columns' fields and outputting the table
+   heading.
+
+   The calculation of the 'columns' field could be distributed between 'add
+   monitor' and 'remove monitor'.  Because these may fail as a result of an
+   overlong display but the error message needs to be generated here there
+   would be need of a global variable.
+
+   The time heading is changed in the case where 'scale time' is greater than
+   one. It is changed to "TIME :/ x" where x is the scale time if the scale
+   time is greater than 9999999 then x is printed as Big.
+
+}
+PROC monitor heading = VOID:
+IF print style = tabulated THEN
+
+   { Output the heading according to scale time setting }
+   newline (out);
+   print heading scaled (scale time);
+
+   { Recalculate Columns }
+   INT pos := first column;
+   REF MONITORLIST scan := testpoints;
+   WHILE scan ISNT nil monitorlist DO
+      IF
+         (action OF monitor OF scan /= stop) ANDTH
+         (action OF monitor OF scan /= keep)
+      THEN
+         set single (monitor OF scan, pos)
+      FI;
+      scan := rest OF scan
+   OD;
+
+   scan := testpoints;
+
+   WHILE scan ISNT nil monitorlist DO
+      IF
+         (action OF monitor OF scan /= stop) ANDTH
+         (action OF monitor OF scan /= keep)
+      THEN
+         INT padding = (columns OF monitor OF scan) [1] - charnumber (out);
+         IF padding < 1 ANDTH (columns OF monitor OF scan) [1] <= first column
+         THEN
+            { Must be a line wrap-around }
+            put (out, (newline, ((first column -2) * " ")+monitoring separator))
+         ELSE
+            put (out, ((padding-1) * " ")+ monitoring separator)
+         FI;
+         ID id = id OF monitor OF scan;
+         IF first column + UPB id - 1 > page width THEN
+            put (out, id [:page width - first column -1] + ".." )
+         ELSE
+            put (out, id)
+         FI;
+         FOR i FROM 2 TO UPB columns OF monitor OF scan DO
+            IF (columns OF monitor OF scan) [i] <= first column THEN
+               { Do all newlines internal to the monitor }
+               put (out, (newline, (first column - 1) * " "))
+            FI
+         OD
+      FI;
+      scan := rest OF scan
+   OD;
+   newline (out);
+   printed time := -1
+   { After a heading we must proceed as if no time has been printed. }
+FI;
+
+{
+   Process one testpoint and perform the necessary screen and history file
+   output.
+   The parameter 'a time' will take increasing values upto and including
+   'active time'. This is needed to allow output of '{display,monitor} always'
+   testpoints. History values will only be written when they change, ie
+   'a time' = 'active time'.
+
+   Return TRUE if and only if the testpoint is an active breakpoint.
+
+   Note that 'do monitor' and its clients in this module --- 'do monitors'
+   and 'new testpoints' assume that the history file read/write times are
+   up to date.  To put this more preciselt they assume the following invariant
+
+   IF present mode THEN
+      history file write time = active time
+   ELSE
+      history file write time = saved active time AND
+      history file read time  = active time
+   FI
+
+   It is the responsibility of anything that changes the RHS variables to
+   preserve this invariant.   This only happens as a result of "sim", "cs",
+   "time" and "set...".
+
+}
+PROC do monitor = (INT a time, REF MONITORLIST ml, INT handle,
+                   BOOL no epi, FLTPROC flt) BOOL:
+IF
+   REF MONITOR m = monitor OF ml;
+   BOOL interesting = time mode = past OREL (REF SVALUE(decoded OF m) IS NIL)
+                      OREL (a time = active time )
+                      ANDTH (INT flag = cg peek int (flag address OF m);
+                             cg poke int (0, flag address OF m);
+                             flag /= 0);
+   BIN always <= BIN condition OF m  OREL  interesting
+THEN
+
+   { Process the signal values - note WORDs are *pointers* }
+   WORD testvalue = testvalues OF m;
+   WORD lastvalue = lastvalues OF m;
+   WORD value;
+{  Remove history: DJS  assume always in present mode.
+   IF time mode = present THEN
+}
+      IF interesting THEN
+          peek signal value (location OF m, workspace OF m);
+          value := workspace OF m;
+          IF (lastvalue ISNT no value) ANDTH (UPB lastvalue /= 0) THEN
+             { The second test there is for 'empty value' }
+             workspace OF m := lastvalue
+          ELSE
+             workspace OF m := HEAP VECTOR [UPB workspace OF m] CHAR
+          FI
+      ELSE
+          { value must be the same as last time }
+          value := lastvalue
+{  Remove history: DJS
+      FI
+   ELSE
+      value := read history value (keepnumber OF m, flt)
+}
+   FI;
+   lastvalues OF m := value;
+
+   { Calculate some useful predicates }
+   BOOL first = (lastvalue ISNT no value) ANDTH UPB lastvalue = 0;
+                                                  { ie 'empty value' }
+   BOOL changed =
+      interesting  ANDTH
+      (((value ISNT no value) ANDTH
+         ((lastvalue IS no value) OREL (value /= lastvalue))) OREL
+       ((value IS no value) ANDTH (lastvalue ISNT no value)) OREL
+       first);
+       { That bracketing is correct since the flag will be set if 'first',
+         therefore  first => interesting }
+   BOOL matched =
+      (testvalue ISNT no value) ANDTH (value ISNT no value) ANDTH
+         (value = testvalue);
+   BOOL active =
+      (condition OF m= always) OREL
+      ((condition OF m = changes) ANDTH changed) OREL
+      ((condition OF m = equals) ANDTH matched) OREL
+      ((condition OF m = becomes) ANDTH matched ANDTH changed);
+
+   { If necessary, decode the value }
+   IF changed THEN
+      decoded OF m :=
+         IF value IS no value THEN  NIL
+         ELIF UPB value = 0  { ie 'empty value' }  THEN
+            HEAP SVALUE := HEAP SVNULL
+         ELSE
+            LINE location of m = CASE node OF location OF m IN (LINE l):l ESAC;
+            HEAP SVALUE := decode (value, type OF wire OF location of m)
+         FI
+   FI;
+
+   { Handle breakpoints }
+   IF action OF m = stop ANDTH active THEN
+      INT format =
+         IF (condition OF m = always) OREL (condition OF m = equals) OREL first
+         THEN print event equals
+         ELSE print event becomes
+         FI;
+      print freeform (a time, m, decoded OF m, format)
+   FI;
+
+   { Handle screen output }
+   IF ((action OF m = display) OREL (action OF m = monitor)) THEN
+      IF active THEN
+         INT format =
+            IF (condition OF m = always) OREL (condition OF m = equals) OREL
+               first
+            THEN print equals
+            ELSE print becomes
+            FI;
+         print current style (a time, ml, decoded OF m, format)
+      ELSE
+         layout (ml)
+      FI
+   FI;
+
+ { { Send EPI messages }
+   IF NOT no epi
+   ANDTH (active OREL (condition OF m = changes ANDTH a time = 0) )
+   THEN
+      EPITESTPOINT testpoint = make_epi_testpoint (BIN handle);
+      EPIUNSIGNED time = BIN a time;
+      IF value IS no value THEN
+         EPISIGNAL null_signal = make_epi_null_signal;
+            epi_send_message (
+               m_epi_m_incomplete_event,
+               make_epi_event (time, testpoint, null_signal)
+            )
+      ELSE
+         EPISIGNAL signal = sim_epi_signal (decoded OF m);
+            epi_send_message (
+               m_epi_m_event,
+               make_epi_event (time, testpoint, signal)
+            )
+      FI
+   FI;
+  }
+
+{  Remove history: DJS
+   { Handle history file output }
+   IF (time mode = present) ANDTH (a time = active time) ANDTH
+      ((action OF m = keep) OREL (action OF m = monitor))
+   THEN
+      write history value (keepnumber OF m, value, flt)
+   FI;
+}
+   (action OF m = stop) ANDTH active
+ELSE
+   IF action OF m = display  OREL  action OF m = monitor THEN
+      { Make sure formatting of output is kept up to date, even for a
+        completely inactive monitor. }
+      layout (ml)
+   FI;
+   FALSE
+FI;
+
+BOOL catch up needed;
+{
+  'list monitors' returns a list of handles onto all monitors that match
+  the supplied parameters from the testpoint list.  Each of the parameters
+  has a 'wildcard' value that matches anything.
+
+  'path' must be fully validated with complete semantic information.
+
+  'force present mode' is true when called from EPI to suppress testpoint
+  modifications made in ETI in past mode.
+
+  The tranformations applied to 'path' (to give 'match id') and the
+  monitor 'full id' imply that (as for as monitors are concerned) the
+  nodenames 'FN' and 'FN.' are equivalent.
+}
+PROC list monitors = (UNION (REF PATH, INT)node descriptor,
+                      INT action, condition,
+                      BOOL force present mode) REF VECTOR [] INT:
+BEGIN
+   REF PATH path := nilpath;
+   INT base := 0;
+   BOOL base match := FALSE;
+   CASE node descriptor IN
+   (REF PATH p): path := p,
+   (INT i): (base := i; base match := TRUE)
+   ESAC;
+
+   REF MONITORLIST list := nil monitorlist;
+   REF REF MONITORLIST end := list;
+
+   REF MONITORLIST m :=
+      IF time mode = past ANDTH force present mode
+      THEN saved testpoints
+      ELSE testpoints
+      FI;
+   VECTOR [] CHAR match id =
+      IF path ISNT nil path
+      THEN
+         VECTOR [] CHAR path nodename = NODENAME path;
+         NODENAME absolute node name(
+               HEAP VECTOR [UPB pathnodename] CHAR := path nodename,sysfault)
+      ELSE
+         SKIP { match id is not used in this case }
+      FI;
+   WHILE m ISNT nil monitorlist DO
+
+      IF  {match}
+         IF (base match) THEN
+            (base = base OF location OF monitor OF m)
+         ELSE
+            ((action = no action) OREL (action OF monitor OF m = action)) ANDTH
+            ((condition = no condition) OREL
+             (condition OF monitor OF m = condition)) ANDTH
+            ((path IS nil path) OREL
+             (NODENAME absolute node name(fullid OF monitor OF m,sysfault) = match id))
+         FI
+      THEN {remember this one}
+          REF REF MONITORLIST (end) := HEAP MONITORLIST :=
+            (monitor OF m, handle OF m, nil monitorlist);
+          end := rest OF end
+      FI;
+      m := rest OF m
+   OD;
+
+   { Collect handles }
+   m := list;
+   INT i := 0;
+   WHILE m ISNT nil monitorlist DO i +:= 1; m := rest OF m OD;
+   REF VECTOR [] INT ans := HEAP VECTOR [i] INT;
+   m := list;
+   i := 0;
+   catch up needed := FALSE;
+   WHILE m ISNT nil monitorlist DO
+      i +:= 1;
+      ans [i] := handle OF m;
+      IF condition OF monitor OF m = always THEN catch up needed := TRUE FI;
+      m := rest OF m
+   OD;
+   ans
+END;
+
+{
+   Process the entire testpoint array.  Return TRUE iff a breakpoint has
+   become active.
+   Suppress EPI message output for non-present-mode testpoints.
+}
+PROC do monitors = (INT old time, FLTPROC flt) BOOL:
+BEGIN
+   IF printed time style /= tabulated AND printed time /= -1 THEN
+      { This is all effectively conditional upon the print style being
+        tabulated, but that is tested by 'monitor heading'. }
+      monitor heading
+   FI;
+
+   REF VECTOR [] INT present mode handles =
+      list monitors(nil path, no action, no condition, TRUE);
+
+   INT start time = IF catch up needed THEN old time ELSE active time FI;
+   FOR a time FROM start time TO active time DO
+      { Now, first do everything except the events }
+      start layout;
+      REF MONITORLIST m := testpoints;
+      WHILE m ISNT nil monitorlist DO
+         IF action OF monitor OF m /= stop THEN
+            { work out whether to suppress EPI messages }
+            BOOL present mode testpoint := time mode = present;
+            FORALL h IN present mode handles WHILE NOT present mode testpoint
+            DO
+               present mode testpoint := h = handle OF m
+            OD;
+            do monitor (a time, m, handle OF m,
+                        NOT present mode testpoint, flt)
+         FI;
+         m := rest OF m
+      OD;
+      IF print style /= no print ANDTH charnumber (out) /= 1 THEN
+         do layout (nil monitorlist);
+         newline (out)
+      FI
+   OD;
+   { Then go along the list again, picking out only the events }
+   BOOL stopped := FALSE;
+   REF MONITORLIST m :=  testpoints;
+   WHILE m ISNT nil monitorlist DO
+      IF action OF monitor OF m = stop THEN
+         { work out whether to suppress EPI messages }
+         BOOL present mode testpoint := time mode = present;
+         FORALL h IN present mode handles WHILE NOT present mode testpoint
+         DO
+            present mode testpoint := h = handle OF m
+         OD;
+         stopped :=
+            do monitor (active time,  m, handle OF m,
+                        NOT present mode testpoint,flt) OR stopped
+      FI;
+      m := rest OF m
+   OD;
+
+   stopped
+END;
+
+{
+   MONITOR CREATION
+   ================
+}
+
+{
+   'load monitor' allocates a MONITOR structure and sets up all its fields to
+   some value.  'columns', 'sizes' and 'testvalues' are set to default values
+   for possible later revision
+
+  'path' must be fully validated with complete semantic information.
+}
+PROC load monitor = (REF PATH path, INT action, condition, FLTPROC flt)
+   REF MONITOR:
+BEGIN
+   HEAP MONITOR mon;
+   id OF mon := SMALLNAME path;
+   full id OF mon := MAKEID NODENAME path;
+   action OF mon := action;
+   condition OF mon := condition;
+   sizes OF mon := NIL;
+   columns OF mon := NIL;
+   location OF mon := line (path);
+{  Remove history: DJS
+   keep number OF mon := open history column (location OF mon, flt);
+}
+   { always need a handle because we might keep this line later }
+   lastvalues OF mon := empty value;
+   testvalues OF mon := no value;
+   LINE location of mon = CASE node OF location OF mon IN (LINE l):l ESAC;
+   INT size := 0;
+   FORALL block IN blocks OF wire OF location of mon DO
+      size +:= size OF block
+   OD;
+   workspace OF mon := HEAP VECTOR [size] CHAR;
+   decoded OF mon := NIL;
+   IF (time mode = present) THEN
+      flag address OF mon := make flag fanouts (location OF mon);
+      cg poke int (1, flag address OF mon)  { To get initial processing }
+   ELSE
+      flag address OF mon := -1
+   FI;
+   mon
+END;
+
+{
+   'add monitor' adds a MONITOR structure (assumed fully set up and validated
+    with a nil linkage field, to the testpoint list and returns its handle
+}
+PROC add monitor = (REF MONITOR m) INT:
+BEGIN
+{  Remove history: DJS
+   IF (action OF m = keep) OREL (action OF m = monitor) THEN
+      open write history column (keep number OF m)
+   FI;
+}
+   INT ans = new handle;
+   REF REF MONITORLIST ptr := testpoints;
+   WHILE ptr ISNT nil monitorlist DO ptr := rest OF ptr OD;
+   REF REF MONITORLIST (ptr) := HEAP MONITORLIST := (m, ans, nil monitorlist);
+   ans
+END;
+
+{
+   'new testpoints' is called to print the values of the new testpoints only.
+   It is given the handle of first new element of the testpoint list.
+   Because this handle must  have been freshly returned by `add
+   monitor' it is OK to assume it correct.
+}
+PROC new testpoints = (INT handle, FLTPROC flt) VOID:
+BEGIN
+   { Find the first entry }
+   REF MONITORLIST scan := testpoints;
+   WHILE handle OF scan /= handle DO
+      scan := rest OF scan
+   OD;
+   REF MONITORLIST first new = scan;
+
+   { Check if there will be any 'normal' displays }
+   BOOL normal displays := FALSE;
+   BOOL normal displays or stops := FALSE;
+   WHILE scan ISNT nil monitorlist DO
+      IF
+         action OF monitor OF scan = display OREL
+         action OF monitor OF scan = monitor
+      THEN
+         normal displays := TRUE
+      FI;
+      IF normal displays OREL action OF monitor OF scan = stop THEN
+         normal displays or stops := TRUE
+      FI;
+      scan := rest OF scan
+   OD;
+
+   { If so start building a table }
+   IF normal displays THEN
+      monitor heading;
+      start layout;
+      scan := testpoints;
+      WHILE scan ISNT first new DO
+         IF
+            (action OF monitor OF scan = display) OREL
+            (action OF monitor OF scan = monitor)
+         THEN
+            layout (scan)
+         FI;
+         scan := rest OF scan
+      OD
+   FI;
+
+   { Process the new testpoints }
+   scan := first new;
+   WHILE scan ISNT nil monitorlist DO
+      do monitor (active time, scan, handle OF scan, TRUE, flt);
+   {  IF (time mode = present) ANDTH action OF monitor OF scan /= keep
+      THEN
+         EPITESTPOINT testpoint = make_epi_testpoint (BIN (handle OF scan));
+         EPISIGNAL signal = sim_epi_signal (
+                               peek and decode (location OF monitor OF scan,
+                                                workspace OF monitor OF scan));
+         epi_send_message(m_epi_m_testpoint, testpoint);
+         epi_send_message(m_epi_m_event,
+            make_epi_event(BIN active time, testpoint, signal))
+      FI;
+   }  scan := rest OF scan
+   OD;
+
+   { Tidy up display }
+   IF normal displays THEN pttime FI;
+   IF normal displays or stops THEN put (out, newline) FI
+END;
+
+{
+   MONITOR DELETION
+   ================
+}
+{
+   Find a monitor from its handle.  Return NIL if not found
+
+  'force present mode' is true when called from EPI to suppress testpoint
+  modifications made in ETI in past mode.
+}
+PROC lookup monitor = (INT handle, BOOL force present mode) REF MONITOR:
+BEGIN
+   REF MONITOR ans := NIL;
+   REF MONITORLIST m :=
+      IF time mode = past ANDTH force present mode
+      THEN saved testpoints
+      ELSE testpoints
+      FI;
+   WHILE m ISNT nil monitorlist DO
+      IF handle OF m = handle THEN ans := monitor OF m FI;
+      m := rest OF m
+   OD;
+   ans
+END;
+
+{
+   Remove a monitor from the monitor list.  It must already be on it
+}
+PROC remove monitor = (INT handle, BOOL permanent, FLTPROC flt) VOID:
+BEGIN
+   REF REF MONITORLIST m := testpoints;
+   WHILE handle OF m /= handle DO
+      m := rest OF m
+   OD;
+{  Remove history: DJS
+   IF action OF monitor OF m = keep OREL action OF monitor OF m = monitor THEN
+      IF permanent THEN
+        set history column start time(keep number OF monitor OF m, activetime)
+      FI;
+      close history column (keep number OF monitor OF m, flt)
+   FI;
+}
+ { IF (time mode = present) ANDTH (action OF monitor OF m /= keep)
+   THEN
+      epi_send_message (m_epi_m_old_testpoint, make_epi_testpoint (BIN handle))
+   FI;
+ } IF (time mode = present) THEN
+      remove flag fanouts (location OF monitor OF m,
+                           flag address OF monitor OF m)
+   FI;
+   REF REF MONITORLIST (m) := rest OF m
+END;
+
+{
+   INITIALISATION
+   ==============
+}
+
+{
+   This procedure initialises data private to this module on simulator
+   entry or as a result of a "simulatefn" command
+}
+PROC start monitors = (FLTPROC flt) VOID:
+    WHILE testpoints ISNT nil monitorlist DO
+        IF flag address OF monitor OF testpoints /= -1 THEN
+        remove flag fanouts (location OF monitor OF testpoints,
+                             flag address OF monitor OF testpoints)
+        FI;
+        testpoints := rest OF testpoints
+    OD;
+
+SKIP
+
+KEEP
+   MONITOR, MONITORLIST,
+   no action, monitor, display, stop, keep,
+   no condition, always, changes, becomes, equals,
+   nil monitorlist, no value,
+   testpoints,
+   NEW (REF MONITORLIST),
+   CLEAR (REF MONITORLIST),
+
+   monitoring separator,
+   printed time, printed time style, printed time mode,
+   print style, freeform, tabulated, noprint,
+
+   print becomes, print equals, print event equals, print event becomes,
+   print free form, pttime, pttime freeform scaled,
+
+   monitor heading, do monitors,
+
+   load monitor, add monitor, new testpoints,
+
+   list monitors, lookup monitor, remove monitor,
+
+   start monitors
+
+FINISH
