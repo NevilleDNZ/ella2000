@@ -1,0 +1,398 @@
+DECS elseof CONTEXT VOID USE putstrings,  basics,  messageproc,  assmodes, 
+                             modeprocs,  transformprocs,  options :
+
+configinfo A68CONFIG "$Id: elseof.a68,v 34.2 1995/03/29 13:02:47 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:08:94  33.001  DJS   CoreElla  Elseof transform started. 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR elseof_options;
+
+PROC elseofid = (INT nameno ) ID: oneline(("_e", nameno ));
+
+{ Null FNBODY proc }
+PROC fnbody_elseof = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_elseof = (OUTER outer,
+                     CLOSURE closure,
+                     OPTIONS  options,
+                     MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF outer;
+
+    PROC fndec_elseof = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs )FNDECC:
+    BEGIN
+        REF VECTOR[ ]NAMETYPE nametypes := nametypes OF fdec;
+        INT num_names = UPB nametypes;
+        INT new_nameno := num_names, max_names := num_names;
+        BOOL changes := FALSE;
+
+        PROC need_new_name = (UNIT u) BOOL:
+        BEGIN
+            BOOL result := FALSE;
+
+            PROC nnn_unit = (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+            BEGIN
+                CASE unit IN
+                (UNION( REF USTRING, REF UMINST, REF UDINST, REF USERIES,
+                        REF USEQUENCE, REF UCASE, REF UCONC ))
+                    result := TRUE
+                OUT
+                    ( unit OF nulltprocs )( unit, tprocs )
+                ESAC;
+                ( unit, FALSE )
+            END;
+
+            TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                                                       ( nnn_unit ));
+
+            ( unit OF newtprocs )( u, newtprocs );
+            discard_tprocs( newtprocs );
+            result
+        END;
+
+        PROC need_ucase_change = (REF UCASE case )BOOL:
+        BEGIN
+        REF UCHOICES choices := choices OF case;
+        BOOL needchange := FALSE;
+
+            WHILE NOT needchange ANDTH ( choices ISNT niluchoices )
+            DO
+               needchange := ( sort OF choices = elseofchoice );
+               choices := rest OF choices
+            OD;
+            needchange
+        END;
+
+        PROC need_seqcase_change = (REF SEQCASE case )BOOL:
+        BEGIN
+        REF SEQCHOICES choices := choices OF case;
+        BOOL needchange := FALSE;
+
+            WHILE NOT needchange ANDTH ( choices ISNT nilseqchoices )
+            DO
+               needchange := ( sort OF choices = elseofchoice );
+               choices := rest OF choices
+            OD;
+            needchange
+        END;
+
+        PROC pre_pass_unit = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+        CASE u IN
+        (REF UCASE case )
+        (BOOL needchange = need_ucase_change( case );
+
+            changes := changes OREL needchange;
+            IF needchange ANDTH need_new_name( input OF case ) THEN
+                max_names PLUSAB 1
+            FI;
+            ( unit OF nulltprocs )( u, tprocs )
+        )
+        OUT
+            ( unit OF dec_tprocs )( u, tprocs )
+        ESAC;
+
+        PROC pre_pass_seqstep = (SEQSTEP s, TRANSFORMPROCS tprocs )SEQSTEPC:
+        CASE s IN
+        (REF SEQCASE case )
+        (BOOL needchange = need_seqcase_change( case );
+
+            changes := changes OREL needchange;
+            IF needchange ANDTH need_new_name( input OF case ) THEN
+                max_names PLUSAB 1
+            FI;
+            ( seqstep OF nulltprocs )( s, tprocs )
+        )
+        OUT
+            ( seqstep OF dec_tprocs )( s, tprocs )
+        ESAC;
+
+        PROC usequence_proc = ( REF USEQUENCE useq,
+                                TRANSFORMPROCS tprocs )UNITC:
+        BEGIN
+        REF SEQUENCE nxtstep := body OF useq, newseq := body OF useq;
+        REF REF SEQUENCE seqtail := newseq;
+        BOOL seqchanged := FALSE;
+        INT stepcount := 0;
+
+            PROC addstep = (SEQSTEP newstep )VOID:
+            BEGIN
+                IF NOT seqchanged THEN
+                REF SEQUENCE nxt := body OF useq;
+
+                    newseq := nilsequence;
+                    seqchanged := TRUE;
+                    TO stepcount
+                    DO
+                        addstep( step OF nxt );
+                        nxt := rest OF nxt
+                    OD
+                FI;
+                REF REF SEQUENCE( seqtail ) := HEAP SEQUENCE :=
+                                               ( newstep, nilsequence );
+                seqtail := rest OF seqtail
+            END;
+
+            PROC seqstep_proc = (SEQSTEP s )SEQSTEPC:
+            CASE s IN
+            (REF SEQCASE case )
+            (REF SEQCHOICES choices := choices OF case;
+             BOOL needchange = need_seqcase_change( case );
+
+                PROC makenewchoices = (REF SEQCHOICES old,
+                                       UNIT newinput )REF SEQCHOICES:
+                IF old IS nilseqchoices THEN
+                   nilseqchoices
+                ELSE
+                UNITC test = ( unit OF tprocs )( test OF old, tprocs );
+                SEQSTEPC output = ( seqstep OF tprocs )( output OF old,
+                                                         tprocs );
+
+                   IF sort OF old = elseofchoice THEN
+                   REF SEQCHOICES newchoices = HEAP SEQCHOICES :=
+                                   ( check OF old, normalchoice,
+                                     u OF test, s OF output,
+                                     makenewchoices( rest OF old, newinput ));
+                   REF SEQCASE newcase = HEAP SEQCASE :=
+                                                     ( newinput, newchoices );
+
+                      HEAP SEQCHOICES := ( check OF old, elsechoice,
+                                           unull, newcase, nilseqchoices )
+                   ELSE
+                      HEAP SEQCHOICES := ( check OF old, sort OF old,
+                                           u OF test, s OF output,
+                                           makenewchoices( rest OF old,
+                                                           newinput ))
+                   FI
+                FI;
+
+                IF needchange THEN
+                UNIT newinput := u OF ( unit OF tprocs )( input OF case,
+                                                          tprocs );
+
+                    IF need_new_name( newinput ) THEN
+                    ID newname = elseofid( new_nameno PLUSAB 1 );
+                    REF UNAME nameinp = HEAP UNAME := ( usource, new_nameno );
+
+                        addstep( MAKESEQLET( HEAP LET :=
+                                      ( HEAP NAMES := ( new_nameno, nilnames ),
+                                        newinput )));
+
+                        nametypes[ new_nameno ] :=
+                                      ( newname,
+                                        unit_type( input OF case, fdec, env ),
+                                        attrnull );
+
+                        ( HEAP SEQCASE :=
+                                 ( nameinp,
+                                   makenewchoices( choices OF case, nameinp )),
+                          TRUE )
+                    ELSE
+                        ( HEAP SEQCASE :=
+                                 ( newinput,
+                                   makenewchoices( choices OF case, newinput )),
+                          TRUE )
+                    FI
+                ELSE
+                   ( seqstep OF tprocs )( s, tprocs )
+                FI
+            )
+            OUT
+                ( seqstep OF tprocs )( s, tprocs )
+            ESAC;
+
+        SEQSTEPC seqc;
+
+            WHILE nxtstep ISNT nilsequence
+            DO
+               seqc := seqstep_proc( step OF nxtstep );
+               IF c OF seqc THEN
+                  addstep( s OF seqc )
+             ELIF seqchanged THEN
+                  addstep( step OF nxtstep )
+               FI;
+               stepcount PLUSAB 1;
+               nxtstep := rest OF nxtstep
+            OD;
+
+         UNITC uc = ( unit OF tprocs )( output OF useq, tprocs );
+
+            IF c OF uc OREL seqchanged THEN
+                ( HEAP USEQUENCE := ( newseq, u OF uc ), TRUE )
+            ELSE
+                ( useq, FALSE )
+            FI
+        END;
+
+        PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+        CASE u IN
+        (REF USEQUENCE useq ) usequence_proc( useq, tprocs ),
+        (REF UCASE case )
+        (REF UCHOICES choices := choices OF case;
+         BOOL needchange := need_ucase_change( case );
+
+            PROC makenewchoices = (REF UCHOICES old,
+                                   UNIT newinput )REF UCHOICES:
+            IF old IS niluchoices THEN
+               niluchoices
+            ELSE
+            UNITC test = ( unit OF tprocs )( test OF old, tprocs ),
+                  output = ( unit OF tprocs )( output OF old, tprocs );
+
+               IF sort OF old = elseofchoice THEN
+               REF UCHOICES newchoices = HEAP UCHOICES :=
+                                   ( check OF old, normalchoice,
+                                     u OF test, u OF output,
+                                     makenewchoices( rest OF old, newinput ));
+               REF UCASE newcase = HEAP UCASE := ( newinput, newchoices );
+
+                  HEAP UCHOICES := ( check OF old, elsechoice,
+                                     unull, newcase, niluchoices )
+               ELSE
+                  HEAP UCHOICES := ( check OF old, sort OF old,
+                                     u OF test, u OF output,
+                                     makenewchoices( rest OF old, newinput ))
+               FI
+            FI;
+
+            IF needchange THEN
+            UNIT newinput = u OF ( unit OF tprocs )( input OF case, tprocs );
+
+                IF need_new_name( newinput ) THEN
+                REF LET let = HEAP LET :=
+                              ( HEAP NAMES := ( new_nameno PLUSAB 1, nilnames ),
+                                newinput );
+
+                ID newname = elseofid( new_nameno );
+                REF UNAME nameinp = HEAP UNAME := ( usource, new_nameno );
+
+                    nametypes[ new_nameno ] :=
+                       ( newname,
+                         unit_type( input OF case, fdec, env ),
+                         attrnull );
+                   ( HEAP USERIES :=
+                        ( HEAP SERIES := ( let, nilseries ), 
+                          HEAP UCASE :=
+                               ( nameinp,
+                                 makenewchoices( choices OF case, nameinp ))),
+                     TRUE )
+              ELSE
+                  ( HEAP UCASE :=
+                      ( newinput, makenewchoices( choices OF case, newinput )),
+                    TRUE )
+                FI
+            ELSE
+               ( unit OF dec_tprocs )( u, tprocs )
+            FI
+        )
+        OUT
+            ( unit OF dec_tprocs )( u, tprocs )
+        ESAC;
+
+        PROC declaration = (DECLARATION dec,
+                            TRANSFORMPROCS tprocs )DECLARATIONC:
+            ( dec, FALSE );
+        { Note: This is a null tproc intended to stop processing of
+                inner declarations while doing the main pass.  These are
+                picked up by a separate call of the transform procs. }
+
+      { Pre pass looks to see if this FNDEC needs changing and counts up
+        number of new names. Inner declarations must not be transformed at
+        this stage so use 'nulltprocs' }
+
+        TRANSFORMPROCS pre_pass_tprocs = make_newtprocs( nulltprocs,
+                                                         ( null_attr,
+                                                           null_formula,
+                                                           null_type,
+                                                           fnbody_elseof,
+                                                           pre_pass_unit,
+                                                           pre_pass_seqstep ));
+        FNDECC fdecc = ( fndec OF nulltprocs )( fdec, pre_pass_tprocs );
+
+        discard_tprocs( pre_pass_tprocs );
+
+        IF changes THEN
+            IF max_names > num_names THEN
+            REF VECTOR[]NAMETYPE newnt = HEAP VECTOR[ max_names ]NAMETYPE;
+
+                newnt[ : num_names ] := nametypes;
+                nametypes := newnt
+            FI;
+
+            TRANSFORMPROCS newtprocs = make_newtprocs( dec_tprocs,
+                                                       ( declaration,
+                                                         unit_proc ));
+            FNDECC fdc = ( fndec OF nulltprocs )( fdec, newtprocs );
+            REF FNDEC new_dec = HEAP FNDEC := f OF fdc;
+
+            discard_tprocs( newtprocs );
+            nametypes OF new_dec := nametypes;
+            { Now call the nulltransform on the new declaration in order
+              to process inner declarations. }
+            ( f OF ( fndec OF nulltprocs )( new_dec, dec_tprocs ), TRUE )
+        ELSE
+            ( fndec OF nulltprocs )( fdec, dec_tprocs )
+        FI
+    END;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_formula,
+                                                         null_type,
+                                                         fnbody_elseof,
+                                                         fndec_elseof ));
+
+   ( outer OF nulltprocs )( outer, newtprocs )
+END;
+
+
+PROC transform_elseof = (CLOSURE closure,
+                         OPTIONS  options,
+                         MESSAGEPROC msg )CLOSUREC:
+BEGIN
+    PROC outer = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+                outer_elseof( o, closure, options, msg );
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( outer ));
+
+    ( closure OF nulltprocs )( closure, newtprocs, msg )
+END;
+
+SKIP
+KEEP outer_elseof, transform_elseof, elseof_options
+FINISH

@@ -1,0 +1,410 @@
+DECS  simcommands  CONTEXT VOID  USE  putstrings,  messageproc,  basics,
+      osinterface,  testmode,  options,  ioprocs,  libmodes,  libinterface,
+      assmodes,  assclosure,  commandsyntax,  command,  kernelreader,
+      closureprocs,  transformprocs,  import,  macro,  fntype,  sequence,
+      timescale,  joins,  portname,  multimakes,  multilets,  reform,
+      openinterface,  variables, asscommands,  checksim:
+
+{ " Id: $" }
+configinfo A68CONFIG "$Id: simcommands.a68,v 34.4 1995/04/03 15:36:46 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:02:93  Created to generate a link to a separated ELLA simulator using the
+             new OSIF - Level 1.  DCT
+09:06:93  Second MAC call made dependent on SEQ and TIMESCALE.  DCT
+16:06:93  Modified output to cope with VMS record differences.  DCT
+16:08:93  Sim and ellanet changed to environment variables.   DCT
+23:08:93  Changes to commands for Public Domain. EVW
+25:08:93  printclosure rename checkclosure. EVW
+31:08:93  Correct parameter reading in SIMWRITE (ctname).  DJS
+26:10:93  Added banners to calls of external commands.  DCT
+01:11:93  ELLA environment renamed "ELLA Library".  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.010 
+26:08:94  33.002  DJS   SepTrans  Separate off transform environment, modify
+                                  calls to transformations. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+03:04:95  34.004  ELLA  Release   Failure to do the transforms necessary.
+                                  Called second macro transform unconditionally.
+??:??:??   ?.???  ????
+COMMENT
+
+
+STR  sim_var = "ELLASIM",  ellanet_var = "ELLANET",  ellalib = "ELLA Library",
+     trace_var = "trace";  { match asscommands }
+REF CLOSURESEEDS seeds;
+
+
+PROC  write_sim_file = ( REF CLOSURESEEDS  seeds,  FILE  file,
+                         STR  closure_details,  MESSAGEPROC  msg ) VOID:
+BEGIN
+   SKIP
+END;
+
+
+
+PROC  sim_command = (VALUES  params,  BOOL  call_sim,  MESSAGEPROC  msg) VOID:
+BEGIN
+   { simulate (sim) / simwrite [<fnname>] [<filename>] }
+
+   INT  index:= 0;
+
+   { Assemble closure }
+
+   RVC  fn = IF UPB params > index  ANDTH  is_fnname(params[index + 1])
+             THEN  get_fnname(params[index PLUSAB 1], msg)
+             ELSE  nullstr
+             FI;
+
+   REF CLOSURESEEDS  probeseed =
+      IF UPB params > index  ANDTH  is_openrnd(params[index + 1])
+      THEN  CTNAME  probecontext = get_ctname(params, index PLUSAB 1,
+                                              nullstr, msg);
+            index PLUSAB 1;   { consume closing round bracket }
+            HEAP CLOSURESEEDS:= ( check_selected(probecontext, msg),
+                                  nullid, nilclosureseed )
+      ELSE  nilclosureseed
+      FI;
+
+   CREGION  cr = check_selected(currentct OF library, msg);
+   HEAP CLOSURESEEDS  seeds:= (cr, fn, probeseed);
+
+   IF closure_details(cr, FALSE, FALSE, FALSE, msg) < 0
+   THEN  msg(user, concat(( "Context ", CTOS cr,
+                            " can not be simulated - see ""checkclosure""" )))
+   FI;
+
+   FILENAME  fname =
+      IF UPB params > index  ANDTH  is_filename(params[index + 1])
+      THEN  get_filename(params[index PLUSAB 1], assfile_type, msg)
+      ELSE  parse_filename(name OF context OF cr, assfile_type, msg)
+      FI;
+
+   { Monitor times to give user feedback }
+
+   INT  lasttime:= get_cpu_time;
+
+   PROC  time = INT:
+   BEGIN
+      INT  newtime = get_cpu_time,
+           diff = newtime - lasttime;
+      lasttime:= newtime;
+      testmode_seconds(diff)
+   END;
+
+   { Call assembler and then open file }
+
+   CLOSURE  closure:=
+        get_allimports(generate_closure(seeds, TRUE { with body }, msg), msg);
+
+   FILE  file = open_file(filename OF fname, write_access, msg);
+   STR  sim_file_name = file_name(file);
+
+   PROC  flt = (MSGNO  msgno,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(msgno)
+      THEN  put(screen, ("Closing file ", sim_file_name, newline));
+            close_file(file, msg)
+      FI;
+      msg(msgno, params)
+   END;
+
+   { Generate title }
+
+   RVC  title:= IF UPB fn > 0
+                THEN  concat(("Closure of FN ", fn, " from context ", CTOS cr))
+                ELSE  concat(("Closure of context ", CTOS cr))
+                FI;
+   IF probeseed ISNT nilclosureseed
+   THEN  title:= concat((title, " with context ", CTOS cregion OF probeseed))
+   FI;
+
+   put(screen, (newline, title, after(25), intwidth(time, 5), " cS", newline));
+
+   { Transform clsoure for standard simulator }
+
+   RVC  tlist:= nullstr;
+
+   PROC  assign = (CLOSUREC  cl,  STR  name,  message) BOOL:
+   BEGIN
+      IF c OF cl
+      THEN  tlist:= concat((tlist, " ", name));
+            put(screen, ( message, after(25), intwidth(time, 5),
+                          " cS", newline ))
+      FI;
+      closure:= cl OF cl;
+      c OF cl
+   END;
+
+
+   assign( transform_portnames(closure, flt),
+           "portname", "Portnames substituted" );
+   assign( transform_imports(closure, flt),
+           "import", "IMPORTs substituted");
+   assign( expand(closure, nilids, get_var(trace_var) = true_var, flt),
+           "macro", "MACros expanded" );
+   assign( transform_sequences(closure, flt),
+           "sequence", "SEQences removed" );
+   assign( transform_timescale(closure, flt),
+           "timescale", "Time scaling expanded" );
+   assign( expand(closure, nilids, FALSE { no trace }, flt),
+           "macro", "MACros expanded" );
+   assign( transform_multimakes(closure, null_options, flt),
+           "make", "Multi-dimensional MAKEs expanded" );
+   assign( transform_fntypes(closure, null_options, flt),
+           "fntype", "Fntype signals expanded" );
+   assign( transform_joins(closure, null_options, flt),
+           "join", "Complex JOIN's simplified" );
+
+
+   { Now write the assembler modes...
+     Must buffer for VMS to avoid very small records and to obtain correct
+     newline_char behaviour (if the last character in the buffer is a newline
+     character it is automatically removed by write_buffer in vmsif, therefore
+     add one here to ensure consistent behaviour).  16:06:93  DCT
+   }
+
+*4 INT  linesize = 512;
+*4 STRUCT 513 CHAR  buffer;   { +1 to allow for newline_char }
+*4 INT  pos:= 0;
+
+   PROC  out_str = (STR  str) VOID:
+*4    IF UPB str + pos <= linesize
+*4    THEN  INT  l = pos + 1;
+*4          buffer[l : pos PLUSAB UPB str]:= str
+*4    ELSE  INT  part = linesize - pos;
+*4          buffer[pos + 1 : linesize]:= str[: part];
+*4          buffer[UPB buffer]:= newline_char;        { removed by VMSIF }
+*4          write_buffer(file, buffer, flt);
+*4          pos:= 0;
+*4          out_str(str[part + 1 :])
+*4    FI;
+%4   write_buffer(file, str, flt);
+
+   put(screen, ( newline, "Writing open interface file  ",
+                 file_name(file), newline ));
+
+   title:= concat(( title, " from library ", name OF library, " (",
+                    version_str(version OF library), ") ",
+                    date_time(seconds) ));
+
+   REF VECTOR [] RVC  header =
+      IF UPB tlist = 0
+      THEN  LOC VECTOR [1] RVC:= title
+      ELSE  LOC VECTOR [2] RVC:= (title, concat(("Transforms: ", tlist)))
+      FI;
+   ASSEMWRITER  writer = write_signature(out_str, packed_format, TRUE, flt);
+   write_closure( (closure, header), writer, flt);
+   write_closureseeds(seeds, writer, flt);
+   finish_write_closure(writer, flt);
+*4 IF pos > 0
+*4 THEN  buffer[pos + 1]:= newline_char;
+*4       write_buffer(file, buffer[: pos + 1], flt)
+*4 FI;
+   close_file(file, msg);
+
+   { Call the simulator and then return to ELLA }
+
+   IF call_sim
+   THEN  IF var_unset(sim_var)
+         THEN  msg(user, concat(( "command """, sim_var, """ not defined"
+                                  " - invoke simulator manually on the file ",
+                                  sim_file_name )))
+         ELSE  STR  simcmd  = get_var(sim_var),
+                    command = IF testmode = null_options
+                              THEN  concat((simcmd, " -s ", sim_file_name))
+                              ELSE  concat((simcmd, " -t -s ", sim_file_name))
+                              FI;
+
+               put(screen, ( "Calling """, simcmd, """ on file ",
+                             sim_file_name, newline ));
+               execute_os_command(command, msg);
+               banner(ellalib)
+   FI
+   ELSE  put(screen, ( "Now invoke the ELLA simulator on the file ",
+                       sim_file_name, " in another window or by using the """,
+                       "obey"" (""!"") command", newline ))
+   FI
+END;
+
+
+PROC  ellanet_command = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   IF var_unset(ellanet_var)
+   THEN  msg(user, concat(( "command """, ellanet_var, """ not defined - "
+                            "leave ELLA and invoke ELLANET manually" )))
+   ELSE  STR  libname = file_name(file OF library),
+              cmd     = get_var(ellanet_var),
+              command = concat((cmd, " ", libname));
+         put(screen, ( "Closing down library file ", libname,
+                       " and calling ELLANET", newline ));
+         finish_library(msg);
+         execute_os_command(command, msg);
+         put(screen, ("Reopening ELLA library", newline));
+         banner(ellalib);
+         open_library(libname, null updater, msg)
+   FI;
+
+PROC  set_trace = (VAR  var,  BOOL  changed,  MESSAGEPROC  msg) VOID:
+   msg(log, concat(( "MAC tracing is ",
+                     IF value OF var = true_var
+                     THEN  "enabled"  ELSE  "disabled"
+                     FI )));
+
+PROC get_assclosure = (VALUES names, MESSAGEPROC msg) EXTERNALCLOSURE:
+BEGIN
+   CREGION cr = check_selected(currentct OF library, msg);
+   create_closure(cr, msg);
+
+   INT index := 0;
+   RVC  fnname = IF is_fnname(names[1])
+                 THEN get_fnname(names[index PLUSAB 1], msg)
+                 ELSE nullstr
+                 FI;
+   seeds := HEAP CLOSURESEEDS := (cr, fnname, nilclosureseed);
+   REF REF CLOSURESEEDS nextseed := rest OF seeds;
+
+   WHILE index < UPB names
+   DO  flt_if_interrupted(msg);
+       IF is_ctname(names[index + 1])
+       THEN  CTNAME ctn =
+               get_ctname(names, index, context OF currentct OF library, msg);
+             REF REF CLOSURESEEDS (nextseed) := HEAP CLOSURESEEDS :=
+               (check_selected(ctn, msg), nullstr, nilclosureseed);
+             nextseed := rest OF nextseed
+       ELSE  index PLUSAB 1  { ignore null }
+       FI
+   OD;
+
+   CLOSURE assclosure:= generate_closure(seeds, TRUE, msg);
+   assclosure:= get_allimports(assclosure, msg);
+   ( assclosure, HEAP VECTOR [1] RVC:= title )
+END;
+
+PROC write_cs = ( ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+   write_closureseeds( seeds, writer, msg );
+
+PROC assemble_prelude = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   seeds := NIL;
+   save_library(msg);
+   transform_prelude( names, FALSE,
+                      name OF library, context OF currentct OF library,
+                      get_assclosure, write_cs, zero_ctnos, check_sim_closure,
+                      msg )
+END;
+
+PROC assemblefile_prelude = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   seeds := NIL;
+   save_library(msg);
+   transform_prelude( names, TRUE,
+                      name OF library, context OF currentct OF library,
+                      get_assclosure, write_cs, zero_ctnos, check_sim_closure,
+                      msg )
+END;
+
+PROC  make_simcommands = (COMMANDVEC  globals) COMMANDVEC:
+BEGIN
+   add_var(sim_var, sim_var, env_var, default_set_var);
+ { add_var(ellanet_var, ellanet_var, env_var, default_set_var); }
+   add_var(trace_var, false_var, bool_var, set_trace);
+
+COMMANDVEC simcommands =
+   MAKECOMMANDS VECTOR [] COMMAND
+   ( HEAP SIMPLE :=
+     ( MAKERVC "SIMULATE", MAKERVC "SIM",
+       prod(( opt(fnname_syntax),
+{              opt( prod((openrnd_syntax, contextname_syntax,         }
+{                        opt(importname_syntax), closernd_syntax)) ), }
+              opt(filename_syntax) )),
+       normal access, continue,
+       MAKERVC  "Starts a simulation from the currently selected imports "
+                "region.  Given with a function name, assembles the closure "
+                "of that function,  otherwise assembles the closure of the "
+                "context.  A open interface file is used to export the "
+                "ELLA circuit to the simulator.  When a file name is not "
+                "specified the name of the current context will be used.",
+       (VALUES  params,  MESSAGEPROC  msg) VOID:
+          sim_command(params, TRUE { call simulator }, msg)
+     ) ,
+
+     HEAP SIMPLE :=
+     ( MAKERVC "SIMWRITE", nullstr,
+       prod(( opt(fnname_syntax),
+{              opt( prod((openrnd_syntax, contextname_syntax,         }
+{                        opt(importname_syntax), closernd_syntax)) ), }
+              opt(filename_syntax) )),
+       normal access, continue,
+       MAKERVC  "Creates a open interface file suitable for an ELLA "
+                "simulation from the currently selected imports region."
+                "  Given with a function name, assembles the closure of that "
+                "function,  otherwise assembles the closure of the context.  "
+                "When is file name is not specified "
+                "the name of the current context will be used.",
+       (VALUES  params,  MESSAGEPROC  msg) VOID:
+          sim_command(params, FALSE { do not call simulator }, msg)
+     ) ,
+
+     HEAP SIMPLE :=
+     ( MAKERVC "TRACE", nullstr, no parameters, normal access, continue,
+       MAKERVC "Switches on diagnostic messages during the transformation "
+               "phase.",
+       (VALUES  params, MESSAGEPROC  msg) VOID:
+         set_var(trace_var, true_var, msg)
+     ) ,
+
+     make_group( "DONT", "D", normal access,
+                 HEAP SIMPLE :=
+                 ( MAKERVC "TRACE", nullstr, no parameters, normal access,
+                   continue, MAKERVC "Switches off the diagnostic trace",
+                   (VALUES  params, MESSAGEPROC  msg) VOID:
+                      set_var(trace_var, false_var, msg)
+                 )
+               ) ,
+
+     HEAP SIMPLE :=
+     ( MAKERVC "ELLANET", nullstr, no parameters, hidden access, continue,
+       MAKERVC "Enters the ELLANET environment where ELLANET dump files may "
+               "be extracted and the attributes editor may be used.  Any "
+               "changes to the ELLA library are first saved.",
+       ellanet_command
+     )
+  );
+
+  simcommands ADD
+  make_asscommands( globals, TRUE, assemble_prelude, assemblefile_prelude )
+END
+
+
+KEEP  make_simcommands
+FINISH

@@ -1,0 +1,936 @@
+DECS names CONTEXT VOID USE putstrings, basics, messageproc, assmodes,
+     osinterface, charset, closureprocs, modeprocs, transformprocs, options :
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: names.a68,v 34.5 1995/03/29 13:03:01 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+07:09:90  Names transform started. DJS.
+02:09:91  Modify for new modes.  DJS.
+18:10:91  New CLOSURE mode.  DCT
+05:02:92  Corrections. EVW
+03:03:92  Declaration attributes added. EVW
+14:07:92  Incorporate new scope rules etc. Modify new names algorithm
+             to start by removing leading visible space, and checking
+             upper-case words against reserved words.
+             Update type tag names and function specs where a name change
+             takes place in inputs or outputs.  DJS
+04:11:92  Updated for 'chars' mode changes. JIT
+13:05:93  ALter handling of replicators. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.008 
+26:08:94  33.002  DJS   CoreElla  Ensure all inputs have names. 
+24:03:95  33.004  DJS   Release   Option to name all outputs. Option to apply
+                                  VHDL rules.
+29:03:95  34.005  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE IDC = STRUCT( ID i, BOOL c ),
+     IDN = STRUCT( ID id,
+                   INT sort,
+                       idno,
+                   REF IDN rest );
+
+REF IDN nilidn = NIL;
+REF TYPETAG niltypetag = NIL;
+
+PROC names_old_scope_rules = OPTIONS: MAKEOPTIONS 1;
+PROC names_name_all_inputs = OPTIONS: MAKEOPTIONS 2;
+
+PROC names_name_all_outputs = OPTIONS: MAKEOPTIONS 3;
+PROC names_name_all_ports = OPTIONS: MAKEOPTIONS 4;
+PROC names_vhdl_rules = OPTIONS: MAKEOPTIONS 5;
+
+VECTOR[ ]VECTOR[ ]CHAR names_options = ( "Use old scope rules.",
+                                         "Ensure all inputs have names.",
+                                         "Ensure all outputs have names.",
+                                         "Ensure all ports have names.",
+                                         "Apply VHDL name restrictions." );
+INT unitsort = 1;
+
+PROC lookup := (ID name, BOOL strops )INT:
+BEGIN
+    lookup := makelookup;
+    lookup( name, strops )
+END;
+
+VECTOR[]VECTOR[]CHAR vhdl_reserved =
+   ( "ABS", "ACCESS", "AFTER", "ALIAS", "ALL", "AND", "ARCHITECTURE", "ARRAY",
+     "ASSERT", "ATTRIBUTE", "BEGIN", "BLOCK", "BODY", "BUFFER", "BUS", "CASE",
+     "COMPONENT", "CONFIGURATION", "CONSTANT", "DISCONNECT", "DOWNTO",
+     "ELSE", "ELSIF", "END", "ENTITY", "EXIT", "FILE", "FOR", "FUNCTION",
+     "GENERATE", "GENERIC", "GROUP", "GUARDED", "IF", "IMPURE", "IN",
+     "INERTIAL", "INITIALIZE", "INOUT",
+     "IS", "LABEL", "LIBRARY", "LINKAGE", "LITERAL", "LOOP", "MAP", "MOD",
+     "NAND", "NEW",
+     "NEXT", "NOR", "NOT", "NULL", "OF", "ON", "OPEN", "OR", "OTHERS", "OUT",
+     "PACKAGE", "PORT", "POSTPONED", "PROCEDURE", "PROCESS", "PURE", "RANGE",
+     "RECORD", "REGISTER", "REJECT", 
+     "REM", "REPORT", "RETURN", "ROL", "ROR", "SELECT", "SEVERITY", "SHARED",
+     "SIGNAL", "SLA", "SLL", "SRA", "SRL", "SUBTYPE",
+     "THEN", "TO", "TRANSPORT", "TYPE", "UNAFFECTED", "UNITS", "UNTIL", "USE",
+     "VARIABLE", "WAIT", "WHEN", "WHILE", "WITH", "XNOR", "XOR" );
+{{ Yes I know some of these correspond to ELLA reserveds, but these match either
+   upper or lower case. }}
+
+INT lc_bias = ABS "a" - ABS "A";
+
+PROC vhdl_illegal = (ID name )INT:
+BEGIN
+   VECTOR[ UPB name ]CHAR np := name;
+   INT result := 0;
+   CHAR lc := " ";
+   FORALL cc IN np WHILE result = 0
+   DO  result := IF cc = "_"
+                 THEN  ABS( lc = "_" )
+                 ELSE  ABS( cc < "0" OREL cc > "z" OREL
+                            ( cc > "9" ANDTH cc < "A" ) OREL
+                            ( cc > "Z" ANDTH cc < "a" ))
+                 FI * 2;
+       IF cc >= "a" ANDTH cc <= "z" THEN cc := REPR( ABS cc - lc_bias ) FI;
+       lc := cc
+   OD;
+   FORALL nn IN vhdl_reserved WHILE result = 0 DO result := ABS( nn = np ) OD;
+   result
+END;
+
+PROC find_name = (STR name, REF IDN list )REF IDN:
+BEGIN
+    REF IDN ee := list;
+
+    WHILE ( ee ISNT nilidn ) ANDTH ( id OF ee /= name ) DO ee := rest OF ee OD;
+    ee
+END;
+
+VECTOR[ 3 ]CHAR symbolic_name_default_uc := "SYM",
+                symbolic_name_default_lc := "sym";
+BOOL apply_vhdl_rules := FALSE;
+PROC test_name = (ID name,
+                  INT nameno,
+                      sort,
+                  REF REF IDN list,
+                  BOOL lower_case,
+                       port )IDC:
+BEGIN
+CHAR prefix = IF lower_case THEN "n" ELSE "N" FI;
+
+    PROC modify_name = (ID n )IDC:
+    BEGIN
+        BOOL changed := FALSE, add_prefix := TRUE;
+        ID newname := n;
+
+        PROC change_name = VOID:
+        BEGIN
+           { If visible space hase been removed restore it and add
+             prefix.  Otherwise append visible space and name number. }
+            changed := TRUE;
+            newname := IF add_prefix
+                       THEN
+                           add_prefix := FALSE;
+                           oneline(( prefix, "_", newname ))
+                       ELSE
+                           oneline(( newname, "_", nameno ))
+                       FI
+        END;
+
+        IF n[1] = "_"
+        THEN { Try removing leading visible space if it is present }
+            changed := TRUE;
+            newname := n[ 2 : ]
+        FI;
+
+        INT code;
+
+        { If an upper-case word test newname against reserved words }
+        IF NOT lower_case ANDTH
+           ( code := lookup( newname, FALSE )) /= 105 ANDTH code <= 199
+        THEN { Clash with ELLA reserved word. }
+            change_name
+        ELIF apply_vhdl_rules ANDTH ( code := vhdl_illegal( newname )) > 0
+        THEN { Clash with VHDL reserved word. }
+            IF code > 1  { It is symbolic or contains double underscore }
+            THEN  newname := IF lower_case
+                             THEN symbolic_name_default_lc
+                             ELSE symbolic_name_default_uc
+                             FI;
+                  add_prefix := FALSE
+            FI;
+            change_name
+        FI;
+
+        WHILE find_name( newname, list ) ISNT nilidn
+        DO  { Make sure there is not a clash with an existing name in the
+              current scope, if so change name and try again until no clash }
+            change_name
+        OD;
+        { add this new name to the current scope }
+        list := HEAP IDN := ( newname, sort, nameno, list );
+        ( newname, changed )
+    END;
+
+    IF UPB name > 0
+    THEN  modify_name( name )
+    ELIF port
+    THEN  ( nullid, FALSE )
+    ELSE  ( i OF modify_name( oneline(( prefix, "_", nameno )) ), TRUE )
+    FI
+END;
+
+PROC dec_name = (OUTER o )ID:
+BEGIN
+    CASE sort OF o IN attrname OF ( attrs OF environ OF o )[1],
+                      intname OF ( ints OF environ OF o )[1],
+                      typename OF ( types OF environ OF o )[1],
+                      constname OF ( consts OF environ OF o )[1],
+                      fnname OF ( fns OF environ OF o )[1]
+    OUT
+        nullid
+    ESAC
+END;
+
+PROC fndec_names = (REF FNDEC fdec,
+                    TRANSFORMPROCS tprocs,
+                    REF ENVIRON env,
+                    BOOL old_scope_rules,
+                         name_all_inputs,
+                         name_all_outputs,
+                    REF REF FNDEC portname_change,
+                    REF IDN inner_names )FNDECC:
+BEGIN
+    REF IDN dec_names_list := inner_names;
+    REF FNDEC newfd := fdec;
+    REF VECTOR[ ]NAMETYPE nametypes := nametypes OF newfd;
+    INT max_port_num := 0, min_change_num := UPB nametypes + 1;
+    BOOL chfn := FALSE, chnt := FALSE, chrp := FALSE;
+
+    PROC change_fndec = REF FNDEC:
+        IF chfn THEN  newfd
+                ELSE  chfn := TRUE;  newfd := HEAP FNDEC := fdec
+        FI;
+
+    PROC change_local_name = (INT nameno,
+                              BOOL port,
+                              REF REF IDN names_list )VOID:
+    BEGIN
+        ID iname = name OF nametypes[ nameno ];
+        IDC nn = test_name( iname, nameno, unitsort, names_list,
+                            TRUE, port );
+
+        IF c OF nn
+        THEN
+            REF FNDEC fdn = change_fndec;
+
+            IF NOT chnt
+            THEN
+                chnt := TRUE;
+                nametypes := nametypes OF fdn :=
+                    HEAP VECTOR[ UPB nametypes OF fdn ]NAMETYPE :=
+                        nametypes
+            FI;
+            name OF nametypes[ nameno ] := i OF nn;
+            min_change_num := min_change_num MIN nameno
+        FI
+    END;
+
+
+    PROC do_names = (REF NAMES n, BOOL port, REF REF IDN names_list )NAMESC:
+        IF n IS nilnames
+        THEN
+            ( n, FALSE )
+        ELSE
+            IF port THEN max_port_num := max_port_num MAX nameno OF n FI;
+            change_local_name( nameno OF n, port, names_list );
+            do_names( rest OF n, port, names_list );
+            ( n, FALSE )
+        FI;
+
+    PROC examine_name = (ID name,
+                         INT sort,
+                             idno,
+                         REF REF IDN names_list )VOID:
+    BEGIN
+    REF IDN idn = find_name( name, names_list );
+
+        IF idn IS nilidn
+        THEN
+            names_list := HEAP IDN := ( name, sort, idno, names_list )
+        ELIF sort OF idn /= sort OREL idno OF idn /= idno
+        THEN
+            IF sort OF idn = unitsort
+            THEN
+                change_local_name( idno OF idn, FALSE, names_list )
+            ELSE
+                sysfault( "Name clash: can`t change original name." )
+            FI;
+            sort OF idn := sort;
+            idno OF idn := idno
+        FI
+    END;
+
+    PROC add_tag_name = (INT typeno, altno, REF REF IDN names_list )VOID:
+    BEGIN
+    REF TYPEDEC tdec = ( types OF env )[ typeno ];
+    ID tagname = CASE body OF tdec IN
+                 (REF VECTOR[ ]ALTERNATIVE alts ) altname OF alts[ altno ],
+                 (REF NEWINTS ni ) tagname OF ni,
+                 (REF NEWCHARS nc ) tagname OF nc
+                 OUT
+                    nullid
+                 ESAC;
+
+        examine_name( tagname, 0, 0, names_list )
+    END;
+
+    PROC add_type_name = (TYPE ty, REF REF IDN names_list )VOID:
+    BEGIN
+        CASE ty IN
+        (REF TNAME tname )
+        (REF TYPEDEC td = ( types OF env )[ typeno OF tname ];
+
+            examine_name( typename OF td, 0, 0, names_list )
+        ),
+        (REF TROW trow ) add_type_name( elem OF trow, names_list ),
+        (REF TSTR tstr )
+        (   add_type_name( elem OF tstr, names_list );
+            IF rest OF tstr ISNT niltstr
+            THEN  add_type_name( rest OF tstr, names_list )
+            FI
+        ),
+        (REF TFN tfn )
+        (   add_type_name( to OF tfn, names_list );
+            add_type_name( from OF tfn, names_list )
+        ),
+        (REF TBRACKET tbracket )  add_type_name( type OF tbracket, names_list ),
+        (REF TSTRING tstring )    add_type_name( char OF tstring, names_list ),
+        (REF TMACPAR tmacpar )
+        (ID mpname = CASE spec OF ( macspecs OF fdec )[ macparno OF tmacpar ]
+                     IN (ATTRNAME attrname )
+                            attrname OF ( attrs OF env )[ attrno OF attrname ],
+                        (FNAME fname )
+                            intname OF ( ints OF env )[ intno OF fname ],
+                        (TNAME tname )
+                            typename OF ( types OF env )[ typeno OF tname ],
+                        (CNAME cname )
+                            constname OF ( consts OF env )[ constno OF cname ],
+                        (FNNAME fnname )
+                            fnname OF ( fns OF env )[ fnno OF fnname ]
+                     OUT
+                        SKIP
+                     ESAC;
+
+            examine_name( mpname, 0, 0, names_list )
+        )
+        OUT
+            SKIP
+        ESAC
+    END;
+
+    PROC do_unit = ( UNIT u, REF REF IDN names_list )VOID:
+    BEGIN
+        CASE u IN
+        (REF CNAME cname )
+        (REF CONSTDEC cd = ( consts OF env )[ constno OF cname ];
+
+             examine_name( constname OF cd, 0, 0, names_list )
+        ),
+        (REF CTYPE ctype ) add_type_name( type OF ctype, names_list ),
+        (REF CPRIM cprim ) add_tag_name( typeno OF cprim, primno OF cprim,
+                                           names_list ),
+        (REF CINT cint ) add_tag_name( typeno OF cint, 1, names_list ),
+        (REF CRANGE crange ) add_tag_name( typeno OF crange, 1, names_list ),
+        (REF CQUERY cquery ) add_type_name( querytype OF cquery, names_list ),
+        (REF CPRIMRANGE cprimrange ) add_tag_name( typeno OF cprimrange, 1,
+                                                   names_list ),
+        (REF CQUOTE cquote ) add_tag_name( typeno OF cquote, 1, names_list ),
+        (REF UNAME uname ) examine_name( name OF nametypes[ nameno OF uname ],
+                                         unitsort, nameno OF uname,
+                                         names_list ),
+        (REF UASSOC uassoc )
+        (   add_tag_name( typeno OF uassoc, altno  OF uassoc, names_list );
+            do_unit( assoc OF uassoc, names_list )
+        ),
+        (REF UEXTRACT uextract )
+        (   add_tag_name( typeno OF uextract, altno OF uextract, names_list );
+            do_unit( extract OF uextract, names_list )
+        )
+        OUT
+            SKIP
+        ESAC
+    END;
+
+    PROC do_series = (REF USERIES user, TRANSFORMPROCS tprocs )VOID:
+    BEGIN
+        REF IDN loc_names_list := nilidn;
+        REF REF IDN ser_names_list = IF old_scope_rules
+                                     THEN dec_names_list
+                                     ELSE loc_names_list
+                                     FI;
+
+        PROC ser_names = (REF NAMES n, TRANSFORMPROCS tp )NAMESC:
+              do_names( n, FALSE, ser_names_list );
+
+        PROC ser_unit = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+        BEGIN
+            IF NOT old_scope_rules THEN do_unit( u, ser_names_list ) FI;
+            CASE u IN
+            (REF USERIES user ) do_series( user, tprocs )
+            OUT
+                ( unit OF nulltprocs )( u, tprocs )
+            ESAC;
+            ( u, FALSE )
+        END;
+
+        TRANSFORMPROCS sertprocs = make_newtprocs( tprocs, ( ser_unit,
+                                                             ser_names));
+
+        ( unit OF nulltprocs )( user, sertprocs );
+        discard_tprocs( sertprocs )
+    END;
+
+    PROC dec_names = (REF NAMES n, TRANSFORMPROCS tprocs )NAMESC:
+          do_names( n, FALSE, dec_names_list );
+
+    PROC dec_unit = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+    BEGIN
+        CASE u IN
+        (REF USERIES user ) do_series( user, tprocs )
+        OUT
+            ( unit OF nulltprocs )( u, tprocs )
+        ESAC;
+        ( u, FALSE )
+    END;
+
+    PROC pre_pass_unit = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+    BEGIN
+        CASE u IN
+        (REF UNAME uname )
+            IF UPB name OF nametypes[ nameno OF uname ] = 0
+            THEN
+                change_local_name( nameno OF uname, FALSE, dec_names_list )
+            FI
+        OUT
+            ( unit OF nulltprocs )( u, tprocs )
+        ESAC;
+        ( u, FALSE )
+    END;
+
+    PROC pre_pass_dec = (DECLARATION dec, TRANSFORMPROCS tprocs )DECLARATIONC:
+        ( dec, FALSE ); { Ignore inner declarations during pre_pass stage }
+
+    do_names( inputs OF fdec, NOT name_all_inputs, dec_names_list );
+    do_names( outputs OF fdec, NOT name_all_outputs, dec_names_list );
+
+    { Look for use of blank names, if any are found give them a generated name }
+    TRANSFORMPROCS pptprocs = make_newtprocs( nulltprocs, ( pre_pass_unit,
+                                                            pre_pass_dec ));
+
+    ( fnbody OF nulltprocs )( fnbody OF fdec, pptprocs );
+    discard_tprocs( pptprocs );
+
+    { transformation for local declarations is part of tprocs }
+    TRANSFORMPROCS newtprocs = make_newtprocs( tprocs, ( dec_unit,
+                                                         dec_names));
+
+    ( fnbody OF nulltprocs )( fnbody OF fdec, newtprocs );
+    discard_tprocs( newtprocs );
+    IF max_port_num >= min_change_num THEN  portname_change := newfd FI;
+    ( newfd, chfn )
+END; { of PROC fndec_names }
+
+PROC transform_names = (CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+    BOOL old_scope_rules = options INCLUDES names_old_scope_rules;
+    BOOL name_all_inputs  := options INCLUDES names_name_all_inputs,
+         name_all_outputs := options INCLUDES names_name_all_outputs;
+
+    apply_vhdl_rules := options INCLUDES names_vhdl_rules;
+
+    IF apply_vhdl_rules OREL ( options INCLUDES names_name_all_ports )
+    THEN   name_all_inputs := name_all_outputs := TRUE
+    FI;
+
+    { The following tables are used to indicate changes to outer level
+      declarations }
+    INT max_clno = maxclosureno( closure );
+    VECTOR[ max_clno ]IDC translations;
+    FORALL name IN translations DO name := ( nullid, FALSE ) OD;
+    VECTOR[ max_clno ]INT typealiases;
+    clear( typealiases );
+    VECTOR[ max_clno ]TYPEBODYC typebodies;
+    FORALL tb IN typebodies DO tb := ( niltypetag, FALSE ) OD;
+    VECTOR[ max_clno ]REF FNDEC portname_changes;
+    FORALL fd IN portname_changes DO fd := nilfndec OD;
+
+    REF IDN outer_names := nilidn;
+    BOOL changed := FALSE;
+    CLOSURE new := closure;
+    REF REF OUTERS newptr := outers OF new;
+
+    PROC change_closure = VOID:
+    BEGIN
+        IF NOT changed
+        THEN
+            changed:= TRUE;
+            new := copy_closure( new, msg );
+            { Now refind the current place in the new outers list }
+            INT place = closureno OF outer OF newptr;
+            newptr := outers OF new;
+            WHILE closureno OF outer OF newptr /= place
+            DO newptr := rest OF newptr OD
+        FI
+    END;
+
+    PROC test_type_body = (TYPEBODY body,
+                           INT idno,
+                           REF REF IDN names_list )TYPEBODYC:
+    BEGIN
+        CASE body IN
+        (REF VECTOR[ ]ALTERNATIVE alts )
+        (   BOOL ac := FALSE;
+            REF VECTOR[ ]ALTERNATIVE newalts := alts;
+
+            FOR altno TO UPB alts
+            DO  IDC adc = test_name( altname OF alts[ altno ], altno, 0,
+                                     names_list, TRUE, FALSE );
+                IF c OF adc
+                THEN
+                    IF NOT ac
+                    THEN
+                        newalts := HEAP VECTOR[ UPB alts ]ALTERNATIVE := alts;
+                        ac := TRUE
+                    FI;
+                    altname OF newalts[ altno ] := i OF adc
+                FI
+            OD;
+            ( newalts, ac )
+        ),
+        (REF NEWINTS ints )
+        (   IDC idc = test_name( tagname OF ints, idno, 0, names_list,
+                                 TRUE, FALSE );
+            IF c OF idc
+            THEN
+                ( HEAP NEWINTS := ( i OF idc, range OF ints ), TRUE )
+            ELSE
+                ( body, FALSE )
+            FI
+        ),
+        (REF NEWCHARS chars )
+        (   IDC cdc = test_name( tagname OF chars, idno, 0, names_list,
+                                 TRUE, FALSE );
+            IF c OF cdc
+            THEN
+                ( HEAP NEWCHARS := ( i OF cdc, chars OF chars ), TRUE )
+            ELSE
+                ( body, FALSE )
+            FI
+        )
+        OUT
+            ( body, FALSE )
+        ESAC
+    END;
+
+    PROC test_outer_name = (OUTER o )BOOL:  { TRUE if declaration is to be
+                                              removed from the closure }
+    BEGIN
+        BOOL same_spec := FALSE;
+        ID name = dec_name( o );
+        REF IDC idc = translations[ closureno OF o ];
+
+        idc := test_name( name, closureno OF o, 0,
+                          outer_names, sort OF o /= outerfn, FALSE );
+
+        IF sort OF o = outertype
+        THEN
+            REF OUTERS end = newptr;
+            REF OUTERS ptr := outers OF new;
+
+            WHILE ( ptr ISNT end ) ANDTH dec_name( outer OF ptr ) /= name
+            DO
+                ptr := rest OF ptr
+            OD;
+            IF ptr ISNT end
+            THEN
+                TNAME tn1, tn2;
+
+                typeno OF tn1 := typeno OF tn2 := 1;
+                IF check_types( simplify_type( tn1, environ OF o ),
+                                simplify_type( tn2, environ OF outer OF ptr ),
+                                environ OF o, environ OF outer OF ptr, TRUE )
+                THEN
+                    { Types are identical.  Mark aliases with closureno of
+                                            first occurence, and remove
+                                            this type from the closure }
+                    typealiases[ closureno OF o ] := closureno OF outer OF ptr;
+                    i OF idc := name;  { Put old name back, but still leave as
+                                         marked for change }
+                    change_closure;
+                    same_spec := TRUE
+                FI
+            FI;
+            IF NOT same_spec THEN
+            REF TYPEDEC tdec = ( types OF environ OF o )[1];
+            TYPEBODYC tbc = test_type_body( body OF tdec, closureno OF o,
+                                            outer_names );
+
+                IF c OF tbc THEN typebodies[ closureno OF o ] := tbc FI
+            FI
+        FI;
+        same_spec
+    END;
+
+    PROC update_outer = (OUTER o )VOID:
+    BEGIN
+        REF ENVIRON env := environ OF o;
+        BOOL ec := FALSE,
+             ac := FALSE, ic := FALSE, tc := FALSE, cc := FALSE, fc := FALSE;
+
+        PROC change_env = REF ENVIRON:
+            IF ec THEN env
+                  ELSE ec := TRUE; env := HEAP ENVIRON := environ OF o
+            FI;
+
+        REF IDN inner_names := nilidn;
+
+        PROC attr_env_action = (INT attrno )VOID:
+        BEGIN
+            REF ATTRDEC adec = ( attrs OF env )[ attrno ];
+            IF adec ISNT nilattrdec
+            THEN
+                IDC atc = IF sort OF adec = outerdec
+                          THEN  translations[ closureno OF usage OF adec ]
+                          ELIF sort OF adec = localdec
+                          THEN  test_name( attrname OF adec, attrno, 0,
+                                           inner_names, TRUE, FALSE )
+                          ELSE  ( nullid, FALSE ) {macpardec}
+                          FI;
+
+                IF c OF atc
+                THEN
+                    IF NOT ac
+                    THEN
+                        REF REF VECTOR[ ]REF ATTRDEC attrs =
+                                                            attrs OF change_env;
+                        ac:= TRUE;
+                        attrs:= HEAP VECTOR [UPB attrs] REF ATTRDEC:= attrs
+                    FI;
+                    HEAP ATTRDEC newattrdec := adec;
+                    attrname OF newattrdec := i OF atc;
+                    ( attrs OF env )[ attrno ] := newattrdec
+                FI
+            FI
+        END;
+
+        PROC int_env_action = (INT intno )VOID:
+        BEGIN
+            REF INTDEC idec = ( ints OF env )[ intno ];
+            IF idec ISNT nilintdec
+            THEN
+                IDC itc = IF sort OF idec = outerdec
+                          THEN  translations[closureno OF usage OF idec ]
+                          ELIF  sort OF idec = localdec
+                          THEN  test_name( intname OF idec, intno, 0,
+                                           inner_names, TRUE, FALSE )
+                          ELSE  ( nullid, FALSE) {macpardec}
+                          FI;
+
+                IF c OF itc
+                THEN
+                    IF NOT ic
+                    THEN
+                        REF REF VECTOR[ ]REF INTDEC ints = ints OF change_env;
+
+                        ic:= TRUE;
+                        ints:= HEAP VECTOR [UPB ints] REF INTDEC:= ints
+                    FI;
+                    HEAP INTDEC newintdec := idec;
+                    intname OF newintdec := i OF itc;
+                    ( ints OF env )[ intno ]:= newintdec
+                FI
+            FI
+        END;
+
+        PROC type_env_action = (INT typeno )VOID:
+        BEGIN
+            REF TYPEDEC tdec = ( types OF env )[ typeno ];
+            IF tdec ISNT niltypedec
+            THEN
+                BOOL is_outer = ( sort OF tdec = outerdec );
+                IDC ttc = IF is_outer
+                          THEN  translations[closureno OF usage OF tdec]
+                          ELIF  sort OF tdec = localdec
+                          THEN  test_name( typename OF tdec, typeno, 0,
+                                           inner_names, TRUE, FALSE )
+                          ELSE  ( nullid, FALSE) {macpardec}
+                          FI;
+                TYPEBODYC tbc = IF is_outer
+                                THEN  typebodies[closureno OF usage OF tdec]
+                                ELIF  sort OF tdec = localdec
+                                THEN  test_type_body( body OF tdec, typeno,
+                                                      inner_names )
+                                ELSE  ( niltypetag, FALSE ) {macpardec}
+                                FI;
+
+                IF c OF ttc OREL c OF tbc
+                THEN
+                    IF NOT tc
+                    THEN
+                        REF REF VECTOR[ ]REF TYPEDEC types = types OF env;
+
+                        tc:= TRUE;
+                        types:= HEAP VECTOR [UPB types] REF TYPEDEC := types
+                    FI;
+                    HEAP TYPEDEC newtdec := tdec;
+                    IF c OF ttc THEN typename OF newtdec := i OF ttc FI;
+                    IF c OF tbc THEN body OF newtdec := t OF tbc FI;
+                    IF is_outer
+                    THEN
+                        INT alias = typealiases[closureno OF usage OF tdec];
+                        IF alias > 0
+                        THEN
+                            HEAP USAGE newusage := usage OF tdec;
+                            closureno OF newusage := alias;
+                            usage OF newtdec := newusage
+                        FI
+                    FI;
+                    ( types OF env )[ typeno ]:= newtdec
+                FI
+            FI
+        END;
+
+        PROC const_env_action = (INT constno )VOID:
+        BEGIN
+            REF CONSTDEC cdec = ( consts OF env )[ constno ];
+            IF cdec ISNT nilconstdec
+            THEN
+                IDC ctc = IF sort OF cdec = outerdec
+                          THEN  translations[closureno OF usage OF cdec]
+                          ELIF  sort OF cdec = localdec
+                          THEN  test_name( constname OF cdec, constno, 0,
+                                           inner_names, TRUE, FALSE )
+                          ELSE  ( nullid, FALSE ) {macpardec}
+                          FI;
+
+                IF c OF ctc
+                THEN
+                    IF NOT cc
+                    THEN
+                        REF REF VECTOR[ ]REF CONSTDEC consts =
+                                                           consts OF change_env;
+
+                        cc:= TRUE;
+                        consts:= HEAP VECTOR [UPB consts] REF CONSTDEC := consts
+                    FI;
+                    HEAP CONSTDEC newcdec := cdec;
+                    constname OF newcdec := i OF ctc;
+                    ( consts OF env )[ constno ]:= newcdec
+                FI
+            FI
+        END;
+
+        VECTOR[ UPB fns OF env ]BOOL fn_changes;
+            FORALL fcn IN fn_changes DO fcn := FALSE OD;
+
+        PROC update_fndec = (IDC ftc,
+                             INT fnno,
+                             REF FNDEC fdec,
+                                       portname_change )VOID:
+         IF c OF ftc OREL ( portname_change ISNT nilfndec )
+         THEN
+            REF BOOL fcn = fn_changes[ fnno ];
+            REF FNDEC fn := fdec;
+            IF NOT fcn
+            THEN
+                fcn := TRUE;
+                IF NOT fc
+                THEN
+                    REF REF VECTOR[ ]REF FNDEC fns = fns OF change_env;
+                    fc:= TRUE;
+                    fns:= HEAP VECTOR [UPB fns] REF FNDEC:= fns
+                FI;
+                fn := HEAP FNDEC := fdec;
+                ( fns OF env )[ fnno ] := fn
+            FI;
+            IF c OF ftc THEN fnname OF fn := i OF ftc FI;
+            IF portname_change ISNT nilfndec
+            THEN
+                INT nttop = UPB nametypes OF fn;
+                nametypes OF fn := HEAP VECTOR[ nttop ]NAMETYPE :=
+                                        nametypes OF fn;
+                FORALL newnt IN nametypes OF fn,
+                       oldnt IN ( nametypes OF portname_change )[ : nttop ]
+                DO
+                    name OF newnt := name OF oldnt
+                OD
+            FI
+         FI;
+
+        PROC ofn_env_action = (INT fnno )VOID:
+        BEGIN
+            REF FNDEC fdec = ( fns OF env )[ fnno ];
+            IF ( fdec ISNT nilfndec ) ANDTH sort OF fdec = outerdec
+            THEN
+               IDC ftc = translations[ closureno OF usage OF fdec ];
+               inner_names := HEAP IDN := ( i OF ftc, 0, 0, inner_names );
+               update_fndec( ftc, fnno, fdec,
+                             portname_changes[ closureno OF usage OF fdec ] )
+            FI
+        END;
+
+        PROC ifn_env_action = (INT fnno )VOID:
+        BEGIN
+            REF FNDEC fdec = ( fns OF env )[ fnno ];
+            IF ( fdec ISNT nilfndec ) ANDTH sort OF fdec = localdec
+            THEN
+                IDC ftc = test_name( fnname OF fdec, fnno, 0, inner_names,
+                                     FALSE, FALSE );
+                update_fndec( ftc, fnno, fdec, nilfndec )
+            FI
+        END;
+
+        PROC fndec_action = (INT fnno,
+                             REF REF FNDEC portname_change,
+                             TRANSFORMPROCS tprocs )VOID:
+        BEGIN
+            REF FNDEC fdec = ( fns OF env )[ fnno ];
+            IF fdec ISNT nilfndec
+            THEN
+                FNDECC ftc = IF sort OF fdec /= macpardec
+                             THEN fndec_names( fdec, tprocs, env,
+                                               old_scope_rules,
+                                               name_all_inputs,
+                                               name_all_outputs,
+                                               portname_change, inner_names )
+                             ELSE {macpardec}
+                                  (fdec, FALSE)
+                             FI;
+
+                IF c OF ftc
+                THEN
+                    IF fc
+                    THEN
+                        fdec := f OF ftc
+                    ELSE
+                        REF VECTOR[ ]REF FNDEC fns = fns OF change_env;
+                        fc := TRUE;
+                        fns := HEAP VECTOR [UPB fns] REF FNDEC := fns;
+                        fns[ fnno ] := f OF ftc
+                    FI
+                FI
+            FI
+        END;
+
+        { The next bit is overkill as could theoretically have environs with
+          items which are never used within the main body of the text }
+
+        FOR attrno TO UPB attrs OF env DO  attr_env_action( attrno ) OD;
+
+        FOR intno TO UPB ints OF env DO  int_env_action( intno ) OD;
+
+        FOR typeno TO UPB types OF env DO  type_env_action( typeno ) OD;
+
+        FOR constno TO UPB consts OF env DO  const_env_action( constno ) OD;
+
+        { Go through functions environment twice, the first time extract names
+          of outer functions and if changed modify the environment.  Also put
+          the name on the list of inner names.  The second time examine local
+          declarations, if the name clashes with the current list of function
+          names change it and the declaration.  Add the name to the list of
+          function names }
+
+        FOR fnno TO UPB fns OF env DO  ofn_env_action( fnno ) OD;
+        FOR fnno TO UPB fns OF env DO  ifn_env_action( fnno ) OD;
+
+        PROC declaration = (DECLARATION dec,
+                            TRANSFORMPROCS tprocs )DECLARATIONC:
+        BEGIN
+            REF FNDEC dummy := nilfndec;
+            CASE dec IN
+            (ATTRNAME  ano) SKIP,
+            (FNAME  ino)    SKIP,
+            (TNAME  tno)    SKIP,
+            (CNAME  cno)    SKIP,
+            (FNNAME  fno)   fndec_action( fnno OF fno, dummy, tprocs )
+            ESAC;
+            ( dec, FALSE )
+        END; {of PROC declaration }
+
+        IF sort OF o = outerfn
+        THEN
+           { Now create a new set of transformprocs to process inner
+             declarations }
+
+           TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                                                      ( declaration,
+                                                        null_attr,
+                                                        null_formula,
+                                                        null_type ));
+            fndec_action( 1, portname_changes[ closureno OF o ], newtprocs );
+            discard_tprocs( newtprocs )
+        FI;
+
+        IF ec
+        THEN
+            change_closure;
+            outer OF newptr := ( closureno OF o, sort OF o, env )
+        FI
+    END;
+
+    WHILE newptr ISNT nilouters
+    DO
+        IF test_outer_name( outer OF newptr )
+        THEN  change_closure;
+              free_outers( newptr, new, msg )
+        ELSE
+              newptr := rest OF newptr
+        FI
+    OD;
+
+    newptr := outers OF new;
+    WHILE newptr ISNT nilouters
+    DO
+        update_outer( outer OF newptr );
+        newptr := rest OF newptr
+    OD;
+    ( new, changed )
+END;
+
+
+
+SKIP
+KEEP transform_names, names_options, names_old_scope_rules,
+     names_name_all_inputs, names_name_all_outputs, names_name_all_ports,
+     names_vhdl_rules
+FINISH

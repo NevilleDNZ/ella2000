@@ -1,0 +1,333 @@
+DECS attribute CONTEXT VOID USE putstrings,  basics,  messageproc,  assmodes, 
+                            modeprocs,  transformprocs,  options, closureprocs :
+
+configinfo A68CONFIG "$Id: attribute.a68,v 34.2 1995/03/29 13:02:48 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:08:94  33.001  DJS   CoreElla  Attribute transform started. 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR attribute_options;
+
+PROC outer_attribute = (OUTER outer,
+                        CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg )OUTERC:
+BEGIN
+HEAP ENVIRON env := environ OF outer;
+BOOL  ac:= FALSE,  ic:= FALSE,  tc:= FALSE,  cc:= FALSE,  fc:= FALSE;
+REF REF VECTOR [] REF ATTRDEC attrs = attrs OF env;
+REF REF VECTOR [] REF INTDEC ints = ints OF env;
+REF REF VECTOR [] REF TYPEDEC types = types OF env;
+REF REF VECTOR [] REF CONSTDEC consts = consts OF env;
+REF REF VECTOR [] REF FNDEC fns = fns OF env;
+
+   PROC  declaration = (DECLARATION  dec, TRANSFORMPROCS  tprocs) DECLARATIONC:
+   BEGIN
+      CASE dec IN
+         (ATTRNAME  ano)
+             SKIP,
+         (FNAME  ino)
+            ( IF intno OF ino > 0  { Not expanded MACSPEC declaration }
+              THEN REF INTDEC idec = ints[intno OF ino];
+                   INTDECC  idecc = (intdec OF tprocs)(idec, tprocs);
+                   IF c OF idecc
+                   THEN  IF ic
+                         THEN  idec := i OF idecc
+                         ELSE  ic:= TRUE;
+                               ints:= HEAP VECTOR [UPB ints] REF INTDEC:= ints;
+                               ints[intno OF ino]:= i OF idecc
+                         FI
+                   FI
+              FI
+            ) ,
+
+         (TNAME  tno)
+            ( IF typeno OF tno > 0 { Not expanded MACSPEC declaration }
+              THEN REF TYPEDEC tdec = types[typeno OF tno];
+                   TYPEDECC  tdecc = (typedec OF tprocs)(tdec, tprocs);
+                   IF c OF tdecc
+                   THEN  IF tc
+                         THEN  tdec:= t OF tdecc
+                         ELSE  tc:= TRUE;
+                               types:= HEAP VECTOR [UPB types] REF TYPEDEC
+                                    := types;
+                               types[typeno OF tno]:= t OF tdecc
+                         FI
+                  FI
+              FI
+            ) ,
+
+         (CNAME  cno)
+            ( IF constno OF cno > 0 { Not expanded MACSPEC declaration }
+              THEN REF CONSTDEC cdec = consts[constno OF cno];
+                   CONSTDECC  cdecc = (constdec OF tprocs)(cdec, tprocs);
+                   IF c OF cdecc
+                   THEN  IF cc
+                         THEN  cdec:= co OF cdecc
+                         ELSE  cc:= TRUE;
+                               consts:= HEAP VECTOR [UPB consts] REF CONSTDEC
+                                                                 := consts;
+                               consts[constno OF cno]:= co OF cdecc
+                         FI
+                  FI
+              FI
+            ) ,
+
+         (FNNAME  fno)
+            ( IF fnno OF fno > 0 { Not expanded MACSPEC declaration }
+              THEN REF FNDEC fdec = fns[fnno OF fno];
+                   FNDECC  fdecc = (fndec OF tprocs)(fdec, tprocs);
+                   IF c OF fdecc
+                   THEN  IF fc
+                         THEN  fdec:= f OF fdecc
+                         ELSE  fc:= TRUE;
+                               fns:= HEAP VECTOR [UPB fns] REF FNDEC:= fns;
+                               fns[fnno OF fno]:= f OF fdecc
+                         FI
+                   FI
+              FI
+            )
+      ESAC;
+      (dec, FALSE)
+   END;
+
+PROC attr_proc = (ATTR a, TRANSFORMPROCS tprocs )ATTRC:
+   CASE a IN
+   (REF ATTRNULL ) ( a, FALSE )
+   OUT
+       ( attrnull, TRUE )
+   ESAC;
+
+PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+   CASE u IN
+   (REF UATTR uat ) ( u OF ( unit OF tprocs )( unit OF uat, tprocs ), TRUE ),
+   (REF USERIES useries )
+   (REF SERIES new_body := body OF useries, step := body OF useries;
+    REF REF SERIES ustail := new_body;
+    BOOL uschanged := FALSE;
+    INT uscount := 0;
+
+      PROC copy_series = VOID:
+        IF NOT uschanged THEN
+        REF SERIES oldus := body OF useries;
+
+            new_body := nilseries;
+            TO uscount
+            DO
+                REF REF SERIES( ustail ) := HEAP SERIES :=
+                                            ( step OF oldus, nilseries );
+                ustail := rest OF ustail;
+                oldus := rest OF oldus
+            OD;
+            uschanged := TRUE
+        FI;
+
+      PROC addustep = (STEP step )VOID:
+      BEGIN
+         copy_series;
+         REF REF SERIES( ustail ) := HEAP SERIES := ( step, nilseries );
+         ustail := rest OF ustail
+      END;
+
+      WHILE step ISNT nilseries
+      DO
+          CASE step OF step IN
+          (ATTRNAME ) copy_series,
+          (FNAME  ino) declaration( ino, tprocs ),
+          (TNAME  tno) declaration( tno, tprocs ),
+          (CNAME  cno) declaration( cno, tprocs ),
+          (FNNAME fno) declaration( fno, tprocs )
+          OUT
+          STEPC sc = ( step OF tprocs )( step OF step, tprocs );
+
+              IF c OF sc OREL uschanged THEN addustep( s OF sc ) FI
+          ESAC;
+          uscount PLUSAB 1;
+          step := rest OF step
+      OD;
+      UNITC uc = ( unit OF tprocs )( output OF useries, tprocs );
+      IF uschanged OREL c OF uc THEN
+          ( HEAP USERIES := ( new_body, u OF uc ), TRUE )
+      ELSE
+          ( useries, FALSE )
+      FI
+   ),
+   (REF USEQUENCE usequence )
+   (REF SEQUENCE new_seqbody := body OF usequence,
+                 sequence := body OF usequence;
+    REF REF SEQUENCE seqtail := new_seqbody;
+    BOOL seqchanged := FALSE;
+    INT seqcount := 0;
+
+      PROC copy_sequence = VOID:
+        IF NOT seqchanged THEN
+        REF SEQUENCE oldseq := body OF usequence;
+
+            new_seqbody := nilsequence;
+            TO seqcount
+            DO
+                REF REF SEQUENCE( seqtail ) := HEAP SEQUENCE :=
+                                            ( step OF oldseq, nilsequence );
+                seqtail := rest OF seqtail;
+                oldseq := rest OF oldseq
+            OD;
+            seqchanged := TRUE
+        FI;
+
+      PROC addseqstep = (SEQSTEP step )VOID:
+      BEGIN
+         copy_sequence;
+         REF REF SEQUENCE( seqtail ) := HEAP SEQUENCE := ( step, nilsequence );
+         seqtail := rest OF seqtail
+      END;
+
+      WHILE sequence ISNT nilsequence
+      DO
+          CASE step OF sequence IN
+          (ATTRNAME ) copy_sequence,
+          (FNAME  ino) declaration( ino, tprocs ),
+          (TNAME  tno) declaration( tno, tprocs ),
+          (CNAME  cno) declaration( cno, tprocs ),
+          (FNNAME fno) declaration( fno, tprocs )
+          OUT
+          SEQSTEPC sc = ( seqstep OF tprocs )( step OF sequence, tprocs );
+
+              IF c OF sc OREL seqchanged THEN addseqstep( s OF sc ) FI
+          ESAC;
+          seqcount PLUSAB 1;
+          sequence := rest OF sequence
+      OD;
+
+      UNITC uc = ( unit OF tprocs )( output OF usequence, tprocs );
+      IF seqchanged OREL c OF uc THEN
+          ( HEAP USEQUENCE := ( sequence, u OF uc ), TRUE )
+      ELSE
+          ( usequence, FALSE )
+      FI
+   )
+   OUT
+      ( unit OF nulltprocs )( u, tprocs )
+   ESAC;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( attr_proc,
+                                                         unit_proc ));
+
+   DECLARATION od =
+     CASE sort OF outer IN { Outer declaration is always 1st element in environ}
+     { outerattr  } MAKEATTRNAME(1),
+     { outerint   } MAKEFNAME(1),
+     { outertype  } MAKETNAME(1),
+     { outerconst } MAKECNAME(1),
+     { outerfn    } MAKEFNNAME(1)
+     OUT SKIP
+     ESAC;
+
+   declaration( od, newtprocs);
+
+   IF UPB attrs > 0 THEN
+       ac := TRUE;
+       attrs := nullattrdecs
+   FI;
+
+   IF ac  OREL  ic  OREL  tc  OREL  cc  OREL  fc
+   THEN  ((closureno OF outer, sort OF outer, env), TRUE)
+   ELSE  (outer, FALSE)
+   FI
+END;
+
+
+PROC transform_attribute = (CLOSURE closure,
+                            OPTIONS  options,
+                            MESSAGEPROC msg )CLOSUREC:
+BEGIN
+    BOOL changed := FALSE;
+    CLOSURE new := closure;
+    REF REF OUTERS newptr := outers OF new;
+
+    PROC change_closure = VOID:
+    BEGIN
+        IF NOT changed
+        THEN
+            changed:= TRUE;
+            new := copy_closure( new, msg );
+            { Now refind the current place in the new outers list }
+            INT place = closureno OF outer OF newptr;
+            newptr := outers OF new;
+            WHILE closureno OF outer OF newptr /= place
+            DO newptr := rest OF newptr OD
+        FI
+    END;
+
+    PROC update_outer = (OUTER outer )VOID:
+    BEGIN
+
+        PROC outer_proc = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+                                outer_attribute( o, closure, options, msg );
+
+        TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( outer_proc ));
+
+        OUTERC oc = ( outer OF newtprocs )( outer, newtprocs );
+
+        IF c OF oc OREL changed THEN
+            change_closure;
+            outer OF newptr :=
+               ( closureno OF outer, sort OF outer, environ OF o OF oc )
+        FI
+    END;
+
+    WHILE newptr ISNT nilouters
+    DO
+        IF sort OF outer OF newptr = outerattr
+        THEN
+            change_closure;
+            free_outers( newptr, new, msg )
+        ELSE
+            newptr := rest OF newptr
+        FI
+    OD;
+
+    newptr := outers OF new;
+    WHILE newptr ISNT nilouters
+    DO
+        update_outer( outer OF newptr );
+        newptr := rest OF newptr
+    OD;
+    ( new, changed )
+END;
+
+SKIP
+KEEP outer_attribute, transform_attribute, attribute_options
+FINISH

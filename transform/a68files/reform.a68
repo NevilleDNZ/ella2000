@@ -1,0 +1,268 @@
+DECS reform CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, options :
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: reform.a68,v 34.3 1995/03/29 13:03:04 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ 3:09:90    DJS.  Reform Transform started, mainly picked up from
+                    ELLA_GASP_TRANS
+ 2:09:91    DJS.  Modifiy for new modes.
+27:07:92    JIT.  null_const removed.
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.003 
+26:08:94  33.002  DJS   CoreElla  Add closure parameter to outer_reform give
+                                  name to un-named inputs 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR reform_options;
+
+PROC outer_reform = (OUTER outer,
+                     CLOSURE closure,
+                     OPTIONS  options,
+                     MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF outer;
+PROC sysfault = (VECTOR[ ]CHAR text )VOID: msg( system, text );
+
+PROC reform_type_size = (TYPE t )INT:
+    CASE t IN
+    ( REF TNAME tn )
+    (REF TYPEDEC td = ( types OF env )[ typeno OF tn ];
+
+        CASE body OF td IN
+        (REF TYPETAG tt ) reform_type_size( tag OF tt )
+        OUT
+            1
+        ESAC
+    ),
+    ( REF TROW trow ) formula_int( size OF trow, msg ) *
+                      reform_type_size( elem OF trow ),
+    ( REF TSTR tstr )
+    (REF TSTR el := tstr;
+     INT size := 0;
+
+        WHILE el ISNT niltstr
+        DO
+            size PLUSAB reform_type_size( elem OF el );
+            el := rest OF el
+        OD;
+        size
+    ),
+    ( REF TFN tfn ) 1,
+    ( REF TBRACKET tbr ) reform_type_size( type OF tbr ),
+    ( REF TSTRING tstring ) formula_int( size OF tstring, msg ) *
+                            reform_type_size( char OF tstring ),
+    ( REF TNULL tnl ) ( sysfault( "reform_type_size: tnull" ); SKIP ),
+    ( REF TVOID tv ) ( sysfault( "reform_type_size: tvoid" ); SKIP )
+    OUT
+        sysfault( "reform_type_size" );
+        SKIP
+    ESAC;
+
+PROC fndec_reform = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs )FNDECC:
+BEGIN
+REF VECTOR[ ]NAMETYPE nametypes := nametypes OF fdec;
+BOOL newtypes := FALSE;
+
+    PROC fnbody_proc = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+    CASE fbody IN
+    (REF REFORM rf )
+    (REF NAMES ins := inputs OF fdec,
+              outs := outputs OF fdec;
+    TYPE intype = names_type( ins, fdec );
+    VECTOR[ reform_type_size( intype ) ]UNIT units;
+    INT unum := 0, ucnt := 0;
+    REF NAMETYPE nt;
+
+    PROC get_units = (UNIT u, TYPE t ) VOID:
+    BEGIN
+        CASE t IN
+        ( REF TNAME tn )
+        (REF TYPEDEC td = ( types OF env )[ typeno OF tn ];
+
+            CASE body OF td IN
+            (REF TYPETAG tt ) get_units( u, tag OF tt )
+            OUT
+                units[ unum PLUSAB 1 ] := u
+            ESAC
+        ),
+        ( REF TBRACKET tbr ) get_units( u, type OF tbr ),
+        (REF TSTR str )
+        (REF TSTR el := str;
+         INT sind := 0;
+
+            WHILE el ISNT niltstr
+            DO
+                get_units( HEAP UINDEX := ( u, MAKEFINT( sind PLUSAB 1 )),
+                           elem OF el );
+                el := rest OF el
+            OD
+        ),
+        (REF TROW row )
+        (   FOR rind TO formula_int( size OF row, msg )
+            DO
+                get_units( HEAP UINDEX := ( u, MAKEFINT rind ),
+                           elem OF row )
+            OD
+        ),
+        ( REF TSTRING tstring )
+        (   FOR rind TO formula_int( size OF tstring, msg )
+            DO
+                get_units( HEAP UINDEX := ( u, HEAP FINT := ( rind, nullid ) ),
+                           char OF tstring )
+            OD
+        )
+        OUT
+            units[ unum PLUSAB 1 ] := u
+        ESAC
+    END;
+
+    PROC reform_units = (TYPE t ) UNIT:
+    BEGIN
+        PROC make_row = (FORMULA size, TYPE elem ) UNIT:
+        BEGIN
+        REF USTR ru := nilustr;
+        REF REF USTR rtail := ru;
+
+            TO formula_int( size, msg )
+            DO
+                REF REF USTR( rtail ) := HEAP USTR :=
+                    ( reform_units( elem ), nilustr );
+                rtail := rest OF rtail
+            OD;
+            ru
+        END;
+
+        CASE t IN
+        (REF TNAME tn )
+        (REF TYPEDEC td = ( types OF env )[ typeno OF tn ];
+
+            CASE body OF td IN
+            (REF TYPETAG tt ) reform_units( tag OF tt )
+            OUT
+                units[ ucnt PLUSAB 1 ]
+            ESAC
+        ),
+        ( REF TBRACKET tbr ) reform_units( type OF tbr ),
+        (REF TSTR str )
+        (REF TSTR el := str;
+         REF USTR su := nilustr;
+         REF REF USTR stail := su;
+
+            WHILE el ISNT niltstr
+            DO
+                REF REF USTR( stail ) := HEAP USTR :=
+                    ( reform_units( elem OF el ), nilustr );
+                stail := rest OF stail;
+                el := rest OF el
+            OD;
+            su
+        ),
+        (REF TROW row ) make_row( size OF row, elem OF row ),
+        (REF TSTRING tstring ) make_row( size OF tstring, char OF tstring )
+        OUT
+            units[ ucnt PLUSAB 1 ]
+        ESAC
+    END;
+
+        WHILE ins ISNT nilnames
+        DO
+            nt := nametypes[ nameno OF ins ];
+            IF UPB name OF nt = 0 THEN
+                IF NOT newtypes THEN
+                    nametypes := HEAP VECTOR[ UPB nametypes ]NAMETYPE := 
+                                 nametypes;
+                    nt := nametypes[ nameno OF ins ]
+                FI;
+               name OF nt := oneline(("_rf", nameno OF ins ))
+            FI;
+            get_units( HEAP UNAME := ( usource, nameno OF ins ), type OF nt );
+            ins := rest OF ins
+        OD;
+
+    REF USTR ans := nilustr;
+    REF REF USTR tail := ans;
+
+        WHILE outs ISNT nilnames
+        DO
+            REF REF USTR( tail ) := HEAP USTR :=
+                       ( reform_units( type OF nametypes[ nameno OF outs ] ),
+                         nilustr );
+            tail := rest OF tail;
+            outs := rest OF outs
+        OD;
+        ( MAKEUNITTAG IF rest OF ans IS nilustr THEN elem OF ans ELSE ans FI,
+          TRUE )
+    )
+    OUT ( fbody, FALSE )
+    ESAC;
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( dec_tprocs, ( fnbody_proc ));
+    FNBODYC bc = ( fnbody OF newtprocs )( fnbody OF fdec, newtprocs );
+
+    IF c OF bc THEN
+    REF FNDEC new := HEAP FNDEC := fdec;
+
+        nametypes OF new := nametypes;
+        fnbody OF new := f OF bc;
+        ( new, TRUE )
+  ELSE
+        ( fdec, FALSE )
+    FI
+END;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_formula,
+                                                         null_type,
+                                                         fndec_reform ));
+
+   ( outer OF nulltprocs )( outer, newtprocs )
+END;
+
+PROC transform_reform = (CLOSURE closure,
+                         OPTIONS  options,
+                         MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                    ( (OUTER outer, TRANSFORMPROCS tprocs )OUTERC:
+                         outer_reform( outer, closure, options, msg )));
+
+    (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+    SKIP
+KEEP outer_reform, transform_reform, reform_options
+FINISH
+

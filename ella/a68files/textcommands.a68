@@ -1,0 +1,101 @@
+DECS  textcommands  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      libmodes,  libinterface,  libprocs,  ioprocs,  assclosure,  assmodes,
+      commandsyntax,  command,  kernelreader, options, simple_layout:
+
+configinfo A68CONFIG "$Id: textcommands.a68,v 34.3 1995/03/29 13:03:35 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+27:06:91  First part of the user interface for text regeneration.  DCT
+01:07:91  printalltext added.  DCT
+03:07:91  altered to use declaration_spec. EVW
+04:02:93  Update to new spec for layout.  DJS
+08:02:93  Merged assemble specs and bodies. EVW
+23:08:93  Command changes for Public Domain. EVW
+28:10:93  newline added.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+26:08:94  33.002  DJS   SepTrans  Add nulloptions to call of simple_layout 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC  put_layout = (RVC  line, MESSAGEPROC msg) VOID:
+BEGIN
+   put(out, (line, newline));
+   flt_if_interrupted(msg)
+END;
+
+PROC  print = (OUTER  outerdec, MESSAGEPROC msg) VOID:
+   simple_layout(outerdec, put_layout, current_width, no_indicators,
+                 null_options, msg );
+
+
+PROC  printtext = (VALUES  values,  MESSAGEPROC  msg) VOID:
+BEGIN
+   newline(out);
+   REF CONTXT ct = get_context(context OF currentct OF library);
+   IF is_name(values[1])
+   THEN  FORALL name IN values
+         DO  flt_if_interrupted(msg);
+             ID declname = get_declname(name, msg);
+             OUTER outer := declaration_spec(ct, declname, TRUE, msg);
+             print(outer, msg)
+         OD
+  ELSE CLOSURE  closure:= context_specs(ct, TRUE, msg);
+       REF OUTERS outers := outers OF closure;
+       WHILE outers ISNT nilouters
+       DO print(outer OF outers, msg);
+          outers := rest OF outers
+       OD
+  FI
+END;
+
+
+PROC  make_textcommands = COMMANDVEC:
+   MAKECOMMANDS COMMAND
+   ( make_group("PRINT", "P", normal access,
+        ( HEAP SIMPLE:=
+          ( MAKERVC "TEXT", MAKERVC "T", opt(star(declname_syntax)),
+            normal access, continue,
+            oneline(( "Text printer for the named declaration(s).  If no "
+                      "parameter is specified, the whole context will be "
+                      "printed." )),
+            printtext
+          )
+
+        )      )
+   )
+
+
+KEEP  printtext,  make_textcommands
+FINISH

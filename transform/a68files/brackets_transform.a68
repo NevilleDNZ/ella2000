@@ -1,0 +1,393 @@
+DECS  brackets_transform  CONTEXT VOID  USE  putstrings,  messageproc,
+      options,  assmodes,  transformprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: brackets_transform.a68,v 34.3 1995/03/29 13:02:52 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+??:??:88  Written on FLEX to show correct binding of UNIT.  DCT
+28:06:90  UFN  added.  DCT
+21:10:91  R6B85  Checks to make sure change is necessary.  DCT
+23:10:91  New interface to closure transform.  DCT
+16:12:91  UTERMINDEX added. EVW
+03:03:92  Declaration attributes added. EVW
+27:07:92  Changes made for CONST / UNIT mode change. JIT
+04:02:93  Ditto above,  CQUERYC no longer in transformprocs.  DJS
+26:03:93  Change IS/ISNT nullid tests to UPB tests.  DJS
+13:05:93  Handling of replicators altered. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.010 
+26:08:94  33.002  DJS   CoreElla  Bracket needed round uextract for post-fix
+                                  ops. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+VECTOR [] STR  brackets_options = LOC VECTOR [0] STR;
+
+PROC  brackets_transform = ( CLOSURE  closure,  OPTIONS  options,
+                             MESSAGEPROC  msg ) CLOSUREC:
+BEGIN
+   TRANSFORMPROCS  oldtprocs = nulltprocs;
+
+
+   PROC  attr = (ATTR a,  TRANSFORMPROCS  tprocs) ATTRC:
+      CASE a IN
+      (REF ATTRDATA ad)
+         IF UPB classname OF ad > 0
+         THEN (MAKEATTRBRACKET(a), TRUE)
+         ELSE (a, FALSE)
+         FI
+      OUT (a, FALSE)
+      ESAC;
+
+   PROC  formula = (FORMULA  f,  TRANSFORMPROCS  tprocs) FORMULAC:
+   BEGIN
+      PROC  bracket_formula = (FORMULA  form) FORMULAC:
+         CASE form IN
+            (REF FDOP  fd)
+                ( MAKEFBRACKET  f OF formula(form, tprocs), TRUE ) ,
+            (REF FBRACKET  fb)
+                ( { Look ahead before deciding whether to remove bracket }
+                  FORMULAC  body = formula(formula OF fb, tprocs);
+                  CASE f OF body IN
+                     (REF FDOP)
+                         { Leave bracket as one is required }
+                         IF c OF body
+                         THEN  (MAKEFBRACKET f OF body, TRUE)
+                         ELSE  (form, FALSE)
+                         FI
+                  OUT  (f OF body, TRUE)   { Remove bracket }
+                  ESAC
+                )
+         OUT  formula(form, tprocs)
+         ESAC;
+
+      CASE f IN
+         (REF FDOP  fd)
+            ( FORMULAC  l = bracket_formula(left OF fd),
+                        r = bracket_formula(right OF fd);
+              IF c OF l  OREL  c OF r
+              THEN  (HEAP FDOP:= (f OF l, sort OF fd, f OF r), TRUE)
+              ELSE  (f, FALSE)
+              FI
+            ) ,
+         (REF FMOP  fm)
+            ( FORMULAC  r = bracket_formula(right OF fm);
+              IF c OF r
+              THEN  (HEAP FMOP:= (sort OF fm, f OF r), TRUE)
+              ELSE  (f, FALSE)
+              FI
+            ) ,
+         (REF FBRACKET  fb)
+            (f OF formula(formula OF fb, tprocs), TRUE)
+      OUT (formula OF oldtprocs)(f, tprocs)
+      ESAC
+   END;
+
+
+
+   PROC  bracket_type = (TYPE  type,  TRANSFORMPROCS  tprocs) TYPEC:
+      CASE type IN
+         (REF TFN  tfn)
+             ( MAKETBRACKET  t OF (type OF tprocs)(tfn, tprocs), TRUE ) ,
+         (REF TBRACKET  tb)
+             ( { Look ahead before deciding whether to remove bracket }
+               TYPEC  body = (type OF tprocs)(type OF tb, tprocs);
+               CASE t OF body IN
+                  (REF TFN)
+                      { Leave bracket as one is required }
+                      IF c OF body
+                      THEN  (MAKETBRACKET t OF body, TRUE)
+                      ELSE  (type, FALSE)
+                      FI
+               OUT  (t OF body, TRUE)   { Remove bracket }
+               ESAC
+             )
+         OUT  (type OF tprocs)(type, tprocs)
+      ESAC;
+
+
+   PROC  type = (TYPE  ty,  TRANSFORMPROCS  tprocs) TYPEC:
+      CASE ty IN
+         (REF TROW  tr)
+            ( FORMULAC  size = (formula OF tprocs)(size OF tr, tprocs);
+              TYPEC  t = bracket_type(elem OF tr, tprocs);
+              IF c OF size  OREL  c OF t
+              THEN  (HEAP TROW:= (f OF size, t OF t), TRUE)
+              ELSE  (ty, FALSE)
+              FI
+            ) ,
+         (REF TFN  tfn)
+            ( TYPEC  f = bracket_type(from OF tfn, tprocs),
+                     t = bracket_type(to OF tfn, tprocs);
+              IF c OF f  OREL  c OF t
+              THEN  (HEAP TFN:= (t OF f, t OF t), TRUE)
+              ELSE  (ty, FALSE)
+              FI
+            ) ,
+         (REF TBRACKET  tb)
+            (t OF type(type OF tb, tprocs), TRUE)
+      OUT (type OF oldtprocs)(ty, tprocs)
+      ESAC;
+
+
+
+   PROC  bracket_const = (UNIT  const,  TRANSFORMPROCS  tprocs) UNITC:
+      CASE const IN
+         (REF UALTS  ca)
+             ( MAKEUBRACKET u OF (unit OF tprocs)(ca, tprocs), TRUE ) ,
+         (REF UBRACKET  cb)
+             ( { Look ahead before deciding whether to remove bracket }
+               UNITC  body = (unit OF tprocs)(unit OF cb, tprocs);
+               CASE u OF body IN
+                  (REF UALTS)
+                      { Leave bracket as one is required }
+                      IF c OF body
+                      THEN  (MAKEUBRACKET u OF body, TRUE)
+                      ELSE  (const, FALSE)
+                      FI
+               OUT  (u OF body, TRUE)   { Remove bracket }
+               ESAC
+             )
+         OUT  (unit OF tprocs)(const, tprocs)
+      ESAC;
+
+
+   PROC  ualts = (REF UALTS  ca,  TRANSFORMPROCS  tprocs) UALTSC:
+      IF ca IS nilualts
+      THEN  (ca, FALSE)
+      ELSE  UNITC  c = bracket_const(alt OF ca, tprocs);
+            UALTSC  cac = (ualts OF tprocs)(rest OF ca, tprocs);
+            IF c OF c  OREL  c OF cac
+            THEN  (HEAP UALTS:= (u OF c, ua OF cac), TRUE)
+            ELSE  (ca, FALSE)
+            FI
+      FI;
+
+
+   PROC  udiadic = (UNIT  unit) BOOL:
+      CASE unit IN  { in-fix operators }
+         (REF UCONC)   TRUE ,
+         (REF UDINST)  TRUE ,
+         (REF UFN)     TRUE
+      OUT  FALSE
+      ESAC;
+
+
+   PROC  uright = (UNIT  unit) BOOL:
+      CASE unit IN   { post-fix operators when parameter to pre_fix }
+         (REF UALTS)     TRUE ,
+         (REF UEXTRACT)  TRUE ,
+         (REF UPORTNAME) TRUE ,
+         (REF UINDEX)    TRUE ,
+         (REF UTRIM)     TRUE ,
+         (REF UDYINDEX)  TRUE ,
+         (REF UCONC)     TRUE ,
+         (REF UDINST)    TRUE ,
+         (REF UATTR)     TRUE
+      OUT  FALSE
+      ESAC;
+
+
+   PROC  uleft = (UNIT  unit) BOOL:
+      CASE unit IN   { pre-fix operators when parameter to post-fix }
+         (REF UASSOC)   TRUE ,
+         (REF UEXTRACT)  TRUE ,  { this may be overkill, fudge?? DJS }
+         (REF UROW)     TRUE ,
+         (REF UCONC)    TRUE ,
+         (REF UMINST)   TRUE ,
+         (REF UDINST)   TRUE ,
+         (REF UREPL)    TRUE ,
+         (REF USTRING)  TRUE
+      OUT  FALSE
+      ESAC;
+
+
+   PROC  bracket_unit = ( UNIT  unit,  PROC (UNIT) BOOL  test,
+                          TRANSFORMPROCS  tprocs ) UNITC:
+      IF test(unit)
+      THEN  (MAKEUBRACKET u OF (unit OF tprocs)(unit, tprocs), TRUE)
+      ELSE  CASE unit IN
+               (REF UBRACKET  ub)
+                  ( UNITC  body = (unit OF tprocs)(unit OF ub, tprocs);
+                    IF test(u OF body)
+                    THEN  IF c OF body
+                          THEN  (MAKEUBRACKET u OF body, TRUE)
+                          ELSE  (unit, FALSE)
+                          FI
+                    ELSE  (u OF body, TRUE)
+                    FI
+                  )
+            OUT  (unit OF tprocs)(unit, tprocs)
+            ESAC
+      FI;
+
+
+   PROC  unit = (UNIT  un,  TRANSFORMPROCS  tprocs) UNITC:
+      CASE un IN
+         (REF UFN  ufn)
+            ( UNITC  u1 = bracket_unit(source OF ufn, udiadic, tprocs),
+                     u2 = bracket_unit(sink OF ufn, udiadic, tprocs);
+              IF c OF u1  OREL  c OF u2
+              THEN  (HEAP UFN:= (u OF u1, u OF u2), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UASSOC  ua)
+            ( UNITC  u = bracket_unit(assoc OF ua, uright, tprocs);
+              IF c OF u
+              THEN  (HEAP UASSOC:= (typeno OF ua, altno OF ua, u OF u), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UEXTRACT  ue)
+            ( UNITC  u = bracket_unit(extract OF ue, uleft, tprocs);
+              IF c OF u
+              THEN  (HEAP UEXTRACT:= (u OF u, typeno OF ue, altno OF ue), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UPORTNAME ut)
+            ( UNITC  u = bracket_unit(unit OF ut, uleft, tprocs);
+              IF c OF u
+              THEN (HEAP UPORTNAME:= (u OF u, fnno OF ut, nameno OF ut), TRUE)
+              ELSE (ut, FALSE)
+              FI
+            ) ,
+         (REF UINDEX ui)
+            ( UNITC  u = bracket_unit(unit OF ui, uleft, tprocs);
+              FORMULAC index = (formula OF tprocs)(index OF ui, tprocs);
+              IF c OF u  OREL  c OF index
+              THEN  (HEAP UINDEX:= (u OF u, f OF index), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UTRIM ut)
+            ( UNITC  u  = bracket_unit(unit OF ut, uleft, tprocs);
+              RANGEC rc = (range OF tprocs)(range OF ut, tprocs);
+              IF c OF u  OREL  c OF rc
+              THEN  (HEAP UTRIM:= (u OF u, r OF rc), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UDYINDEX udy)
+            ( UNITC  u = bracket_unit(unit OF udy, uleft, tprocs);
+              UNITC index = (unit OF tprocs)(index OF udy, tprocs);
+              IF c OF u  OREL c OF index
+              THEN  (HEAP UDYINDEX:= (u OF u, u OF index), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UROW ur)
+            ( FORMULAC  size = (formula OF tprocs)(size OF ur, tprocs);
+              UNITC  u = bracket_unit(elem OF ur, uright, tprocs);
+              IF c OF size  OREL  c OF u
+              THEN  (HEAP UROW:= (f OF size, u OF u), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UCONC ucon)
+            ( UNITC  l = bracket_unit(left OF ucon, udiadic, tprocs),
+                     r = bracket_unit(right OF ucon, udiadic, tprocs);
+              IF c OF l  OREL  c OF r
+              THEN  ( HEAP UCONC:= ( string OF ucon, sort OF ucon,
+                                     u OF l, u OF r ), TRUE )
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UMINST um)
+            ( INSTANCEC ic = (instance OF tprocs)(inst OF um, tprocs);
+              UNITC  u = bracket_unit(right OF um, uright, tprocs);
+              IF c OF u  OREL  c OF ic
+              THEN  (HEAP UMINST:= (i OF ic, u OF u), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UDINST ud)
+            ( UNITC  l = bracket_unit(left OF ud, udiadic, tprocs);
+              INSTANCEC ic = (instance OF tprocs)(inst OF ud, tprocs);
+              UNITC  r = bracket_unit(right OF ud, udiadic, tprocs);
+              IF c OF l  OREL  c OF r  OREL  c OF ic
+              THEN  (HEAP UDINST:= (u OF l, i OF ic, u OF r), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UREPL url)
+            ( FORMULAC replc = (formula OF tprocs)(repl OF url, tprocs);
+              UNITC  u = bracket_unit(body OF url, uright, tprocs);
+              IF c OF replc  OREL  c OF u
+              THEN  (HEAP UREPL:= (f OF replc, u OF u), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF UATTR uat)
+            ( UNITC  u = bracket_unit(unit OF uat, uleft, tprocs);
+              ATTRC ac = (attr OF tprocs)(attr OF uat, tprocs);
+              IF c OF u OREL c OF ac
+              THEN  (HEAP UATTR:= (u OF u, a OF ac), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF USTRING ug)
+            ( FORMULAC size = (formula OF tprocs)(size OF ug, tprocs);
+              UNITC  u = bracket_unit(char OF ug, uright, tprocs);
+              IF c OF size  OREL  c OF u
+              THEN  (HEAP USTRING:= (f OF size, u OF u), TRUE)
+              ELSE  (un, FALSE)
+              FI
+            ) ,
+         (REF CQUERY cq )
+            (TYPEC  t = bracket_type(querytype OF cq, tprocs);
+             IF c OF t
+             THEN  (MAKECQUERY t OF t, TRUE)
+             ELSE  (un, FALSE)
+             FI
+            ),
+         (REF UBRACKET ub)
+            (u OF unit(unit OF ub, tprocs), TRUE)
+      OUT  (unit OF oldtprocs)(un, tprocs)
+      ESAC;
+
+
+   TRANSFORMPROCS  newtprocs =
+       make_newtprocs(oldtprocs,
+                      (attr, formula, type, ualts, unit));
+
+   (closure OF newtprocs)(closure, newtprocs, msg)
+END
+
+
+KEEP  brackets_options,  brackets_transform
+FINISH

@@ -1,0 +1,930 @@
+DECS  syntax_inds  CONTEXT VOID USE  putstrings,  basics,  osinterface:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: syntax_inds.a68,v 34.3 1995/03/29 13:02:50 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+Amendment record.
+
+ 7:06:91  Incorporate syntax into the module and add mode INDICATORS
+              and related OPERATOR and procedures.  Format module so that
+              the sections that change can be recognised by CONVERTSYNTAX.
+                DJS
+10:07:91  Bring basics into the use list in order to pick up clear from the
+              correct place.  DJS
+13:11:91  Text attributes added. EVW
+06:02:92  # added around macparams of expanded INSTANCEs. EVW
+02:03:92  Attribute declarations added. EVW
+29:07:92  Changes made for CONST / UNIT mode change. JIT
+15:01:93  Add new indicators endseqrepl, and endurepl etc.  DJS
+13:05:93  remove frepl. EVW
+15:06:93  add SEQROW. EWW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+26:08:94  33.002  DJS   CoreElla  Remove pass_heralded_terminators 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{{{{
+
+The following syntax is used to generate the indicators in this module by using
+the command CONVERTSYNTAX.  Headings are text starting at the beginning of a
+line and ending with full stop (.).  Lines begining with a # character are
+comment lines, they may be used to allow part rules to be shown for
+convienence, see rule 'declaration'.
+
+Everything between the headings 'Syntax start.' and 'Syntax end.' is regarded
+as the syntax definition. and will be used by CONVERTSYNTAX to produce output
+in various forms, including a new version of this file by using the /MODULE
+qualifier.  Do not make changes to the tables etc. in this module, by means of
+direct edits, change the syntax section first, then run the command
+CONVERTSYNTAX /MODULE [] to generate a new SYNTAX_INDS.STA.  Changes to other
+sections of code may be made providing the commented markers are not disturbed.
+To generate a file of the syntax for listing on a DEC printer use the commend
+CONVERTSYNTAX /UNDERLINE [].
+
+Rule names are preeceeded by at least one space and followed by :-, indicator
+names are preeceeded by ^ and terminated by space or newline.  Each alternative
+of a rule takes a new line, but if an alternative will not fit on a line it is
+split over several lines by using ~.  Rule names and some basics are in lower
+case.  Diamond brackets ( << >> ) enclose optional or repeated elements and are
+followed by '?' if it may be omitted and '*' if it may be repeated.  These
+characters appearing in any other position are treated as a basic.
+
+Syntax start.
+
+General.
+
+    strings :- string << ^sep string >> *
+
+    namelist :- ^namelist nameitem << ^sep nameitem >> * ^endnamelist
+
+    nameitem :- name << @ ^nameattr attr >> ?
+
+    declaration :- ^adecls ATTR attrdec <<, ^sep attrdec>> *
+                   ^idecls INT intdec <<, ^sep intdec>> *
+                   ^tdecls TYPE typedec <<, ^sep typedec>> *
+                   ^cdecls CONST constdec <<, ^sep constdec >> *
+                   ^fdecls FN fndec <<, ^sep fndec>> *
+                   ^mdecls MAC macdec <<, ^sep macdec>> *
+
+Attrbutes.
+
+#   declaration :- ^adecls ATTR attrdec <<, ^sep attrdec>> *
+
+    attr :- ^attrname name
+            ^attrmpar name
+            ^attrdata << name : >> ? strings ^endattrdata
+            ^attrstr ( attr <<, ^sep attr >> *) ^endstr
+            ^attrbr ( attr ) ^endstr
+
+    attrdec :- ^attrdec name = attr ^enddec
+
+Formulas.
+
+#   declaration :- ^idecls INT intdec <<, ^sep intdec>> *
+
+    intdec :- ^intdec nameitem = formula ^enddec
+
+    formula :- ^formula expression ^endformula
+
+    expression :- ^fdop expression ^operator operator ^sep expression ^endfdop
+                  ^fmop ^operator operator expression ^endfmop
+                  ^farith name
+                  ^fname name
+                  ^fmpar name
+                  ^impint INT nameitem
+                  ^fint integervalue
+                  ^fif IF ^condition formula ^then THEN ^option formula ~
+                      ^else ELSE ^option formula ^fi FI ^endif
+                  ^fbr (expression) ^endstr
+
+    range :- formula ^dotdot .. ^sep formula
+
+    replicator :- ^startrepl INT nameitem = range ^endrepl
+
+Types.
+
+#   declaration :- ^tdecls TYPE typedec <<, ^sep typedec>> *
+
+    typedec :- ^typedec nameitem = typebody ^enddec
+
+    typebody :- ^newalts NEW( name << & type >> ? ~
+                      <<| ^sep name << & type >> ? >> *) ^endalts
+                ^newint NEW name/( range ) ^endint
+                ^newchars NEW name ( charalt ~
+                      <<| ^sep charalt >> * ) ^endchars
+                ^typealias type
+
+    charalt :- ^char char
+               ^startcharrange char ^dotdot .. ^sep char ^endrange
+
+    type :- ^tfn type ^to -> ^sep type ^endtfn
+            ^tname name
+            ^tmpar name
+            ^imptype TYPE nameitem << = typebody >> ?
+            ^tbr (type) ^endstr
+            ^trow [formula] ^sep type ^endrow
+            ^tstr (type <<, ^sep type>> *) ^endstr
+            ^tstring STRING [formula] ^sep type ^endstring
+            ^tvoid ()
+
+Constants and units.
+
+#   declaration :- ^cdecls CONST constdec <<, ^sep constdec>> *
+
+    constdec :- ^constdec nameitem = unit ^enddec
+
+    unit :- ^uconc unit ^conc CONC ^sep unit ^enduconc
+            ^udinst unit ^inst instance ^sep unit ^endudinst
+            ^uminst instance ^sep unit ^enduminst
+            ^urow [formula] ^sep unit ^endrow
+            ^urepl [ replicator ] ^sep unit ^endurepl
+            ^uassoc name & unit ^enduassoc
+            ^uextract unit ^slashslash // name ^enduextract
+            ^uportname unit ^backslash \ name ^enduportname
+            ^ustring STRING [formula] ^sep unit ^endstring
+            ^uname name
+            ^uindex unit[formula] ^endindex
+            ^utrim unit[ ^startrange range ^endrange ] ^endindex
+            ^udyindex unit[[ ^sep unit ]] ^endindex
+            ^uio IO name
+            ^uif IF ^condition formula ^then THEN ^option unit ^else ~
+                                             ELSE ^option unit ^fi FI ^endif
+            ^uattr unit @ ^unitattr attr ^endattr
+            series
+            sequenceclause
+            ^ustr ( unit <<, ^sep unit>> * ) ^endstr
+            ^ubr ( unit ) ^endstr
+            ^ucase CASE ^chooser unit ^caseof OF ^option choices ~
+                 << ^elseof ELSEOF ^option choices >> * ~
+                 << ^caseelse ELSE ^option unit >> ? ^esac ESAC ^endcase
+            ^ureplace REPLACE ^replace (unit, ^sep unit, ^sep unit) ^endreplace
+            ^ufn unit ^to -> ^sep unit ^endufn
+            ^unull
+            ^ualts unit <<| ^sep unit >> * ^endalts
+            ^cname name
+            ^cmpar name
+            ^cbasic name
+            ^cquery ? type ^endcquery
+            ^cint name/formula ^endcint
+            ^cchar name char
+            ^cquote name strings ^endcquote
+            ^cvoid ()
+            ^ctype type
+            ^crange name/(range) ^endrange
+            ^ccharrange name(char ^dotdot .. ^sep char) ^endrange
+
+    choices :- chooserbranch <<, ^sep chooserbranch>> *
+    chooserbranch :- ^choice unit: ^sep unit ^endchoice
+
+    outputunit :- ^output OUTPUT unit ^endoutput
+                  ^nooutput
+
+Series statements.
+
+    series :- ^useries BEGIN ^block << step . ^endstep >> * ~
+                  outputunit ^endblock END ^endseries
+    step :- declaration
+            printorfault
+            ^make MAKE makeitem <<, ^sep makeitem>> *
+            ^let LET letitem <<, ^sep letitem>> *
+            ^forjoin FOR multiplier ^endmult joins
+            ^join joins
+
+    joins :- JOIN joinitem <<, ^sep joinitem>> *
+    joinitem :- ^startjoin unit ^to -> ^sep unit ^finishjoin
+    multiplier :- replicator << ^sep replicator >> *
+
+    makeitem :- ^makemult [formula] <<^sep [formula]>> * ^endmakemult ~
+                    ^makeinst instance : namelist
+                ^makeinst instance : namelist
+    instance :- ^fnname fnname << instparams >> ? << @ ^instattr attr >> ?
+    instparams :- macparams
+                  emacparams
+    macparams :- ^mparams { macparam <<, ^sep macparam>> * } ^endmparams
+    macparam :- attr
+                formula
+                type
+                unit
+                instance
+
+    letitem :- ^letname nameitem = unit
+               ^letstr ( nameitem <<, ^sep nameitem >> * ) ^endstr = unit
+
+    printorfault :- ^print PRINT printitem <<, ^sep printitem>> *
+                    ^fault FAULT faultitem <<, ^sep faultitem>> *
+    printitem :- ^printif IF ^condition formula ^then THEN ~
+                     ^option printable << ^sep printable >> * ^fi FI ^endif
+                 printable << ^sep printable >> *
+
+    printable :- ^printstring string
+                 formula
+
+    faultitem :- printitem
+
+Sequence statements.
+
+    sequenceclause :- ^usequence BEGIN SEQ ^block ~
+                          <<sequencestep ; ^endstep >> * ~
+                          outputunit ^endblock END ^endsequence
+
+    sequencestep :- declaration
+                    printorfault
+                    ^seqlet LET seqletitem <<, ^sep seqletitem >> *
+                    ^seqvar VAR varitem <<, ^sep varitem >> *
+                    ^seqpvar PVAR pvaritem <<, ^sep pvaritem >> *
+                    ^seqstat statement
+
+    seqletitem :- ^seqletname nameitem = unit
+                  ^seqletstr ( nameitem <<, ^sep nameitem >> * ) ^endstr = unit
+
+    varitem :- ^seqvarname nameitem ^becomes := unit
+               ^seqvarstr ( nameitem <<, ^sep nameitem >> * ) ^endstr ~
+                        ^becomes := unit
+
+    pvaritem :- ^seqpvarname nameitem ^becomes ::= unit
+                ^seqpvarstr ( nameitem <<, ^sep nameitem >> * ) ^endstr ~
+                        ^becomes ::= unit
+
+    statement :- ^seqbr ( statement <<; ^sep statement >> * ) ^endstr
+                 ^seqassign unit ^becomes := ^sep unit ^endassign
+                 ^seqrow [ formula ] ^seq statement ^endseqrow
+                 ^seqrepl [ replicator ] ^sep statement ^endseqrepl
+                 ^seqif IF ^condition formula ^then THEN ^option statement ~
+                     <<^else ELSE ^option statement >> ? ^fi FI ^endif
+                 ^seqcase CASE ^chooser unit ^caseof OF ^option seqchoices ~
+                     <<^elseof ELSEOF ^option seqchoices>> * ~
+                     <<^caseelse ELSE ^option statement >> ? ^esac ESAC ^endcase
+
+    seqchoices :- seqchooserbranch <<, ^sep seqchooserbranch>> *
+
+    seqchooserbranch :- ^seqchoice unit: ^sep << statement>> ? ^endchoice
+
+Function and macro declarations.
+
+#   declaration :- ^fdecls FN fndec <<, ^sep fndec>> *
+#                  ^mdecls MAC macdec <<, ^sep macdec>> *
+
+    fndec :- fndecspec : ^endfnspec fnbody ^endbody ^enddec
+
+    macdec :- macdecspec : ^endfnspec fnbody ^endbody ^enddec
+
+    fndecspec :- ^fndec ^fnname fnname << @ ^nameattr attr >> ? = fnspec
+                 ^expmacdec ^fnname fnname emacparams ~
+                                    << @ ^nameattr attr >> ? = fnspec
+
+    macdecspec :- ^macdec ^fnname fnname << macspec >> ? ~
+                                    << @ ^nameattr attr >> ? = fnspec
+
+    emacparams :- ^expmparams # { macparam <<, ^sep macparam>> * } # ^endmparams
+
+    fnspec :- ^fnspec terminals ^to -> ^sep terminals
+
+    terminals :- type
+                 ^terms ( terminal <<, ^sep terminal>> * ) ^endstr
+
+    terminal :- type <<: termspec >> ?
+
+    termspec :- @ ^nonameattr attr
+                namelist
+
+    macspec :- ^macspec { macspecitem <<, ^sep macspecitem >> * } ^endmacspec
+
+    macspecitem :- ^attritem ATTR namelist
+                   ^intitem INT namelist
+                   ^typeitem TYPE namedeclist
+                   ^constitem CONST type : namelist
+                   ^fnitem FN fnnamelist
+                   ^macitem MAC macnamelist
+
+    namedeclist :- ^namelist namedec << ^sep namedec >>* ^endnamelist
+
+    namedec :- nameitem << = typebody >> ?
+
+    fnnamelist :- ^namelist fndecspec ^endfnspec ^enddec << ^sep fndecspec ~
+                      ^endfnspec ^enddec >> * ^endnamelist
+
+   macnamelist :- ^namelist macdecspec ^endfnspec ^enddec << ^sep macdecspec ~
+                      ^endfnspec  ^enddec >> * ^endnamelist
+
+    fnbody :- ^body unit
+              ^biop BIOP ^fnname fnname << macparams >> ?
+              ^alien ALIEN ^fnname fnname << macparams >> ?
+              ^arith ARITH formula
+              ^reform REFORM
+              ^import IMPORT
+              ^adelay DELAY ( unit, ^sep formula <<, ^sep adeltail >> ? )
+              ^idelay IDELAY ( unit, ^sep formula)
+              ^sample SAMPLE ( timescale )
+              ^faster FASTER ( instance, ^sep timescale )
+              ^slower SLOWER ( instance, ^sep timescale )
+              ^ram RAM ( unit )
+              ^nobody NOBODY
+
+    adeltail :- unit <<, ^sep formula >> ?
+                formula
+
+    timescale :- formula <<, ^sep unit, ^sep formula >> ?
+
+Outer declarations.
+
+    outerdec :- declaration . ^endouterdec
+
+Syntax end.
+
+}}}}
+
+{ Size constants. }
+INT     num_inds = 215,
+    max_ind_size = 14;
+{ End }
+
+INT blank_ind = 0,
+    pass_all_terminators = num_inds + 1;
+INT num_words = ( pass_all_terminators + word_size - 1 ) % word_size;
+
+MODE INDICATORS = VECTOR[ num_words ]BITS;
+
+OP INCLUDES = (INDICATORS inds, INT num )BOOL:
+BEGIN
+INT n = num - 1;
+
+    IF num <= 0 OREL num > num_inds THEN
+        FALSE
+  ELSE
+        ( inds[ ( n % word_size ) + 1 ] AND
+          ( 2r1 SHL ( n MOD word_size ))) /= 2r0
+    FI
+END;
+
+OP SETINDAB = (REF INDICATORS result, INT ind )REF INDICATORS:
+BEGIN
+    IF ind > 0 ANDTH ind <= num_inds THEN
+    INT n = ind - 1;
+    INT index = ( n % word_size ) + 1;
+    BITS mask = ( 2r1 SHL ( n MOD word_size ));
+    REF BITS bb = result[ index ];
+
+        bb := bb OR mask
+    FI;
+    result
+END;
+
+OP CLEARINDAB = (REF INDICATORS result, INT ind )REF INDICATORS:
+BEGIN
+    IF ind > 0 ANDTH ind <= num_inds THEN
+    INT n = ind - 1;
+    INT index = ( n % word_size ) + 1;
+    BITS mask = NOT( 2r1 SHL ( n MOD word_size ));
+    REF BITS bb = result[ index ];
+
+        bb := bb AND mask
+    FI;
+    result
+END;
+
+PROC no_indicators = INDICATORS:
+BEGIN
+INDICATORS result;
+
+    clear( result );
+    result
+END;
+
+PROC all_indicators = INDICATORS:
+BEGIN
+INDICATORS result;
+REF BITS last = result[ num_words ];
+
+    FORALL elem IN result DO elem := BIN -1 OD;
+    last := last SHR ( num_words * word_size - num_inds );
+    result
+END;
+
+PROC these_indicators = (VECTOR[ ]INT inds )INDICATORS:
+BEGIN
+INDICATORS result;
+
+    clear( result );
+    FORALL ind IN inds DO result SETINDAB ind OD;
+    result
+END;
+
+{ Indicator values }
+INT         adecls_ind =   1,
+            adelay_ind =   2,
+             alien_ind =   3,
+             arith_ind =   4,
+            attrbr_ind =   5,
+          attrdata_ind =   6,
+           attrdec_ind =   7,
+          attritem_ind =   8,
+          attrmpar_ind =   9,
+          attrname_ind =  10,
+           attrstr_ind =  11,
+         backslash_ind =  12,
+           becomes_ind =  13,
+              biop_ind =  14,
+             block_ind =  15,
+              body_ind =  16,
+          caseelse_ind =  17,
+            caseof_ind =  18,
+            cbasic_ind =  19,
+             cchar_ind =  20,
+        ccharrange_ind =  21,
+            cdecls_ind =  22,
+              char_ind =  23,
+            choice_ind =  24,
+           chooser_ind =  25,
+              cint_ind =  26,
+             cmpar_ind =  27,
+             cname_ind =  28,
+              conc_ind =  29,
+         condition_ind =  30,
+          constdec_ind =  31,
+         constitem_ind =  32,
+            cquery_ind =  33,
+            cquote_ind =  34,
+            crange_ind =  35,
+             ctype_ind =  36,
+             cvoid_ind =  37,
+            dotdot_ind =  38,
+              else_ind =  39,
+            elseof_ind =  40,
+           endalts_ind =  41,
+         endassign_ind =  42,
+           endattr_ind =  43,
+       endattrdata_ind =  44,
+          endblock_ind =  45,
+           endbody_ind =  46,
+           endcase_ind =  47,
+          endchars_ind =  48,
+         endchoice_ind =  49,
+           endcint_ind =  50,
+         endcquery_ind =  51,
+         endcquote_ind =  52,
+            enddec_ind =  53,
+           endfdop_ind =  54,
+           endfmop_ind =  55,
+         endfnspec_ind =  56,
+        endformula_ind =  57,
+             endif_ind =  58,
+          endindex_ind =  59,
+            endint_ind =  60,
+           enditem_ind =  61,
+        endmacspec_ind =  62,
+       endmakemult_ind =  63,
+        endmparams_ind =  64,
+           endmult_ind =  65,
+       endnamelist_ind =  66,
+       endouterdec_ind =  67,
+         endoutput_ind =  68,
+          endrange_ind =  69,
+           endrepl_ind =  70,
+        endreplace_ind =  71,
+            endrow_ind =  72,
+        endseqrepl_ind =  73,
+         endseqrow_ind =  74,
+       endsequence_ind =  75,
+         endseries_ind =  76,
+           endstep_ind =  77,
+            endstr_ind =  78,
+         endstring_ind =  79,
+            endtfn_ind =  80,
+         enduassoc_ind =  81,
+          enduconc_ind =  82,
+         endudinst_ind =  83,
+       enduextract_ind =  84,
+            endufn_ind =  85,
+         enduminst_ind =  86,
+      enduportname_ind =  87,
+          endurepl_ind =  88,
+              esac_ind =  89,
+         expmacdec_ind =  90,
+        expmparams_ind =  91,
+            farith_ind =  92,
+            faster_ind =  93,
+             fault_ind =  94,
+               fbr_ind =  95,
+            fdecls_ind =  96,
+              fdop_ind =  97,
+                fi_ind =  98,
+               fif_ind =  99,
+        finishjoin_ind = 100,
+              fint_ind = 101,
+              fmop_ind = 102,
+             fmpar_ind = 103,
+             fname_ind = 104,
+             fndec_ind = 105,
+            fnitem_ind = 106,
+            fnname_ind = 107,
+            fnspec_ind = 108,
+           forjoin_ind = 109,
+           formula_ind = 110,
+            idecls_ind = 111,
+            idelay_ind = 112,
+            impint_ind = 113,
+            import_ind = 114,
+           imptype_ind = 115,
+              inst_ind = 116,
+          instattr_ind = 117,
+            intdec_ind = 118,
+           intitem_ind = 119,
+              join_ind = 120,
+               let_ind = 121,
+           letname_ind = 122,
+            letstr_ind = 123,
+            macdec_ind = 124,
+           macitem_ind = 125,
+           macspec_ind = 126,
+              make_ind = 127,
+          makeinst_ind = 128,
+          makemult_ind = 129,
+            mdecls_ind = 130,
+           mparams_ind = 131,
+          nameattr_ind = 132,
+          namelist_ind = 133,
+           newalts_ind = 134,
+          newchars_ind = 135,
+            newint_ind = 136,
+            nobody_ind = 137,
+        nonameattr_ind = 138,
+          nooutput_ind = 139,
+          operator_ind = 140,
+            option_ind = 141,
+            output_ind = 142,
+             print_ind = 143,
+           printif_ind = 144,
+       printstring_ind = 145,
+               ram_ind = 146,
+            reform_ind = 147,
+           replace_ind = 148,
+            sample_ind = 149,
+               sep_ind = 150,
+               seq_ind = 151,
+         seqassign_ind = 152,
+             seqbr_ind = 153,
+           seqcase_ind = 154,
+         seqchoice_ind = 155,
+             seqif_ind = 156,
+            seqlet_ind = 157,
+        seqletname_ind = 158,
+         seqletstr_ind = 159,
+           seqpvar_ind = 160,
+       seqpvarname_ind = 161,
+        seqpvarstr_ind = 162,
+           seqrepl_ind = 163,
+            seqrow_ind = 164,
+           seqstat_ind = 165,
+            seqvar_ind = 166,
+        seqvarname_ind = 167,
+         seqvarstr_ind = 168,
+        slashslash_ind = 169,
+            slower_ind = 170,
+    startcharrange_ind = 171,
+         startjoin_ind = 172,
+        startrange_ind = 173,
+         startrepl_ind = 174,
+               tbr_ind = 175,
+            tdecls_ind = 176,
+             terms_ind = 177,
+               tfn_ind = 178,
+              then_ind = 179,
+             tmpar_ind = 180,
+             tname_ind = 181,
+                to_ind = 182,
+              trow_ind = 183,
+              tstr_ind = 184,
+           tstring_ind = 185,
+             tvoid_ind = 186,
+         typealias_ind = 187,
+           typedec_ind = 188,
+          typeitem_ind = 189,
+             ualts_ind = 190,
+            uassoc_ind = 191,
+             uattr_ind = 192,
+               ubr_ind = 193,
+             ucase_ind = 194,
+             uconc_ind = 195,
+            udinst_ind = 196,
+          udyindex_ind = 197,
+          uextract_ind = 198,
+               ufn_ind = 199,
+               uif_ind = 200,
+            uindex_ind = 201,
+               uio_ind = 202,
+            uminst_ind = 203,
+             uname_ind = 204,
+          unitattr_ind = 205,
+             unull_ind = 206,
+         uportname_ind = 207,
+             urepl_ind = 208,
+          ureplace_ind = 209,
+              urow_ind = 210,
+         usequence_ind = 211,
+           useries_ind = 212,
+              ustr_ind = 213,
+           ustring_ind = 214,
+             utrim_ind = 215;
+{ End }
+
+{ Indicator names }
+VECTOR[ ]VECTOR[ ]CHAR ind_names =
+( "adecls",
+  "adelay",
+  "alien",
+  "arith",
+  "attrbr",
+  "attrdata",
+  "attrdec",
+  "attritem",
+  "attrmpar",
+  "attrname",
+  "attrstr",
+  "backslash",
+  "becomes",
+  "biop",
+  "block",
+  "body",
+  "caseelse",
+  "caseof",
+  "cbasic",
+  "cchar",
+  "ccharrange",
+  "cdecls",
+  "char",
+  "choice",
+  "chooser",
+  "cint",
+  "cmpar",
+  "cname",
+  "conc",
+  "condition",
+  "constdec",
+  "constitem",
+  "cquery",
+  "cquote",
+  "crange",
+  "ctype",
+  "cvoid",
+  "dotdot",
+  "else",
+  "elseof",
+  "endalts",
+  "endassign",
+  "endattr",
+  "endattrdata",
+  "endblock",
+  "endbody",
+  "endcase",
+  "endchars",
+  "endchoice",
+  "endcint",
+  "endcquery",
+  "endcquote",
+  "enddec",
+  "endfdop",
+  "endfmop",
+  "endfnspec",
+  "endformula",
+  "endif",
+  "endindex",
+  "endint",
+  "enditem",
+  "endmacspec",
+  "endmakemult",
+  "endmparams",
+  "endmult",
+  "endnamelist",
+  "endouterdec",
+  "endoutput",
+  "endrange",
+  "endrepl",
+  "endreplace",
+  "endrow",
+  "endseqrepl",
+  "endseqrow",
+  "endsequence",
+  "endseries",
+  "endstep",
+  "endstr",
+  "endstring",
+  "endtfn",
+  "enduassoc",
+  "enduconc",
+  "endudinst",
+  "enduextract",
+  "endufn",
+  "enduminst",
+  "enduportname",
+  "endurepl",
+  "esac",
+  "expmacdec",
+  "expmparams",
+  "farith",
+  "faster",
+  "fault",
+  "fbr",
+  "fdecls",
+  "fdop",
+  "fi",
+  "fif",
+  "finishjoin",
+  "fint",
+  "fmop",
+  "fmpar",
+  "fname",
+  "fndec",
+  "fnitem",
+  "fnname",
+  "fnspec",
+  "forjoin",
+  "formula",
+  "idecls",
+  "idelay",
+  "impint",
+  "import",
+  "imptype",
+  "inst",
+  "instattr",
+  "intdec",
+  "intitem",
+  "join",
+  "let",
+  "letname",
+  "letstr",
+  "macdec",
+  "macitem",
+  "macspec",
+  "make",
+  "makeinst",
+  "makemult",
+  "mdecls",
+  "mparams",
+  "nameattr",
+  "namelist",
+  "newalts",
+  "newchars",
+  "newint",
+  "nobody",
+  "nonameattr",
+  "nooutput",
+  "operator",
+  "option",
+  "output",
+  "print",
+  "printif",
+  "printstring",
+  "ram",
+  "reform",
+  "replace",
+  "sample",
+  "sep",
+  "seq",
+  "seqassign",
+  "seqbr",
+  "seqcase",
+  "seqchoice",
+  "seqif",
+  "seqlet",
+  "seqletname",
+  "seqletstr",
+  "seqpvar",
+  "seqpvarname",
+  "seqpvarstr",
+  "seqrepl",
+  "seqrow",
+  "seqstat",
+  "seqvar",
+  "seqvarname",
+  "seqvarstr",
+  "slashslash",
+  "slower",
+  "startcharrange",
+  "startjoin",
+  "startrange",
+  "startrepl",
+  "tbr",
+  "tdecls",
+  "terms",
+  "tfn",
+  "then",
+  "tmpar",
+  "tname",
+  "to",
+  "trow",
+  "tstr",
+  "tstring",
+  "tvoid",
+  "typealias",
+  "typedec",
+  "typeitem",
+  "ualts",
+  "uassoc",
+  "uattr",
+  "ubr",
+  "ucase",
+  "uconc",
+  "udinst",
+  "udyindex",
+  "uextract",
+  "ufn",
+  "uif",
+  "uindex",
+  "uio",
+  "uminst",
+  "uname",
+  "unitattr",
+  "unull",
+  "uportname",
+  "urepl",
+  "ureplace",
+  "urow",
+  "usequence",
+  "useries",
+  "ustr",
+  "ustring",
+  "utrim" );
+{ End }
+
+    SKIP
+KEEP INDICATORS, INCLUDES( INDICATORS, INT ),
+     SETINDAB( REF INDICATORS, INT ), CLEARINDAB( REF INDICATORS, INT ),
+     no_indicators, all_indicators, these_indicators,
+     blank_ind, pass_all_terminators,
+{ Indicator keeps }
+     adecls_ind, adelay_ind, alien_ind, arith_ind, attrbr_ind, attrdata_ind,
+     attrdec_ind, attritem_ind, attrmpar_ind, attrname_ind, attrstr_ind,
+     backslash_ind, becomes_ind, biop_ind, block_ind, body_ind, caseelse_ind,
+     caseof_ind, cbasic_ind, cchar_ind, ccharrange_ind, cdecls_ind, char_ind,
+     choice_ind, chooser_ind, cint_ind, cmpar_ind, cname_ind, conc_ind,
+     condition_ind, constdec_ind, constitem_ind, cquery_ind, cquote_ind,
+     crange_ind, ctype_ind, cvoid_ind, dotdot_ind, else_ind, elseof_ind,
+     endalts_ind, endassign_ind, endattr_ind, endattrdata_ind, endblock_ind,
+     endbody_ind, endcase_ind, endchars_ind, endchoice_ind, endcint_ind,
+     endcquery_ind, endcquote_ind, enddec_ind, endfdop_ind, endfmop_ind,
+     endfnspec_ind, endformula_ind, endif_ind, endindex_ind, endint_ind,
+     enditem_ind, endmacspec_ind, endmakemult_ind, endmparams_ind, endmult_ind,
+     endnamelist_ind, endouterdec_ind, endoutput_ind, endrange_ind,
+     endrepl_ind, endreplace_ind, endrow_ind, endseqrepl_ind, endseqrow_ind,
+     endsequence_ind, endseries_ind, endstep_ind, endstr_ind, endstring_ind,
+     endtfn_ind, enduassoc_ind, enduconc_ind, endudinst_ind, enduextract_ind,
+     endufn_ind, enduminst_ind, enduportname_ind, endurepl_ind, esac_ind,
+     expmacdec_ind, expmparams_ind, farith_ind, faster_ind, fault_ind, fbr_ind,
+     fdecls_ind, fdop_ind, fi_ind, fif_ind, finishjoin_ind, fint_ind, fmop_ind,
+     fmpar_ind, fname_ind, fndec_ind, fnitem_ind, fnname_ind, fnspec_ind,
+     forjoin_ind, formula_ind, idecls_ind, idelay_ind, impint_ind, import_ind,
+     imptype_ind, inst_ind, instattr_ind, intdec_ind, intitem_ind, join_ind,
+     let_ind, letname_ind, letstr_ind, macdec_ind, macitem_ind, macspec_ind,
+     make_ind, makeinst_ind, makemult_ind, mdecls_ind, mparams_ind,
+     nameattr_ind, namelist_ind, newalts_ind, newchars_ind, newint_ind,
+     nobody_ind, nonameattr_ind, nooutput_ind, operator_ind, option_ind,
+     output_ind, print_ind, printif_ind, printstring_ind, ram_ind, reform_ind,
+     replace_ind, sample_ind, sep_ind, seq_ind, seqassign_ind, seqbr_ind,
+     seqcase_ind, seqchoice_ind, seqif_ind, seqlet_ind, seqletname_ind,
+     seqletstr_ind, seqpvar_ind, seqpvarname_ind, seqpvarstr_ind, seqrepl_ind,
+     seqrow_ind, seqstat_ind, seqvar_ind, seqvarname_ind, seqvarstr_ind,
+     slashslash_ind, slower_ind, startcharrange_ind, startjoin_ind,
+     startrange_ind, startrepl_ind, tbr_ind, tdecls_ind, terms_ind, tfn_ind,
+     then_ind, tmpar_ind, tname_ind, to_ind, trow_ind, tstr_ind, tstring_ind,
+     tvoid_ind, typealias_ind, typedec_ind, typeitem_ind, ualts_ind,
+     uassoc_ind, uattr_ind, ubr_ind, ucase_ind, uconc_ind, udinst_ind,
+     udyindex_ind, uextract_ind, ufn_ind, uif_ind, uindex_ind, uio_ind,
+     uminst_ind, uname_ind, unitattr_ind, unull_ind, uportname_ind, urepl_ind,
+     ureplace_ind, urow_ind, usequence_ind, useries_ind, ustr_ind, ustring_ind,
+     utrim_ind,
+{ End }
+     num_inds, max_ind_size, ind_names
+FINISH

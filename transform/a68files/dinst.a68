@@ -1,0 +1,97 @@
+DECS dinst CONTEXT VOID USE putstrings,  basics,  messageproc,  assmodes, 
+                            modeprocs,  transformprocs,  options :
+
+configinfo A68CONFIG "$Id: dinst.a68,v 34.2 1995/03/29 13:02:47 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:08:94  33.001  DJS   CoreElla  Copied from range transform and install in
+                                  transform environment 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR dinst_options;
+
+{ Null FNBODY proc }
+PROC fnbody_dinst = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_dinst = (OUTER outer,
+                    CLOSURE closure,
+                    OPTIONS  options,
+                    MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF outer;
+
+PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+    CASE u IN
+    (REF UDINST dinst )
+    (UNITC left = ( unit OF tprocs )( left OF dinst, tprocs ),
+           right = ( unit OF tprocs )( right OF dinst, tprocs );
+     REF USTR str = HEAP USTR := ( u OF left,
+                                   HEAP USTR := ( u OF right, nilustr ));
+     REF UMINST minst = HEAP UMINST := ( inst OF dinst, str );
+
+        ( minst, TRUE )
+    )
+    OUT
+        ( unit OF nulltprocs )( u, tprocs )
+    ESAC;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_formula,
+                                                         null_type,
+                                                         fnbody_dinst,
+                                                         unit_proc ));
+
+   ( outer OF nulltprocs )( outer, newtprocs )
+END;
+
+
+PROC transform_dinst = (CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg )CLOSUREC:
+BEGIN
+    PROC outer = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+                outer_dinst( o, closure, options, msg );
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( outer ));
+
+    ( closure OF nulltprocs )( closure, newtprocs, msg )
+END;
+
+SKIP
+KEEP outer_dinst, transform_dinst, dinst_options
+FINISH

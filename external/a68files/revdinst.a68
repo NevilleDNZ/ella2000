@@ -1,0 +1,112 @@
+DECS revdinst CONTEXT VOID USE putstrings,  basics,  messageproc,  assmodes, 
+                               modeprocs,  transformprocs,  options :
+
+configinfo A68CONFIG "$Id: revdinst.a68,v 34.2 1995/03/29 13:05:09 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:08:94  33.001  DJS   CoreElla  Copied from range transform and install in
+                                  transform environment 
+21:03:95  33.001  DJS   Release   Inserted as an example transform.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR revdinst_options;
+
+{ Null FNBODY proc }
+PROC fnbody_dinst = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_revdinst = (OUTER outer,
+                       CLOSURE closure,
+                       OPTIONS  options,
+                       MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF outer;
+
+PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+    CASE u IN
+    (REF UMINST minst )
+    (UNITC right = ( unit OF tprocs )( right OF minst, tprocs );
+
+       CASE u OF right IN
+       (REF USTR ustr )
+       (  IF ( rest OF ustr ISNT nilustr ) ANDTH
+             ( rest OF rest OF ustr IS nilustr )
+          THEN
+            REF UDINST dinst = HEAP UDINST :=
+                 ( elem OF ustr, inst OF minst, elem OF rest OF ustr );
+            ( dinst, TRUE )
+          ELIF c OF right
+          THEN  ( HEAP UMINST := ( inst OF minst, u OF right ), TRUE )
+          ELSE  ( u, FALSE )
+          FI
+       )
+       OUT
+         IF c OF right
+         THEN  ( HEAP UMINST := ( inst OF minst, u OF right ), TRUE )
+         ELSE  ( u, FALSE )
+         FI
+       ESAC
+    )
+    OUT
+        ( unit OF nulltprocs )( u, tprocs )
+    ESAC;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_formula,
+                                                         null_type,
+                                                         fnbody_dinst,
+                                                         unit_proc ));
+
+   ( outer OF nulltprocs )( outer, newtprocs )
+END;
+
+
+PROC transform_revdinst = (CLOSURE closure,
+                           OPTIONS  options,
+                           MESSAGEPROC msg )CLOSUREC:
+BEGIN
+    PROC outer = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+                outer_revdinst( o, closure, options, msg );
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( outer ));
+
+    ( closure OF nulltprocs )( closure, newtprocs, msg )
+END;
+
+SKIP
+KEEP outer_revdinst, transform_revdinst, revdinst_options
+FINISH

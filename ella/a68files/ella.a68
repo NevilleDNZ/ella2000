@@ -1,0 +1,182 @@
+PROGRAM  ella  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+         testmode,  basics,  libinterface,  libprocs,  ioprocs,  ellaversion,
+         printissue,  commandsyntax,  commandreader,  command,  kernelreader,
+         commandcaller,  globalcommands,  libcommands,  compcommands,
+         graphicscommands,  textcommands,  simcommands,
+         diagnostics
+BEGIN
+
+configinfo A68CONFIG "$Id: ella.a68,v 34.3 1995/03/29 13:03:15 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1981
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:01:90  *S addded - Only compiled if simulator present. EVW
+22:06:90  Test message removed.  DCT
+22:10:90  Mods to environ incorporated DJS
+29:01:91  *S -> %K (for SUN) + other changes for UNIX.  DCT
+31:01:91  Reference to disclaimer added.  DCT
+12:02:91  Eliminate customer message etc. when in testmode.  DJS
+21:03:91  Enable <CTRL-C> and added rcsid.  DCT
+25:03:91  Modify for more general form of MSGNO, see messageproc. DJS
+05:04:91  <CTRL-C> (actually <F6> on VMS) not working from com file.  DCT
+10:04:91  Graphics commands included. JIT
+27:06:91  textcommands Module added.  DCT
+19:10:92  Ammend ellastart for UNIX.  DJS
+24:02:93  OSIF Level 1 - simulator, attributes and ellanet split off.  DCT
+13:08:93  Changes for latest OS merge.  DCT
+24:08:93  Library globals now local to the library.  DCT
+30:09:93  New argument parsing procedures in osinterface.  DCT
+13:10:93  private OF env no longer set TRUE.  DCT
+20:10:93  Spelling.  DCT
+28:10:93  Startup changed.  DCT
+30:11:93  version renamed ellaversion.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  32.020 
+26:08:94  33.002  DJS   SepTrans  Separate of the transform environment,
+                                  asscommands and ptassem moved to transform 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ Main body of ELLA - initialise and build command tables }
+
+STR  ellasysdir = "ELLASYSDIR";
+COMMANDENV  env;   { holds information about the current command context }
+PROC get_prompt = RVC: prompt OF current_context OF stack OF env;
+
+initialise_osinterface(ellaversion, TRUE { trap user interrupts });
+initialise_ioprocs(get_prompt);    { before create library }
+
+{ Get and check the arguments }
+
+BOOL  create, testmode, silent;
+RVC  lib_fname:= nullstr,  in_fname:= nullstr,  comp_fname:= nullstr;
+
+PROC  reset = VOID:
+BEGIN
+   create:= testmode:= silent:= FALSE;
+   lib_fname:= in_fname:= comp_fname:= nullstr
+END;
+
+PROC  check_arg = (STR  arg,  PROC STR  next) BOOL: { OK }
+   IF arg = "-c"
+   THEN  create:= filename_arg(next, "Library", library_type, lib_fname, FALSE)
+   ELIF arg = "-t" THEN  testmode:= TRUE
+   ELIF arg = "-s" THEN  silent:= TRUE
+   ELIF arg = "-i"
+   THEN  filename_arg(next, "Input", infile_type, in_fname, TRUE)
+   ELIF arg = "-compile"
+   THEN  silent:= TRUE;
+         filename_arg(next, "Compiler input", source_type, comp_fname, TRUE)
+   ELIF UPB arg >= 1  ANDTH  arg[1] = "-"
+   THEN  put(err, ("Unexpected option """, arg, """", newline));  FALSE
+   ELIF UPB lib_fname > 0
+   THEN  put(err, ("Extra argument """, arg, """", newline));  FALSE
+   ELSE  filename_arg(arg, "Library", library_type, lib_fname, TRUE)
+FI;
+
+
+PROC  no_more = (BOOL  ok) BOOL: { OK }
+   IF ok  ANDTH  UPB lib_fname > 0
+   THEN  TRUE { arguments successfully parsed }
+   ELSE  put(screen, ( newline, "   <file> = ELLA library",
+                       newline, "-c <file> = create new ELLA library",
+                       newline, "-i <file> = start reading input commands "
+                                     "from <file>", lines(2) ));
+         FALSE
+   FI;
+
+
+parse_arguments( "Give ELLA library file name ([-i <file>] [-c] <file>): ",
+                 reset, check_arg, no_more );
+
+print_title(silent);
+set_testmode(testmode);
+IF NOT silent THEN  banner("ELLA Library")  FI;  { Must match libcommands }
+
+{ Initialise library }
+
+IF create THEN  create_library(lib_fname, global_msg)
+          ELSE  open_library(lib_fname, null updater, global_msg)
+FI;
+
+{ Batch compile }
+
+IF UPB comp_fname > 0
+THEN  compile(comp_fname, FALSE, global_msg);
+      finish_library(global_msg);
+      exit(0)
+FI;
+
+{ Initialise and set up ELLA commands }
+
+REF COMPOUND  outer_command = initialise_library;
+
+{ Set up input if required }
+
+IF UPB in_fname > 0 THEN  io_input(in_fname, global_msg)  FI;
+
+{ Assemble global commands }
+
+COMMANDVEC  lib_globals = globals OF outer_command;
+COMMANDVEC  globals:= make_globalcommands( ellasysdir, source_type,
+                                           print_issue, REF COMMANDENV: env )
+                      ADD  make_diagnostics;
+
+{ The library global commands (lib_globals) are nowto be local to the library }
+
+globals OF outer_command:= globals;
+locals OF outer_command ADDAB lib_globals;
+globals ADDAB lib_globals;
+
+{ Make globals available to diagnostic command contexts }
+
+add_globals_to_compounds(globals, globals);
+
+{ Assemble other local commands }
+
+locals OF outer_command  ADDAB   make_compcommands  ADD
+   make_graphics_commands  ADD
+   make_textcommands  ADD  make_simcommands(globals);
+
+{ Initialise command environment }
+
+env:= initialise_commands( report_error, set_default_msg, global_msg,
+                           call_command, make_kernel_readers, outer_command,
+                           no_parameters );
+
+interpret_commands(env);
+
+put(screen, (facility, " finished", newline))
+
+END  FINISH
+

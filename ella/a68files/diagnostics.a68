@@ -1,0 +1,214 @@
+DECS  diagnostics  CONTEXT VOID  USE  putstrings,  messageproc,
+      osinterface,  basics,  libmodes,  libinterface,  attrdecls,
+      ptcomp,  ptkeepsake,  ptassem,  lowptil,  ioprocs,  assclosure,  assmodes,
+      closureprocs, commandsyntax,  commandreader,  command,  kernelreader:
+
+{ " Id: diagnostics.sta,v 1.1 91/10/14 14:26:36 edcad Exp $" }
+configinfo A68CONFIG "$Id: diagnostics.a68,v 34.3 1995/03/29 13:03:24 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1985
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+17:12:85  DIAGNOSE  formed from PTPROCS and debugging commands extracted
+             from IOPROCS and ELLA - designed to isolate and group them  DCT.
+             Relies on USE for output, library commands and lib name.
+26:02:86  Presentation of "Filename" in messages rationalised (no
+             space) for Release 2 Bug 011.
+06:05:86  Access to undocumented commands rationalised (Bug 87)
+22:05:86  privateoff command made private
+24:06:86  renamed from DIAGNOSIS to DIAGNOSE for lifespan
+09:09:86  Merged with FLEX - privateontest re-introduced *8 only
+16:10:86  Updated for new osinterface  DCT
+09:02:89  CR 642. Updated to new kernel. EVW
+03:08:89  Procedure to add globals to inner compounds added.  DCT
+31:10:89  CR 636. Ptadam replaced by ptkeepsake. JIT
+19:01:90  Command DEBUGREADER added.  DCT
+17:07:90  Declaration attributes used to read FN body. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+29:11:90  SETTESTMODE added.  DCT
+11:02:91  Command ptil uses repeated calls of ptfnil. JIT
+22:02:91  Updated for KEEPSAKE interface changes.  DCT
+03:03:93  Updated for OSIF - Level 1 - NB: testingin... now unprotected.  DCT
+29:06:93  General diagnostic commands -> globalcommands - PTs left.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.018 
+26:08:94  33.002  DJS   SepTrans  Separate off transform environment. move
+                                  ptnewmodes, ptfnnewmodes and ptspecs to this
+                                  module 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC ptnewmodes = (CREGION cr, MESSAGEPROC msg) VOID:
+BEGIN
+   CLOSURE closure := context_closure(cr, TRUE, msg);
+   closure := get_allimports( closure, msg);
+   pt_closure(closure, 0)
+END;
+
+PROC ptfnnewmodes = (REF CONTXT ct, ID name, MESSAGEPROC msg) VOID:
+(
+   PROC print = (VECTOR [] OUTMODE param) VOID:
+      (flt_if_interrupted(msg); put(out, param));
+
+   IF check_text(ct, msg)
+   THEN  OUTER ass_res := declaration_spec(ct, name, TRUE, msg);
+         add_import(ass_res, msg);
+         pt_outer(ass_res, 0);
+         IF sort OF ass_res = outerfn THEN print(("End of FN", newline)) FI;
+         print((resetindent, newline))
+   FI
+);
+
+
+PROC ptspecs = (CREGION cr, MESSAGEPROC msg) VOID:
+BEGIN
+   CLOSURE closure = context_closure(cr, FALSE, msg);
+   pt_closure(closure, 0)
+END;
+
+
+PROC  make_diagnostics = COMMANDVEC:   {{{{  PT Programmes  }}}}
+   MAKECOMMANDS
+      make_group
+         ( "PT", nullstr, secret private access,
+           BEGIN
+
+               HEAP SIMPLE:=
+               ( MAKERVC "COMP", nullstr, filename_syntax,
+                 secret private access, continue,
+                 MAKERVC "Compiler printer for a file of ELLA text.",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 ( RVC name =
+                      filename OF get_filename(names[1], source_type, msg);
+                   FILE  comp_file = open_file(name, read_access, msg);
+                   ptcomp(comp_file, msg)
+                 )
+               ) ,
+
+
+               HEAP SIMPLE:=
+               ( MAKERVC "IL", nullstr, no parameters, secret private access,
+                 continue,
+                 MAKERVC "Prints out the IL of the current ELLA context",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 ( REF CONTXT ct = get_context(context OF currentct OF library);
+                   REF VECTOR [] DECL  decls = get_decls(ct, msg);
+                   REF DECLATTRIBUTES bodyset :=
+                                        get_declattribute(ct, body_key, msg);
+                   FOR i TO UPB decls
+                   DO ptfnil( ct, il OF decls[i], (data OF bodyset)[i], msg )
+                   OD
+                   {lowptil(ct, msg)}
+                 )
+               ) ,
+
+               HEAP SIMPLE:=
+               ( MAKERVC "FNIL", nullstr, star(declname_syntax),
+                 secret private access, continue,
+                 MAKERVC "Prints out the IL for <name>* in the current context",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 ( REF CONTXT ct = get_context(context OF currentct OF library);
+                   FORALL name IN names
+                   DO  INT  declno =
+                          check_decl(ct, get_declname(name, msg), msg);
+                       REF VECTOR [] DECL  decls = get_decls(ct, msg);
+                       REF DECLATTRIBUTES bodyset :=
+                           get_declattribute(ct, body_key, msg);
+                       ptfnil( ct, il OF decls[declno],
+                               (data OF bodyset)[declno], msg )
+                   OD
+                 )
+               ) ,
+
+               HEAP SIMPLE:=
+               ( MAKERVC "ILSIZE", nullstr, no parameters,
+                 secret private access, continue,
+                 MAKERVC "size of intermediate language in current context",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 ( REF CONTXT ct = get_context(context OF currentct OF library);
+                   ptsize(ct, msg)
+                 )
+               ) ,
+
+
+               HEAP SIMPLE:=
+
+               ( MAKERVC "KEEPSAKE", nullstr, no parameters,
+                 secret private access, continue,
+                 MAKERVC"Prints out the KEEPSAKE structure of the ELLA library",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                    ptkeepsake(database OF discfile, msg)
+               ) ,
+
+
+               HEAP SIMPLE:=
+               ( MAKERVC "ASSEM", nullstr, no parameters, secret private access,
+                 continue,
+                 MAKERVC"Prints out the assembling of the current ELLA context",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 (  CREGION cr = check_selected(currentct OF library, msg);
+                    save_library(msg);
+                    ptnewmodes(cr, msg)
+                 )
+               ),                                     {{ From: ptassem }}
+
+               HEAP SIMPLE:=
+               ( MAKERVC "SPECS", nullstr, no parameters, secret private access,
+                 continue,
+                 MAKERVC "Prints out the specs of the current ELLA context",
+                 (VALUES names, MESSAGEPROC msg) VOID:
+                 (  CREGION cr = check_selected(currentct OF library, msg);
+                    save_library(msg);
+                    ptspecs(cr, msg)
+                 )
+               ),                                     {{ From: ptassem }}
+
+               HEAP SIMPLE:=
+             ( MAKERVC "FNASSEM", nullstr, star(name_syntax),
+               secret private access, continue,
+               MAKERVC "Prints out the assembler mode for <name>*",
+               (VALUES names, MESSAGEPROC msg) VOID:
+               (  REF CONTXT ct = get_context(context OF currentct OF library);
+                  save_library(msg);
+                  FORALL nm IN names
+                  DO  ID name = get_fnname(nm, msg);
+                      ptfnnewmodes(ct, name, msg)
+                  OD
+               )
+             )                                       {{ From: ptassem }}
+
+          END
+        ) {{ of PT commands }}
+
+
+KEEP  make_diagnostics
+FINISH

@@ -1,0 +1,1944 @@
+DECS  asscommands  CONTEXT VOID  USE  putstrings, messageproc, options,
+      testmode,  osinterface,  basics,  ioprocs,  ptassem, assmodes, variables, 
+      commandsyntax,  command,  kernelreader,  closureprocs,  transformprocs, 
+      import,  macro,  fntype,  sequence,   timescale,  joins,  portname,  
+      brackets_transform,  names,  multimakes,  multilets,  reform,  macparams,
+      elseof, range, dinst, attribute, alias, local, associated, cquery, delay,
+      flatten_unit, tstr_trow,
+      openinterface, assdiagnostics,  lets_transform,  kexpand,  simple_layout :
+
+configinfo A68CONFIG "$Id: asscommands.a68,v 34.4 1995/03/29 13:02:49 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+   *K  Compile KERNEL ELLA only      [ was: *S  Use of Simulator modules ]
+
+15:03:88  Pttransform created
+21:08:88  Consequential change for change to COMPOUND.  EVW
+27:10:88  Simulator expansion transformation added.  PAR.
+16:03:88  Correction to simulator transform case.  PAR.
+04:04:89  Correction to that correction!  PAR.
+14:04:89  Pttransform renamed assemble, command structure altered. EVW
+11:12:89  Updated to Kernel. EVW
+02:01:90  Timescale transformation added.  EVW
+29:01:90  Changes for probes, including adding PRINTSTATUS. EVW
+28:06:90  LETOPTIONS changed, UNDO added.  DCT
+06:07:90  Module extended - procedures to help add transforms added.  DCT
+12:07:90  "external" added.  DCT
+17:07:90  LIBMODES and ASSCLOSURE added to USE list. EVW
+08:11:90  Modifications to assembler dump file format.  DJS
+19:11:90  Declaration attributes merged onto update 26. JIT
+28:11:90  Output of filenames suppressed in testmode.  DJS
+19:12:90  General purpose GATEMAP transforms integrated, assmodes dump file
+             interface changed. DCT
+10:01:90  R6B5:  output format for external wrong.  SIMPLELAYOUT added.  DCT
+11:01:91  can_read_file replaced by find_file.  DCT
+18:01:91  "All" needs fntype option 1.  DCT
+29:01:91  *S -> %K to avoid class with "compile for SUN".  No UNIX gc.  DCT
+22:02:91  Updated for KEEPSAKE changes and for put/get_buffer on UNIX.  DCT
+08:04:91  Call of get_allimports now needed after call of get_allbodies. JIT
+19:04:91  R6B32. Last char < space should not be stripped from lines in
+                    packed mode.  DJS
+20:06:91  R6B48:  Sun 3 compiler error - ptassem rewritten.  EVW
+01:07:91  <CTRL-C> trap added to layout routines.  DCT
+22:10:91  New closure + idstable.  History state wrong after read.  DCT
+23:10:91  Previous closure replaced by a stack.  DCT
+24:12:91  Portname transform added. EVW
+03:03:92  Attribute Declarations added. EVW
+06:04:92  CLEARTPROCS added for diagnostics.  DCT
+10:06:92  Use testmode_seconds to output transformation times.  DJS
+13:07:92  R6B121 Add test of function outputs. Test 7.  DJS
+17:08:92  Remove test 6 and make a separate command, test 7 then
+             becomes test 6.  DJS
+02:11:92  Added "printclosure".  DCT
+04:02:93  Update to new spec for layout.  DJS
+08:02:93  Merged assembling of specs and bodies. EVW
+09:02:93  Probe information dumped in .ELA file. EVW
+26:02:93  Updated to OSIF - Level 1.  Simulator removed.  DCT
+16:06:93  Modified output to cope with VMS record differences.  DCT
+28:06:93  variables added, external and error_trap removed.  DCT
+16:08:93  Last line lost reading from the dump file.  DCT
+23:08:93  Changes to commands for Public Domain. EVW
+25:08:93  Add printclosure and printfullclosure. EVW
+26:10:93  Added banners to calls of external commands.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.045 
+26:08:94  33.001  DJS   SepTrans  Move from ELLA to transform, adjust
+                                  make_ass_commands etc to work with new module
+                                  transtest. 
+22:03:95  33.002  DJS   Release   Introduce alias, local, associated, cquery,
+                                  delay, flatten_unit and tstr_trow etc.
+22:03:95  33.003  ELLA  Release   Change ELLAVIF to ELLAVHDL
+29:03:95  34.004  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{   *K  Compile KERNEL ELLA only      [ was: *S  Use of Simulator modules ]
+}
+
+STR  environment = "ELLA Transformer";
+
+{ Global variables &c }
+
+BOOL assembled := FALSE;
+CLOSURE assclosure := NIL;
+PROC( ASSEMWRITER, MESSAGEPROC )VOID write_closureseeds :=
+    ( ASSEMWRITER w, MESSAGEPROC m )VOID: SKIP;
+PROC VOID zero_ctnos := VOID: SKIP;
+PROC (CLOSURE, MESSAGEPROC ) BOOL check_sim_closure :=
+ (CLOSURE assclosure, MESSAGEPROC msg)BOOL: SKIP;
+VECTOR[ 15 ]CHAR lbn := "default_library",
+                 ctn := "default_context";
+RVC library_name := lbn,
+    context_name := ctn;
+RVC assprompt := NIL;
+
+CLOSURE null_closure = NIL;
+
+STR  trace_var = "trace",  sim_var = "ELLASIM",  { must match simcommands }
+     external_var = "ELLATRANSFORM";
+BOOL  gcmode:= FALSE,  show_options:= FALSE;
+
+{ The closure STACK holds the earlier states of the closure whereas HISTORY
+  records the changes made to the closure
+}
+
+MODE  STACK = STRUCT (CLOSURE  closure,  REF STACK  rest);
+REF STACK  stackend = NIL;
+INT  max_stack_size:= 5;
+REF STACK  stack:= stackend;
+
+MODE  OUTERNAME = STRUCT (RVC  name,  INT  n),
+      HISTORY = STRUCT ( INT  count,  RVC  name,
+                         INT  sort,      { affect on modes tree }
+                              cpu_time,  { centi-Seconds }
+                              status,    { whether undone }
+                              type,      { used to generate title }
+                         REF VECTOR [] INT  options,
+                         REF VECTOR [] OUTERNAME  fns, REF HISTORY  rest );
+INT  nochange = 0,  normal = 1,  overwrites = 2,  corrupts = 3,
+     original = 0,  undone = 1,  cancelled = 2,
+     transtype = 1,  readtype = 2,  externtype = 3,  ignoretype = 4;
+BOOL  no_outer = FALSE,  have_outer = TRUE;
+LOC VECTOR [0] INT  nulloptions;
+LOC VECTOR [0] OUTERNAME  nullouterfns;
+VECTOR [] STR  no_options = LOC VECTOR [0] STR;
+INT  history_count:= 0;
+HISTORY  endhistory:= ( history_count, HEAP VECTOR [0] CHAR, normal, 0,
+                        original, ignoretype, nulloptions, nullouterfns, NIL );
+REF HISTORY  history:= endhistory;
+REF VECTOR [] RVC  title_str:= HEAP VECTOR [0] RVC;
+
+PROC  collectgarbage = VOID:
+   IF gcmode
+   THEN  put(screen, (time_str, "garbage collecting...", newline));
+         garbage_collect
+   FI;
+
+
+{ Procedures to show a history of the transformations performed }
+
+PROC  show_latest = (REF HISTORY  transform) RVC:
+   IF status OF transform = undone
+   THEN  oneline(( intwidth(count OF transform, 2), " ", name OF transform,
+                   " has been undone" ))
+   ELSE  RVC  options:= nullstr;
+         IF UPB options OF transform > 0
+         THEN  options:= MAKERVC "  options:";
+               FORALL opt IN options OF transform
+               DO  options:= oneline((options, intwidth(opt, 3)))  OD
+         FI;
+         IF UPB fns OF transform > 0
+         THEN  FORALL fn IN fns OF transform
+               DO  IF n OF fn > 1
+                   THEN  options:= oneline(( options, "  ", name OF fn,
+                                             " (", n OF fn, ")" ))
+                   ELSE  options:= oneline((options, "  ", name OF fn))
+                   FI
+               OD
+         FI;
+         oneline(( intwidth(count OF transform, 2), " ", name OF transform,
+                   CASE sort OF transform + 1 IN
+                      " (No change made)  ",
+                      "  ",
+                      " (Closure overwritten)  ",
+                      " (Closure corrupted)  "
+                   ESAC,
+                   IF cpu_time OF transform < 0
+                   THEN  STR ("?")
+                   ELSE  intchars(testmode_seconds(cpu_time OF transform))
+                   FI, " cS", options ))
+   FI;
+
+PROC  tlist = (REF HISTORY  transform) RVC:
+BEGIN   { Generate extra title line for write operations }
+   RVC  ans:= nullstr;
+   REF HISTORY  ptr:= transform;
+   WHILE (ptr ISNT endhistory)  ANDTH (type OF ptr /= readtype)
+   DO  IF (type OF ptr /= ignoretype)  ANDTH  (sort OF ptr /= nochange)
+       THEN  STR  name = IF type OF ptr = externtype
+                         THEN  "external..."
+                         ELSE  name OF ptr
+                         FI;
+             INT  o = UPB options OF ptr,  f = UPB fns OF ptr;
+             IF o = 0  ANDTH  f = 0
+             THEN  ans:= concat((" ", name, ans))
+             ELSE  ans:= concat(( " ", name, " ",
+                                  IF o > 0 THEN "*" ELSE "" FI,
+                                  IF f > 0 THEN "%" ELSE "" FI, ans ))
+             FI;
+             IF type OF ptr = externtype
+             THEN  ptr:= endhistory
+             ELSE  ptr:= rest OF ptr
+             FI
+       ELSE  ptr:= rest OF ptr
+       FI
+   OD;
+   ans
+END;
+
+PROC  pth = (REF HISTORY  transform) VOID:
+   IF transform IS endhistory
+   THEN  newline(out)
+   ELSE  pth(rest OF transform);
+         put(out, (show_latest(transform), newline))
+   FI;
+
+PROC print_transform_history = (REF HISTORY  transform) VOID:
+BEGIN
+   pth(transform);
+   REF STACK  ptr:= stack;
+   INT  n:= 0;
+   WHILE ptr ISNT stackend DO  ptr:= rest OF ptr;  n PLUSAB 1  OD;
+   put(out, (intwidth(n, 2), " previous closures remembered", newline))
+END;
+
+
+{ Procedures for processing declaration names (Used by LAYOUT and DIAGNOSE) }
+
+MODE IDNO = STRUCT (ID id, INT contextno);
+
+PROC outer_idno = (OUTER o) IDNO:
+  CASE sort OF o IN
+  {outerattr}
+    ( REF ATTRDEC adec = (attrs OF environ OF o)[1];
+      IF adec ISNT nilattrdec
+      THEN (attrname OF adec, contextno OF usage OF adec)
+      ELSE (nullid, 0)
+      FI
+    ),
+  {outerint}
+    ( REF INTDEC idec = (ints OF environ OF o)[1];
+      IF idec ISNT nilintdec
+      THEN (intname OF idec, contextno OF usage OF idec)
+      ELSE (nullid, 0)
+      FI
+    ),
+  {outertype}
+    ( REF TYPEDEC tdec = (types OF environ OF o)[1];
+      IF tdec ISNT niltypedec
+      THEN (typename OF tdec, contextno OF usage OF tdec)
+      ELSE (nullid, 0)
+      FI
+    ),
+  {outerconst}
+    ( REF CONSTDEC cdec = (consts OF environ OF o)[1];
+      IF cdec ISNT nilconstdec
+      THEN (constname OF cdec, contextno OF usage OF cdec)
+      ELSE (nullid, 0)
+      FI
+    ),
+  {outerfn}
+    ( REF FNDEC fdec = (fns OF environ OF o)[1];
+      IF fdec ISNT nilfndec
+      THEN (fnname OF fdec, contextno OF usage OF fdec)
+      ELSE (nullid, 0)
+      FI
+    )
+  OUT SKIP
+  ESAC;
+
+PROC find_outers = (VALUES names, CLOSURE closure, MESSAGEPROC msg ) REF OUTERS:
+BEGIN
+   INT ntop = UPB names;
+   IF ntop > 0 ANDTH is_declname(names[1])
+   THEN  REF OUTERS list := nilouters;
+         REF REF OUTERS ptr := list;
+         INT number := 0;
+         INT index := 0;
+         WHILE (index < ntop) ANDTH number = 0
+         DO  ID id = get_declname(names[index PLUSAB 1], msg);
+             number := IF ntop > index ANDTH is_int(names[index + 1])
+                       THEN get_int(names[index PLUSAB 1], msg)
+                       ELSE 1
+                       FI;
+             OUTER outer;
+             REF OUTERS os := outers OF closure;
+             WHILE (number /= 0) ANDTH (os ISNT nilouters)
+             DO ID decname = id OF outer_idno(outer OF os);
+                IF decname = id
+                THEN  IF number = 1 THEN outer := outer OF os FI;
+                      number MINUSAB 1
+                FI;
+                os := rest OF os
+             OD;
+             IF number > 0
+             THEN msg(user, (id + " not found")); SKIP
+             ELSE REF REF OUTERS (ptr) := HEAP OUTERS := (outer, nilouters);
+                  ptr := rest OF ptr
+             FI
+         OD;
+         list
+   ELSE outers OF closure
+   FI
+END;
+
+
+PROC get_options = (VECSTR  options_description,
+                    VALUES  params,
+                    MESSAGEPROC  msg )
+                   STRUCT( OPTIONS options, REF VECTOR[]INT options_record ):
+BEGIN
+   INT  index:= 0;
+   FORALL param IN params WHILE is_int(param)
+   DO  index PLUSAB 1  OD;
+   HEAP VECTOR [index] INT  options_record;
+   OPTIONS  options:= null_options;
+
+   INT  max = UPB options_description;
+   FORALL param IN params[:index],  record IN options_record
+   DO  INT  i = get_int(param, msg);
+       IF i <= 0  OREL  i > max
+       THEN  msg(user, oneline(("You must choose options between 1 and ", max)))
+       ELIF options INCLUDES MAKEOPTIONS i
+       THEN  msg(user, oneline(("Option ", i, " has already been specified")))
+       ELSE  options PLUSAB MAKEOPTIONS (record:= i);
+             IF show_options
+             THEN  put(screen, (options_description[i], newline))
+             FI
+       FI
+   OD;
+   ( options, options_record )
+END;
+
+PROC ptclosure = ( BOOL diagnose, VALUES names, CLOSURE closure,
+                   PROC ( OUTER,
+                          PROC (RVC, MESSAGEPROC) VOID,
+                          INT,
+                          INDICATORS,
+                          OPTIONS,
+                          MESSAGEPROC
+                        ) VOID  layout,
+                   MESSAGEPROC msg ) VOID:
+BEGIN
+   PROC put_layout = (RVC  line, MESSAGEPROC msg ) VOID:
+   BEGIN
+      put( out, (line, newline));
+      flt_if_interrupted(msg)
+   END;
+
+   PROC print_layout = (OUTER outerdec, OPTIONS  options, MESSAGEPROC msg) VOID:
+        layout(outerdec, put_layout, current_width, no_indicators,
+               options, msg );
+
+   { Get any specified options }
+   VECSTR  options_description = IF diagnose THEN no_options
+                                             ELSE write_ella_options
+                                 FI;
+   STRUCT( OPTIONS options,
+           REF VECTOR[]INT options_record ) parse_options =
+                            get_options( options_description, names, msg );
+   OPTIONS  options = options OF parse_options;
+   REF VECTOR[]INT options_record = options_record OF parse_options;
+   INT  index := UPB options_record;
+   REF OUTERS os := find_outers(names[ index + 1 : ], closure, msg);
+   newline(out);
+   IF diagnose
+   THEN WHILE os ISNT nilouters
+        DO pt_outer(outer OF os, 0);
+           os := rest OF os
+        OD
+   ELSE WHILE os ISNT nilouters
+        DO  print_layout(outer OF os, options, msg);
+            os := rest OF os
+        OD
+   FI
+END;
+
+COMMENT
+PROC ptstatus = (VALUES names, CLOSURE closure, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC outerstatus = (INT ctno, RVC  id) VOID:
+   (  INT status = decl_closure_seed(ctno, id, msg);
+      put(out, ("status of ",id, " = "));
+      CASE status+1 IN
+      {notfound}    put(out, ("not found", newline)),
+      {not}         put(out, ("not in closure", newline)),
+      {first}       put(out, ("sim", newline)),
+      {subsequent}  put(out, ("probe", newline)),
+      {firstandsub} put(out, ("sim and probe", newline))
+      ESAC
+   );
+
+   REF OUTERS os := find_outers(names, closure, msg);
+   WHILE os ISNT nilouters
+   DO IDNO in = outer_idno(outer OF os);
+      outerstatus(contextno OF in, id OF in);
+      os := rest OF os
+   OD
+END;
+COMMENT
+
+PROC  print_closure = ( VALUES  params,  CLOSURE  closure, BOOL full,
+                        MESSAGEPROC  msg) VOID:
+BEGIN
+   IF full
+   THEN
+     put(out, ( newline, "Outer declarations in the current closure", newline,
+              "   cl = closure number, ct = context number, ver = spec / body "
+              "library versions,", newline, "  env = number of ATTR, INT, "
+              "TYPE, CONST and FN/MAC entries in the environment", lines(2) ))
+   FI;
+   REF OUTERS  outers:= outers OF closure;
+   WHILE outers ISNT nilouters
+   DO  REF ENVIRON  env = environ OF outer OF outers;
+       INT  sort = sort OF outer OF outers,
+            closureno = closureno OF outer OF outers;
+       IF env IS nilenviron
+       THEN  put(out, ( "Unset - closure number = ", closureno,
+                        "  sort = ", sort, newline ))
+       ELSE  VECTOR [] INT  sizes = ( UPB attrs OF env,  UPB ints OF env,
+                                      UPB types OF env,  UPB consts OF env,
+                                      UPB fns OF env );
+             PROC  usage = (REF USAGE  u) VOID:
+                IF u IS nilusage
+                THEN  put(out, ("  Nil USAGE", newline))
+                ELSE  IF full
+                      THEN put(out, ( after(27), " cl ", closureno OF u,
+                                      "  ct ", contextno OF u, "  ver ",
+                                      libv_spec OF u, "/", libv_body OF u,
+                                     "  env ", sizes, newline ))
+                      ELSE put(out, ("(", libv_spec OF u, ")", newline))
+                      FI;
+                      IF closureno /= closureno OF u
+                      THEN  put(out, ( "   --- closure number missmatch: ",
+                                       closureno, newline ))
+                      FI
+                FI;
+
+             IF sort < 1  OREL  sort > 5  OREL  sizes[sort] < 1
+             THEN  put(out, ( "Missing - closure number = ", closureno, "  "
+                              "sort = ", sort, "  environ = ", sizes, newline ))
+             ELSE  CASE sort IN
+                      ( REF ATTRDEC  attr = (attrs OF env)[1];
+                        put(out, ("ATTR  ", attrname OF attr));
+                        usage(usage OF attr)
+                      ) ,
+                      ( REF INTDEC  int = (ints OF env)[1];
+                        put(out, ("INT  ", intname OF int));
+                        usage(usage OF int)
+                      ) ,
+                      ( REF TYPEDEC  type = (types OF env)[1];
+                        put(out, ("TYPE  ", typename OF type));
+                        usage(usage OF type)
+                      ) ,
+                      ( REF CONSTDEC  const = (consts OF env)[1];
+                        put(out, ("CONST  ", constname OF const));
+                        usage(usage OF const)
+                      ) ,
+                      ( REF FNDEC  fn = (fns OF env)[1];
+                        put(out, ( IF macro OF fn THEN "MAC  " ELSE "FN  " FI,
+                                   fnname OF fn ));
+                        usage(usage OF fn)
+                      )
+                   ESAC
+             FI
+       FI;
+       outers:= rest OF outers
+   OD
+END;
+
+
+
+{ Procedures used to control the global CLOSURE variable assclosure }
+
+PROC  undo_latest = (REF REF HISTORY  history,  MESSAGEPROC  msg) VOID:
+   IF stack ISNT stackend  { Undo the last change }
+   THEN  REF HISTORY  ptr:= history;
+         WHILE (ptr ISNT endhistory)  ANDTH
+               (sort OF ptr = nochange  OREL  status OF ptr /= original)
+         DO  ptr:= rest OF ptr  OD;
+         IF ptr IS endhistory
+         THEN  msg(user, "Nothing to undo")
+         ELSE  status OF ptr:= cancelled;
+               type OF ptr:= ignoretype;
+               history:= HEAP HISTORY:=
+                   ( count OF ptr, name OF ptr, normal { NOT nochange }, 0,
+                     undone, ignoretype, nulloptions, nullouterfns, history );
+               assclosure:= closure OF stack;
+               stack:= rest OF stack;
+               collectgarbage;
+               put(screen, (show_latest(history), newline))
+         FI
+   ELSE  msg(user, "Nothing to undo")
+   FI;
+
+
+PROC  set_stack_max = (INT  max) VOID:
+BEGIN
+   INT  n:= 0;
+   REF REF STACK  ptr:= stack;
+   WHILE ptr ISNT stackend
+   DO  ptr:= rest OF ptr;  n PLUSAB 1  OD;
+   IF n > max
+   THEN  ptr:= stack;
+         TO max DO  ptr:= rest OF ptr  OD;
+         REF REF STACK (ptr):= stackend;
+         put(screen, ( max, " previous closure",
+                       IF max = 1 THEN  " has"  ELSE  "s have"  FI,
+                       " been retained (", n-max,
+                       IF n-max = 1 THEN " has" ELSE " have" FI,
+                       " been discarded)", newline ));
+         collectgarbage
+   FI
+END;
+
+
+PROC  assign = (CLOSURE  newclosure) VOID:
+BEGIN    { Remember old state of the closure and set new current state }
+   stack:= HEAP STACK:= (assclosure, stack);
+   assclosure:= newclosure;
+   set_stack_max(max_stack_size)
+END;
+
+{ These two procedures define the interface to add further transformations }
+
+PROC  do_transform =
+   ( UNION ( PROC (CLOSURE, MESSAGEPROC) CLOSUREC,
+             PROC (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC ) transform,
+     UNION ( PROC (OUTER, CLOSURE, MESSAGEPROC) OUTERC,
+             PROC (OUTER, CLOSURE, OPTIONS, MESSAGEPROC) OUTERC,
+             BOOL ) transform_outer,
+     INT  sort,  STR  name,  VECSTR  options_description,
+     VALUES  params,  MESSAGEPROC  msg
+   ) VOID:
+BEGIN
+   COMMENT
+     Given a transform procedure of the (logical) form:
+             (CLOSURE  parameter,  MESSAGEPROC  msg) CLOSUREC:
+     or      (OUTER  parameter,  CLOSURE,  MESSAGEPROC  msg) OUTERC:
+
+     INT  sort should be one of the following:
+
+     normal:        The transform delivers a new closure without altering
+                    the closure supplied as its parameter (ie it is functional).
+                    The boolean c OF CLOSUREC should be used to indicate
+                    whether the closure delivered is different to that supplied.
+                    (ie deliver (new_closure, TRUE) or (parameter, FALSE) ).
+
+     nochange:      The transform does not alter the closure supplied nor
+                    delivers a new closure. (The transform should return
+                    (parameter, FALSE) ).
+
+     overwrites:    The transform overwrites its parameter.  Note: because the
+                    transform framework was designed to be used functionally
+                    transformations are allowed to generate shared references.
+                    Therefore, it may be necessary to call the "copy" transform
+                    to prevent unexpected consequences from assignments.
+                    (The transform should deliver (parameter, whether_
+                    actually_changed) ).
+
+     corrupts:      This sort of transform is not encouraged !  In this case
+                    the transform alters the assembler modes for its own
+                    purposes without leaving the modes in a consistant state.
+                    (For example, if TYPEs in the nametypes table no longer
+                    match the signals the describe then use "corrupts").
+                    Further transformations will be banned. (Deliver (parameter,
+                    whether_actually_changed) or (parameter, TRUE) if it is
+                    not known whether any changes have been made).
+
+     STR  name  is used to identify the transformation in a print out of the
+     the history of transformations performed.
+
+     VECSTR  options_description  should describe each of the options your
+     transform provides.  If there are no options use "no_options" for this
+     parameter.
+
+     VALUES  params  and  MESSAGEPROC  msg  are the two parameters supplied
+     by the command interpreter.  The first is used to pass any options
+     specified by the user and the second is used to report errors and other
+     messages from within the transform.
+
+     When a transform is not in standard form (CLOSURE, MESSAGEPROC) CLOSUREC
+     (or (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC when it has options) then
+     it should be wrapped up appropriately.  Particular care should be taken to
+     ensure that the boolean in the result (CLOSUREC) is set TRUE if there is
+     any uncertainty about whether a change has occurred.
+
+     Use "no_outer" if you do not have a procedure for transforming an
+     an individual outer declaration in the closure.
+  COMMENT
+
+   IF NOT assembled
+   THEN  msg(user, "No further transformations are possible")
+   FI;
+
+   { Get any specified options }
+   STRUCT( OPTIONS options,
+           REF VECTOR[]INT options_record ) parse_options =
+                            get_options( options_description, params, msg );
+   OPTIONS  options = options OF parse_options;
+   REF VECTOR[]INT options_record = options_record OF parse_options;
+   INT  index := UPB options_record;
+
+   BOOL  have_names = index < UPB params  ANDTH  is_fnname(params[index + 1]);
+   INT  n_fnnames:= 0;
+   IF have_names
+   THEN  FORALL param IN params[index + 1 :]
+         DO  IF is_fnname(param) THEN  n_fnnames PLUSAB 1  FI  OD
+   FI;
+
+   { If FN names have been supplied, copy the closure first (this will avoid
+     including the copying in the timings) and then find references to the
+     OUTERFN(S) in the new closure.  If a subsequent change occurs, deliver
+     the new closure, otherwise, discard it.
+   }
+
+   HEAP VECTOR [n_fnnames] OUTERNAME  fnnames;
+   CLOSURE  newclosure = IF have_names
+                         THEN  copy_closure(assclosure, msg)
+                         ELSE  null_closure
+                         FI;
+   VECTOR [n_fnnames] REF OUTER new_fns;
+
+   FORALL fnname IN fnnames, new IN new_fns
+   DO  RVC  name = get_fnname(params[index PLUSAB 1], msg);
+       fnname:= ( name, IF index < UPB params  ANDTH  is_int(params[index + 1])
+                        THEN  get_int(params[index PLUSAB 1], msg)
+                        ELSE  1
+                        FI
+                );
+
+       INT number := n OF fnname;
+       OUTER outer;
+       REF OUTERS os := outers OF newclosure;
+       WHILE (number /= 0) ANDTH (os ISNT nilouters)
+       DO  { Scan the outers list (newclosure) to find the nth version of fn }
+           ID decname = id OF outer_idno(outer OF os);
+           IF decname = name
+           THEN  IF number = 1 THEN  new := outer OF os  { Reference FN }  FI;
+                 number MINUSAB 1
+           FI;
+           os := rest OF os
+       OD;
+       IF number = n OF fnname
+       THEN  msg(user, oneline(("FN ", name, " was not found")))
+       ELIF number /= 0
+       THEN  msg(user, oneline(( "Only ", n OF fnname - number,
+                                 " versions of FN ", name, " were found" )))
+       FI
+   OD;
+
+   BOOL  changed:= FALSE;            { Flag to test whether any FNs changed }
+   INT  start = get_cpu_time;
+
+   PROC  tmsg = (MSGNO  msgno,  VECSTR  params) VOID:
+      IF abort_msg(msgno)  OREL  sysfault_msg(msgno)
+      THEN  put(screen, ( "An error occurred in transform ", name, ":", newline,
+                          """", text OF translate_msg(msgno, params), """",
+                          newline, "This might have been caused by applying "
+                          "transformations in the wrong sequence.", newline ));
+            IF sort > normal
+            THEN  put(screen, ( "If you wish to continue you are warned that "
+                                "the closure may be inconsistent.", newline ))
+            FI;
+            RVC  ans = prompt("Do you wish to continue [yes] or crash ? ");
+            IF UPB ans > 0  ANDTH  (ans[1] = "y"  OREL  ans[1] = "Y")
+            THEN  msg(user, "transform aborted")
+            ELSE  put(screen, ("Transform aborted", newline));
+                  msg(msgno, params)
+            FI
+      ELIF cli_msg(msgno)  ANDTH  sort > normal
+      THEN  put(screen, ( "Transform ", name, " aborted - the closure may be "
+                          "in an inconsistent state", newline ));
+            msg(msgno, params)
+      ELSE  msg(msgno, params)
+      FI;
+
+
+   CLOSUREC  new:= (null_closure, FALSE);
+
+   new:= IF have_names
+         THEN
+            FORALL new IN new_fns
+            DO  OUTERC  newfn =
+                   CASE transform_outer IN
+                      (PROC (OUTER, CLOSURE, MESSAGEPROC) OUTERC  o1)
+                          o1(new, assclosure, tmsg),
+                      (PROC ( OUTER, CLOSURE, OPTIONS, MESSAGEPROC) OUTERC  o2)
+                          o2(new, assclosure, options, tmsg)
+                   OUT  (msg( system, "No OUTER procedure"); SKIP)
+                   ESAC;
+                IF c OF newfn
+                THEN  changed:= TRUE;
+                      REF OUTER (new) := o OF newfn
+                FI
+            OD;
+            (newclosure, changed)
+         ELSE
+            CASE transform IN
+               (PROC (CLOSURE, MESSAGEPROC) CLOSUREC  t1)
+                   t1(assclosure, tmsg) ,
+               (PROC (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC  t2)
+                   t2(assclosure, options, tmsg)
+            ESAC
+         FI;
+
+   INT  finish = get_cpu_time;
+   INT  state = IF c OF new THEN  sort  ELSE  nochange  FI;
+
+   history:= HEAP HISTORY:=
+      ( history_count PLUSAB 1, MAKERVC  name, state, finish - start,
+        original, transtype, options_record, fnnames, history );
+
+   IF state /= nochange THEN  assign(cl OF new)  FI;
+
+   put(screen, show_latest(history));
+
+   IF state = corrupts
+   THEN  assembled:= FALSE;
+         put(screen, ( " - no further transformations may be performed",
+                       newline ));
+         set_stack_max(0)
+   ELIF state = overwrites
+   THEN  put(screen, (" - change can not be undone", newline));
+         set_stack_max(0)
+   ELSE  newline(screen)
+   FI
+END;
+
+PROC make_helptext = ( VECSTR options_description,
+                       STR nametype_str, optype_str,
+                       BOOL have_outer_proc,
+                       STR  help_msg )REF VECTOR [] RVC:
+BEGIN
+  INT  n_lines = UPB options_description + 1 +
+                  IF have_outer_proc THEN  1  ELSE  0  FI;
+   HEAP VECTOR [n_lines] RVC  help;
+   BOOL have_options = UPB options_description > 0;
+   help[1]:= IF NOT have_options
+             THEN  oneline((help_msg, "."))
+             ELIF have_outer_proc
+             THEN  oneline(( help_msg, " - the options available (specified "
+                             "by the first [", int_str, "]* parameter) are:" ))
+             ELSE  oneline((help_msg, " - the options available are:"))
+             FI;
+   INT  index:= 1;
+   FORALL descript IN options_description
+   DO  index PLUSAB 1;
+       help[index]:= oneline((intwidth(index - 1, 2), ":  ", descript))
+   OD;
+   IF have_outer_proc
+   THEN  help[index + 1]:=
+            oneline(( "The ",
+                      IF have_options THEN "remaining " ELSE " " FI,
+                      "[", nametype_str, " [", int_str, "]]* "
+                      "parameters may be used to specify particular outer "
+                      "level functions to be ", optype_str,
+                      ".  Use the ", int_str,
+                      " parameter to distinguish between functions having the "
+                      "same name.  If no function names are specified, the "
+                      "whole closure will be ", optype_str, "." ))
+   FI;
+   help
+END;
+
+PROC  make_command = ( STR  name,  abreviation,  VECSTR  options_description,
+                       BOOL  have_outer_proc,  STR  help_msg,
+                       PROC (VALUES, MESSAGEPROC) VOID  action ) REF SIMPLE:
+BEGIN
+   COMMENT
+      Procedure to help build a command.  This provides a simplified interface
+      to the command system.  Use one of the existing transformation commands
+      as a template.
+
+      STR  name       The name of the command - note, this will appear in
+                      lower case in the help listing.  "name" MUST BE SUPPLIED
+                      IN UPPER CASE.
+
+           abreviation    As name - use "" (or nullstr) if not required.
+
+      VECTOR [] STR  options_description
+                      Used to generate the help message and to show the user
+                      which options have been selected - one STR to describe
+                      each option - use "no_options" when there are none.
+
+      have_outer_proc  Supply "have_outer" if you have a transform procedure
+                      that will operate on single OUTERs or "no_outer" if
+                      not.  This parameter is used to determine the command
+                      syntax.
+
+      STR  help_msg   Displayed by the command "help name".  This string may
+                      be any length - newlines will be generated automatically.
+                      If a particular layout is required then the command must
+                      be introduced by hand (create a REF SIMPLE on the HEAP).
+                      A punctuation mark will be added to the end of the string.
+
+      action          The transformation.  Use "do_transform" to build an action
+                      procedure from your transform procedure - eg:
+
+                      when the transform conforms to the standard interface
+                      action should be similar to:
+
+                      (VALUES  names,  MESSAGEPROC  msg) VOID:
+                         do_transform( brackets_transform, no_outer, normal,
+                                       "bracket", no_options, params, msg )
+
+                      (VALUES  params,  MESSAGEPROC  msg) VOID:
+                         do_transform( transform_joins, no_outer, normal,
+                                       "join", joins_options, params, msg )
+
+                      when there are additional parameters or a different result
+                      then the transform should be wrapped up thus:
+
+                      (VALUES  names,  MESSAGEPROC  msg) VOID:
+                         do_transform( (CLOSURE  c,  MESSAGEPROC  msg) CLOSUREC:
+                                          expand(c, NIL, mactrace, msg),
+                                       no_outer, normal, "macro",
+                                       no_options, params, msg );
+
+                      For further information about the action procedure see
+                      the comment relating to do_transform
+   COMMENT
+
+   COMMANDSYNTAX  options_syntax = star(opt(int_syntax)),
+                  fnnames_syntax = star( opt(prod(( fnname_syntax,
+                                                    opt(int_syntax) ))) ),
+                  syntax = IF UPB options_description = 0
+                           THEN  IF have_outer_proc
+                                 THEN  fnnames_syntax
+                                 ELSE  no parameters
+                                 FI
+                           ELIF have_outer_proc
+                           THEN  prod((options_syntax, fnnames_syntax))
+                           ELSE  options_syntax
+                           FI;
+   REF VECTOR [] RVC  help = make_helptext( options_description,
+                                            fnname_str, "transformed",
+                                            have_outer_proc,
+                                            help_msg );
+
+   HEAP SIMPLE:= ( MAKERVC name,  MAKERVC abreviation, syntax,
+                   normal access, continue, help, action )
+END;
+
+PROC make_option_values = (VECTOR [] INT optvals )VALUES:
+BEGIN
+INT top = UPB optvals;
+REF VECTOR [] VALUE values = HEAP VECTOR[ top ]VALUE;
+INT int_no = CASE int_syntax IN(REF INT i ) i ESAC;
+
+   FORALL i IN optvals, v IN values
+   DO
+      v := ( int_no, MAKERVC intchars( i ))
+   OD;
+   values
+END;
+
+{ These transforms are in the main ELLA product - for the simulator / ELLANET.
+  They are declared here as they are also used together in the ALL command.
+}
+PROC  portname = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_portnames, no_outer, normal, "portname",
+                 no_options, params, msg );
+
+PROC  import = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_imports, no_outer, normal, "import",
+                 no_options, params, msg );
+
+PROC  macro = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( (CLOSURE  c,  MESSAGEPROC  msg) CLOSUREC:
+                     expand(c, NIL, get_var(trace_var) = true_var, msg),
+                 no_outer, normal, "macro", no_options, params, msg );
+
+PROC  sequence = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_sequences, no_outer, normal, "sequence",
+                 no_options, params, msg );
+
+PROC  fntype = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_fntypes, no_outer, normal, "fntype",
+                 fntype_options, params, msg );
+
+PROC  timescale = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_timescale, no_outer, normal, "timescale",
+                 no_options, params, msg );
+
+PROC  join = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "standard and coreella" - options are available 
+     from "join" }
+   do_transform( transform_joins, outerfn_joins, normal, "join",
+                 joins_options, params, msg );
+
+PROC  make = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "standard and coreella" - options are available 
+     from "make" }
+   do_transform( transform_multimakes, outer_multimakes, normal, "make",
+                 multimakes_options, params, msg );
+
+PROC  name = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "lt" - options are available from "name" }
+   do_transform( transform_names, no_outer, normal, "name",
+                 names_options, params, msg );
+
+PROC elseof = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "coreella" transform group }
+   do_transform( transform_elseof, outer_elseof, normal, "elseof",
+                 elseof_options, params, msg );
+
+PROC  range = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "coreella" transform group }
+   do_transform( transform_range, outer_range, normal, "range",
+                 no_options, params, msg );
+
+PROC  dinst = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "core ELLA" transform group }
+   do_transform( transform_dinst, outer_dinst, normal, "dinst",
+                 no_options, params, msg );
+
+PROC multilet = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "core ELLA" transform group }
+   do_transform( transform_multilets, outer_multilets, normal, "let", 
+                 multilets_options, params, msg );
+
+PROC  macparam = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "lt" - options are available from "macparam" }
+   do_transform( transform_macparams, outerfn_macparams, normal, "macparam",
+                 macparams_options, params, msg );
+
+PROC  attribute = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "lt"  }
+   do_transform( transform_attribute, outer_attribute, normal, "attribute",
+                 no_options, params, msg );
+
+PROC  bracket = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   { This proc is called from "lt"  }
+   do_transform( brackets_transform, no_outer, normal, "bracket",
+                 no_options, params, msg );
+
+PROC reform = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_reform, outer_reform, normal, "reform",
+                 reform_options, params, msg );
+
+PROC alias = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_alias, no_outer, normal, "alias",
+                 no_options, params, msg );
+
+PROC associated = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_associated, no_outer, normal, "associated",
+                 no_options, params, msg );
+
+PROC local = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_local, no_outer, normal, "local",
+                 no_options, params, msg );
+
+PROC cquery = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_cquery, no_outer, normal, "cquery",
+                 no_options, params, msg );
+
+PROC delay = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_delay, no_outer, normal, "delay",
+                 no_options, params, msg );
+
+PROC flatten_unit = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_flatten_unit, no_outer, normal, "flatten_unit",
+                 no_options, params, msg );
+
+PROC tstr_trow = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   do_transform( transform_tstr_trow, no_outer, normal, "tstr_trow",
+                 no_options, params, msg );
+
+PROC standard = (VALUES params, MESSAGEPROC msg) VOID:
+   { This proc calls the standard transforms needed for the simulator }
+  ( portname(params, msg);
+    import(params, msg);
+    macro(params, msg);
+    sequence(params, msg);
+    timescale(params, msg);
+    macro(params, msg);
+    make(params, msg);     { Note:  Praxis sim should cope }
+    fntype(params, msg);
+    join(params, msg)
+   );
+
+PROC coreella = (VALUES params, MESSAGEPROC msg) VOID:
+   { This proc calls the transforms needed for Core ELLA }
+  ( portname(params, msg);
+    import(params, msg);
+    macro(params, msg);
+    sequence(params, msg);
+    timescale(params, msg);
+    macro(params, msg);
+    make(make_option_values((1)), msg);
+    fntype(params, msg);
+    join(make_option_values((2)), msg);
+    multilet(params, msg );
+    elseof(params, msg );
+    range(params, msg );
+    dinst(params, msg );
+    macparam(params, msg);
+    attribute(params, msg);
+    name(make_option_values((2)), msg);
+    bracket(params, msg);
+    put( screen, ( newline,
+                   "To generate the text for Core ELLA use printcoreella "
+                   "(pce) which does printtext (pt) with"
+                   " options 1 2 and 3", newline ))
+   );
+
+PROC ellavhdl = (VALUES params, MESSAGEPROC msg) VOID:
+   { This proc calls the transforms needed for ELLA to VHDL translator }
+  ( portname(params, msg);
+    import(params, msg);
+    macro(params, msg);
+    sequence(params, msg);
+    timescale(params, msg);
+    macro(params, msg);
+    make(params, msg);
+    fntype(params, msg);
+    join(make_option_values((1)), msg);
+    multilet(params, msg );
+    reform(params, msg );
+    dinst(params, msg );
+    macparam(params, msg);
+    attribute(params, msg);
+    local(params, msg);
+    associated(params, msg);
+    cquery(params, msg);
+    delay(params, msg);
+    flatten_unit(params, msg);
+    tstr_trow(params, msg);
+    alias(params, msg);
+    name(make_option_values((5)), msg)
+  );
+
+
+
+{ This transform has been extracted from the Praxis simulator for testing }
+
+PROC  simulator = (VALUES  params , MESSAGEPROC msg) VOID:
+   do_transform( (CLOSURE  closure,  MESSAGEPROC  msg) CLOSUREC:
+                 ( REF OUTERS os := outers OF closure;
+                   WHILE os ISNT nilouters
+                   DO  IF sort OF outer OF os = outerfn
+                       THEN  expand to atomic(outer OF os)
+                       FI;
+                       os := rest OF os
+                   OD;
+                   (closure, TRUE { do not know whether changed - must assume })
+                 ),
+                 (OUTER  f,  CLOSURE c, MESSAGEPROC  msg) OUTERC:
+                 ( OUTER fn := f;
+                   IF sort OF fn = outerfn
+                   THEN  expand to atomic(fn)
+                   FI;
+                   (fn, TRUE)
+                 ),
+                 overwrites, "makejoin", no_options, params, msg
+               );
+
+{ These are experimental / test transforms }
+
+VECTOR [] STR assembletest_options =
+ ( "Equality of types between LHS and RHS of LET statement",
+   "Equality of types between LHS and RHS of JOIN statement",
+   "Equality of types between parameters and spec of UMINST/UDINST",
+   "Check that UNAME has correct sort for LHS and RHS of JOIN",
+   "Check that an INSTANCE points to FN in with the correct name",
+   "Check that output type matches output of FNDEC"
+ );
+
+PROC  assembletest = ( CLOSURE  closure,  OPTIONS  options,
+                       MESSAGEPROC  msg ) CLOSUREC:
+BEGIN
+   VECTOR [UPB assembletest_options] BOOL  tests;
+   BOOL  present:= FALSE;
+   FOR i TO UPB tests
+   DO  IF tests[i]:= options INCLUDES MAKEOPTIONS i THEN  present:= TRUE  FI
+   OD;
+   { If no test(s) has been specified do them all }
+   IF NOT present THEN  FORALL t IN tests DO  t:= TRUE  OD  FI;
+   assemble_diagnostics(closure, tests, msg)
+END;
+
+
+PROC  read_assmodes = (STR  fname,  MESSAGEPROC msg) CLOSURE:
+BEGIN
+   INT  size = 512;
+   VECTOR [size] CHAR  buffer;
+   INT  pos:= size, end:= 0;
+   FILE  file = open_file(fname, read_access, msg);
+   STR  filename = testmode_file_name(file);
+
+   PROC  ass_msg = (MSGNO  msgno,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(msgno)
+      THEN  put(screen, ("Closing file ", filename, newline));
+            close_file(file, msg)
+      FI;
+      msg(msgno, params)
+   END;
+
+   PROC get_char = CHAR:
+      IF pos >= end
+      THEN  IOSTATUS  reply = read_buffer(file, buffer, end, ass_msg);
+            IF reply = io_eof  ANDTH  end = 0
+            THEN  { io_error caught by msg previously }
+                  msg(user, "Premature end of dump stream file");
+                  " "
+            ELSE  pos:= 0;
+                  get_char
+            FI
+      ELSE  buffer[pos PLUSAB 1]
+      FI;
+
+   put(screen, (newline, "Reading open interface file  ", filename, newline));
+
+   ASSEMREADER reader = read_signature( get_char, msg );
+   EXTERNALCLOSURE new_modes = read_closure( reader, msg );
+   close_file( file, msg );
+
+   { If called at start up, write banner before title }
+   IF history IS endhistory THEN  banner(environment);  newline(screen)  FI;
+
+   title_str:= head_data OF new_modes;
+   FORALL line IN title_str DO  put(screen, (line, newline))  OD;
+   zero_ctnos;  { makes sure that any closure in library mode is removed }
+   closure OF new_modes
+END;
+
+
+PROC  read_assfile = (VALUES  params,  MESSAGEPROC  msg) VOID:
+BEGIN
+   RVC  fname = filename OF get_filename(params[1], assfile_type, msg);
+   INT  start = get_cpu_time;
+   assign(read_assmodes(fname, msg));
+   INT  finish = get_cpu_time;
+   assembled := TRUE;
+   history:= HEAP HISTORY:=
+      ( history_count PLUSAB 1, concat(("Read from ", fname)), normal, finish -
+           start, original, readtype, nulloptions, nullouterfns, history )
+END;
+
+
+PROC  write_assmodes = ( CLOSURE closure,  STR  fname,  BOOL  unpacked,
+                         MESSAGEPROC  msg ) VOID:
+BEGIN
+   INT  linesize = IF unpacked
+                 THEN current_width  { current_width set by "setwidth" command }
+                 ELSE 512
+                   FI;
+   FILE  file = open_file(fname, write_access, msg);
+   STR  filename = testmode_file_name(file);
+
+   PROC  ass_msg = (MSGNO  msgno,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(msgno)
+      THEN  put(screen, ("Closing file ", filename, newline));
+            close_file(file, msg)
+      FI;
+      msg(msgno, params)
+   END;
+
+
+   { Must buffer for VMS to avoid very small records and to obtain correct
+     newline_char behaviour (if the last character in the buffer is a newline
+     character it is automatically removed by write_buffer in vmsif, therefore
+     add one here to ensure consistent behaviour).  16:06:93  DCT
+     Use buffering to simplify UNIX unpacked version.
+   }
+
+   VECTOR [linesize + 1] CHAR  buffer;   { +1 to allow for newline_char }
+   INT  pos:= 0;
+
+   PROC  buff_out_str = (STR  str) VOID:
+     IF UPB str + pos <= linesize
+     THEN  INT  l = pos + 1;
+           buffer[l : pos PLUSAB UPB str]:= str
+     ELSE  INT  part = linesize - pos;
+           buffer[pos + 1 : linesize]:= str[: part];
+           buffer[UPB buffer]:= newline_char;        { removed by VMSIF }
+           write_buffer(file, buffer, ass_msg);
+           pos:= 0;
+           buff_out_str(str[part + 1 :])
+     FI;
+
+   PROC (STR) VOID  out_str =
+%4   IF unpacked THEN  buff_out_str
+%4               ELSE  (STR  str) VOID:  write_buffer(file, str, ass_msg)
+%4   FI;
+*4   buff_out_str;
+
+   put(screen, ( newline, "Writing open interface file  ", filename,
+                 IF unpacked THEN  "  (in unpacked format)"  ELSE  ""  FI,
+                 newline ));
+
+   INT  start = get_cpu_time;
+   ASSEMWRITER writer = write_signature( out_str,
+                                         IF unpacked
+                                         THEN  unpacked_format
+                                         ELSE  packed_format
+                                         FI,
+                                         NOT unpacked { write IDs hash table },
+                                         ass_msg );
+
+   { Write out closure with modified title giving list of transforms }
+
+   STR  transforms_done = tlist(history);
+   IF UPB transforms_done > 0
+   THEN  VECTOR [UPB title_str + 1] RVC  new_title;
+         new_title[: UPB title_str]:= title_str;
+         new_title[UPB new_title]:= concat(("Transforms:  ", transforms_done));
+         write_closure((closure, new_title), writer, ass_msg)
+   ELSE  write_closure((closure, title_str), writer, ass_msg)
+   FI;
+   write_closureseeds( writer, ass_msg );
+   finish_write_closure( writer, ass_msg );
+
+   IF pos > 0
+   THEN  buffer[pos + 1]:= newline_char;
+         write_buffer(file, buffer[: pos + 1], ass_msg)
+   FI;
+   close_file(file, msg);
+
+   INT  finish = get_cpu_time;
+   history:= HEAP HISTORY:=
+      ( history_count PLUSAB 1, concat(("Written to ", filename)),
+        nochange, finish - start, original, ignoretype, nulloptions,
+        nullouterfns, history )
+END;
+
+
+
+PROC  external = (VALUES  params,  MESSAGEPROC  msg) VOID:
+BEGIN
+   { Procedure to run an external transformation via the assembler modes
+     reading and writing procedures - requires ELLATRANSFORM to be defined. }
+
+   IF var_unset(external_var)
+   THEN  msg(user, concat(("command """, external_var, """ not defined")))
+   FI;
+
+   STR  root_fname = library_name,  { Root name for interface files }
+        command_name = get_var(external_var);
+
+   INT  first:= 1;
+   BOOL  unpacked = get_ident(params[first], msg) = "unpacked";
+   IF unpacked
+   THEN  put(screen, ("Using unpacked format", newline));
+         first PLUSAB 1;
+         IF UPB params = 1  OREL  NOT is_ident(params[first])
+         THEN  msg(user, "Transform name expected")
+         FI
+   FI;
+
+   RVC  command:= concat(( command_name,
+                           IF show_options THEN  " -s"  ELSE  ""  FI,
+                           IF unpacked THEN  " -u"  ELSE  ""  FI,
+                           " -f ", root_fname ));
+   INT  pstart = UPB command;
+   FORALL param IN params[first:]
+   DO  command:= concat((command, " ", value OF param))  OD;
+
+   FILENAME
+      outf = parse_filename(oneline((root_fname, "_out")), assfile_type, msg),
+      inf  = parse_filename(oneline((root_fname, "_in")), assfile_type, msg);
+
+   write_assmodes(assclosure, filename OF outf, unpacked, msg);
+   put(screen, ("Issuing command:  ", command, newline));
+   INT  exit_status = execute_os_command(command, msg);
+   banner(environment);
+
+   BOOL  rebuild = exit_status = ABS 16r200;
+
+   IF rebuild THEN  assign(read_assmodes(filename OF inf, msg))  FI;
+   history:= HEAP HISTORY:=
+      ( history_count PLUSAB 1, concat(("External", command[pstart:])),
+        IF rebuild THEN  normal  ELSE  nochange  FI, -1 { time not known },
+        original, externtype, nulloptions, nullouterfns, history )
+END;
+
+PROC transform_postlude = (VALUES  params,  MESSAGEPROC  msg) VOID:
+BEGIN
+   assclosure:= null_closure;
+   stack:= stackend;
+   assembled := FALSE;
+   banner(facility)   { context OF current_context OF caller OF stack OF env }
+END;
+
+PROC  call_simulator = (VALUES  params,  MESSAGEPROC  msg) VOID:
+BEGIN
+   check_sim_closure(assclosure, msg);
+
+   { write closure - cf "WRITE" }
+   STR  sim_file_name = filename OF
+      IF is_filename(params[1])
+      THEN  get_filename(params[1], assfile_type, msg)
+      ELSE  parse_filename(context_name, assfile_type, msg)
+      FI;
+   write_assmodes(assclosure, sim_file_name, FALSE { packed }, msg);
+
+   IF var_unset(sim_var)
+   THEN  msg(user, concat(( "command """, sim_var, """ not defined"
+                            " - invoke simulator manually on the file ",
+                            sim_file_name )))
+   ELSE  STR  simcmd  = get_var(sim_var),
+              command = IF testmode = null_options
+                        THEN  concat((simcmd, " -s ", sim_file_name))
+                        ELSE  concat((simcmd, " -t -s ", sim_file_name))
+                        FI;
+         put(screen, ( "Calling """, simcmd, """ on file ",
+                       sim_file_name, newline ));
+         execute_os_command(command, msg);
+         banner(environment)
+   FI
+END;
+
+PROC  call_nosimulator = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   put( screen, ( "There is no simulator with the transform test environment",
+                  newline ));
+
+PROC make_asscommands = ( COMMANDVEC  globals,
+                          BOOL simenviron,
+                          PROC (VALUES, MESSAGEPROC) VOID assemble_prelude,
+                                                          assemblefile_prelude
+                        )COMMANDVEC:
+BEGIN
+   COMMANDVEC  asscommands = MAKECOMMANDS VECTOR [] COMMAND
+   BEGIN
+      HEAP SIMPLE:=
+         ( MAKERVC "TRACE", nullstr, no parameters, normal access, continue,
+           MAKERVC "Switches on diagnostic messages during macro expansion.",
+           (VALUES params, MESSAGEPROC msg) VOID:
+              set_var(trace_var, true_var, msg)
+         ) ,
+
+
+      HEAP SIMPLE:=
+      ( MAKERVC "GCMODE", nullstr, no parameters, hidden access, continue,
+        MAKERVC "Forces garbage collection after each transformation that "
+                "produces a change (after the previous closure has been "
+                "discarded).",
+        (VALUES params, MESSAGEPROC msg) VOID:  gcmode:= TRUE
+      ) ,
+
+      make_group( "SHOW", "S", normal access,
+                  HEAP SIMPLE:=
+                  ( MAKERVC "OPTIONS", MAKERVC "OPT", no parameters,
+                    hidden access, continue,
+                    MAKERVC "Show the selected options given "
+                                      "to a transform command",
+                    (VALUES  params,  MESSAGEPROC  msg) VOID:
+                       show_options:= TRUE
+                  )
+                ) ,
+
+      make_group( "SET", "S", normal access,
+                  HEAP SIMPLE:=
+                  ( MAKERVC "MAXHISTORY", MAKERVC "MH", int_syntax,
+                    normal access, continue,
+                    oneline(( "Sets the maximum number of previous versions "
+                              "of the closure that are remembered.  If the "
+                              "number of remembered versions exceeds the new "
+                              "maximum, the excess are deleted.  The default "
+                              "value is ", max_stack_size )),
+                    (VALUES  values,  MESSAGEPROC  msg) VOID:
+                    ( max_stack_size:= get_int(values[1], msg);
+                      put(screen, ( "Stack size set to ", max_stack_size,
+                                    newline ));
+                      set_stack_max(max_stack_size)
+                    )
+                  )
+                ) ,
+
+      make_group( "CLEAR", "C", normal access, VECTOR [] COMMAND
+                  ( HEAP SIMPLE:=
+                    ( MAKERVC "HISTORY", MAKERVC "H", no parameters,
+                      normal access, continue, MAKERVC
+                         "Clears the stack of previous closures remembered.",
+                      (VALUES  values,  MESSAGEPROC  msg) VOID:
+                         set_stack_max(0)
+                    ) ,
+
+                    HEAP SIMPLE:=
+                    ( MAKERVC "TPROCS", MAKERVC "TP", no parameters,
+                      hidden access, continue,
+                      MAKERVC "Discards the transform procs free-list",
+                      (VALUES  values,  MESSAGEPROC  msg) VOID:  clear_tprocs
+                    )
+                  )
+                ) ,
+
+      make_group( "DONT", "D", normal access,
+                  ( HEAP SIMPLE:=
+                    ( MAKERVC "TRACE", nullstr, no parameters, normal access,
+                      continue, MAKERVC "Switches off the diagnostic trace",
+                      (VALUES params, MESSAGEPROC msg) VOID:
+                         set_var(trace_var, false_var, msg)
+                    ) ,
+
+                    HEAP SIMPLE:=
+                    ( MAKERVC "GCMODE", nullstr,
+                      no parameters, hidden access, continue,
+                      MAKERVC "Switches off forced garbage collection",
+                      (VALUES params, MESSAGEPROC msg) VOID:  gcmode:= FALSE
+                    ) ,
+
+                    make_group( "SHOW", "S", normal access,
+                                HEAP SIMPLE:=
+                                ( MAKERVC "OPTIONS", MAKERVC "OPT",
+                                  no parameters, hidden access, continue,
+                                  MAKERVC "Do not show the selected options "
+                                     "given to a transform command",
+                                  (VALUES  params,  MESSAGEPROC  msg) VOID:
+                                       show_options:= FALSE
+                                )
+                              )
+                ) ) ,
+
+      make_group( "PRINT", "P", normal access,
+                  ( HEAP SIMPLE:=
+                    ( MAKERVC "CLOSURE", MAKERVC "CL", no parameters,
+                      normal access, continue,
+                      MAKERVC "Prints basic information about each outer "
+                              "declaration in the closure.",
+                      (VALUES  params,  MESSAGEPROC  msg) VOID:
+                          print_closure(params, assclosure, FALSE, msg)
+                    ) ,
+
+                    HEAP SIMPLE:=
+                    ( MAKERVC "FULLCLOSURE", MAKERVC "FCL", no parameters,
+                      normal access, continue,
+                      MAKERVC "Prints basic information about each outer "
+                              "declaration in the closure.",
+                      (VALUES  params,  MESSAGEPROC  msg) VOID:
+                          print_closure(params, assclosure, TRUE, msg)
+                    ) ,
+
+                    HEAP SIMPLE:=
+                    ( MAKERVC "TRANSFORMHISTORY", MAKERVC "TH", no parameters,
+                      normal access, continue,
+                      MAKERVC "Shows which transformations have been called",
+                      (VALUES names, MESSAGEPROC msg) VOID:
+                          print_transform_history(history)
+                    ) ,
+
+COMMENT
+                    HEAP SIMPLE:=
+                    ( MAKERVC "STATUS", MAKERVC "S",
+                      opt(prod((name_syntax, opt(int_syntax)))), normal access,
+                      continue, MAKERVC
+                          "Prints out status of the declarations in the "
+                          "closure or for the <int>th declaration of a <name>.",
+                      (VALUES names, MESSAGEPROC msg) VOID:
+                         ptstatus(names, assclosure, msg)
+                    ) ,
+COMMENT
+                   HEAP SIMPLE:=
+                   ( MAKERVC "INTERMEDIATEFORMAT", MAKERVC "IF",
+                     star(opt(prod((declname_syntax, opt(int_syntax))))),
+                     normal access, continue, MAKERVC
+                     "Intermediate format printer for current closure or for "
+                     " the <int>th declaration of a <name>."
+                     " (default value of <int> is 1)",
+                     (VALUES names, MESSAGEPROC msg) VOID:
+                     ptclosure(TRUE, names, assclosure, SKIP, msg)
+                   ) ,
+
+                 HEAP SIMPLE:=
+                  ( MAKERVC "TEXT", MAKERVC "T",
+                    prod((star(opt(int_syntax)),
+                          star(opt(prod((declname_syntax, opt(int_syntax))))))),
+                    normal access, continue,
+                    make_helptext( write_ella_options, declname_str, "printed",
+                                   have_outer,
+                  "Text printer for a declaration or the current closure" ),
+                   (VALUES names, MESSAGEPROC msg) VOID:
+                   ptclosure(FALSE, names, assclosure, simple_layout, msg)
+                  ) ,
+
+                 HEAP SIMPLE:=
+                  ( MAKERVC "COREELLA", MAKERVC "CE",
+                    star( opt(prod(( declname_syntax, opt(int_syntax))))),
+                    normal access, continue,
+                    make_helptext( no_options, declname_str, "printed",
+                                   have_outer,
+                  "Core ELLA text printer for a declaration or the current "
+                  "closure" ),
+                   (VALUES names, MESSAGEPROC msg) VOID:
+                   ptclosure(FALSE, make_option_values((1,2,3)), assclosure, 
+                             simple_layout, msg)
+                  ) ,
+
+                    HEAP SIMPLE:=
+                    ( MAKERVC "TITLE", nullstr, no parameters,
+                      hidden access, continue,
+                      MAKERVC "Prints the header string(s) for the modes",
+                      (VALUES  params,  MESSAGEPROC  msg) VOID:
+                      ( newline(out);
+                        FORALL line IN title_str
+                        DO  put(out, (line, newline))  OD
+                      )
+                    )
+                ) ) ,
+
+      HEAP SIMPLE:=
+          ( MAKERVC "PTIDS", nullstr, no parameters, hidden access, continue,
+            MAKERVC "Print the names hash table",
+            (VALUES  values, MESSAGEPROC  msg) VOID:  pt_idstable
+          ) ,
+
+      HEAP SIMPLE :=
+          ( MAKERVC "LAYOUT", nullstr,
+            star(opt(prod((declname_syntax, opt(int_syntax))))),
+            hidden access, continue,
+            MAKERVC "Withdrawn - renamed PRINTTEXT (PT)",
+           (VALUES names, MESSAGEPROC flt) VOID:
+             flt( user, "This command has been renamed PRINTTEXT." )
+          ),
+
+      HEAP SIMPLE:=
+          ( MAKERVC "MONITORINGORDER", MAKERVC "MO",
+            star(opt(prod((name_syntax, opt(int_syntax))))),
+            hidden access, continue,
+            MAKERVC "Prints out diagnostic table to show monitoring order "
+                    "for the current closure or for the <int>th declaration of "
+                    "a <name>. (default value of <int> is 1).  If no parameter "
+                    "is specified, the whole closure will be printed",
+                    (VALUES  names,  MESSAGEPROC  msg) VOID:
+                     monitoring_order(find_outers(names, assclosure, msg), msg)
+           ) ,
+
+{ Standard ELLA transformation - can be combined using the STANDARD command }
+
+      make_command( "PORTNAME", "", no_options, no_outer,
+                    "Removes portnames from the current closure", portname ) ,
+
+      make_command( "IMPORT", "", no_options, no_outer,
+                    "Removes imports from the current closure", import ) ,
+
+      make_command( "MACRO", "", no_options, no_outer,
+                    "Expands macros and replicators in the current closure",
+                    macro ) ,
+
+      make_command( "FNTYPE", "", fntype_options, no_outer,
+                    "Removes fntypes and IO statements the current closure",
+                    fntype
+                  ) ,
+
+      make_command( "SEQUENCE", "", no_options, no_outer,
+                    "Removes sequences from the current closure",
+                    sequence ) ,
+
+      make_command( "TIMESCALE", "", no_options, no_outer,
+                    "Removes timescaling from the current closure",
+                    timescale ) ,
+
+      make_command( "JOIN", "", joins_options, have_outer,
+                    "Removes multiple and partial JOINs",
+                    join
+                  ) ,
+
+      make_command( "MAKE", "", multimakes_options, have_outer,
+                    "Removes multi-dimensional makes",
+                    make
+                  ) ,
+
+      make_command( "ELSEOF", "", elseof_options, have_outer,
+                    "Replaces ELSEOF branches by equivalent CASE",
+                    elseof
+                  ) ,
+
+      make_command( "STANDARD", "", no_options, no_outer, "Does the Portname, "
+                    "Import, Macro, Sequence, Timescaling, Macro, Make, "
+                    "Fntype and Join transformations.  These transformations "
+                    "must be done before running the current simulator",
+                    standard
+                   ) ,
+
+      make_command( "COREELLA", "", no_options, no_outer,
+                    "Does the Portname, Import, Macro, Sequence, Timescaling, "
+                    "Macro, Make(1), Fntype, Join(2), Let, Elseof, Range, "
+                    "Dinst, Macparam, Attribute, Name(2) and Bracket "
+                    "transformations. These transformations must be done "
+                    "before outputing text for Core ELLA using the "
+                    "printcoreella(pce) command",
+                    coreella
+                   ) ,
+
+      make_command( "ELLAVHDL", "", no_options, no_outer,
+                    "Does the Portname, Import, Macro, Sequence, Timescaling, "
+                    "Macro, Make, Fntype, Join(1), Let, Reform, Dinst, "
+                    "Macparam, Attribute, Local, Associated, Cquery, Delay, "
+                    "Flatten_unit, Tstr_trow, Alias and Name(5) "
+                    "transformations. These transformations must be done "
+                    "before outputing an open interface file for the ELLA to "
+                    "VHDL translator.",
+                    ellavhdl
+                   ) ,
+
+{  Extra general purpose ELLA transforms (not used by the simulator) }
+
+      make_command( "LET", "", multilets_options, have_outer,
+                    "Expand out LETs that define more than one name at a time",
+                    multilet                                    
+                  ) ,
+
+      make_command( "REFORM", "", reform_options, have_outer, "Replace REFORM "
+                    "function bodies by corresponding expression",
+                    reform
+                  ) ,
+
+      make_command( "NAME", "", names_options, no_outer,
+                    "Convert illegal generated names into a form that the "
+                    "ELLA compiler will accept",
+                    name
+                  ) ,
+
+      make_command( "RANGE", "", no_options, have_outer,
+                    "Change INT and CHAR ranges in choices to alternatives",
+                    range
+                  ) ,
+
+      make_command( "DINST", "", no_options, have_outer,
+                    "Change dyadic instances to monadic instances",
+                    dinst
+                  ) ,
+
+      make_command( "MACPARAM", "", macparams_options, have_outer,
+                    "Removes the skeletal MAC parameters left by the macro "
+                    "transform",
+                    macparam
+                  ) ,
+
+      make_command( "ATTRIBUTE", "", no_options, have_outer,
+                    "Removes all references to attributes including "
+                    "declarations",
+                    attribute
+                  ) ,
+
+      make_command( "ALIAS", "", no_options, have_outer,
+                    "Makes alias types for all compound types",
+                    alias
+                  ) ,
+
+      make_command( "ASSOCIATED", "", no_options, have_outer,
+                    "Turns associated types into an equavelent set of"
+                    " ordinary types",
+                    associated
+                  ) ,
+
+      make_command( "LOCAL", "", no_options, have_outer,
+                    "Makes local declarations into outer declarations",
+                    local
+                  ) ,
+
+      make_command( "CQUERY", "", no_options, have_outer,
+                    "Turns query of rows or structs into rows or structs"
+                    " of querys",
+                    cquery
+                  ) ,
+
+      make_command( "DELAY", "", no_options, have_outer,
+                    "Makes delays have single input and output, ie. removes"
+                    " names of inputs and outputs, but leaves structure.",
+                    delay
+                  ) ,
+
+      make_command( "FLATTENUNIT", "", no_options, have_outer,
+                    "Simplifies units for the ELLA to VHDL transform.",
+                    flatten_unit
+                  ) ,
+
+      make_command( "TSTRTROW", "", no_options, have_outer,
+                    "Turns type structs of same type into type rows of"
+                    " suitable size",
+                    tstr_trow
+                  ) ,
+
+      make_command( "BRACKET", "", no_options, no_outer,
+                    "Inserts brackets where needed to define the correct "
+                    "bindings in generated text",
+                    bracket
+                  ) ,
+
+      make_command( "LEGALTEXT", "LT", no_options, no_outer,
+                    "Does the Macparams, Names and Brackets transforms to "
+                    "convert the ELLA data tree to a form that will enable "
+                    "legal ELLA text to be produced by the printtext(pt) "
+                    "command",
+                    (VALUES  params,  MESSAGEPROC  msg) VOID:
+                    ( macparam(params, msg);
+                      name(params, msg);
+                      bracket(params, msg)
+                    )
+                  ) ,
+
+%9 { Praxis simulator transform }
+
+      HEAP SIMPLE:= ( MAKERVC "MAKEJOIN",  MAKERVC "MJ", no parameters,
+                      hidden access, continue,
+                      MAKERVC "Does the simulator transformations (KEEXPAND) "
+                              "on the current closure", simulator ) ,
+
+      { Experimental and test transformations }
+
+      make_command( "TRANSFORMTEST", "TRANSTEST", assembletest_options,
+                    no_outer,
+                    "Runs one or more tests on the current closure.  "
+                       "The default is all the tests",
+                    (VALUES  params,  MESSAGEPROC  msg) VOID:
+                       do_transform( assembletest, no_outer, nochange,
+                                     "transformtest", assembletest_options,
+                                     params, msg )
+                  ) ,
+
+      HEAP SIMPLE:= ( MAKERVC "RECURSIVELET",  MAKERVC "RL",
+                      star(opt(int_syntax)), hidden access, continue,
+                      MAKERVC "Simplifies function bodies in terms of LETs",
+                     (VALUES  params,  MESSAGEPROC  msg) VOID:
+                      ( put(screen , ( "********** WARNING - this transform is"
+                                       " out of date and may fail **********",
+                                       newline ));
+                        do_transform( lets_transform, no_outer, normal,
+                                      "recursivelet", lets_options,
+                                      params, msg )
+                      )
+                  ) ,
+
+%9 }
+
+      HEAP SIMPLE:=
+      ( MAKERVC "UNDO", nullstr, no parameters, normal access, continue,
+        MAKERVC "Undoes that last transformation that caused a change to "
+                "the closure if possible",
+        (VALUES  names,  MESSAGEPROC  msg) VOID:  undo_latest(history, msg)
+      ) ,
+
+      HEAP SIMPLE:=
+          ( MAKERVC "WRITE", nullstr, opt(filename_syntax),
+            normal access, continue,
+            MAKERVC "Writes the intermediate format in standard packed form "
+                    "to <filename>.  (The default name is <contextname>.ela)."
+                    "Use the command WRITEASCII to write an ascii form of the "
+                    "intermediate format.",
+            (VALUES names, MESSAGEPROC msg) VOID:
+            ( FILENAME  filename =
+                 IF is_filename(names[1])
+                 THEN  get_filename(names[1], assfile_type, msg)
+                 ELSE  parse_filename( context_name,
+                                       assfile_type, msg )
+                 FI;
+
+              write_assmodes( assclosure, filename OF filename,
+                              FALSE { packed }, msg )
+            )
+          ) ,
+
+      HEAP SIMPLE:=
+          ( MAKERVC "READ", nullstr, filename_syntax, normal access, continue,
+            MAKERVC "Reads the intermediate format file <filename> (with "
+                    "default type .ela).  The resulting data is then used "
+                    "for all subsequent transformations.",
+            read_assfile
+          ) ,
+
+      HEAP SIMPLE:=
+          ( MAKERVC "WRITEASCII", nullstr, opt(filename_syntax), hidden access,
+            continue,
+            MAKERVC "Writes the intermediate format using an unpacked ascii "
+                    "form to <filename>.  (The default name is "
+                    "<contextname>.ela).",
+            (VALUES names, MESSAGEPROC msg) VOID:
+            ( FILENAME filename =
+                 IF is_filename(names[1])
+                 THEN  get_filename(names[1], assfile_type, msg)
+                 ELSE  parse_filename( context_name,
+                                       assfile_type, msg )
+                 FI;
+              write_assmodes( assclosure, filename OF filename,
+                              TRUE { unpacked }, msg )
+            )
+          ) ,
+
+      HEAP SIMPLE:=
+      ( MAKERVC "EXTERNAL", MAKERVC "EXT",
+        star(prod((ident_syntax, opt(star(int_syntax))))),
+        normal access, continue,
+        oneline(( "Runs external ELLA transformations via intermediate format "
+                  "files.  Each ", ident_str, " parameter should be the name "
+                  "of a transformation known to the external command "
+                  """ellatransform"".  Each name may be followed by a list "
+                  "of ", int_str, "s to specify options for that transform.  "
+                  "If any changes are generated the resulting intermediate "
+                  "format is read back in as the new current closure." )),
+        external
+      ) ,
+
+      HEAP SIMPLE:=
+      ( MAKERVC "EASE", nullstr, no parameters, hidden access, return,
+        MAKERVC "Returns to the main ELLA environment",  nullcommand
+      ),
+
+      IF simenviron THEN 
+        HEAP SIMPLE:=
+      ( MAKERVC "SIMULATE", MAKERVC "SIM", opt(filename_syntax),
+        normal access, continue,
+        (REF SIMPLE  s,  RCH  ch) VOID:
+        put(ch, ( "Invoke the ELLA simulator defined by the variable, ",
+                  sim_var, ".  The optional ", filename_str, " parameter is "
+                  "name to be used for the open interface (", assfile_type,
+                  ") file used to communicate with the simulator - current "
+                  " context name is used by defualt.", lines(2),
+                  "Before using this command it is necessary to "
+                  "ensure that the appropriate transformations have been "
+                  "applied to remove features that the ELLA simulator can not "
+                  "handle.  The standard ELLA simulator requires portnames, "
+                  "IMPORTs, MACros, SEQuences, FASTER, SLOWER, "
+                  "multi-dimensional MAKEs, fntypes and complex JOINs to be "
+                  "removed (see the ""standard"" command).  The ""write"" "
+                  "command may be used to generate a public interface (""",
+                  assfile_type, ") file so that the simulator (or other "
+                  "back-end) may be invoked manually in another window or by "
+                  "using the ""obey"" (""!"") command.", newline )),
+        call_simulator
+      )
+   ELSE
+     HEAP SIMPLE:=
+      ( MAKERVC "SIMULATE", MAKERVC "SIM", opt(filename_syntax),
+        hidden access, continue,
+        MAKERVC "There is no simulator with the transform test environment",
+        call_nosimulator
+      )
+   FI
+   END;
+
+
+   add_var(external_var, external_var, env_var, default_set_var);
+
+   IF simenviron THEN 
+
+     MAKECOMMANDS VECTOR [] COMMAND
+       ( make_compound
+            ( HEAP SIMPLE:=
+              ( MAKERVC "TRANSFORM", MAKERVC "TRANS",
+                prod(( opt(fnname_syntax),
+          star(opt(prod(( opt(contextname_syntax), opt(importname_syntax) ))))
+                )),
+                normal access, continue, MAKERVC
+                  "Enters the transfrom environment with no closure closure.",
+                assemble_prelude
+              ),
+            environment,
+            assprompt,
+            asscommands,
+            globals,
+            transform_postlude
+          ),
+
+       make_compound
+          ( HEAP SIMPLE:=
+              ( MAKERVC "TRANSFORMREAD", MAKERVC "TRANSREAD", filename_syntax,
+                normal access, continue,
+                concat(( "Assembles the closure from <filename> "
+                         "(with default ", assfile_type, ")" )),
+                assemblefile_prelude
+              ),
+            environment,
+            assprompt,
+            asscommands,
+            globals,
+            transform_postlude
+          )
+     )
+   ELSE
+     asscommands
+   FI
+   
+END;
+
+{ Prelude and special initialise commands }
+
+PROC transform_prelude = (VALUES names,
+                          BOOL readass,
+                          RVC lbn, ctn,
+                          PROC (VALUES,
+                                MESSAGEPROC) EXTERNALCLOSURE get_assclosure,
+                          PROC( ASSEMWRITER, MESSAGEPROC )VOID sw,
+                          PROC VOID zc,
+                          PROC (CLOSURE, MESSAGEPROC ) BOOL ckcl,
+                          MESSAGEPROC msg) VOID:
+BEGIN
+   library_name := lbn;
+   context_name := ctn;
+   write_closureseeds := sw;
+   zero_ctnos := zc;
+   check_sim_closure := ckcl;
+   assprompt := MAKERVC "Trans";
+   gcmode:= show_options:= FALSE;
+   stack:= stackend;
+   history:= endhistory;
+   history_count:= 0;
+   assembled := FALSE;
+   IF readass THEN
+     { read_assfile no longer calls banner at start up }
+     newline(screen);
+     read_assfile(names, msg)
+   ELSE
+     INT  start = get_cpu_time;
+     EXTERNALCLOSURE cl = get_assclosure( names, msg );
+     IF closure OF cl ISNT null_closure THEN
+       assign( closure OF cl );
+       title_str:= head_data OF cl;
+       banner(environment);
+       put(screen, (newline, title_str[1], newline));
+       INT  finish = get_cpu_time;
+       history:= HEAP HISTORY:=
+         ( history_count PLUSAB 1, MAKERVC "Assembly", normal, finish - start,
+           original, ignoretype, nulloptions, nullouterfns, history );
+       assembled := TRUE
+     FI
+   FI
+END;
+
+  SKIP
+KEEP  EXTERNALCLOSURE,  make_asscommands,  transform_prelude
+FINISH

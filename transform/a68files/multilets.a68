@@ -1,0 +1,358 @@
+DECS multilets CONTEXT VOID USE putstrings, basics, messageproc, assmodes,
+     modeprocs, transformprocs, options:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: multilets.a68,v 34.3 1995/03/29 13:03:00 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ 3:09:90 multilets transform copied from GASP work, assumes that the
+            sequence transform has been done.  DJS.
+28:10:91 Updated to version 7 of assembler modes. EVW
+17:12:91 BODYDATA removed. EVW
+19:02:92 R6B99, Inner FN decs of functions with no outer level
+            transformation.   DJS
+03:03:92 Declaration attributes added .EVW
+09:03:92 Correction to bug fix 99, error in proc 'declaration'.  DJS
+28:07:92 null_const removed. JIT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.007 
+26:08:94  33.002  DJS   CoreElla  Add closure to outer_multilets and correct
+                                  bug R6B218 causing inner declarations to be
+                                  untransformed. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR multilets_options;
+
+PROC multiletsid = (INT nameno ) ID: oneline(("_sl", nameno ));
+
+{ Null FNBODY proc }
+PROC fnbody_multilets = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_multilets = (OUTER outer,
+                        CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg )OUTERC:
+BEGIN
+
+PROC fndec_proc = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs ) FNDECC:
+BEGIN
+REF VECTOR[ ]NAMETYPE nametypes := nametypes OF fdec;
+INT new_nameno := UPB nametypes;
+INT max_names := new_nameno;
+BOOL has_multi_lets := FALSE;
+
+
+    PROC name_needed = (UNIT u )BOOL:
+        CASE u IN
+        (REF USTR ) FALSE,
+        (REF UNAME ) FALSE,
+        (REF UROW urow ) CASE elem OF urow IN (REF UNAME ) FALSE OUT TRUE ESAC,
+        (REF UBRACKET ubr ) name_needed( unit OF ubr )
+        OUT
+            TRUE
+        ESAC;
+
+PROC useries_multi = (REF USERIES useries, TRANSFORMPROCS tprocs ) UNITC:
+BEGIN
+REF SERIES ss := body OF useries,
+           new_series := nilseries;
+REF REF SERIES stail := new_series;
+INT num_steps := 0;
+BOOL changed := FALSE;
+
+    PROC copy_series = VOID:
+    BEGIN
+        IF NOT changed THEN
+            changed := TRUE;
+            ss := body OF useries;
+            TO num_steps
+            DO
+                REF REF SERIES( stail ) := HEAP SERIES :=
+                                                      ( step OF ss, nilseries );
+                stail := rest OF stail;
+                ss := rest OF ss
+            OD
+        FI
+    END;
+
+    PROC do_step = (REF SERIES ss )VOID:
+    BEGIN
+        CASE step OF ss IN
+        (REF LET let )
+        (UNITC uc = ( unit OF tprocs )( unit OF let, tprocs );
+
+            IF rest OF letnames OF let ISNT nilnames THEN
+
+            PROC separate = (BOOL need_new_name,
+                             PROC( INT )UNIT get_unit )VOID:
+            BEGIN
+            REF NAMES nn := letnames OF let;
+            REF TSTR tstr := niltstr;
+            REF REF TSTR ttail := tstr;
+
+                IF need_new_name THEN
+                    REF REF SERIES( stail ) := HEAP SERIES :=
+                        ( HEAP LET := ( HEAP NAMES := ( new_nameno, nilnames ),
+                                        u OF uc ),
+                          nilseries );
+                    stail := rest OF stail
+                FI;
+
+                FOR index WHILE nn ISNT nilnames
+                DO
+                    IF need_new_name THEN
+                        REF REF TSTR( ttail ) := HEAP TSTR :=
+                               ( type OF nametypes[ nameno OF nn ], niltstr );
+                        ttail := rest OF ttail
+                    FI;
+                    REF REF SERIES( stail ) := HEAP SERIES :=
+                        ( HEAP LET :=
+                            ( HEAP NAMES := ( nameno OF nn, nilnames ),
+                              get_unit( index ) ),
+                          nilseries );
+                    stail := rest OF stail;
+                    nn := rest OF nn
+                OD;
+                IF need_new_name THEN
+                  nametypes[ new_nameno ]
+                     := ( multiletsid( new_nameno ), tstr, attrnull )
+                FI
+            END;
+
+            PROC index_unit = (UNIT unit, BOOL need_new_name )VOID:
+            BEGIN
+                separate( need_new_name,
+                          (INT index )UNIT:
+                          ( HEAP UINDEX := ( unit, HEAP FINT :=
+                                                            ( index, nullid ) )
+                          ))
+            END;
+
+            PROC try_unit = (UNIT u, BOOL need_new_name )VOID:
+            BEGIN
+                PROC incr_nameno = INT:
+                    IF need_new_name THEN new_nameno
+                                     ELSE new_nameno PLUSAB 1
+                    FI;
+
+                CASE u IN
+                (REF USTR ustr )
+                (REF USTR el := ustr;
+
+                    separate( need_new_name,
+                              (INT index )UNIT:
+                              (UNIT x = elem OF el; el := rest OF el; x ))
+                ),
+                (REF UROW urow )
+                (
+                    CASE elem OF urow IN
+                    (REF UNAME )
+                        separate( need_new_name,
+                                  (INT index )UNIT: ( elem OF urow ))
+                    OUT
+                        index_unit( HEAP UNAME := ( usource, incr_nameno ),
+                                    TRUE )
+                    ESAC
+                ),
+                (REF UNAME una )
+                (
+                    index_unit( una, need_new_name )
+                ),
+                (REF UATTR attr )
+                (   incr_nameno;
+                    IF name_needed( unit OF attr ) THEN
+                        index_unit( HEAP UNAME := ( usource, new_nameno ),
+                                    TRUE )
+                  ELSE
+                        try_unit( unit OF attr, TRUE )
+                    FI
+                ),
+                (REF UBRACKET ubr ) try_unit( unit OF ubr, need_new_name )
+                OUT
+                    index_unit( HEAP UNAME := ( usource, incr_nameno ), TRUE )
+                ESAC
+            END;
+
+                copy_series;
+                try_unit( u OF uc, FALSE )
+
+          ELIF c OF uc OREL changed THEN
+                copy_series;
+                REF REF SERIES( stail ) := HEAP SERIES :=
+                    ( HEAP LET := ( letnames OF let, u OF uc ),
+                      nilseries );
+                stail := rest OF stail
+          ELIF changed THEN
+                REF REF SERIES( stail ) := HEAP SERIES :=
+                                                      ( step OF ss, nilseries );
+                stail := rest OF stail
+            FI
+        )
+        OUT
+        STEPC sc = ( step OF dec_tprocs )( step OF ss, tprocs );
+
+            IF c OF sc OREL changed THEN
+                copy_series;
+                REF REF SERIES( stail ) := HEAP SERIES :=
+                                                         ( s OF sc, nilseries );
+                stail := rest OF stail
+            FI
+        ESAC
+    END;
+
+    WHILE ss ISNT nilseries
+    DO
+        do_step( ss );
+        num_steps PLUSAB 1;
+        ss := rest OF ss
+    OD;
+
+UNITC output = ( unit OF tprocs )( output OF useries, tprocs );
+
+     IF c OF output OREL changed THEN
+        ( HEAP USERIES := ( IF changed THEN new_series ELSE body OF useries FI,
+                            u OF output ),
+          TRUE )
+  ELSE
+        ( useries, FALSE )
+    FI
+END;
+
+PROC unit_multi = (UNIT unit, TRANSFORMPROCS tprocs ) UNITC:
+    CASE unit IN (REF USERIES usr ) useries_multi( usr, tprocs )
+    OUT
+        ( unit OF dec_tprocs )( unit, tprocs )
+    ESAC;
+
+PROC pre_pass_let = (REF LET let, TRANSFORMPROCS tprocs )LETC:
+BEGIN
+UNITC uc = ( unit OF tprocs )( unit OF let, tprocs );
+
+    IF rest OF letnames OF let ISNT nilnames THEN
+        has_multi_lets := TRUE;
+        IF name_needed( u OF uc ) THEN max_names PLUSAB 1 FI
+    FI;
+    IF c OF uc THEN
+        ( HEAP LET := ( letnames OF let, u OF uc ), TRUE )
+  ELSE
+        ( let, FALSE )
+    FI
+END;
+
+{    PROC nulldec = (DECLARATION dec, TRANSFORMPROCS tprocs )DECLARATIONC:
+        ( dec, FALSE );
+        { Note: This is a null tproc intended to stop processing of
+                inner declarations while doing the main pass.  These are
+                picked up by a separate call of the transform procs. }
+}
+  { Pre pass looks to see if this FNDEC needs changing and counts up number of
+    new names. Inner declarations must not be transformed so use 'nulltprocs' }
+
+TRANSFORMPROCS pre_pass_tprocs = make_newtprocs( nulltprocs,
+                                                 ( null_attr,
+                                                   null_formula,
+                                                   null_type,
+                                                   fnbody_multilets,
+                                                   pre_pass_let ));
+
+    ( fnbody OF pre_pass_tprocs )( fnbody OF fdec, pre_pass_tprocs );
+
+    discard_tprocs( pre_pass_tprocs );
+
+TRANSFORMPROCS new_tprocs = make_newtprocs( dec_tprocs, ( { nulldec, }
+                                                              unit_multi ));
+
+    IF max_names > new_nameno THEN
+    REF VECTOR[ ]NAMETYPE old_nametypes = nametypes;
+
+      { There are new names so make a new nametypes table }
+        nametypes := HEAP VECTOR[ max_names ]NAMETYPE;
+        nametypes[ : new_nameno ] := old_nametypes
+    FI;
+
+    {{ No possible change to macspecs or iospec }}
+FNBODYC fc = ( fnbody OF new_tprocs )( fnbody OF fdec, new_tprocs );
+
+    IF c OF fc THEN
+    REF FNDEC new_dec = HEAP FNDEC := fdec;
+
+        IF max_names /= new_nameno THEN
+            msg( system, oneline(( "max_names = ", max_names,
+                                   " new_nameno =", new_nameno )))
+        FI;
+        nametypes OF new_dec := nametypes;
+        fnbody OF new_dec := f OF fc;
+        ( new_dec, TRUE )
+  ELSE
+        ( fdec, FALSE )
+    FI
+END;  {{ end of PROC fndec_proc }}
+
+
+   TRANSFORMPROCS new_tprocs = make_newtprocs( nulltprocs,
+                                               ( null_attr,
+                                                 null_formula,
+                                                 null_type,
+                                                 fnbody_multilets,
+                                                 fndec_proc ));
+
+OUTERC oc = ( outer OF new_tprocs )( outer, new_tprocs );
+
+    discard_tprocs( new_tprocs );
+    oc
+END;
+
+PROC transform_multilets = (CLOSURE closure,
+                            OPTIONS  options,
+                            MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                                           ( null_attr,
+                                             null_formula,
+                                             null_type,
+                                             fnbody_multilets,
+          (OUTER outer, TRANSFORMPROCS tprocs )OUTERC:
+                 outer_multilets( outer, closure, options, msg )));
+
+    (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP outer_multilets, transform_multilets, multilets_options
+FINISH

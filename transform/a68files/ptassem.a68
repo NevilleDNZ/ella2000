@@ -1,0 +1,956 @@
+DECS  ptassem  CONTEXT VOID  USE  putstrings,  messageproc,  testmode,
+      osinterface,  basics,  assmodes,  closureprocs,  ioprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: ptassem.a68,v 34.2 1995/03/29 13:02:48 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+01:05:84  Taken from ELLAPTIL (4)
+22:08:84  renamed - NB SEGMENT name is ptassemble on FLEX / 1906
+30:08:84  faults tidied
+05:02:85  REFORM added and mode of TPRIM changed
+02:09:85  Changes made to interface to make ELLA one core image.
+27:09:85  Changes made to assemble for ELLANET.
+28:11:85  Brought to Perq, 1906 removed
+09:12:85  Updated for extra REF in MACEXP ( MPARAMS )
+20:03:86  CR 250   VALUE, VCALL, and DMAKE contain attribute names. EVW
+06:10:86  CR 180   Sequences.  EVW
+16:10:86  Updated for new osinterface  DCT
+31:10:86  Updated for break-in  DCT
+10:11:86  NIL declarations removed since duplicate assmodes.  EVW
+14:04:87  CR 256   Macros with same parameters - MACCALL, and MACEXP.  EVW
+18:05:87  CR 255   Discriminate Assembly - nextdeclaration.  EVW
+19:08:87  CR 180   Dynamic indexing.
+09:11:87  Added DECLARATION, moved ARITHetc to FNBODY. EVW
+16:11:87  Added INTEGER, VIF, VDO, SEQIF, PRINT, FAULT.  EVW
+17:11:87  Added TNAMED, newprim changed to newtype.  EVW
+20:12:87  Changes to TYPE positions added.  EVW
+01:05:88  Updated for new assembler modes.  MGH
+31:10:88  INT sort added to INPUT.  EVW
+09:12:88  CMACPAR added, MACPARAM and MACSPEC altered.  EVW
+02:02:89  CR 642.  Updated to new kernel.  EVW
+31:10:89  CR 638.  CTYPE mode altered STEPNULL added.  EVW
+17:12:89  CR ???.  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+29:03:90  Macros can now have function parameters. JIT
+26:06:90  CR 643.  UPdated to fntype changes. MGH
+17:07:90  LIBINTERFACE replaced by LIBMODES and ASSCLOSURE. EVW
+06:08:90  joincheck mode changed from VECTOR to List. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+23:11:90  Output of version numbers supressed for testmode.  DJS
+09:04:91  Call of get_allimports now needed after call of get_allbodies. JIT
+21:06:91  R6B48  Sun 3 compiler switch error. Split large CASE -> procs. EVW
+27:06:91  Version 7 of assembler modes. EVW
+18:10:91  New form of CLOSURE.  DCT
+22:10:91  pt_idstable added.  DCT
+23:10:91  flt_if_interrupted added using the global msg proc.  DCT
+13:11:91  Added text attributes. EVW
+17:12:91  UTERMINDEX added. BODYDATA removed. MACSPEC altered. EVW
+03:03:92  Attribute declarations added. EVW
+17:03:92  Multiple strings added to CQUOTE. EVW
+16:07:92  Changes added for CONST / UNIT mode change. JIT
+04:11:92  Updated for 'chars' mode changes. JIT
+08:02:93  merge assembling specs and bodies. EVW
+25:02:93  io_msgproc renamed global_msg for OSIF - Level 1.  DCT
+20:04:93  changes to replicator names, remove FREPL. EVW
+16:06:93  Add SEQROW. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.048 
+26:08:94  33.001  DJS   SepTrans  Move from ELLA to TRANSFORM 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+INT mparamtype = 1,  mparamint = 2;
+
+PROC print = (VECTOR [] OUTMODE  line) VOID:
+   ( put(out, line);  flt_if_interrupted(global_msg) );
+
+PROC pt_ids_table = (BOOL  full,  INT  sp) VOID:
+BEGIN
+   print(( setindent(sp), "Ids hash table width = ", UPB idstable, newline ));
+   print(( setindent(sp+3), "Sizes =" ));
+   INT  n:= 0;
+   REF IDS  ptr:= nilids;
+   FORALL arm IN idstable
+   DO  n:= 0;  ptr:= arm;
+       WHILE ptr ISNT nilids DO  ptr:= rest OF ptr;  n PLUSAB 1  OD;
+       print(intwidth(n, 4))
+   OD;
+   print(newline);
+   IF full
+   THEN  FOR i TO UPB idstable
+         DO  print(( setindent(sp+6), "Arm ", i, ":  " ));
+             ptr:= idstable[i];
+             FOR j WHILE ptr ISNT nilids
+             DO  print(( "  ", j, ": """, id OF ptr, """" ));
+                 ptr:= rest OF ptr
+             OD;
+             print(newline)
+         OD
+   FI;
+   print((resetindent, newline))
+END;
+
+PROC pt_ids = (REF IDS ids, INT sp) VOID:
+BEGIN
+   print(setindent(sp));
+   REF IDS s := ids;
+   WHILE s ISNT nilids
+   DO print(("""", id OF s, """ "));
+      s := rest OF s
+   OD
+END;
+
+PROC pt_attr = (ATTR at, INT sp) VOID:
+BEGIN
+   print(setindent(sp));
+   CASE at IN
+   (REF ATTRNAME an)
+        print(("Attrname ", attrno OF an, " ")),
+   (REF ATTRDATA ad)
+      ( print(("Attrdata ", classname OF ad, ":"));
+        pt_ids(strings OF ad, 0)
+      ),
+   (REF ATTRSTR at)
+      ( REF ATTRSTR as := at;
+        print("Attrstr");
+         WHILE as ISNT nilattrstr
+         DO pt_attr(elem OF as, 3);
+            as := rest OF as
+         OD
+       ),
+   (REF ATTRBRACKET ab)
+      ( print(("Attrbracket"));
+        pt_attr(attr OF ab, 3)
+      ),
+   (REF ATTRNULL)  print("Attrnull")
+   ESAC
+END;
+
+
+PROC pt_formula  = (FORMULA int, INT sp) VOID:
+BEGIN
+  print(setindent(sp));
+  CASE int IN
+   (REF FINT i)
+      print(("Fint ", int OF i, " ",text OF i,newline)) ,
+   (REF FCHECK  fc)
+    ( print(("Fcheck ",
+      ( (sort OF fc) MOD 8 | "EQ", "<=", ">=", "=", "/=" | "??" ), newline));
+      pt_formula(test OF fc, sp + 3);
+      pt_formula(standard OF fc, sp + 3)
+    ) ,
+   (REF FARITH fa)
+      print(("Farith ", nameno OF fa, newline)),
+   (REF FNAME fn)
+      print(("Fname ", intno OF fn, newline)),
+   (REF FDOP fd)
+    ( print(("Fdop ", sort OF fd, newline));
+      pt_formula(left OF fd, sp + 3);
+      pt_formula(right OF fd, sp + 3)
+    ) ,
+   (REF FMOP fm)
+    ( print(("Fmop ", sort OF fm, newline));
+      pt_formula(right OF fm, sp + 3)
+    ) ,
+   (REF FCOND fc)
+    ( print(("Fcond", newline));
+      pt_formula(cond OF fc, sp + 3);
+      pt_formula(true OF fc, sp + 3);
+      pt_formula(false OF fc, sp + 3)
+    ) ,
+   (REF FBRACKET fb)
+    ( print(("Fbracket", newline));
+      pt_formula(formula OF fb, sp + 3)
+    ),
+   (REF FMACPAR fm)
+     print(("Fmacpar ", macparno OF fm, newline)),
+   (REF FNULL fn)
+     print(("Fnull ", newline))
+   OUT sys fault("formula")
+   ESAC
+END;
+
+PROC pt_range = (RANGE rg, INT sp) VOID:
+BEGIN
+   print((setindent(sp), "Range ", newline));
+   pt_formula(lwb OF rg, sp +3);
+   pt_formula(upb OF rg, sp +3)
+END;
+
+PROC pt_formularange = (FORMULARANGE fg, INT sp) VOID:
+   CASE fg IN
+   (RANGE rg)  pt_range(rg, sp),
+   (FORMULA f) pt_formula(f, sp)
+   ESAC;
+
+PROC pt_formulas = (REF FORMULAS fs, INT sp) VOID:
+BEGIN
+   REF FORMULAS formulas := fs;
+   WHILE formulas ISNT nilformulas
+   DO pt_formula(formula OF formulas, sp);
+      formulas := rest OF formulas
+   OD
+END;
+
+PROC pt_type = (TYPE type, INT sp) VOID:
+BEGIN
+   REF TSTR tstr;
+   print(setindent(sp));
+   CASE type IN
+     (REF TNAME tn)
+        print(("Tname ", typeno OF tn, newline)),
+     (REF TROW tr)
+       ( print(("Trow ", newline));
+         pt_formula(size OF tr, sp + 3);
+         pt_type(elem OF tr, sp + 3)
+       ) ,
+     (REF TSTR ts)
+        ( print(("Tstr", newline));
+          tstr:= ts;
+          WHILE tstr ISNT niltstr
+          DO  pt_type(elem OF tstr, sp + 3);
+              tstr:= rest OF tstr
+          OD
+         ) ,
+     (REF TFN tf)
+         ( print(("Tfn", newline));
+           pt_type(from OF tf, sp + 3);
+           pt_type(to OF tf, sp + 3)
+         ) ,
+     (REF TBRACKET tb)
+         ( print(("Tbracket", newline));
+           pt_type(type OF tb, sp + 3)
+         ),
+     (REF TSTRING ts)
+         ( print(("Tstring", newline));
+           pt_formula(size OF ts, sp+3);
+           pt_type(char OF ts, sp+3)
+         ),
+     (REF TMACPAR tm)
+         print(("Tmacpar ", macparno OF tm, newline)),
+     (REF TNULL tn)
+         print(("Tnull ", newline)),
+     (REF TVOID tv)
+         print(("Tvoid ", newline))
+    OUT sys fault("type")
+   ESAC
+END;
+
+
+PROC (INSTANCE, INT) VOID pt_instance;
+
+PROC pt_names = (REF NAMES ns, INT sp) VOID:
+BEGIN
+   REF NAMES ids := ns;
+   print((setindent(sp), "Names  "));
+   WHILE ids ISNT nilnames
+   DO  print((nameno OF ids, " "));
+       ids:= rest OF ids
+   OD;
+   print(newline)
+END;
+
+PROC (SEQSTEP, INT) VOID pt_seqstep;
+PROC (STEP, INT) VOID pt_step;
+
+PROC pt_unit = (UNIT unit, INT sp) VOID:
+BEGIN
+   PROC pt_uchoices = (REF UCHOICES uc, INT sp) VOID :
+   BEGIN
+      REF UCHOICES uchoices := uc;
+      print((setindent(sp), "Uchoices ", newline));
+      WHILE uchoices ISNT niluchoices
+      DO IF check OF uchoices
+           THEN print((setindent(sp), " check", newline))
+           ELSE print((setindent(sp), " nocheck", newline))
+         FI;
+         print(setindent(sp));
+         IF (sort OF uchoices) = normalchoice
+           THEN print(("Normalchoice ", newline))
+           ELIF (sort OF uchoices) = elseofchoice
+             THEN print(("Elseofchoice ", newline))
+             ELIF (sort OF uchoices) = elsechoice
+               THEN print(("Elsechoice ", newline))
+               ELIF (sort OF uchoices) = noelsechoice
+                 THEN print(("Noelsechoice ", newline))
+                 ELSE print(("sort ", sort OF uchoices, newline))
+         FI;
+         pt_unit(test OF uchoices, sp +3);
+         pt_unit(output OF uchoices, sp +3);
+         uchoices := rest OF uchoices
+      OD
+    END;
+
+    print(setindent(sp));
+    CASE unit IN
+    (REF CNAME cn)
+       print(("Cname ", constno OF cn, newline)),
+    (REF CPRIM cp)
+       print(("Cprim ", typeno OF cp, " ", primno OF cp, newline)),
+    (REF CINT ci)
+       (print(("Cint ", typeno OF ci, newline));
+        pt_formula(index OF ci, sp +3)
+       ),
+    (REF CTYPE ct)
+        ( print(("Ctype ", newline));
+          pt_type(type OF ct, sp + 3)
+        ),
+    (REF CRANGE cr)
+       (print(("Crange ", typeno OF cr, newline));
+        pt_range(range OF cr, sp + 3)
+       ),
+    (REF CPRIMRANGE cpr)
+         print(("Cprimrange ", typeno OF cpr, " ", firstno OF cpr,
+                  " ", lastno OF cpr, newline)) ,
+    (REF CQUERY cq)
+       ( print(("Cquery", newline));
+         pt_type(querytype OF cq, sp + 3)
+       ),
+    (REF CQUOTE cq)
+       ( print(("Cquote ", typeno OF cq, "  "));
+         FOR i TO UPB string OF cq
+         DO print(((string OF cq)[i], " ")) OD;
+         print(newline)
+       ),
+    (REF CVOID cv) print(("Cvoid ", newline)),
+    (REF UALTS ua)
+       ( print(("Ualts", newline));
+         REF UALTS ualts:= ua;
+         WHILE ualts ISNT nilualts
+         DO  pt_unit(alt OF ualts, sp + 3);
+             ualts:= rest OF ualts
+         OD
+       ) ,
+    (REF UNAME un)
+       (print(("Uname "));
+        IF (sort OF un) = 1 THEN print("source ")
+          ELIF (sort OF un) = 2 THEN print("sink ")
+          ELIF (sort OF un) = 3 THEN print("iosource ")
+          ELSE print("iosink ")
+        FI;
+        print((nameno OF un, newline))
+       ),
+    (REF UREPLACE ud)
+       (print(("Ureplace ", newline));
+        pt_unit(unit OF ud, sp+3);
+        pt_unit(index OF ud, sp+3);
+        pt_unit(from OF ud, sp+3)
+       ),
+    (REF UASSOC ua)
+       (print(("Uassoc ", typeno OF ua, " ", altno OF ua, newline));
+        pt_unit(assoc OF ua, sp +3)
+       ),
+    (REF UEXTRACT ue)
+       (print(("Uextract ", typeno OF ue, " ", altno OF ue, newline));
+        pt_unit(extract OF ue, sp +3)
+       ),
+    (REF UPORTNAME uti)
+       (print(("Uportname ", fnno OF uti, " ", nameno OF uti, newline));
+        pt_unit(unit OF uti, sp +3)
+       ),
+    (REF UINDEX ui)
+       (print(("Uindex ",newline));
+        pt_unit(unit OF ui, sp +3);
+        pt_formula(index OF ui, sp +3)
+       ),
+    (REF UTRIM ut)
+       (print(("Utrim ", newline));
+        pt_unit(unit OF ut, sp +3);
+        pt_range(range OF ut, sp + 3)
+       ),
+    (REF UDYINDEX ud)
+       (print(("Udyindex ", newline));
+        pt_unit(unit OF ud, sp +3);
+        pt_unit(index OF ud, sp +3)
+       ),
+    (REF UROW ur)
+       (print(("Urow ",newline));
+        pt_formula(size OF ur, sp +3);
+        pt_unit(elem OF ur, sp +3)
+       ),
+    (REF USTR us)
+       (REF USTR ustr := us;
+        print(("Ustr ", newline));
+        WHILE ustr ISNT nilustr
+        DO pt_unit(elem OF ustr, sp +3);
+           ustr := rest OF ustr
+        OD
+       ),
+    (REF UCONC uc)
+       (print(("Uconc ", IF string OF uc THEN "string " ELSE "row " FI,
+               sort OF uc, newline));
+        pt_unit(left OF uc, sp +3);
+        pt_unit(right OF uc, sp +3)
+       ),
+    (REF UMINST um)
+       (print(("Uminst ", newline));
+        pt_instance(inst OF um, sp +3);
+        pt_unit(right OF um, sp +3)
+       ),
+    (REF UDINST ud)
+       (print(("Udinst ", newline));
+        pt_instance(inst OF ud, sp +3);
+        pt_unit(left OF ud, sp +3);
+        pt_unit(right OF ud, sp +3)
+       ),
+    (REF UCASE uc)
+       (print(("Ucase ", newline));
+        pt_unit(input OF uc, sp +3);
+        pt_uchoices(choices OF uc, sp +3)
+       ),
+    (REF UCOND ucond)
+       (print(("Ucond ", newline));
+        pt_formula(cond OF ucond, sp +3);
+        pt_unit(true OF ucond, sp +3);
+        pt_unit(false OF ucond, sp +3)
+       ),
+    (REF UREPL ur)
+       (print(("Urepl ", newline));
+        pt_formula(repl OF ur, sp +3);
+        pt_unit(body OF ur, sp +3)
+       ),
+    (REF USEQUENCE us)
+       (print(("Usequence ", newline));
+        pt_seqstep(body OF us, sp +3);
+        pt_unit(output OF us, sp +3)
+       ),
+    (REF USERIES us)
+       (print(("Useries ", newline));
+        REF SERIES series := body OF us;
+        print((setindent(sp+3), "Series ", newline));
+        WHILE series ISNT nilseries
+        DO pt_step(step OF series, sp +3);
+           series := rest OF series
+        OD;
+        pt_unit(output OF us, sp +3)
+       ),
+    (REF UBRACKET ub)
+       (print(("Ubracket", newline));
+        pt_unit(unit OF ub, sp + 3)
+       ),
+    (REF UATTR ua)
+       (print(("Uattr ", newline));
+        pt_unit(unit OF ua, sp +3);
+        pt_attr(attr OF ua, sp);
+        print(newline)
+       ),
+    (REF UCHECK uc)
+       (print(("Ucheck ", newline));
+        pt_unit(unit OF uc, sp +3);
+        pt_formula(check OF uc, sp +3)
+       ),
+    (REF USTRING us)
+       (print(("Ustring", newline));
+        pt_formula(size OF us, sp+3);
+        pt_unit(char OF us, sp+3)
+       ),
+    (REF UFN ufn)
+       (print(("Ufn", newline));
+        pt_unit(sink OF ufn, sp+3);
+        pt_unit(source OF ufn, sp+3)
+       ),
+    (REF UNULL un) print(("Unull ", newline))
+    OUT sys fault("unit")
+    ESAC
+END;
+
+PROC pt_macparam = (MACPARAM p, INT sp) VOID:
+BEGIN
+   print((setindent(sp), "Sort ", sort OF p, newline));
+   CASE param OF p IN
+   (ATTRTAG at)   (pt_attr(tag OF at, sp+3); print(newline)),
+   (FORMULATAG ft) pt_formula(tag OF ft, sp+3),
+   (TYPETAG tg)    pt_type(tag OF tg, sp+3),
+   (UNITTAG ug)    pt_unit(tag OF ug, sp+3),
+   (INSTANCE inst) pt_instance(inst, sp+3)
+   ESAC
+END;
+
+pt_instance := (INSTANCE ins, INT sp) VOID:
+BEGIN
+    print((setindent(sp), "Instance ", fnno OF ins));
+    IF (macparams OF ins) IS nilmacparams
+    THEN print((" nilmacparams ")); pt_attr(attr OF ins, 0)
+    ELIF UPB (macparams OF ins) = 0
+    THEN print((" nullmacparams ")); pt_attr(attr OF ins, 0)
+    ELSE print(newline);
+         FORALL p IN (macparams OF ins) DO pt_macparam(p, sp) OD;
+         pt_attr(attr OF ins, sp+3)
+    FI;
+    print(newline)
+END;
+
+PROC pt_tag = (UNION(REF TYPETAG, REF FORMULATAG,
+                     REF UNITTAG) tag, INT sp) VOID:
+BEGIN
+   CASE tag IN
+   (REF TYPETAG tg)
+     ( print((setindent(sp), "Typetag ", newline));
+       pt_type(tag OF tg, sp + 3)
+     ),
+   (REF FORMULATAG fg)
+     ( print((setindent(sp), "Formulatag ", newline));
+       pt_formula(tag OF fg, sp + 3)
+     ),
+   (REF UNITTAG ug)
+     ( print((setindent(sp), "Unittag ", newline));
+       pt_unit(tag OF ug, sp + 3)
+     )
+   OUT sys fault("tag")
+   ESAC
+END;
+
+PROC pt_declaration = (DECLARATION dec, INT sp) VOID:
+BEGIN
+   CASE dec IN
+   (ATTRNAME an) print((setindent(sp), "Attrname ", attrno OF an, newline)),
+   (FNAME fn) print((setindent(sp), "Fname ", intno OF fn, newline)),
+   (TNAME tn) print((setindent(sp), "Tname ", typeno OF tn, newline)),
+   (CNAME cn) print((setindent(sp), "Cname ", constno OF cn, newline)),
+   (FNNAME fnn) print((setindent(sp), "Fnname ", fnno OF fnn, newline))
+   OUT sys fault("declaration")
+   ESAC
+END;
+
+PROC pt_print = (UNION(REF PRINT, REF FAULT) pf, INT sp) VOID:
+BEGIN
+   REF PRINTITEMS printitems :=
+     CASE pf IN
+     (REF PRINT ps)
+       ( print((setindent(sp), "Print", newline));
+         pt_formula(cond OF ps, sp +3);
+         print OF ps
+       ),
+     (REF FAULT fs)
+       ( print((setindent(sp), "Fault", newline));
+         pt_formula(cond OF fs, sp +3);
+         fault OF fs
+       )
+     OUT sys fault("print"); NIL
+     ESAC;
+   print((setindent(sp+3), "Printitems", newline));
+   WHILE printitems ISNT nilprintitems
+   DO CASE item OF printitems IN
+      (ID id ) print((setindent(sp+6), id, newline)),
+      (REF FORMULATAG ftg) pt_tag(ftg, sp +6)
+      ESAC;
+      printitems := rest OF printitems
+   OD
+END;
+
+pt_seqstep := (SEQSTEP step, INT sp) VOID:
+BEGIN
+   PROC pt_seqchoices = (REF SEQCHOICES sc, INT sp) VOID:
+   ( REF SEQCHOICES seqchoices := sc;
+     print((setindent(sp), "Seqchoices ", newline));
+     WHILE seqchoices ISNT nilseqchoices
+     DO print(setindent(sp));
+        IF check OF seqchoices
+        THEN print((" check ", newline))
+        ELSE print((" nocheck ", newline))
+        FI;
+        print(setindent(sp));
+        IF (sort OF seqchoices) = normalchoice
+        THEN print(("Normalchoice ", newline))
+          ELIF (sort OF seqchoices) = elseofchoice
+          THEN print(("Elseofchoice ", newline))
+            ELIF (sort OF seqchoices) = elsechoice
+            THEN print(("Elsechoice ", newline))
+              ELIF (sort OF seqchoices) = noelsechoice
+              THEN print(("Noelsechoice ", newline))
+              ELSE print(("sort ", sort OF seqchoices, newline))
+        FI;
+        pt_unit(test OF seqchoices, sp +3);
+        pt_seqstep(output OF seqchoices, sp +3);
+        seqchoices := rest OF seqchoices
+      OD
+   );
+
+   CASE step IN
+   (DECLARATION dec) pt_declaration(dec, sp +3),
+   (REF PRINT pt)    pt_print(pt, sp +3),
+   (REF FAULT ft)    pt_print(ft, sp +3),
+   (REF SEQLET sl)
+    ( print((setindent(sp), "Seqlet ", newline));
+      pt_names(letnames OF seqlet OF sl, sp +3);
+      pt_unit(unit OF seqlet OF sl, sp +3)
+    ) ,
+   (REF SEQVAR sv)
+    ( print((setindent(sp), "Seqvar ", newline));
+      pt_names(letnames OF seqvar OF sv, sp +3);
+      pt_unit(unit OF seqvar OF sv, sp +3)
+    ),
+   (REF SEQPVAR spv)
+    ( print((setindent(sp), "Seqpvar ", newline));
+      pt_names(pvarnames OF spv, sp+3);
+      pt_unit(init OF spv, sp+3)
+    ),
+   (REF SEQASSIGN sa)
+    ( print((setindent(sp), "Seqassign", newline));
+      pt_unit(from OF sa, sp + 3);
+      pt_unit(to OF sa, sp + 3)
+    ),
+   (REF SEQCASE sc)
+    ( print((setindent(sp), "Seqcase", newline));
+      pt_unit(input OF sc, sp +3);
+      pt_seqchoices(choices OF sc, sp +3)
+    ),
+   (REF SEQCOND scond)
+    ( print((setindent(sp), "Seqcond ", newline));
+      pt_formula(cond OF scond, sp + 3);
+      pt_seqstep(true OF scond, sp + 3);
+      pt_seqstep(false OF scond, sp + 3)
+    ) ,
+   (REF SEQREPL sd)
+    ( print((setindent(sp), "Seqrepl ", newline));
+      pt_formula(repl OF sd, sp +3);
+      pt_seqstep(body OF sd, sp +3)
+    ) ,
+  (REF SEQROW sr)
+    ( print((setindent(sp), "Seqrow ", newline));
+      pt_formula(size OF sr, sp +3);
+      pt_seqstep(elem OF sr, sp +3)
+    ) ,
+   (REF SEQNULL sn)
+      print((setindent(sp), "Seqnull ", newline)),
+   (REF SEQUENCE sq)
+     (REF SEQUENCE sequence := sq;
+      print((setindent(sp), "Sequence ", newline));
+      WHILE sequence ISNT nilsequence
+      DO pt_seqstep(step OF sequence, sp +3);
+         sequence := rest OF sequence
+      OD
+     )
+   OUT sys fault("seqstep")
+   ESAC
+END;
+
+
+pt_step := (STEP step, INT sp) VOID:
+BEGIN
+   CASE step IN
+   (DECLARATION dec) pt_declaration(dec, sp +3),
+   (REF PRINT pt)    pt_print(pt, sp +3),
+   (REF FAULT ft)    pt_print(ft, sp +3),
+   (REF LET let)
+     (print((setindent(sp), "Let ", newline));
+      pt_names(letnames OF let, sp +3);
+      pt_unit(unit OF let, sp +3)
+     ),
+    (REF MAKE mk)
+      ( print((setindent(sp), "Make ", newline));
+        pt_formulas(sizes OF mk, sp + 3);
+        pt_instance(inst OF mk, sp +3);
+        pt_names(makenames OF mk, sp +3)
+      ),
+    (REF JOIN jn)
+      ( print((setindent(sp), "Join ", newline));
+        pt_unit(from OF jn, sp +3);
+        pt_unit(to OF jn, sp +3)
+      ),
+    (REF REPLJOIN rjn)
+      ( print((setindent(sp), "Repljoin ", newline));
+        pt_formulas(repls OF rjn, sp +3);
+        REF JOINS joins := joins OF rjn;
+        print((setindent(sp+3), "joins ", newline));
+        WHILE joins ISNT niljoins
+        DO  pt_step(join OF joins, sp +3);
+            joins := rest OF joins
+        OD
+      ),
+    (REF STEPNULL)  print((setindent(sp), "Stepnull ", newline))
+    OUT sys fault("step")
+    ESAC
+END;
+
+PROC pt_typebody = (TYPEBODY body, INT sp) VOID:
+BEGIN
+   CASE body IN
+   (REF VECTOR [] ALTERNATIVE nn)
+    ( print((setindent(sp), "Newnames ", newline));
+      FORALL al IN nn
+      DO print((setindent(sp+3), altname OF al, newline));
+         pt_type(assoc OF al, sp + 6)
+      OD
+    ) ,
+    (REF NEWINTS ni)
+     ( print((setindent(sp), "Newints ", tagname OF ni, newline));
+       pt_range(range OF ni, sp +3)
+     ),
+    (REF NEWCHARS nc)
+     ( print((setindent(sp), "Newchars ", tagname OF nc, newline));
+       print(setindent(sp+3));
+       FOR i TO UPB chars OF nc
+       DO print(((chars OF nc)[i], " ")) OD;
+       print(newline)
+     ),
+    (REF TYPETAG tg) pt_tag(tg, sp)
+    OUT sys fault("typebody")
+    ESAC
+END;
+
+PROC pt_fnbody = (FNBODY body, INT sp) VOID:
+BEGIN
+   CASE body IN
+   (REF UNITTAG ut)  pt_tag(ut, sp),
+   (REF ARITH ra)
+    ( print((setindent(sp), "Arith ", newline));
+      pt_formula(output OF ra, sp + 3)
+    ) ,
+   (REF ALIENCODE bi)
+    ( IF biop OF bi
+      THEN  print((setindent(sp), "Biop ", name OF bi, newline))
+      ELSE  print((setindent(sp), "Alien ", name OF bi, newline))
+      FI;
+      IF (macparams OF bi) ISNT nilmacparams
+      THEN FORALL p IN (macparams OF bi) DO pt_macparam(p, sp) OD
+      FI
+    ),
+   (REF IMPORT im)
+    ( IF im ISNT nilimport
+      THEN print((setindent(sp), "Import ", name OF im, " ", contextno OF im,
+                  newline));
+           CTNAME ctn = ctname OF im;
+           print((setindent(sp+3), "Ctname ", context OF ctn, " ", import OF ctn,
+                  newline))
+      ELSE  print((setindent(sp), "Nilimport", newline))
+      FI
+    ),
+   (REF IDELAY id)
+    ( print((setindent(sp), "Idelay ", newline));
+      pt_unit(init OF id, sp + 3);
+      pt_formula(delaytime OF id, sp +3)
+    ) ,
+   (REF ADELAY ad)
+    ( print((setindent(sp), "Adelay ", sort OF ad, newline));
+      pt_unit(init OF ad, sp + 3);
+      pt_formula(ambigtime OF ad, sp + 3);
+      pt_unit(ambig OF ad, sp + 3);
+      pt_formula(delaytime OF ad, sp + 3)
+    ) ,
+   (REF RAM rm)
+    ( print((setindent(sp), "Ram", newline));
+      pt_unit(init OF rm, sp + 3)
+    ) ,
+   (REF SAMPLE sl)
+    ( print((setindent(sp), "Sample ", sort OF sl, " "));
+      pt_formula(interval OF sl, sp +3);
+      pt_unit(init OF sl, sp + 3);
+      pt_formula(skew OF sl, sp +3)
+    ) ,
+   (REF TIMESCALE ts)
+    ( print((setindent(sp), "Timescale ", faster OF ts, " ", sort OF ts, " "));
+      pt_instance(inst OF ts, sp+3);
+      pt_formula(scale OF ts, sp +3);
+      pt_unit(init OF ts, sp + 3);
+      pt_formula(skew OF ts, sp +3)
+    ),
+   (REF REFORM rf)
+    ( print((setindent(sp), "Reform ", newline)) ),
+   (REF BODYCHECK bc)
+    ( print((setindent(sp), "Bodycheck ", newline));
+      print((setindent(sp+3), "joincheck: "));
+      REF INTS jc := joincheck OF bc;
+      WHILE jc ISNT nilints
+         DO print((int OF jc, " " )); jc := rest OF jc OD;
+      print(newline);
+      IF check OF bc
+      THEN  print((setindent(sp+3), "check", newline))
+      ELSE  print((setindent(sp+3), "nocheck", newline))
+      FI;
+      pt_fnbody(fnbody OF bc, sp + 3)
+    ),
+   (REF BODYNULL bn)
+    ( print((setindent(sp), "Bodynull", newline)) )
+   OUT sys fault("fnbody")
+   ESAC
+END;
+
+
+PROC pt_decsort = (INT sort) STR:
+  CASE sort IN
+  {1} " Outer ",
+  {2} " Local ",
+  {3} " Macpar "
+  OUT sys fault("illegal sort"); SKIP
+  ESAC;
+
+PROC pt_usage = (REF USAGE us, INT sp) VOID:
+BEGIN
+   IF us IS nilusage
+   THEN  print((setindent(sp), "nilusage", newline))
+   ELSE  print((setindent(sp), "Usage ", newline));
+         print((setindent(sp+3), "Contextno = ", contextno OF us,
+                             " Closureno = ", closureno OF us,
+                             " Libv_spec = ", version_str(libv_spec OF us),
+                             " Libv_body = ", version_str(libv_body OF us),
+                             IF import OF us THEN " Import " ELSE "" FI,
+                             IF export OF us THEN " Export " ELSE "" FI,
+                newline))
+   FI
+END;
+
+PROC pt_fndec = (REF FNDEC fd, INT sp) VOID:
+BEGIN
+   IF fd IS nilfndec
+   THEN  print((setindent(sp), "nilfndec", newline))
+   ELSE  print((setindent(sp), pt_decsort(sort OF fd), "Fndec ", fnname OF fd,
+                newline));
+         IF macro OF fd
+         THEN print((setindent(sp), " macro", newline))
+         ELSE print((setindent(sp), " not macro", newline))
+         FI;
+         IF (macspecs OF fd) IS nilmacspecs
+         THEN print((setindent(sp), " nilmacspecs", newline))
+         ELIF UPB (macspecs OF fd) = 0
+         THEN print((setindent(sp), " nullmacspecs", newline))
+         ELSE FORALL ms IN (macspecs OF fd)
+              DO  print((setindent(sp), "Macspec Sort ", sort OF ms, newline));
+                  pt_declaration(spec OF ms, sp + 3)
+              OD
+         FI;
+         pt_attr(attr OF fd, sp);
+         print(newline);
+         print((setindent(sp), "Inputs", newline));
+         pt_names(inputs OF fd, sp +3);
+         print((setindent(sp), "Outputs", newline));
+         pt_names(outputs OF fd, sp +3);
+
+         print((setindent(sp), "Nametypes table", newline));
+         FORALL nametype IN (nametypes OF fd)
+         DO print((setindent(sp), name OF nametype, newline));
+            pt_type ( type OF nametype, sp +6);
+            pt_attr(attr OF nametype, sp + 6 );
+            print(newline)
+         OD;
+
+         pt_fnbody(fnbody OF fd, sp);
+         pt_usage(usage OF fd, sp)
+    FI
+END;
+
+
+PROC pt_typedec = (REF TYPEDEC ty, INT sp) VOID:
+BEGIN
+   IF ty IS niltypedec
+   THEN  print((setindent(sp), "niltypedec", newline))
+   ELSE  print((setindent(sp), pt_decsort(sort OF ty),
+                   "Typedec ", typename OF ty, newline));
+         pt_attr(attr OF ty, sp +3);
+         print(newline);
+         pt_typebody(body OF ty, sp +3);
+         pt_usage(usage OF ty, sp +3)
+   FI
+END;
+
+PROC pt_attrdec = (REF ATTRDEC ad, INT sp) VOID:
+BEGIN
+   IF ad IS nilattrdec
+   THEN print((setindent(sp), "nilattrdec", newline))
+   ELSE print((setindent(sp), pt_decsort(sort OF ad),
+                  "Attrdec ", attrname OF ad, newline));
+        print(setindent(sp));
+        pt_attr(value OF ad, sp +3);
+        print(newline);
+        pt_usage(usage OF ad, sp +3)
+   FI
+END;
+
+PROC pt_intdec = (REF INTDEC id, INT sp) VOID:
+BEGIN
+   IF id IS nilintdec
+   THEN print((setindent(sp), "nilintdec", newline))
+   ELSE print((setindent(sp), pt_decsort(sort OF id),
+                  "Intdec ", intname OF id, newline));
+        pt_attr(attr OF id, sp +3);
+        print(newline);
+        pt_formularange(value OF id, sp +3);
+        pt_usage(usage OF id, sp +3)
+   FI
+END;
+
+PROC pt_constdec = (REF CONSTDEC cd, INT sp) VOID:
+BEGIN
+   IF cd IS nilconstdec
+   THEN print((setindent(sp), "nilconstdec", newline))
+   ELSE print((setindent(sp), pt_decsort(sort OF cd),
+                 "Constdec ", constname OF cd, newline));
+        pt_attr(attr OF cd, sp +3);
+        print(newline);
+        pt_unit(value OF cd, sp+3);
+        pt_usage(usage OF cd, sp+3)
+   FI
+END;
+
+
+PROC pt_outer = (OUTER o, INT sp) VOID:
+BEGIN
+   print(( setindent(sp), "Outer ",
+           CASE sort OF o IN "Attr", "Int", "Type", "Const", "FN" ESAC,
+           " closure number ", closureno OF o, newline ));
+   REF ENVIRON env = environ OF o;
+   FORALL attr IN attrs OF env  DO pt_attrdec(attr, sp + 3) OD;
+   FORALL int IN ints OF env  DO pt_intdec(int, sp + 3) OD;
+   FORALL type IN types OF env  DO pt_typedec(type, sp + 3) OD;
+   FORALL const IN consts OF env  DO pt_constdec(const, sp + 3) OD;
+   FORALL fn IN fns OF env  DO print(newline); pt_fndec(fn, sp + 3) OD;
+   newline(out)
+END;
+
+PROC pt_closure = (CLOSURE close, INT sp) VOID:
+BEGIN
+   pt_ids_table(FALSE, sp);
+   REF OUTERS os := outers OF close;
+   INT  n:= 0;
+   WHILE os ISNT nilouters DO  os:= rest OF os;  n PLUSAB 1  OD;
+   os:= outers OF close;
+   print(( setindent(sp), "Closure with ", n,
+           " Outer declarations (max closureno = ", maxclosureno(close),
+           ")", lines(2) ));
+   WHILE os ISNT nilouters
+   DO pt_outer(outer OF os, sp);
+      os := rest OF os
+   OD;
+   print((resetindent, newline))
+END;
+
+
+
+PROC  pt_idstable = VOID:  pt_ids_table(TRUE, 0)
+
+
+KEEP  pt_closure, pt_outer, pt_idstable
+FINISH

@@ -1,0 +1,2432 @@
+DECS write_ella CONTEXT VOID USE putstrings, osinterface, basics,
+     messageproc, options, assmodes, modeprocs, closureprocs, syntax_inds:
+
+{ " Id: write_ella.sta,v 1.1 91/10/14 14:32:19 edcad Exp $" }
+configinfo A68CONFIG "$Id: write_ella.a68,v 34.3 1995/03/29 13:03:07 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+
+         :88  DJS
+14:08:89  CR 642. Updated for Kernel Interface.  DCT
+11:12:89  Changes to allow transforms after calling layout. EVW
+18:12:89  CMACPAR, ALIENCODE, SAMPLE and TIMESCALE added
+              INSTANCE, FNDEC, MACSPEC and MACPARAM altered.  EVW
+29:03:90  Macros can now have function parameters. JIT
+24:04:90  CR 643. TVOID, UVOID, UFN added. MAKE, JOIN, FNSPEC altered. EVW
+16:07:90  Macros can now have macro parameters. JIT
+ 8:10:90  Corrections to implicit/explicit macro parameter handling. DJS
+16:11:90  Replace FLTPROC by MESSAGEPROC, and sysfault() by msg( system, ).
+              DJS
+07:01:91  R6B_1  Error in  macparameters for inner macro decs.  DJS
+16:04:91  R6B25  Corrections for layout of FN/MAC parameters of macros. EVW
+ 9:05:91  Extra indicators added for interactive transfrom environment.
+              Rename 'write_name' to 'write_text'.
+              Installed checks of assembler version number.  DJS
+21:05:91  Correction to output of declaration keyword in macro parameters.
+                                                                        DJS
+ 4:06:91  Removal of layout info from modes. DJS
+31:07:91  Updated to version 7 of modes. EVW
+ 3:10:91  Replace null attribute name by visible space. DJS
+13:11:91  Addition of textattributes. EVW
+17:12:91  UTERMINDEX added, BODYDATA removed, MACSPEC altered. EVW
+06:02:92  add # around parameters of expanded instances. EVW
+13:02:92  print out UNULL as blank space (multiple assignments) EVW
+02:03:92  declaration attributes added. EVW
+17:03:92  Multiple strings added to CQUOTE. EVW
+29:07:92  Changes made for CONST / UNIT mode change. JIT
+11:11:92  Updated for 'chars' mode changes. JIT
+13:05:93  Handling of replicators altered. EVW
+15:06:93  add seqrow. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.025 
+26:08:94  33.002  DJS   CoreElla  Add options parameter to control format of
+                                  output. Correct R6B209, error in printing
+                                  TYPE parameters to MACs. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE MPLIST = STRUCT (BOOL written, DECLARATION decl, REF MPLIST rest);
+REF MPLIST nilmplist = NIL;
+
+MODE RGENV = STRUCT( REF FNDEC fd,
+                     REF MPLIST mplist,
+                     REF ENVIRON dec_env );
+
+VECTOR[ 0 ]ID nullidvec;
+RGENV nullrgenv;
+INT write_version_no = 921103;  { Integer used for continuity checking with
+                                  ASSMODES }
+
+VECTOR[ ]CHAR orb_txt = "(",
+              crb_txt = ")",
+              osb_txt = "[",
+              csb_txt = "]",
+              ocb_txt = "{",
+              ccb_txt = "}",
+              vis_space_txt = "_",
+              slash_txt = "/",
+              ampsand_txt = "&",
+              qmark_txt = "?",
+              attr_txt = "ATTR",
+              at_txt = "@",
+              prime_txt = "'",
+              equals_txt = "=",
+              stroke_txt = "|",
+              colon_txt = ":",
+              comma_txt = ",",
+              dot_txt = ".",
+              semi_txt = ";",
+              plus_txt = "+",
+              minus_txt = "-",
+              star_txt = "*",
+              perc_txt = "%",
+              ne_txt = "/=",
+              le_txt = "<=",
+              ge_txt = ">=",
+              lt_txt = "<",
+              gt_txt = ">",
+              and_txt = "AND",
+              or_txt = "OR",
+              sl_txt = "SL",
+              sr_txt = "SR",
+              iand_txt = "IAND",
+              ior_txt = "IOR",
+              mod_txt = "MOD",
+              not_txt = "NOT",
+              inot_txt = "INOT",
+              sqrt_txt = "SQRT",
+              abs_txt = "ABS",
+              int_txt = "INT",
+              if_txt = "IF",
+              then_txt = "THEN",
+              else_txt = "ELSE",
+              fi_txt = "FI",
+              dotdot_txt = "..",
+              type_txt = "TYPE",
+              to_txt = "->",
+              string_txt = "STRING",
+              slashbr_txt = "/(",
+              new_txt = "NEW",
+              nobody_txt = "NOBODY",
+              biop_txt = "BIOP",
+              alien_txt = "ALIEN",
+              arith_txt = "ARITH",
+              reform_txt = "REFORM",
+              import_txt = "IMPORT",
+              delay_txt = "DELAY",
+              idelay_txt = "IDELAY",
+              ram_txt = "RAM",
+              sample_txt = "SAMPLE",
+              faster_txt = "FASTER",
+              slower_txt = "SLOWER",
+              const_txt = "CONST",
+              print_txt = "PRINT",
+              fault_txt = "FAULT",
+              let_txt = "LET",
+              make_txt = "MAKE",
+              join_txt = "JOIN",
+              for_txt = "FOR",
+              becomes_txt = ":=",
+              case_txt = "CASE",
+              of_txt = "OF",
+              elseof_txt = "ELSEOF",
+              esac_txt = "ESAC",
+              var_txt = "VAR",
+              pvar_txt = "PVAR",
+              init_txt = "::=",
+              output_txt = "OUTPUT",
+              end_txt = "END",
+              io_txt = "IO",
+              twoslash_txt = "//",
+              twoosb_txt = "[[",
+              twocsb_txt = "]]",
+              replace_txt = "REPLACE",
+              conc_txt = "CONC",
+              begin_txt = "BEGIN",
+              seq_txt = "SEQ",
+              mac_txt = "MAC",
+              fn_txt = "FN",
+              void_txt = "()",
+              hash_txt = "#",
+              backslash_txt = "\",
+              qmark_name = "_?_";
+
+OP = = (FORMULA a, b )BOOL:
+    CASE a IN
+    (REF FINT finta )
+        CASE b IN (REF FINT fintb ) int OF finta = int OF fintb OUT FALSE ESAC,
+    (REF FCHECK fca )
+        b = test OF fca,
+    (REF FARITH fara )
+        CASE b IN (REF FARITH farb ) nameno OF fara = nameno OF farb
+        OUT                          FALSE
+        ESAC,
+    (REF FNAME fnaa )
+        CASE b IN (REF FNAME fnab ) intno OF fnaa = intno OF fnab
+        OUT                         FALSE
+        ESAC,
+    (REF FDOP fdopa )
+        CASE b IN (REF FDOP fdopb ) sort OF fdopa = sort OF fdopb ANDTH
+                                    left OF fdopa = left OF fdopb ANDTH
+                                    right OF fdopa = right OF fdopb
+        OUT                         FALSE
+        ESAC,
+    (REF FMOP fmopa )
+        CASE b IN (REF FMOP fmopb ) sort OF fmopa = sort OF fmopb ANDTH
+                                    right OF fmopa = right OF fmopb
+        OUT                         FALSE
+        ESAC,
+    (REF FCOND fcnda )
+        CASE b IN (REF FCOND fcndb ) cond OF fcnda = cond OF fcndb ANDTH
+                                     true OF fcnda = true OF fcndb ANDTH
+                                     false OF fcnda = false OF fcndb
+        OUT                          FALSE
+        ESAC,
+    (REF FBRACKET fbra )
+        b = formula OF fbra,
+    (REF FNULL fnla )
+        CASE b IN (REF FNULL fnlb ) TRUE OUT FALSE ESAC
+    OUT
+        FALSE
+    ESAC;
+
+OP = = (TYPE a, b )BOOL:
+    CASE a IN
+    (REF TNAME tnma )
+        CASE b IN (REF TNAME tnmb ) typeno OF tnma = typeno OF tnmb
+        OUT                         FALSE
+        ESAC,
+    (REF TROW tra )
+        CASE b IN (REF TROW trb ) size OF tra = size OF trb ANDTH
+                                  elem OF tra = elem OF trb
+        OUT                       FALSE
+        ESAC,
+    (REF TSTR tsa )
+        CASE b IN (REF TSTR tsb )
+            IF tsa IS niltstr THEN
+                tsb IS niltstr
+          ELIF tsb IS niltstr THEN
+                FALSE
+          ELSE
+                elem OF tsa = elem OF tsb ANDTH
+                rest OF tsa = rest OF tsb
+            FI
+        OUT
+            FALSE
+        ESAC,
+    (REF TFN tfa )
+        CASE b IN (REF TFN tfb ) from OF tfa = from OF tfb
+        OUT                      FALSE
+        ESAC,
+    (REF TSTRING tsra )
+        CASE b IN (REF TSTRING tsrb ) size OF tsra = size OF tsrb ANDTH
+                                      char OF tsra = char OF tsrb
+        OUT                           FALSE
+        ESAC,
+    (REF TBRACKET tba )
+        b = type OF tba,
+    (REF TNULL tnla )
+        CASE b IN (REF TNULL tnlb ) TRUE
+        OUT                         FALSE
+        ESAC,
+    (REF TVOID tav)
+        CASE b IN (REF TVOID tbv) TRUE
+        OUT                       FALSE
+        ESAC
+    OUT
+        FALSE
+    ESAC;
+
+PROC macparam_sort = (MACPARAM param )INT: ABS( BIN sort OF param AND 16r1 );
+
+
+PROC make_mplist = (REF VECTOR[ ]MACSPEC macspecs, REF MPLIST mp )REF MPLIST:
+BEGIN
+   REF MPLIST mplist := mp;
+   IF macspecs ISNT nilmacspecs THEN
+      FORALL m IN macspecs
+        DO  mplist := HEAP MPLIST := (FALSE, spec OF m, mplist) OD
+   FI;
+   mplist
+END;
+
+PROC equal_decl = (DECLARATION da, db) BOOL:
+   CASE da IN
+   (FNAME fa)
+      CASE db IN (FNAME fb) intno OF fa = intno OF fb OUT FALSE ESAC,
+   (TNAME ta)
+      CASE db IN (TNAME tb) typeno OF ta = typeno OF tb OUT FALSE ESAC,
+   (CNAME ca)
+      CASE db IN (CNAME cb) constno OF ca = constno OF cb OUT FALSE ESAC,
+   (FNNAME fna)
+      CASE db IN (FNNAME fnb) fnno OF fna = fnno OF fnb OUT FALSE ESAC
+   OUT FALSE
+   ESAC;
+
+PROC set_fnenv = (REF RGENV env,
+                  REF FNDEC fd,
+                  REF MPLIST outer_mplist,
+                  REF ENVIRON dec_env ) VOID:
+BEGIN
+REF MPLIST mplist := outer_mplist;
+    IF macro OF fd THEN
+        mplist := make_mplist( macspecs OF fd, mplist )
+    FI;
+
+    env := ( fd, mplist, dec_env )
+END;
+
+PROC attrname = (INT attrno, REF RGENV env ) VECTOR[ ]CHAR:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+ID name = attrname OF ( attrs OF dec_env )[ attrno ];
+
+    name
+END;
+
+PROC intname = (INT intno, REF RGENV env ) VECTOR[ ]CHAR:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+ID name = intname OF ( ints OF dec_env )[ intno ];
+
+    name
+END;
+
+PROC typename = (INT typeno, REF RGENV env ) VECTOR[ ]CHAR:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+ID name = typename OF ( types OF dec_env )[ typeno ];
+
+    name
+END;
+
+PROC constname = (INT constno, REF RGENV env ) VECTOR[ ]CHAR:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+ID name = constname OF ( consts OF dec_env )[ constno ];
+
+    name
+END;
+
+PROC fnname = (INT fnno, REF RGENV env ) VECTOR[ ]CHAR:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+ID name = fnname OF ( fns OF dec_env )[ fnno ];
+
+    name
+END;
+
+PROC altname = (INT typeno, nno, REF RGENV env, MESSAGEPROC msg )ID:
+BEGIN
+REF ENVIRON dec_env = dec_env OF env;
+REF TYPEDEC td = ( types OF dec_env )[ typeno ];
+
+    CASE body OF td IN
+    (REF VECTOR[ ]ALTERNATIVE alts ) altname OF alts[ nno ],
+    (REF NEWCHARS nc) tagname OF nc,
+    (REF NEWINTS ni ) tagname OF ni
+    OUT
+       msg( system,  "altname dec" );
+       SKIP
+    ESAC
+END;
+
+PROC is_ella_char = (INT typeno, REF RGENV env) BOOL:
+BEGIN
+  REF ENVIRON dec_env = dec_env OF env;
+  REF TYPEDEC td = ( types OF dec_env )[ typeno ];
+
+  CASE body OF td IN
+  (REF NEWCHARS nc) TRUE
+  OUT FALSE
+  ESAC
+END;
+
+PROC find_char = (INT typeno, primno, REF RGENV env, MESSAGEPROC msg ) CHAR:
+BEGIN
+  REF ENVIRON dec_env = dec_env OF env;
+  REF TYPEDEC td = ( types OF dec_env )[ typeno ];
+
+  CASE body OF td IN
+  (REF NEWCHARS nc) (chars OF nc)[primno]
+  OUT msg( system, "find_char");
+      SKIP
+  ESAC
+END;
+
+PROC make_string = (INT typeno, REF VECTOR [] INT rvi, REF RGENV env,
+                    MESSAGEPROC msg ) REF VECTOR [] CHAR:
+BEGIN
+  REF ENVIRON dec_env = dec_env OF env;
+  REF TYPEDEC td = ( types OF dec_env )[ typeno ];
+
+  CASE body OF td IN
+  (REF NEWCHARS nc)
+           (REF VECTOR [] CHAR chars := chars OF nc;
+            REF VECTOR [] CHAR string := HEAP VECTOR [UPB rvi] CHAR;
+            FOR i TO UPB rvi DO string[i] := chars[rvi[i]] OD;
+            string
+           )
+  OUT msg( system, "make_string");
+      NIL
+  ESAC
+END;
+
+
+PROC mpname = (DECLARATION decl,
+               REF RGENV env ) BOOL:
+BEGIN
+REF MPLIST mplist := mplist OF env;
+BOOL found := FALSE;
+BOOL written := FALSE;
+
+    WHILE NOT found ANDTH (mplist ISNT nilmplist)
+    DO  IF equal_decl(decl, decl OF mplist) THEN
+           found := TRUE;
+           written := written OF mplist;
+           IF NOT written THEN written OF mplist := TRUE FI
+        FI;
+        mplist := rest OF mplist
+    OD;
+
+    written
+END;
+
+VECTOR[ ]CHAR badop = "Unexpected op sort in ";
+
+PROC has_typebody = (REF TYPEDEC tdec) BOOL:
+    CASE body OF tdec IN
+    (REF TYPETAG tg) CASE tag OF tg IN (REF TNULL) FALSE OUT TRUE ESAC
+    OUT TRUE
+    ESAC;
+
+
+PROC write_no_comma_lists = OPTIONS: MAKEOPTIONS 1;
+PROC write_expand_char_decs = OPTIONS: MAKEOPTIONS 2;
+PROC write_expand_delays = OPTIONS: MAKEOPTIONS 3;
+
+VECTOR[ ]VECTOR[ ]CHAR write_ella_options =
+    ( "Write item lists in full, ie. no comma separation.",
+      "Expand characters in char type declarations, also suppresses radix etc.",
+      "Expand delays to contain all fields CASE to contain ELSE part." );
+
+PROC write_ella = ( OUTER dec,
+                    PROC( VECTOR[ ]CHAR )VOID write_text,
+                    PROC( INT )VOID set_ind,
+                    OPTIONS  options,
+                    MESSAGEPROC msg ) VOID:
+BEGIN
+BOOL no_comma_lists = options INCLUDES write_no_comma_lists,
+     expand_char_decs = options INCLUDES write_expand_char_decs,
+     expand_delays = options INCLUDES  write_expand_delays;
+
+PROC write_string = (REF VECTOR[ ]CHAR text, RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+    {{ Quoted text must be output as a complete string including the
+    enclosing quotes. Any quotes in the string must be turned to
+    double quotes.                                                 }}
+
+INT num_quotes := 0, tpos := 0;
+INT ttop = UPB text;
+CHAR cc;
+
+    FORALL c IN text DO IF c = """" THEN num_quotes PLUSAB 1 FI OD;
+
+VECTOR[ ttop + num_quotes + 2 ]CHAR textout;
+
+    textout[ tpos PLUSAB 1 ] := """";
+    FOR j TO ttop
+    DO
+        cc := text[ j ];
+        textout[ tpos PLUSAB 1 ] := cc;
+        IF cc = """" THEN textout[ tpos PLUSAB 1 ] := cc FI
+    OD;
+    textout[ tpos PLUSAB 1 ] := """";
+    write_text( textout )
+END;
+
+
+PROC write_strings = ( REF IDS ids, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+   REF IDS strings := ids;
+   WHILE strings ISNT nilids
+   DO write_string( id OF strings, env, msg );
+      strings := rest OF strings;
+      IF strings ISNT nilids THEN set_ind( sep_ind ) FI
+   OD
+END;
+
+PROC write_basicattr = ( ATTR attr, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+   CASE attr IN
+   (REF ATTRNAME an)
+   ( REF ATTRDEC adec = (attrs OF dec_env OF env)[attrno OF an];
+     IF sort OF adec = macpardec  THEN
+          set_ind( attrmpar_ind );
+          mpname( an, env )
+     ELSE
+          set_ind( attrname_ind )
+     FI;
+     write_text( attrname( attrno OF an, env ))
+   ),
+   (REF ATTRDATA ad)
+   ( set_ind( attrdata_ind );
+     IF NOT (classname OF ad = nullid)
+     THEN write_text( classname OF ad );
+          write_text( colon_txt )
+     FI;
+     write_strings( strings OF ad, env, msg );
+     set_ind( endattrdata_ind )
+   ),
+   (REF ATTRSTR attrs)
+   ( REF ATTRSTR el := attrs;
+
+     set_ind( attrstr_ind );
+     write_text( orb_txt );
+     WHILE el ISNT nilattrstr
+     DO
+         write_basicattr( elem OF el, env, msg );
+         el := rest OF el;
+         IF el ISNT nilattrstr THEN
+             write_text( comma_txt );
+             set_ind( sep_ind )
+       ELSE
+             write_text( crb_txt );
+             set_ind( endstr_ind )
+         FI
+    OD
+   ),
+   (REF ATTRBRACKET abr )
+   (   set_ind( attrbr_ind );
+       write_text( orb_txt );
+       write_basicattr( attr OF abr, env, msg );
+       write_text( crb_txt );
+       set_ind( endstr_ind )
+   ),
+   (REF ATTRNULL) SKIP
+   ESAC
+END;
+
+PROC write_attr = ( ATTR attr,
+                    INT ind,
+                    REF RGENV env,
+                    MESSAGEPROC msg )VOID:
+   CASE attr IN
+   (REF ATTRNULL) SKIP
+   OUT ( IF ind /= blank_ind THEN
+             write_text( at_txt );
+             set_ind( ind )
+         FI;
+         write_basicattr( attr, env, msg )
+       )
+   ESAC;
+
+PROC write_nameitem = ( VECTOR[ ]CHAR name,
+                        ATTR attr,
+                        REF RGENV env,
+                        MESSAGEPROC msg )VOID:
+BEGIN
+    IF UPB name > 0 THEN
+        write_text( name );
+        write_attr( attr, nameattr_ind, env, msg )
+    FI
+END;
+
+PROC write_formula = ( FORMULA form, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+PROC write_f = ( FORMULA f ) VOID:
+BEGIN
+    CASE f IN
+    (REF FINT fint )
+    (
+        set_ind( fint_ind );
+        IF NOT expand_char_decs ANDTH UPB text OF fint > 0 THEN
+            write_text( text OF fint )
+      ELSE
+            write_text( intchars( int OF fint ) )
+        FI
+    ),
+    (REF FCHECK fc )
+    (
+        write_f( test OF fc )
+    ),
+    (REF FARITH far )
+    (
+         set_ind( farith_ind );
+         write_text( name OF ( nametypes OF fd OF env )[ nameno OF far ] )
+    ),
+    (REF FNAME fna )
+    (REF INTDEC idec = (ints OF dec_env OF env)[intno OF fna];
+
+        IF sort OF idec = macpardec  THEN
+        BOOL written = mpname( fna, env );
+
+            IF NOT written THEN
+                set_ind( impint_ind );
+                write_text( int_txt );
+                write_nameitem( intname( intno OF fna, env ),
+                                attr OF idec, env, msg )
+          ELSE
+                set_ind( fmpar_ind );
+                write_text( intname( intno OF fna, env ))
+            FI
+      ELSE
+            set_ind( fname_ind );
+            write_text( intname( intno OF fna, env ))
+        FI
+    ),
+    (REF FDOP fdop )
+    (   set_ind( fdop_ind );
+        write_f( left OF fdop );
+        set_ind( operator_ind );
+        write_text( CASE sort OF fdop IN
+                        plus_txt, minus_txt, star_txt, perc_txt, equals_txt,
+                        ne_txt, le_txt, ge_txt, lt_txt, gt_txt, and_txt, or_txt,
+                        ( msg( system,  badop + "FDOP" ); SKIP ),
+                        sl_txt, sr_txt, iand_txt, ior_txt, mod_txt
+                    OUT
+                        msg( system,  badop + "FDOP" );
+                        SKIP
+                    ESAC );
+        set_ind( sep_ind );
+        write_f( right OF fdop );
+        set_ind( endfdop_ind )
+    ),
+    (REF FMOP fmop )
+    (   set_ind( fmop_ind );
+        set_ind( operator_ind );
+        write_text( CASE sort OF fmop IN
+                        plus_txt, minus_txt, not_txt,
+                        ( msg( system,  badop + "FMOP" ); SKIP ),
+                        inot_txt, sqrt_txt, abs_txt
+                    OUT
+                        msg( system,  badop + "FMOP" );
+                        SKIP
+                    ESAC );
+        write_f( right OF fmop );
+        set_ind( endfmop_ind )
+    ),
+    (REF FCOND fcnd )
+    (   set_ind( fif_ind );
+        write_text( if_txt );
+        set_ind( condition_ind );
+        write_formula( cond OF fcnd, env, msg );
+        set_ind( then_ind );
+        write_text( then_txt );
+        set_ind( option_ind );
+        write_formula( true OF fcnd, env, msg );
+        set_ind( else_ind );
+        write_text( else_txt );
+        set_ind( option_ind );
+        write_formula( false OF fcnd, env, msg );
+        set_ind( fi_ind );
+        write_text( fi_txt );
+        set_ind( endif_ind )
+    ),
+    (REF FBRACKET fbr )
+    (   set_ind( fbr_ind );
+        write_text( orb_txt );
+        write_f( formula OF fbr );
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    ),
+    (REF FNULL fnl ) write_text( vis_space_txt )
+    OUT
+        msg( system,  "Unexpected mode in FORMULA" )
+    ESAC
+END;
+
+    set_ind( formula_ind );
+    write_f( form );
+    set_ind( endformula_ind )
+END;
+
+
+PROC write_range = (RANGE r, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+    write_formula( lwb OF r, env, msg );
+    set_ind( dotdot_ind );
+    write_text( dotdot_txt );
+    set_ind( sep_ind );
+    write_formula( upb OF r, env, msg )
+END;
+
+PROC write_index = ( FORMULA f, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+    CASE f IN
+    (REF FNULL nl ) SKIP
+    OUT
+        write_text( osb_txt );
+        write_formula( f, env, msg );
+        write_text( csb_txt )
+    ESAC
+END;
+
+PROC write_indexes = (REF FORMULAS flist, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+REF FORMULAS fs := flist;
+
+    IF fs ISNT nilformulas THEN
+        set_ind( makemult_ind );
+        WHILE fs ISNT nilformulas
+        DO
+            write_index( formula OF fs, env, msg );
+            fs := rest OF fs;
+            IF fs ISNT nilformulas THEN set_ind( sep_ind ) FI
+        OD;
+        set_ind( endmakemult_ind )
+    FI
+END;
+
+PROC (TYPEBODY, REF RGENV, MESSAGEPROC ) VOID write_typebody;
+
+PROC write_type = ( TYPE t, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+    CASE t IN
+    (REF TNAME tnm )
+    (REF TYPEDEC tdec = (types OF dec_env OF env)[typeno OF tnm];
+
+        IF tdec IS niltypedec THEN
+            set_ind( tmpar_ind );
+            write_text( type_txt )
+      ELIF sort OF tdec = macpardec THEN
+            IF NOT mpname( tnm, env ) THEN
+                set_ind( imptype_ind );
+                write_text( type_txt );
+                write_nameitem( typename( typeno OF tnm, env ),
+                                attr OF tdec, env, msg );
+                IF has_typebody( tdec ) THEN
+                    write_text( equals_txt );
+                    write_typebody( body OF tdec, env, msg )
+                FI
+          ELSE
+                set_ind( tmpar_ind );
+                write_text( typename( typeno OF tnm, env ))
+            FI
+        ELSE
+              set_ind( tname_ind );
+              write_text( typename( typeno OF tnm, env ))
+          FI
+    ),
+    (REF TROW tr )
+    (   set_ind( trow_ind );
+        write_index( size OF tr, env, msg );
+        set_ind( sep_ind );
+        write_type( elem OF tr, env, msg );
+        set_ind( endrow_ind )
+    ),
+    (REF TSTR ts )
+    (REF TSTR el := ts;
+
+        set_ind( tstr_ind );
+        write_text( orb_txt );
+        WHILE el ISNT niltstr
+        DO
+            write_type( elem OF el, env, msg );
+            el := rest OF el;
+            IF el ISNT niltstr THEN
+                write_text( comma_txt );
+                set_ind( sep_ind )
+          ELSE
+                write_text( crb_txt );
+                set_ind( endstr_ind )
+            FI
+        OD
+    ),
+    (REF TFN tf )
+    (   set_ind( tfn_ind );
+        write_type( from OF tf, env, msg );
+        set_ind( to_ind );
+        write_text( to_txt );
+        set_ind( sep_ind );
+        write_type( to OF tf, env, msg );
+        set_ind( endtfn_ind )
+    ),
+    (REF TSTRING tsr )
+    (   set_ind( tstring_ind );
+        write_text( string_txt );
+        write_text( osb_txt );
+        write_formula( size OF tsr, env, msg );
+        write_text( csb_txt );
+        set_ind( sep_ind );
+        write_type( char OF tsr, env, msg );
+        set_ind( endstring_ind )
+    ),
+    (REF TBRACKET tb )
+    (   set_ind( tbr_ind );
+        write_text( orb_txt );
+        write_type( type OF tb, env, msg );
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    ),
+    (REF TNULL tnl ) write_text( vis_space_txt ),
+    (REF TVOID tv)
+    (   set_ind( tvoid_ind );
+        write_text( void_txt )
+    )
+    OUT
+        msg( system,  "Unexpected mode in TYPE" )
+    ESAC
+END;
+
+PROC explicit_size = ( UNION ( REF VECTOR[ ]MACSPEC,
+                               REF VECTOR[ ]MACPARAM ) vector ) INT:
+BEGIN
+   INT explicitsize := 0;
+   CASE vector IN
+   (REF VECTOR[ ]MACSPEC ms)
+      IF ms ISNT nilmacspecs
+      THEN FOR ms_index TO UPB ms
+           DO INT sorts = ABS( BIN sort OF ms[ms_index] AND 16r1 );
+              IF sorts = explicitmacpar THEN explicitsize := ms_index FI
+           OD
+      FI,
+   (REF VECTOR[ ]MACPARAM mp)
+      IF mp ISNT nilmacparams
+      THEN FOR mp_index TO UPB mp
+           DO INT sortp = macparam_sort( mp[mp_index] );
+              IF sortp = explicitmacpar THEN explicitsize := mp_index FI
+           OD
+      FI
+   ESAC;
+   explicitsize
+END;
+
+PROC(INSTANCE, BOOL, BOOL, REF RGENV,
+     PROC(UNIT, REF RGENV, MESSAGEPROC)VOID, MESSAGEPROC)VOID write_instance;
+
+PROC write_macparams = ( REF VECTOR[ ]MACPARAM params,
+                         BOOL is_macro, in_macparam,
+                         INT first, last, sort,
+                         REF RGENV env,
+                         PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                         MESSAGEPROC msg ) VOID:
+BEGIN
+    IF last > 0 THEN
+        IF is_macro OREL in_macparam THEN
+           set_ind( mparams_ind )
+      ELSE set_ind( expmparams_ind );
+           write_text( hash_txt )
+        FI;
+        write_text( ocb_txt );
+        FOR mpno FROM first TO last
+        DO
+            IF macparam_sort( params[ mpno ] ) = sort THEN
+                CASE param OF params[ mpno ] IN
+                (ATTRTAG at)     write_attr( tag OF at, blank_ind, env, msg ),
+                (FORMULATAG ft ) write_formula( tag OF ft, env, msg ),
+                (TYPETAG tt )    write_type( tag OF tt, env, msg ),
+                (UNITTAG ct )    write_unit( tag OF ct, env, msg ),
+                (INSTANCE inst)  write_instance(inst, TRUE, TRUE, env,
+                                                write_unit, msg )
+                OUT
+                    msg( system,  "write_macparam" )
+                ESAC;
+                IF mpno /= last THEN
+                    write_text( comma_txt );
+                    set_ind( sep_ind )
+                FI
+            FI
+        OD;
+        write_text( ccb_txt );
+        IF NOT (is_macro OREL in_macparam) THEN write_text( hash_txt ) FI;
+        set_ind( endmparams_ind )
+    FI
+END;
+
+
+write_instance := (INSTANCE inst,
+                   BOOL ismake, in_macparam,
+                   REF RGENV env,
+                   PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                   MESSAGEPROC msg ) VOID:
+BEGIN
+    BOOL is_macro = macro OF ( fns OF dec_env OF env )[ fnno OF inst ];
+    set_ind( fnname_ind );
+    write_text( fnname( fnno OF inst, env ));
+    IF macparams OF inst ISNT nilmacparams THEN
+    INT mptop = UPB macparams OF inst;
+    INT explicitsize = explicit_size(macparams OF inst);
+
+        write_macparams( macparams OF inst, is_macro, in_macparam,
+                        1, explicitsize, explicitmacpar, env, write_unit, msg );
+        IF ismake ANDTH mptop > explicitsize THEN
+            write_macparams( macparams OF inst, is_macro, in_macparam,
+                             explicitsize + 1, mptop, implicitmacpar, env,
+                             write_unit, msg )
+        FI
+    FI;
+    write_attr( attr OF inst, instattr_ind, env, msg )
+END;
+
+PROC write_replicator = (FORMULA repl, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+INT intno;
+REF INTDEC idec =
+    CASE repl IN
+    (REF FNAME fn)
+       ( intno := intno OF fn;
+         ( ints OF dec_env OF env )[ intno OF fn ]
+       )
+    OUT    msg( system,  "write_replicator - 1" ); SKIP
+    ESAC;
+
+RANGE range =
+    CASE value OF idec IN
+    (RANGE r) r
+    OUT    msg( system,  "write_replicator - 2" ); SKIP
+    ESAC;
+
+    set_ind( startrepl_ind );
+    write_text( int_txt );
+    write_nameitem( intname OF idec, attr OF idec, env, msg );
+    write_text( equals_txt );
+    write_range( range, env, msg );
+    set_ind( endrepl_ind )
+END;
+
+PROC write_keyword = (INT ind,
+                      VECTOR[ ]CHAR txt, term,
+                      REF INT keyword_ind,
+                      MESSAGEPROC msg )BOOL:
+BEGIN
+    IF no_comma_lists OREL keyword_ind /= ind THEN
+        IF keyword_ind /= 0 THEN
+            write_text( term );
+            IF term = comma_txt THEN
+                set_ind( sep_ind )
+          ELSE
+                set_ind( endstep_ind )
+            FI
+        FI;
+        set_ind( keyword_ind := ind );
+        write_text( txt );
+        TRUE
+  ELSE
+        write_text( comma_txt );
+        set_ind( sep_ind );
+        FALSE
+    FI
+END;
+
+PROC write_listkeyword = ( INT ind,
+                           VECTOR[ ]CHAR txt,
+                           REF INT keyword_ind ) BOOL:
+BEGIN
+    IF no_comma_lists OREL keyword_ind /= ind THEN
+        IF keyword_ind /= 0 THEN
+            set_ind( endnamelist_ind );
+            write_text( comma_txt );
+            set_ind( sep_ind )
+        FI;
+        set_ind( keyword_ind := ind );
+        write_text( txt );
+        TRUE
+  ELSE
+        set_ind( sep_ind );
+        FALSE
+    FI
+END;
+
+PROC write_attrdec = (REF ATTRDEC ad,
+                      INT attrno,
+                      REF RGENV env,
+                      VECTOR[ ]CHAR term,
+                      REF INT keyword_ind,
+                      MESSAGEPROC msg ) VOID:
+BEGIN
+    write_keyword( adecls_ind, attr_txt, term, keyword_ind, msg );
+    set_ind( attrdec_ind );
+    write_text( attrname OF ad );
+    write_text( equals_txt );
+    write_attr( value OF ad, blank_ind, env, msg );
+    set_ind( enddec_ind )
+END;
+
+PROC write_intdec = (REF INTDEC id,
+                     INT intno,
+                     REF RGENV env,
+                     VECTOR[ ]CHAR term,
+                     REF INT keyword_ind,
+                     MESSAGEPROC msg ) VOID:
+BEGIN
+    write_keyword( idecls_ind, int_txt, term, keyword_ind, msg );
+    set_ind( intdec_ind );
+    write_nameitem( intname OF id, attr OF id, env, msg );
+    write_text( equals_txt );
+    CASE value OF id IN
+    (FORMULA f) write_formula( f, env, msg ),
+    (RANGE r)   write_range(r, env, msg)
+    OUT msg ( system, "write_intdec" )
+    ESAC;
+    set_ind( enddec_ind )
+END;
+
+write_typebody := (TYPEBODY body, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+    CASE body IN
+    (REF VECTOR [] ALTERNATIVE newn )
+    (REF ALTERNATIVE alt;
+     INT nalts = UPB newn;
+
+        set_ind( newalts_ind );
+        write_text( new_txt );
+        write_text( orb_txt );
+        FOR altno TO nalts
+        DO
+            alt := newn[ altno ];
+            write_text( altname OF alt );
+            CASE assoc OF alt IN
+            (REF TNULL tn ) SKIP
+            OUT
+                write_text( ampsand_txt );
+                write_type( assoc OF alt, env, msg )
+            ESAC;
+            IF altno /=nalts THEN
+                write_text( stroke_txt );
+                set_ind( sep_ind )
+          ELSE
+                write_text( crb_txt );
+                set_ind( endalts_ind )
+            FI
+        OD
+    ),
+    (REF NEWINTS newi )
+    (   set_ind( newint_ind );
+        write_text( new_txt );
+        write_text( tagname OF newi );
+        write_text( slashbr_txt );
+        write_range( range OF newi, env, msg );
+        write_text( crb_txt );
+        set_ind( endint_ind )
+    ),
+    (REF NEWCHARS newch )
+    (REF VECTOR [] CHAR chars := chars OF newch;
+     INT firstcharval,
+         lastcharval := 256;  { Must be greater that any character }
+     CHAR firstchar, lastchar;
+     BOOL first := TRUE, incharrange := FALSE;
+
+        PROC letter_or_digit = (CHAR c )BOOL:
+            ( c >= "0" ANDTH c <= "9" ) OREL
+            ( c >= "A" ANDTH c <= "Z" ) OREL
+            ( c >= "a" ANDTH c <= "z" );
+
+        PROC do_char = (CHAR c, BOOL endspec )VOID:
+        BEGIN
+        VECTOR[ ]CHAR primechar_txt = prime_txt + lastchar;
+        INT val = ABS c;
+
+            IF first THEN
+                SKIP
+          ELIF val = lastcharval + 1 ANDTH
+               letter_or_digit( lastchar ) ANDTH
+               letter_or_digit( c ) THEN
+                IF NOT incharrange THEN
+                    firstchar := lastchar;
+                    firstcharval := lastcharval;
+                    incharrange := TRUE
+                FI
+          ELIF incharrange THEN
+                IF firstcharval + 1 = lastcharval THEN
+                    write_text( prime_txt + firstchar );
+                    write_text( stroke_txt );
+                    set_ind( sep_ind );
+                    write_text( primechar_txt )
+                ELSE
+                    set_ind( startcharrange_ind );
+                    write_text( prime_txt + firstchar );
+                    set_ind( dotdot_ind );
+                    write_text( dotdot_txt );
+                    set_ind( sep_ind );
+                    write_text( primechar_txt );
+                    set_ind( endrange_ind )
+                FI;
+                incharrange := FALSE
+          ELSE
+                set_ind( char_ind );
+                write_text( primechar_txt )
+            FI;
+            IF incharrange THEN
+                SKIP
+          ELIF endspec THEN
+                write_text( crb_txt );
+                set_ind( endchars_ind )
+          ELIF NOT first THEN
+                write_text( stroke_txt );
+                set_ind( sep_ind )
+            FI;
+            first := FALSE;
+            lastcharval := val;
+            lastchar := c
+        END;
+
+        set_ind( newchars_ind );
+        write_text( new_txt );
+        write_text( tagname OF newch );
+        write_text( orb_txt );
+        IF expand_char_decs THEN
+            FORALL c IN chars
+            DO
+                IF NOT first THEN
+                    write_text( stroke_txt );
+                    set_ind( sep_ind )
+                FI;
+                first := FALSE;
+                set_ind( char_ind );
+                write_text( prime_txt + c )
+            OD;
+            write_text( crb_txt );
+            set_ind( endchars_ind )
+        ELSE
+            FORALL c IN chars DO do_char( c, FALSE ) OD;
+            do_char( REPR 0, TRUE )  { This char is not output }
+        FI
+    ),
+    (REF TYPETAG tt )
+    (   set_ind( typealias_ind );
+        write_type( tag OF tt, env, msg )
+    )
+    OUT
+        msg( system,  "Unexpected mode in TYPEBODY" )
+    ESAC
+END;
+
+PROC write_typedec = (REF TYPEDEC td,
+                      INT typeno,
+                      REF RGENV env,
+                      VECTOR[ ]CHAR term,
+                      REF INT keyword_ind,
+                      MESSAGEPROC msg ) VOID:
+BEGIN
+    write_keyword( tdecls_ind, type_txt, term, keyword_ind, msg );
+    set_ind( typedec_ind );
+    write_nameitem( typename OF td, attr OF td, env, msg );
+    write_text( equals_txt );
+    write_typebody( body OF td, env, msg );
+    set_ind( enddec_ind )
+END;
+
+PROC write_constdec = (REF CONSTDEC cd,
+                       INT constno,
+                       REF RGENV env,
+                       PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                       VECTOR[ ]CHAR term,
+                       REF INT keyword_ind,
+                       MESSAGEPROC msg ) VOID:
+BEGIN
+    write_keyword( cdecls_ind, const_txt, term, keyword_ind, msg );
+    set_ind( constdec_ind );
+    write_nameitem( constname OF cd, attr OF cd, env, msg );
+    write_text( equals_txt );
+    write_unit( value OF cd, env, msg );
+    set_ind( enddec_ind )
+END;
+
+PROC write_terminals = (REF NAMES terminals,
+                        REF RGENV env,
+                        MESSAGEPROC msg ) VOID:
+BEGIN
+REF VECTOR [] NAMETYPE nametypes =  nametypes OF fd OF env;
+
+REF NAMES ts := terminals;
+NAMETYPE nametype := nametypes[ nameno OF ts ];
+BOOL brackets = no_comma_lists OREL
+                ( rest OF ts ISNT nilnames ) OREL
+                ( UPB name OF nametype > 0 ) OREL
+                CASE attr OF nametype IN (REF ATTRNULL) FALSE OUT TRUE ESAC;
+BOOL first := TRUE, has_list := FALSE, has_name := FALSE;
+TYPE last_type := tnull;
+
+    IF brackets THEN
+        set_ind( terms_ind );
+        write_text( orb_txt )
+    FI;
+    WHILE ts ISNT nilnames
+    DO
+        nametype := nametypes[ nameno OF ts ];
+        has_name := ( UPB name OF nametype > 0 );
+        IF has_name ANDTH
+           NOT no_comma_lists ANDTH
+           type OF nametype = last_type THEN
+            set_ind( sep_ind );
+            write_nameitem( name OF nametype, attr OF nametype, env, msg )
+      ELSE
+            IF first THEN
+                first := FALSE
+          ELSE
+                IF has_list THEN
+                    has_list := FALSE;
+                    set_ind( endnamelist_ind )
+                FI;
+                write_text( comma_txt );
+                set_ind( sep_ind )
+            FI;
+            write_type( last_type := type OF nametype, env, msg );
+            IF has_name THEN
+                write_text( colon_txt );
+                set_ind( namelist_ind );
+                has_list := TRUE;
+                write_nameitem( name OF nametype, attr OF nametype, env, msg )
+          ELSE
+                CASE attr OF nametype IN
+                (REF ATTRNULL) SKIP
+                OUT
+                    write_text( colon_txt );
+                    write_attr( attr OF nametype, nonameattr_ind, env, msg )
+                ESAC
+            FI
+        FI;
+        ts := rest OF ts
+    OD;
+    IF has_list THEN set_ind( endnamelist_ind ) FI;
+    IF brackets THEN
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    FI
+END;
+
+PROC ( REF VECTOR[ ]MACSPEC, REF FNDEC, REF RGENV,
+       PROC( UNIT, REF RGENV, MESSAGEPROC )VOID, BOOL, INT ) VOID
+                                                         write_macspecs;
+
+PROC write_fndecspec = (REF FNDEC fd,
+                        INT fnno,
+                        BOOL in_macspec,
+                        REF RGENV env,
+                        PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                        MESSAGEPROC msg ) VOID:
+BEGIN
+REF VECTOR[ ]MACSPEC macspecs = macspecs OF fd;
+INT macspecstop = IF macspecs IS nilmacspecs THEN 0 ELSE UPB macspecs FI;
+
+    IF macro OF fd THEN
+        set_ind( macdec_ind )
+  ELIF macspecstop /= 0 THEN
+        set_ind( expmacdec_ind )
+  ELSE
+        set_ind( fndec_ind )
+    FI;
+    set_ind( fnname_ind );
+    write_text( fnname OF fd );
+    write_macspecs( macspecs, fd, env, write_unit, in_macspec, macspecstop );
+
+    write_attr( attr OF fd, nameattr_ind, env, msg );
+    write_text( equals_txt );
+    set_ind( fnspec_ind );
+    write_terminals( inputs OF fd, env, msg );
+    set_ind( to_ind );
+    write_text( to_txt );
+    set_ind( sep_ind );
+    write_terminals( outputs OF fd, env, msg )
+END;
+
+
+PROC write_mpvalue = ( DECLARATION spec, REF RGENV env,
+                       PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                       MESSAGEPROC msg ) VOID:
+    CASE spec IN
+    (ATTRNAME an)
+      ( REF ATTRDEC adec = (attrs OF dec_env OF env )[attrno OF an];
+        write_attr( value OF adec, blank_ind, env, msg )
+      ),
+    (FNAME fn)
+      ( REF INTDEC idec = ( ints OF dec_env OF env )[ intno OF fn ];
+        CASE value OF idec IN
+        (FORMULA f) write_formula( f, env, msg ),
+        (RANGE r)   write_range(r, env, msg)
+        OUT msg ( system, "write_mpvalue: fname" )
+        ESAC
+      ),
+    (TNAME tn)
+      ( REF TYPEDEC tdec = ( types OF dec_env OF env )[ typeno OF tn ];
+        IF tdec IS niltypedec THEN write_text(type_txt)
+        ELSE CASE body OF tdec IN
+             (REF TYPETAG tt) write_type( tag OF tt, env, msg )
+             OUT msg( system, "write_mpvalue: tname" )
+             ESAC
+        FI
+      ),
+    (CNAME cn)
+      ( REF CONSTDEC cdec = ( consts OF dec_env OF env )[ constno OF cn ];
+        write_unit( value OF cdec, env, msg )
+      ),
+    (FNNAME fnn)
+      ( REF FNDEC fdec = ( fns OF dec_env OF env )[ fnno OF fnn ];
+        CASE fnbody OF fdec IN
+        (REF UNITTAG ut)
+           CASE tag OF ut IN
+           (REF UMINST um) write_instance( inst OF um, TRUE, TRUE, env,
+                                           write_unit, msg )
+           OUT msg( system, "write_mpvalue: fnname - 1" )
+           ESAC
+        OUT msg( system, "write_mpvalue: fnname - 2" )
+        ESAC
+      )
+    OUT
+      msg( system,  "write_mpvalue" )
+    ESAC;
+
+
+PROC write_specvalue = ( DECLARATION sp, REF RGENV env,
+                         PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                         MESSAGEPROC msg ) VOID:
+   CASE sp IN
+   (ATTRNAME anm)
+     write_text( attrname( attrno OF anm, env )),
+   (FNAME fnm)
+     ( REF INTDEC idec = ( ints OF dec_env OF env )[ intno OF fnm ];
+       write_nameitem( intname( intno OF fnm, env ),
+                       attr OF idec, env, msg )
+     ),
+   (TNAME tnm)
+     ( REF TYPEDEC tdec = (types OF dec_env OF env)[typeno OF tnm];
+       write_nameitem( typename( typeno OF tnm, env ) ,
+                       attr OF tdec, env, msg );
+       IF has_typebody( tdec ) THEN
+         write_text( equals_txt );
+         write_typebody( body OF tdec, env, msg )
+       FI
+     ),
+   (CNAME cn)
+     ( REF CONSTDEC cdec = (consts OF dec_env OF env)[ constno OF cn ];
+       write_nameitem( constname( constno OF cn, env ) ,
+                       attr OF cdec, env, msg )
+     ),
+   (FNNAME fn)
+     ( REF ENVIRON de = dec_env OF env;
+       REF FNDEC fd = ( fns OF de )[ fnno OF fn ];
+       RGENV locenv;
+       set_fnenv( locenv, fd, mplist OF env, de );
+       write_fndecspec( fd, fnno OF fn, TRUE, locenv, write_unit, msg );
+       set_ind( endfnspec_ind );
+       set_ind( enddec_ind )
+     )
+   OUT SKIP
+   ESAC;
+
+write_macspecs := (REF VECTOR[ ]MACSPEC macspecs,
+                   REF FNDEC fd,
+                   REF RGENV env,
+                   PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                   BOOL in_macspec,
+                   INT macspectop ) VOID:
+BEGIN
+INT explicitsize = explicit_size(macspecs);
+TYPE lasttype := tnull;
+INT keyword_ind := 0;
+
+    PROC write_pspec = ( DECLARATION spec ) VOID:
+    CASE spec IN
+    (ATTRNAME)
+       IF write_listkeyword( attritem_ind, attr_txt, keyword_ind ) THEN
+           set_ind( namelist_ind )
+       FI,
+    (FNAME)
+       IF write_listkeyword( intitem_ind, int_txt, keyword_ind ) THEN
+           set_ind( namelist_ind )
+       FI,
+    (TNAME)
+       IF write_listkeyword( typeitem_ind, type_txt, keyword_ind ) THEN
+           set_ind( namelist_ind )
+       FI,
+    (CNAME cn)
+     BEGIN
+       REF CONSTDEC c = (consts OF dec_env OF env)[constno OF cn];
+       TYPE ty = unit_type(value OF c, fd OF env, dec_env OF env);
+       BOOL need_to_print = no_comma_lists OREL keyword_ind /= constitem_ind;
+
+       IF NOT need_to_print ANDTH NOT( ty = lasttype ) THEN
+           keyword_ind := -1  { Make it invalid but not zero, else no separator
+                                will be put out. }
+       FI;
+       lasttype := ty;
+       IF write_listkeyword( constitem_ind, const_txt, keyword_ind ) THEN
+           write_type( ty, env, msg );
+           write_text( colon_txt );
+           set_ind( namelist_ind )
+       FI
+     END,
+    (FNNAME fnn)
+    (REF FNDEC f = (fns OF dec_env OF env)[fnno OF fnn];
+
+        IF macro OF f THEN
+             IF write_listkeyword( macitem_ind, mac_txt, keyword_ind )  THEN
+                 set_ind( namelist_ind )
+             FI
+      ELIF write_listkeyword( fnitem_ind, fn_txt, keyword_ind )  THEN
+            set_ind( namelist_ind )
+        FI
+    )
+    OUT  msg( system,  "write_pspec: un_known param type" )
+    ESAC; { end of write_pspec }
+
+    IF macspectop > 0 THEN
+      IF NOT macro OF fd THEN  {{ expanded parameters of a macro }}
+         set_ind( expmparams_ind );
+         IF NOT in_macspec THEN write_text( hash_txt ) FI;
+         write_text( ocb_txt );
+
+         FOR mpno TO macspectop
+         DO
+            write_mpvalue( spec OF macspecs[ mpno ], env, write_unit, msg );
+            IF mpno = macspectop THEN
+                 write_text( ccb_txt );
+                 IF NOT in_macspec THEN write_text( hash_txt ) FI
+           ELSE
+                 write_text( comma_txt );
+                 set_ind( sep_ind )
+            FI
+         OD;
+            set_ind( endmparams_ind )
+
+    ELIF explicitsize > 0  THEN
+         set_ind( macspec_ind );
+         write_text( ocb_txt );
+
+         FOR mpno TO explicitsize
+         DO
+            MACSPEC sp = macspecs[ mpno ];
+            IF ABS( BIN sort OF sp AND 16r1 ) = explicitmacpar THEN
+               mpname( spec OF sp, env );
+               write_pspec( spec OF sp );
+               write_specvalue( spec OF sp, env, write_unit, msg )
+            FI
+         OD;
+         set_ind( endnamelist_ind );
+
+         write_text( ccb_txt );
+         set_ind( endmacspec_ind )
+      FI
+   FI
+END;
+
+PROC write_fnbody = ( FNBODY fnbody,
+                      PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                      REF RGENV env, MESSAGEPROC msg
+                    ) VOID:
+   CASE fnbody IN
+   (REF UNITTAG ut )
+   (   set_ind( body_ind );
+       write_unit( tag OF ut, env, msg )
+   ),
+   (REF ALIENCODE alien )
+   (   IF biop OF alien THEN
+           set_ind( biop_ind );
+           write_text( biop_txt )
+       ELSE
+           set_ind( alien_ind );
+           write_text( alien_txt )
+       FI;
+       set_ind( fnname_ind );
+       write_text( name OF alien );
+       IF macparams OF alien ISNT nilmacparams
+       THEN
+           write_macparams( macparams OF alien, TRUE, FALSE, 1,
+                            UPB macparams OF alien, explicitmacpar, env,
+                            write_unit, msg )
+       FI
+   ),
+   (REF ARITH ar )
+   (   set_ind( arith_ind );
+       write_text( arith_txt );
+       write_formula( output OF ar, env, msg )
+   ),
+   (REF REFORM rf )
+   (   set_ind( reform_ind );
+       write_text( reform_txt )
+   ),
+   (REF IMPORT im )
+   (   set_ind( import_ind );
+       write_text( import_txt )
+   ),
+   (REF ADELAY ad )
+   (   set_ind( adelay_ind );
+       write_text( delay_txt );
+       write_text( orb_txt );
+       write_unit( init OF ad, env, msg );
+       IF expand_delays OREL
+          sort OF ad = constint2  OREL
+          sort OF ad = const2int2 THEN
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_formula( ambigtime OF ad, env, msg )
+       FI;
+       IF expand_delays OREL
+          sort OF ad = const2int  OREL
+          sort OF ad = const2int2 THEN
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_unit( ambig OF ad, env, msg )
+       FI;
+       write_text( comma_txt );
+       set_ind( sep_ind );
+       write_formula( delaytime OF ad, env, msg );
+       write_text( crb_txt )
+   ),
+   (REF IDELAY id )
+   (   set_ind( idelay_ind );
+       write_text( idelay_txt );
+       write_text( orb_txt );
+       write_unit( init OF id, env, msg );
+       write_text( comma_txt );
+       set_ind( sep_ind );
+       write_formula( delaytime OF id, env, msg );
+       write_text( crb_txt )
+   ),
+   (REF RAM rm )
+   (   set_ind( ram_ind );
+       write_text( ram_txt );
+       write_text( orb_txt );
+       write_unit( init OF rm, env, msg );
+       write_text( crb_txt )
+   ),
+   (REF SAMPLE sp )
+   (   set_ind( sample_ind );
+       write_text( sample_txt );
+       write_text( orb_txt );
+       write_formula( interval OF sp, env, msg );
+       IF expand_delays OREL sort OF sp = int2 THEN
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_unit( init OF sp, env, msg );
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_formula( skew OF sp, env, msg )
+       FI;
+       write_text( crb_txt )
+   ),
+   ( REF TIMESCALE ts )
+   (   IF faster OF ts THEN
+           set_ind( faster_ind );
+           write_text( faster_txt )
+      ELSE
+           set_ind( slower_ind );
+           write_text( slower_txt )
+       FI;
+       write_text( orb_txt );
+       write_instance( inst OF ts, TRUE, FALSE, env, write_unit, msg );
+       write_text( comma_txt );
+       set_ind( sep_ind );
+       write_formula( scale OF ts, env, msg );
+       IF expand_delays OREL sort OF ts = int2 THEN
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_unit( init OF ts, env, msg );
+           write_text( comma_txt );
+           set_ind( sep_ind );
+           write_formula( skew OF ts, env, msg )
+       FI;
+       write_text( crb_txt )
+    ),
+    (REF BODYCHECK bc)
+       write_fnbody( fnbody OF bc, write_unit, env, msg ),
+    (REF BODYNULL)
+    (  set_ind( nobody_ind );
+       write_text( nobody_txt )
+    )
+    OUT
+        msg( system,  "Unexpected mode in FNBODY" )
+    ESAC;
+
+
+PROC write_fndec = (REF FNDEC fd,
+                    INT fnno,
+                    REF RGENV env,
+                    PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                    VECTOR[ ]CHAR term,
+                    REF INT keyword_ind,
+                    MESSAGEPROC msg ) VOID:
+BEGIN
+INT kind = IF macro OF fd THEN mdecls_ind ELSE fdecls_ind FI;
+VECTOR[ ]CHAR ktxt = IF macro OF fd THEN mac_txt ELSE fn_txt FI;
+
+    write_keyword( kind, ktxt, term, keyword_ind, msg );
+    write_fndecspec( fd, fnno, FALSE, env, write_unit, msg );
+    write_text( colon_txt );
+    set_ind( endfnspec_ind );
+    write_fnbody( fnbody OF fd, write_unit, env, msg );
+    set_ind( endbody_ind );  { Extra indicator needed to pull down stack
+                               for fn decs etc. }
+    set_ind( enddec_ind )
+END;
+
+PROC write_declaration = (DECLARATION dd,
+                          VECTOR[ ]CHAR term,
+                          REF INT keyword_ind,
+                          REF RGENV env,
+                          PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                          MESSAGEPROC msg )VOID:
+BEGIN
+    CASE dd IN
+    (ATTRNAME ana)
+    (REF ATTRDEC ad = (attrs OF dec_env OF env )[ attrno OF ana ];
+
+        write_attrdec( ad, attrno OF ana, env, term, keyword_ind, msg )
+    ),
+    (FNAME fna )
+    (REF INTDEC id = ( ints OF dec_env OF env )[ intno OF fna ];
+
+        write_intdec( id, intno OF fna, env, term, keyword_ind, msg )
+    ),
+    (TNAME tna )
+    (REF TYPEDEC td = ( types OF dec_env OF env )[ typeno OF tna ];
+
+        write_typedec( td, typeno OF tna, env, term, keyword_ind, msg )
+    ),
+    (CNAME cna )
+    (REF CONSTDEC cd = ( consts OF dec_env OF env )[ constno OF cna ];
+
+        write_constdec( cd, constno OF cna, env, write_unit, term, keyword_ind,
+                        msg )
+    ),
+    (FNNAME fnna )
+    (REF ENVIRON de = dec_env OF env;
+     REF FNDEC fd = ( fns OF de )[ fnno OF fnna ];
+     RGENV locenv;
+
+        set_fnenv( locenv, fd, mplist OF env, de );
+        write_fndec( fd, fnno OF fnna, locenv, write_unit, term,
+                     keyword_ind, msg )
+    )
+    OUT
+        msg( system,  "Unexpected mode in DECLARATION" )
+    ESAC
+END;
+
+PROC write_printitem = (FORMULA cond,
+                        REF PRINTITEMS pii,
+                        REF RGENV env,
+                        MESSAGEPROC msg ) VOID:
+BEGIN
+REF PRINTITEMS pi := pii;
+BOOL isif = CASE cond IN (REF FNULL fn ) FALSE OUT TRUE ESAC;
+
+    IF isif THEN
+        set_ind( printif_ind );
+        write_text( if_txt );
+        set_ind( condition_ind );
+        write_formula( cond, env, msg );
+        set_ind( then_ind );
+        write_text( then_txt );
+        set_ind( option_ind )
+    FI;
+    WHILE pi ISNT nilprintitems
+    DO
+        CASE item OF pi IN
+        (REF VECTOR[ ]CHAR text )
+        (   set_ind( printstring_ind );
+            write_string( text, env, msg )
+        ),
+        (REF FORMULATAG ft ) write_formula( tag OF ft, env, msg )
+        OUT
+            msg( system,  "Unexpected mode in PRINTITEMS" )
+        ESAC;
+        pi := rest OF pi;
+        IF pi ISNT nilprintitems THEN set_ind( sep_ind ) FI
+    OD;
+    IF isif THEN
+        set_ind( fi_ind );
+        write_text( fi_txt );
+        set_ind( endif_ind )
+    FI
+END;
+
+PROC write_print = (REF PRINT pr,
+                    VECTOR[ ]CHAR term,
+                    REF INT keyword_ind,
+                    REF RGENV env,
+                    MESSAGEPROC msg )VOID:
+BEGIN
+    write_keyword( print_ind, print_txt, term, keyword_ind, msg );
+    write_printitem( cond OF pr, print OF pr, env, msg )
+END;
+
+PROC write_fault = (REF FAULT ft,
+                    VECTOR[ ]CHAR term,
+                    REF INT keyword_ind,
+                    REF RGENV env,
+                    MESSAGEPROC msg )VOID:
+BEGIN
+    write_keyword( fault_ind, fault_txt, term, keyword_ind, msg );
+    write_printitem( cond OF ft, fault OF ft, env, msg )
+END;
+
+PROC write_letnames = (REF NAMES letnames,
+                       REF RGENV env,
+                       INT ind,
+                           strind,
+                       MESSAGEPROC msg ) VOID:
+BEGIN
+REF NAMES names := letnames;
+BOOL noname = ( names IS nilnames );
+BOOL str = NOT noname ANDTH ( rest OF names ISNT nilnames );
+
+    IF str THEN
+        set_ind( strind );
+        write_text( orb_txt )
+  ELIF noname THEN
+        set_ind( ind );
+        write_text( vis_space_txt )
+  ELSE
+        set_ind( ind )
+    FI;
+    WHILE names ISNT nilnames
+    DO
+     NAMETYPE nametype = ( nametypes OF fd OF env )[ nameno OF names ];
+        write_nameitem( name OF nametype, attr OF nametype, env, msg );
+        names := rest OF names;
+        IF names ISNT nilnames THEN
+            write_text( comma_txt );
+            set_ind( sep_ind )
+        FI
+    OD;
+    IF str THEN
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    FI
+END;
+
+PROC write_let = (REF LET le,
+                  VECTOR[ ]CHAR term,
+                  REF INT keyword_ind,
+                  INT ind1, ind2, ind3,
+                  REF RGENV env,
+                  PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                  MESSAGEPROC msg )VOID:
+BEGIN
+    write_keyword( ind1, let_txt, term, keyword_ind, msg );
+    write_letnames( letnames OF le, env, ind2, ind3, msg );
+    write_text( equals_txt );
+    write_unit( unit OF le, env, msg )
+END;
+
+PROC write_make = (REF MAKE mk,
+                   REF INT keyword_ind,
+                   REF RGENV env,
+                   PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                   MESSAGEPROC msg )VOID:
+BEGIN
+REF NAMES n := makenames OF mk;
+BOOL put_inst := TRUE;
+NAMETYPE nametype;
+
+    WHILE n ISNT nilnames
+    DO
+        IF put_inst THEN
+            write_keyword( make_ind, make_txt, dot_txt, keyword_ind, msg );
+            write_indexes( sizes OF mk, env, msg );
+            set_ind( makeinst_ind );
+            write_instance( inst OF mk, TRUE, FALSE, env, write_unit, msg );
+            write_text( colon_txt );
+            set_ind( namelist_ind );
+            put_inst := no_comma_lists
+        FI;
+        nametype := ( nametypes OF fd OF env )[ nameno OF n ];
+        write_nameitem( name OF nametype, attr OF nametype, env, msg );
+        n := rest OF n;
+        IF NOT no_comma_lists ANDTH ( n ISNT nilnames ) THEN
+            set_ind( sep_ind )
+        FI
+    OD;
+    set_ind( endnamelist_ind )
+END;
+
+PROC do_write_join = (REF JOIN j,
+                      REF RGENV env,
+                      PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                      MESSAGEPROC msg )VOID:
+BEGIN
+    set_ind( startjoin_ind );
+    write_unit( from OF j, env, msg );
+    set_ind( to_ind );
+    write_text( to_txt );
+    set_ind( sep_ind );
+    write_unit( to OF j, env, msg );
+    set_ind( finishjoin_ind )
+END;
+
+PROC write_join = (REF JOIN j,
+                   REF INT keyword_ind,
+                   REF RGENV env,
+                   PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                   MESSAGEPROC msg )VOID:
+BEGIN
+    write_keyword( join_ind, join_txt, dot_txt, keyword_ind, msg );
+    do_write_join( j, env, write_unit, msg )
+END;
+
+PROC write_repljoin = (REF REPLJOIN re,
+                       REF INT keyword_ind,
+                       REF RGENV env,
+                       PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                       MESSAGEPROC msg )VOID:
+BEGIN
+REF FORMULAS repls := repls OF re;
+REF JOINS j := joins OF re;
+
+    write_keyword( forjoin_ind, for_txt, dot_txt, keyword_ind, msg );
+    WHILE repls ISNT nilformulas
+    DO
+        write_replicator( formula OF repls, env, msg );
+        repls := rest OF repls;
+        IF repls ISNT nilformulas THEN set_ind( sep_ind ) FI
+    OD;
+    set_ind( keyword_ind := endmult_ind );
+    write_text( join_txt );
+
+    WHILE j ISNT niljoins
+    DO
+        do_write_join( join OF j, env, write_unit, msg );
+        j := rest OF j;
+        IF j ISNT niljoins THEN
+            write_text( comma_txt );
+            set_ind( sep_ind )
+        FI
+    OD
+END;
+
+PROC write_series = (REF SERIES ss,
+                     REF RGENV env,
+                     PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                     MESSAGEPROC msg )VOID :
+BEGIN
+REF SERIES sel := ss;
+INT keyword_ind := 0;
+
+    WHILE sel ISNT nilseries
+    DO
+        CASE step OF sel IN
+        (DECLARATION dd )  write_declaration( dd, dot_txt, keyword_ind, env,
+                                              write_unit, msg ),
+        (REF PRINT pr )    write_print( pr, dot_txt, keyword_ind, env, msg ),
+        (REF FAULT fl )    write_fault( fl, dot_txt, keyword_ind, env, msg ),
+        (REF LET le )      write_let( le, dot_txt, keyword_ind, let_ind,
+                                      letname_ind, letstr_ind, env,
+                                      write_unit, msg ),
+        (REF MAKE mk )     write_make( mk, keyword_ind, env, write_unit, msg ),
+        (REF JOIN jo )     write_join( jo, keyword_ind, env, write_unit, msg ),
+        (REF REPLJOIN re ) write_repljoin( re, keyword_ind, env, write_unit,
+                                           msg )
+        OUT
+            msg( system,  "Unexpected mode in STEP" )
+        ESAC;
+        sel := rest OF sel
+    OD;
+    IF keyword_ind /= 0 THEN
+        write_text( dot_txt );
+        set_ind( endstep_ind )
+    FI
+END;
+
+PROC write_sequence = (REF SEQUENCE sqq,
+                       REF RGENV env,
+                       PROC( UNIT, REF RGENV, MESSAGEPROC )VOID write_unit,
+                       MESSAGEPROC msg )VOID :
+BEGIN
+PROC write_statement = (SEQSTEP st ) VOID:
+BEGIN
+    CASE st IN
+    (REF SEQASSIGN as )
+    (   set_ind( seqassign_ind );
+        write_unit( to OF as, env, msg );
+        set_ind( becomes_ind );
+        write_text( becomes_txt );
+        set_ind( sep_ind );
+        write_unit( from OF as, env, msg );
+        set_ind( endassign_ind )
+    ),
+    (REF SEQCASE scse )
+    (REF SEQCHOICES ch := choices OF scse;
+
+        set_ind( seqcase_ind );
+        write_text( case_txt );
+        set_ind( chooser_ind );
+        write_unit( input OF scse, env, msg );
+        set_ind( caseof_ind );
+        write_text( of_txt );
+        set_ind( option_ind );
+        WHILE ch ISNT nilseqchoices
+        DO
+            IF sort OF ch = elseofchoice THEN
+                set_ind( elseof_ind );
+                write_text( elseof_txt );
+                set_ind( option_ind )
+          ELIF sort OF ch = elsechoice OREL
+               ( expand_delays ANDTH sort OF ch = noelsechoice ) THEN
+                set_ind( caseelse_ind );
+                write_text( else_txt );
+                set_ind( option_ind );
+                write_statement( output OF ch )
+            FI;
+            IF sort OF ch = normalchoice OREL
+               sort OF ch = elseofchoice THEN
+                set_ind( seqchoice_ind );
+                write_unit( test OF ch, env, msg );
+                write_text( colon_txt );
+                set_ind( sep_ind );
+                write_statement( output OF ch );
+                set_ind( endchoice_ind )
+            FI;
+            ch := rest OF ch;
+            IF ( ch ISNT nilseqchoices ) ANDTH sort OF ch = normalchoice THEN
+                write_text( comma_txt );
+                set_ind( sep_ind )
+            FI
+        OD;
+        set_ind( esac_ind );
+        write_text( esac_txt );
+        set_ind( endcase_ind )
+    ),
+    (REF SEQCOND if )
+    (   set_ind( seqif_ind );
+        write_text( if_txt );
+        set_ind( condition_ind );
+        write_formula( cond OF if, env, msg );
+        set_ind( then_ind );
+        write_text( then_txt );
+        set_ind( option_ind );
+        write_statement( true OF if );
+        CASE false OF if IN
+        (REF SEQNULL nll ) SKIP
+        OUT
+            set_ind( else_ind );
+            write_text( else_txt );
+            set_ind( option_ind );
+            write_statement( false OF if )
+        ESAC;
+        set_ind( fi_ind );
+        write_text( fi_txt );
+        set_ind( endif_ind )
+    ),
+    (REF SEQREPL srp )
+    (   set_ind( seqrepl_ind );
+        write_text( osb_txt );
+        write_replicator( repl OF srp, env, msg );
+        write_text( csb_txt );
+        set_ind( sep_ind );
+        write_statement( body OF srp );
+        set_ind( endseqrepl_ind )
+    ),
+    (REF SEQROW srw )
+    (   set_ind( seqrow_ind );
+        write_text( osb_txt );
+        write_formula( size OF srw, env, msg );
+        write_text( csb_txt );
+        set_ind( sep_ind );
+        write_statement( elem OF srw );
+        set_ind( endseqrow_ind )
+    ),
+    (REF SEQNULL snl ) SKIP,
+    (REF SEQUENCE seq )
+    (REF SEQUENCE sel := seq;
+
+        set_ind( seqbr_ind );
+        write_text( orb_txt );
+        WHILE sel ISNT nilsequence
+        DO
+            write_statement( step OF sel );
+            sel := rest OF sel;
+            IF sel ISNT nilsequence THEN
+                write_text( semi_txt );
+                set_ind( sep_ind )
+            FI
+        OD;
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    )
+    OUT
+        msg( system,  "Unexpected mode in SEQSTEP" )
+    ESAC
+END;
+
+REF SEQUENCE sel := sqq;
+INT keyword_ind := 0;
+
+    WHILE sel ISNT nilsequence
+    DO
+        CASE step OF sel IN
+        (DECLARATION dd )  write_declaration( dd, semi_txt, keyword_ind, env,
+                                              write_unit, msg ),
+        (REF PRINT pr )    write_print( pr, semi_txt, keyword_ind, env, msg ),
+        (REF FAULT fl )    write_fault( fl, semi_txt, keyword_ind, env, msg ),
+        (REF SEQLET le )   write_let( seqlet OF le, semi_txt, keyword_ind,
+                                      seqlet_ind, seqletname_ind, seqletstr_ind,
+                                      env, write_unit, msg ),
+        (REF SEQVAR va )
+        (
+            write_keyword( seqvar_ind, var_txt, semi_txt, keyword_ind, msg );
+            write_letnames( letnames OF seqvar OF va, env,
+                            seqvarname_ind, seqvarstr_ind, msg );
+            set_ind( becomes_ind );
+            write_text( becomes_txt );
+            write_unit( unit OF seqvar OF va, env, msg )
+        ),
+        (REF SEQPVAR pv )
+        (
+            write_keyword( seqpvar_ind, pvar_txt, semi_txt, keyword_ind, msg );
+            write_letnames( pvarnames OF pv, env,
+                            seqpvarname_ind, seqpvarstr_ind, msg );
+            set_ind( becomes_ind );
+            write_text( init_txt );
+            write_unit( init OF pv, env, msg )
+        )
+        OUT
+            IF keyword_ind /= 0 THEN
+                write_text( semi_txt );
+                set_ind( endstep_ind )
+            FI;
+            set_ind( keyword_ind := seqstat_ind );
+            write_statement( step OF sel )
+        ESAC;
+        sel := rest OF sel
+    OD;
+    IF keyword_ind /= 0 THEN
+        write_text( semi_txt );
+        set_ind( endstep_ind )
+    FI
+END;
+
+PROC write_unit = ( UNIT u, REF RGENV env, MESSAGEPROC msg ) VOID:
+BEGIN
+PROC write_output = (UNIT output, INT endserorseq_ind )VOID:
+BEGIN
+    CASE output IN
+    (REF UNULL) set_ind( nooutput_ind )
+    OUT
+       set_ind( output_ind );
+       write_text( output_txt );
+       write_unit( output, env, msg );
+       set_ind( endoutput_ind )
+    ESAC;
+    set_ind( endblock_ind );
+    write_text( end_txt );
+    set_ind( endserorseq_ind )
+END;
+
+    CASE u IN
+    (REF CNAME cnm )
+    ( REF CONSTDEC cdec = (consts OF dec_env OF env)[constno OF cnm];
+         IF sort OF cdec = macpardec  THEN
+              mpname( cnm, env );
+              set_ind( cmpar_ind )
+        ELSE
+              set_ind( cname_ind )
+          FI;
+      write_text( constname( constno OF cnm, env ))
+    ),
+    (REF CTYPE cty )
+    (   set_ind( ctype_ind );
+        write_type( type OF cty, env, msg )
+    ),
+    (REF CPRIM cby )
+    (ID an = altname( typeno OF cby, primno OF cby, env, msg );
+     IF is_ella_char( typeno OF cby, env)
+     THEN set_ind( cchar_ind );
+          write_text( an );
+          write_text( prime_txt
+                      + find_char(typeno OF cby, primno OF cby, env, msg))
+     ELSE set_ind( cbasic_ind );
+          write_text( an )
+     FI
+    ),
+    (REF CINT cnt )
+    (ID tagname = altname( typeno OF cnt, 1, env, msg );
+
+        set_ind( cint_ind );
+        write_text( tagname );
+        write_text( slash_txt );
+        write_formula( index OF cnt, env, msg );
+        set_ind( endcint_ind )
+    ),
+    (REF CRANGE crg )
+    (ID tagname = altname( typeno OF crg, 1, env, msg );
+
+        set_ind( crange_ind );
+        write_text( tagname );
+        write_text( slashbr_txt );
+        write_range( range OF crg, env, msg );
+        write_text( crb_txt );
+        set_ind( endrange_ind )
+    ),
+    (REF CPRIMRANGE ccr )
+    (ID tagname = altname( typeno OF ccr, 1, env, msg );
+
+        set_ind( ccharrange_ind );
+        write_text( tagname );
+        write_text( orb_txt );
+        write_text( prime_txt
+                    + find_char(typeno OF ccr, firstno OF ccr, env, msg) );
+        set_ind( dotdot_ind );
+        write_text( dotdot_txt );
+        set_ind( sep_ind );
+        write_text( prime_txt
+                    + find_char(typeno OF ccr, lastno OF ccr, env, msg) );
+        write_text( crb_txt );
+        set_ind( endrange_ind )
+    ),
+    (REF CQUOTE cqu )
+    (ID tagname = altname( typeno OF cqu, 1, env, msg );
+
+        set_ind( cquote_ind );
+        write_text( tagname );
+        write_string( make_string(typeno OF cqu, string OF cqu, env, msg ),
+                      env, msg );
+        set_ind( endcquote_ind )
+    ),
+    (REF UALTS ualts )
+    (REF UALTS el := ualts;
+
+        set_ind( ualts_ind );
+        WHILE el ISNT nilualts
+        DO
+            write_unit( alt OF el, env, msg );
+            el := rest OF el;
+            IF el ISNT nilualts THEN
+                write_text( stroke_txt );
+                set_ind( sep_ind )
+            FI
+        OD;
+        set_ind( endalts_ind )
+    ),
+    (REF CQUERY cqy )
+    (   set_ind( cquery_ind );
+        write_text( qmark_txt );
+        write_type( querytype OF cqy, env, msg );
+        set_ind( endcquery_ind )
+    ),
+    (REF CVOID cv )
+    (   set_ind( cvoid_ind );
+        write_text( void_txt )
+    ),
+    (REF UNAME unm )
+    ( ID uname = name OF ( nametypes OF fd OF env )[ nameno OF unm ];
+        IF (sort OF unm = uiosource) OREL (sort OF unm = uiosink)
+        THEN
+           set_ind( uio_ind );
+           write_text( io_txt )
+        ELSE
+           set_ind( uname_ind )
+        FI;
+        IF UPB uname > 0 THEN write_text( uname ) FI
+    ),
+    (REF UASSOC uas )
+    (ID an = altname( typeno OF uas, altno OF uas, env, msg );
+
+        set_ind( uassoc_ind );
+        write_text( an );
+        write_text( ampsand_txt );
+        write_unit( assoc OF uas, env, msg );
+        set_ind( enduassoc_ind )
+    ),
+    (REF UEXTRACT uex )
+    (ID an = altname( typeno OF uex, altno OF uex, env, msg );
+
+        set_ind( uextract_ind );
+        write_unit( extract OF uex, env, msg );
+        set_ind( slashslash_ind );
+        write_text( twoslash_txt );
+        write_text( an );
+        set_ind( enduextract_ind )
+    ),
+    (REF UPORTNAME uti)
+    (   set_ind( uportname_ind );
+        write_unit( unit OF uti, env, msg );
+        REF FNDEC fd = ( fns OF dec_env OF env )[ fnno OF uti ];
+        ID name = name OF ( nametypes OF fd )[ nameno OF uti ];
+        set_ind( backslash_ind );
+        write_text( backslash_txt );
+        write_text( name );
+        set_ind( enduportname_ind )
+    ),
+    (REF UINDEX uin )
+    (   set_ind( uindex_ind );
+        write_unit( unit OF uin, env, msg );
+        write_index( index OF uin, env, msg );
+        set_ind( endindex_ind )
+    ),
+    (REF UTRIM utr )
+    (   set_ind( utrim_ind );
+        write_unit( unit OF utr, env, msg );
+        write_text( osb_txt );
+        set_ind( startrange_ind );
+         write_range( range OF utr, env, msg );
+        set_ind( endrange_ind );
+        write_text( csb_txt );
+        set_ind( endindex_ind )
+    ),
+    (REF UDYINDEX udy )
+    (   set_ind( udyindex_ind );
+        write_unit( unit OF udy, env, msg );
+        write_text( twoosb_txt );
+        set_ind( sep_ind );
+        write_unit( index OF udy, env, msg );
+        write_text( twocsb_txt );
+        set_ind( endindex_ind )
+    ),
+    (REF UREPLACE ur )
+    (   set_ind( ureplace_ind );
+        write_text( replace_txt );
+        set_ind( replace_ind );
+        write_text( orb_txt );
+        write_unit( unit OF ur, env, msg );
+        write_text( comma_txt );
+        set_ind( sep_ind );
+        write_unit( index OF ur, env, msg );
+        write_text( comma_txt );
+        set_ind( sep_ind );
+        write_unit( from OF ur, env, msg );
+        write_text( crb_txt );
+        set_ind( endreplace_ind )
+    ),
+    (REF UROW row )
+    (   set_ind( urow_ind );
+        write_index( size OF row, env, msg );
+        set_ind( sep_ind );
+        write_unit( elem OF row, env, msg );
+        set_ind( endrow_ind )
+    ),
+    (REF USTR str )
+    (REF USTR el := str;
+
+        set_ind( ustr_ind );
+        write_text( orb_txt );
+        WHILE el ISNT nilustr
+        DO
+            write_unit( elem OF el, env, msg );
+            el := rest OF el;
+            IF el ISNT nilustr THEN
+                write_text( comma_txt );
+                set_ind( sep_ind )
+          ELSE
+                write_text( crb_txt );
+                set_ind( endstr_ind )
+            FI
+        OD
+    ),
+    (REF UCONC ucnc )
+    (   set_ind( uconc_ind );
+        write_unit( left OF ucnc, env, msg );
+        set_ind( conc_ind );
+        write_text( conc_txt );
+        set_ind( sep_ind );
+        write_unit( right OF ucnc, env, msg );
+        set_ind( enduconc_ind )
+    ),
+    (REF UMINST umin )
+    (   set_ind( uminst_ind );
+        write_instance( inst OF umin, FALSE, FALSE, env, write_unit, msg );
+        set_ind( sep_ind );
+        write_unit( right OF umin, env, msg );
+        set_ind( enduminst_ind )
+    ),
+    (REF UDINST udin )
+    (   set_ind( udinst_ind );
+        write_unit( left OF udin, env, msg );
+        set_ind( inst_ind );
+        write_instance( inst OF udin, FALSE, FALSE, env, write_unit, msg );
+        set_ind( sep_ind );
+        write_unit( right OF udin, env, msg );
+        set_ind( endudinst_ind )
+    ),
+    (REF UCASE ucse )
+    (REF UCHOICES ch := choices OF ucse;
+
+        set_ind( ucase_ind );
+        write_text( case_txt );
+        set_ind( chooser_ind );
+        write_unit( input OF ucse, env, msg );
+        set_ind( caseof_ind );
+        write_text( of_txt );
+        set_ind( option_ind );
+        WHILE ch ISNT niluchoices
+        DO
+            IF sort OF ch = elseofchoice THEN
+                set_ind( elseof_ind );
+                write_text( elseof_txt );
+                set_ind( option_ind )
+          ELIF sort OF ch = elsechoice OREL
+               ( expand_delays ANDTH sort OF ch = noelsechoice )THEN
+                set_ind( caseelse_ind );
+                write_text( else_txt );
+                set_ind( option_ind );
+                write_unit( output OF ch, env, msg )
+            FI;
+            IF sort OF ch = normalchoice OREL
+               sort OF ch = elseofchoice THEN
+                set_ind( choice_ind );
+                write_unit( test OF ch, env, msg );
+                write_text( colon_txt );
+                set_ind( sep_ind );
+                write_unit( output OF ch, env, msg );
+                set_ind( endchoice_ind )
+            FI;
+            ch := rest OF ch;
+            IF ( ch ISNT niluchoices ) ANDTH sort OF ch = normalchoice THEN
+                write_text( comma_txt );
+                set_ind( sep_ind )
+            FI
+        OD;
+        set_ind( esac_ind );
+        write_text( esac_txt );
+        set_ind( endcase_ind )
+    ),
+    (REF UCOND if )
+    (   set_ind( uif_ind );
+        write_text( if_txt );
+        set_ind( condition_ind );
+        write_formula( cond OF if, env, msg );
+        set_ind( then_ind );
+        write_text( then_txt );
+        set_ind( option_ind );
+        write_unit( true OF if, env, msg );
+        set_ind( else_ind );
+        write_text( else_txt );
+        set_ind( option_ind );
+        write_unit( false OF if, env, msg );
+        set_ind( fi_ind );
+        write_text( fi_txt );
+        set_ind( endif_ind )
+    ),
+    (REF UREPL urp )
+    (   set_ind( urepl_ind );
+        write_text( osb_txt );
+        write_replicator( repl OF urp, env, msg );
+        write_text( csb_txt );
+        set_ind( sep_ind );
+        write_unit( body OF urp, env, msg );
+        set_ind( endurepl_ind )
+    ),
+    (REF USEQUENCE usq )
+    (   set_ind( usequence_ind );
+        write_text( begin_txt );
+        write_text( seq_txt );
+        set_ind( block_ind );
+        write_sequence( body OF usq, env, write_unit, msg );
+        write_output( output OF usq, endsequence_ind )
+    ),
+    (REF USERIES usr )
+    (   set_ind( useries_ind );
+        write_text( begin_txt );
+        set_ind( block_ind );
+        write_series( body OF usr, env, write_unit, msg );
+        write_output( output OF usr, endseries_ind )
+    ),
+    (REF UATTR uat )
+    (   set_ind( uattr_ind );
+        write_unit( unit OF uat, env, msg );
+        write_attr( attr OF uat, unitattr_ind, env, msg );
+        set_ind( endattr_ind )
+    ),
+    (REF USTRING usr )
+    (   set_ind( ustring_ind );
+        write_text( string_txt );
+        write_text( osb_txt );
+        write_formula( size OF usr, env, msg );
+        write_text( csb_txt );
+        set_ind( sep_ind );
+        write_unit( char OF usr, env, msg );
+        set_ind( endstring_ind )
+    ),
+    (REF UCHECK uch ) write_unit( unit OF uch, env, msg ),
+    (REF UBRACKET ubr )
+    (   set_ind( ubr_ind );
+        write_text( orb_txt );
+        write_unit( unit OF ubr, env, msg );
+        write_text( crb_txt );
+        set_ind( endstr_ind )
+    ),
+    (REF UNULL unl ) set_ind( unull_ind ),
+    (REF UFN ufn )
+    (   set_ind( ufn_ind );
+        write_unit( sink OF ufn, env, msg );
+        set_ind( to_ind );
+        write_text( to_txt );
+        set_ind( sep_ind );
+        write_unit( source OF ufn, env, msg );
+        set_ind( endufn_ind )
+    )
+    OUT
+        msg( system,  "Unexpected mode in UNIT" )
+    ESAC
+END;
+
+INT keyword_ind := 0;
+
+    IF write_version_no /= assembler_version_no THEN
+        msg( fatal, "Write ELLA out of date" )
+    FI;
+    nullrgenv := ( nilfndec, nilmplist, NIL );
+    IF CASE sort OF dec IN
+       {OUTERATTR}  get_outerattr(dec) ISNT nilattrdec,
+       {OUTERINT}   get_outerint(dec) ISNT nilintdec,
+       {OUTERTYPE}  get_outertype(dec) ISNT niltypedec,
+       {OUTERCONST} get_outerconst(dec) ISNT nilconstdec,
+       {OUTERFN}    get_outerfn(dec) ISNT nilfndec
+       OUT
+            TRUE
+       ESAC    THEN
+    RGENV env := nullrgenv;
+
+        dec_env OF env := environ OF dec;
+        CASE sort OF dec IN
+        {outerattr}
+          write_attrdec( get_outerattr(dec), 1, env, dot_txt, keyword_ind, msg),
+        {outerint}
+          write_intdec( get_outerint(dec), 1, env, dot_txt, keyword_ind, msg ),
+        {outertype}
+           write_typedec( get_outertype(dec), 1, env, dot_txt,
+                          keyword_ind, msg ),
+        {outerconst}
+           write_constdec( get_outerconst(dec), 1, env, write_unit, dot_txt,
+                           keyword_ind, msg ),
+        {outerfn}
+        (REF FNDEC fd = get_outerfn(dec);
+
+            set_fnenv( env, fd, nilmplist, environ OF dec );
+            write_fndec( fd, 1, env, write_unit, dot_txt, keyword_ind, msg )
+        )
+        OUT
+            msg( system,  "Unexpected mode in OUTER" )
+        ESAC;
+        write_text( dot_txt );
+        set_ind( endouterdec_ind )
+    FI
+END;
+
+    SKIP
+KEEP OUTER, write_ella,
+     write_no_comma_lists, write_expand_char_decs, write_ella_options,
+     write_expand_delays
+FINISH

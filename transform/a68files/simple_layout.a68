@@ -1,0 +1,883 @@
+DECS simple_layout CONTEXT VOID USE putstrings, basics, osinterface,
+     messageproc, options,  assmodes, modeprocs, syntax_inds, write_ella,
+     layout_tables :
+
+{ " Id: simple_layout.sta,v 1.1 91/10/14 14:31:32 edcad Exp $" }
+configinfo A68CONFIG "$Id: simple_layout.a68,v 34.3 1995/03/29 13:03:05 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+19:09:90  Simple text printer. DJS.
+ 9:05:91  Extra indicators added for interactive transform environment.  DJS
+03:03:92  Attribute declarations added. EVW
+29:07:92  cstring_ind removed from ind_types. JIT
+ 9:09:92  Change to way indicators are passed.  DJS
+ 4:01:93  Increase inteligence of this layout module.  DJS
+ 2:03:93  Correct printing of expanded mac params.  DJS
+15:06:93  Add seqrow indices. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.008 
+26:08:94  33.002  DJS   CoreElla  Add options to use list, and option parameter
+                                  call of write_ella 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE MARKER,
+     INDTYPE = STRUCT( INT number,
+                           delay,
+                           bias,
+                       BITS clause_state,
+                       PROC( REF INDTYPE, MESSAGEPROC )VOID action ),
+     STACK = STRUCT( REF INDTYPE ind,
+                     INT indent,
+                         bias,
+                     BITS clause_state,
+                     REF MARKER markers,
+                     REF STACK rest ),
+     MARKER = STRUCT( INT pos,
+                          cnt,
+                          bias,
+                      REF MARKER rest ),
+     ADJUST = STRUCT( INT item_cnt,
+                      REF MARKER marker,
+                      REF ADJUST rest );
+
+REF STACK nilstack = NIL;
+REF MARKER nilmarker = NIL;
+REF ADJUST niladjust = NIL;
+
+PROC trap = (INT trap_pos ) VOID:
+BEGIN
+INT a = trap_pos + 1;
+
+    SKIP
+END;
+
+INDENTDATA indent_data := ( 0, 0 );
+VECTOR[ 256 ]CHAR line;
+REF STACK stack := nilstack,
+          freestack := nilstack;
+REF MARKER markers := nilmarker,
+           freemarkers := nilmarker;
+REF ADJUST adjusts := niladjust,
+           freeadjusts := niladjust;
+INT lwidth := 80;
+INT cpos := 0,
+    ccnt := 0,
+    space_cnt := 0,
+    level := 0,
+    depth := 0,
+    last_ind_num := 0,
+    line_count := 0;
+
+PROC set_marker = (INT delay, bias )REF MARKER:
+BEGIN
+REF MARKER mk;
+
+    IF freemarkers IS nilmarker THEN
+        mk := HEAP MARKER
+  ELSE
+        mk := freemarkers;
+        freemarkers := rest OF mk
+    FI;
+    REF MARKER( mk ) := ( cpos, ccnt, bias, nilmarker );
+
+REF ADJUST adj;
+
+    IF freeadjusts IS niladjust THEN
+        adj := HEAP ADJUST
+  ELSE
+        adj := freeadjusts;
+        freeadjusts := rest OF adj
+    FI;
+    REF ADJUST( adj ) := ( delay, mk, adjusts );
+    adjusts := adj;
+
+REF REF MARKER last := markers OF stack;
+
+    WHILE last ISNT nilmarker DO last := rest OF last OD;
+    REF REF MARKER( last ) := mk
+END;
+
+PROC free_marker = (REF MARKER mk, REF REF MARKER list )REF MARKER:
+BEGIN
+REF MARKER rest = rest OF mk;
+REF REF MARKER last := list;
+
+    WHILE last ISNT mk DO last := rest OF last OD;
+    REF REF MARKER( last ) := rest;
+    rest OF mk := freemarkers;
+    freemarkers := mk;
+    rest
+END;
+
+PROC free_adjusts = VOID:
+BEGIN
+REF ADJUST rest;
+
+    WHILE adjusts ISNT niladjust
+    DO
+        rest := rest OF adjusts;
+        rest OF adjusts := freeadjusts;
+        freeadjusts := adjusts;
+        adjusts := rest
+    OD
+END;
+
+PROC no_indaction = (REF INDTYPE ind, MESSAGEPROC msg )VOID: SKIP;
+
+INDTYPE dummy_indtype := ( 0, 0, 0, 2r0, no_indaction );
+
+PROC out_line := ( REF VECTOR[ ]CHAR buf, MESSAGEPROC msg )VOID:
+    msg( system, "simple_layout: out_line not set." );
+
+PROC put_out_line = (INT pos, MESSAGEPROC msg )VOID:
+BEGIN
+INT pp := pos;
+
+    WHILE pp > 0 ANDTH line[ pp ] = " " DO pp MINUSAB 1 OD;
+    out_line( line[ : pp ], msg );
+    line_count PLUSAB 1
+END;
+
+PROC write_line = (INT leadsp, MESSAGEPROC msg )VOID:
+BEGIN
+REF STACK st := stack;
+REF REF MARKER mktail;
+
+    put_out_line( cpos, msg );
+    WHILE st ISNT nilstack
+    DO
+        mktail := rest OF markers OF st;
+        WHILE mktail ISNT nilmarker DO mktail := rest OF mktail OD;
+        REF REF MARKER( mktail ) := freemarkers;
+        freemarkers := rest OF markers OF st;
+        rest OF markers OF st := nilmarker;
+        clause_state OF st := ( clause_state OF st AND NOT clause_head_mask );
+        st := rest OF st
+    OD;
+    cpos := ccnt := space_cnt := leadsp MAX 0;
+    FORALL c1 IN line[ : cpos ] DO c1 := " " OD
+END;
+
+PROC split_line = (INT mkpos,
+                       mkcnt,
+                       leadsp,
+                   REF STACK stk,
+                   BOOL all_stack_entries,
+                   MESSAGEPROC msg )BOOL:
+BEGIN
+INT pos = mkpos MIN cpos,
+    cnt = mkcnt MIN ccnt;
+INT lsp := leadsp MAX 0;
+INT pshift := pos - lsp,
+    cshift := cnt - lsp;
+REF STACK st := IF all_stack_entries THEN stack ELSE stk FI;
+REF MARKER mk;
+BOOL first;
+
+    IF cshift < 0 THEN
+        pshift MINUSAB cshift;
+        lsp PLUSAB cshift;
+        cshift := 0
+    FI;
+    IF pos > space_cnt THEN put_out_line( pos, msg ) FI;
+    WHILE st ISNT nilstack
+    DO
+        first := TRUE;
+        mk := markers OF st;
+        WHILE mk ISNT nilmarker
+        DO
+            IF pos OF mk >= pos THEN
+                pos OF mk MINUSAB pshift;
+                cnt OF mk MINUSAB cshift;
+                mk := rest OF mk
+          ELIF first THEN
+                clause_state OF st := ( clause_state OF st AND
+                                        NOT clause_head_mask );
+                mk := rest OF mk
+          ELSE
+                mk := free_marker( mk, markers OF st )
+            FI;
+            first := FALSE
+        OD;
+        st := IF all_stack_entries THEN rest OF st ELSE nilstack FI
+    OD;
+    FORALL c1 IN line[ : space_cnt := lsp ] DO c1 := " " OD;
+
+    IF pos < cpos THEN
+    INT oldcpos = cpos;
+
+        cpos MINUSAB pshift;
+        ccnt MINUSAB cshift;
+        line[ lsp + 1 : cpos ] := line[ pos + 1 : oldcpos ];
+        TRUE
+  ELSE
+        cpos := ccnt := lsp;
+        FALSE
+    FI
+END;
+
+PROC clear_markers = (REF STACK st )VOID:
+BEGIN
+    IF markers OF st ISNT nilmarker THEN
+    REF REF MARKER mktail := markers OF st;
+
+        WHILE mktail ISNT nilmarker DO mktail := rest OF mktail OD;
+        REF REF MARKER( mktail ) := freemarkers;
+        freemarkers := markers OF st;
+        markers OF st := nilmarker
+    FI
+END;
+
+PROC push_stack = (REF INDTYPE ind )REF STACK:
+BEGIN
+INT indent = IF stack ISNT nilstack THEN indent OF stack ELSE 0 FI +
+             IF ( clause_state OF ind AND step_indent ) /= 2r0 THEN
+                step OF indent_data
+           ELSE
+                0
+             FI;
+REF STACK st;
+
+    IF freestack IS nilstack THEN
+        st := HEAP STACK
+  ELSE
+        st := freestack;
+        freestack := rest OF st;
+        clear_markers( st )
+    FI;
+
+    level PLUSAB 1;
+    REF STACK( st ) := ( ind, indent, bias OF ind, clause_state OF ind,
+                         nilmarker, stack );
+    stack := st;
+    set_marker( delay OF ind, 0 );
+    st
+END;
+
+BOOL underflowed := FALSE;
+PROC pop_stack = VOID:
+BEGIN
+    IF level > 0 THEN
+    REF STACK st = stack;
+
+        level MINUSAB 1;
+        free_adjusts;
+        IF freestack ISNT nilstack THEN clear_markers( freestack ) FI;
+        stack := rest OF st;
+        rest OF st := freestack;
+        freestack := st
+
+  ELIF NOT underflowed THEN
+        underflowed := TRUE;
+        put( screen, ( "**** Stack underflow at line ",
+                       line_count, " ****", newline,
+                       line[ : cpos ], newline ))
+    FI
+END;
+
+PROC set_fold = (REF STACK st )VOID:
+BEGIN
+REF STACK stp := st;
+
+    WHILE stp ISNT nilstack
+    DO
+        IF ( clause_state OF stp AND fold_at_sep_if_folded ) /= 2r0 THEN
+            clause_state OF stp := ( clause_state OF stp OR fold_at_every_sep )
+        FI;
+        stp := rest OF stp
+    OD
+END;
+
+PROC clause_head_fold = (REF STACK st,
+                         BOOL in_stack,
+                         MESSAGEPROC msg )BOOL:
+BEGIN
+BOOL may_need_space := TRUE;
+BITS fold_state = ( clause_state OF st AND clause_head_mask );
+
+    IF fold_state >= fold_if_no_fit OREL
+       ( fold_state = fold_if_gt_dither ANDTH
+         pos OF markers OF st > indent OF st + dither OF indent_data ) THEN
+        may_need_space := split_line( pos OF markers OF st,
+                                      cnt OF markers OF st,
+                                      indent OF st, st, in_stack, msg )
+    FI;
+    clause_state OF st := clause_state OF st AND NOT clause_head_mask;
+    may_need_space
+END;
+
+
+PROC clause_sep_fold = (REF STACK st,
+                        BOOL in_stack,
+                        MESSAGEPROC msg )BOOL:
+BEGIN
+BOOL may_need_space := TRUE;
+REF MARKER spmk := rest OF markers OF st, rest;
+BOOL fold_all = (( clause_state OF st AND clause_sep_mask ) >=
+                 fold_at_sep_if_folded  ),
+     to_indent = (( clause_state OF st AND fold_mode_mask ) = fold_to_indent );
+
+    WHILE spmk ISNT nilmarker
+    DO
+        rest := free_marker( spmk, markers OF st );
+             { Marker must be freed before taking a new line }
+        IF fold_all OREL ( rest IS nilmarker ) THEN
+            IF to_indent THEN
+                may_need_space := split_line( pos OF spmk, cnt OF spmk,
+                                              indent OF st + bias OF spmk,
+                                              st, in_stack, msg )
+          ELSE
+                may_need_space := split_line( pos OF spmk, cnt OF spmk,
+                                              pos OF markers OF st +
+                                                  bias OF spmk,
+                                              st, in_stack, msg )
+            FI
+        FI;
+        spmk := rest
+    OD;
+
+    IF in_stack ANDTH fold_all THEN set_fold( st ) FI;
+    may_need_space
+END;
+
+PROC try_fold_clause = (REF BOOL may_need_space, MESSAGEPROC msg )BOOL:
+BEGIN
+BOOL fold_head := FALSE,
+     try_free := FALSE;
+REF STACK st := nilstack,
+          stitem := stack;
+
+    WHILE stitem ISNT nilstack
+    DO
+        IF rest OF markers OF stitem ISNT nilmarker THEN
+            st := stitem;
+            fold_head := FALSE
+      ELIF ( clause_state OF stitem AND clause_head_mask ) /= dont_fold
+      THEN
+            st := stitem;
+            fold_head := TRUE
+        FI;
+        stitem := rest OF stitem
+    OD;
+    IF fold_head THEN
+        may_need_space := clause_head_fold( st, TRUE, msg );
+        TRUE
+  ELIF st ISNT nilstack THEN
+        may_need_space := clause_sep_fold( st, TRUE, msg );
+        TRUE
+  ELIF try_free := (( freestack ISNT nilstack ) ANDTH
+       ( markers OF freestack ISNT nilmarker ));
+       try_free ANDTH
+       ( clause_state OF freestack AND clause_head_mask ) /= dont_fold THEN
+        may_need_space := clause_head_fold( freestack, FALSE, msg );
+        TRUE
+  ELIF try_free ANDTH ( rest OF markers OF freestack ISNT nilmarker ) THEN
+        may_need_space := clause_sep_fold( freestack, FALSE, msg );
+        TRUE
+  ELSE
+        FALSE
+    FI
+END;
+
+PROC clause_head_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    push_stack( ind )
+END;
+
+PROC clause_sep_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+INT bias := bias OF stack;
+
+    IF bias OF ind /= 0 THEN
+        bias := 0;
+        bias OF stack := bias OF ind
+    FI;
+    IF ( clause_state OF stack AND clause_sep_mask ) = fold_at_every_sep THEN
+        IF (( clause_state OF stack AND fold_mode_mask ) = fold_to_indent )
+      THEN
+            split_line( cpos, ccnt, indent OF stack + bias,
+                        stack, TRUE, msg )
+      ELSE
+            split_line( cpos, ccnt, pos OF markers OF stack + bias,
+                        stack, TRUE, msg )
+        FI
+  ELSE
+        set_marker( 1, bias )
+    FI
+END;
+
+PROC clause_end_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+BOOL extra_nl = (( clause_state OF stack AND take_extra_nl ) /= 2r0 ),
+      need_nl = (( clause_state OF stack AND clause_tail_mask ) /= 2r0 );
+
+    pop_stack;
+    IF need_nl THEN
+        write_line( indent OF stack, msg );
+        IF extra_nl THEN
+            cpos := 0;
+            write_line( indent OF stack, msg )
+        FI
+    FI
+END;
+
+PROC set_fnname_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( fnname_class );
+
+PROC set_becomes_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( becomes_class );
+
+PROC set_dotdot_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( dotdot_class );
+
+PROC set_op_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( op_class );
+
+PROC set_slashslash_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( slashslash_class );
+
+PROC set_to_class = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+        set_next_class( to_class );
+
+PROC newalts_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+{    set_fnname_class( ind, msg ); }
+    clause_head_action( ind, msg )
+END;
+
+PROC dec_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    depth PLUSAB 1;
+    clause_head_action( ind, msg )
+END;
+
+PROC enddec_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    pop_stack;
+    depth MINUSAB 1
+END;
+
+PROC series_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    IF last_ind_num = body_ind THEN
+        indent OF stack:= ( depth - 1 ) * step OF indent_data
+  ELSE
+    BOOL dummy := FALSE;
+
+        set_fold( stack );
+        try_fold_clause( dummy, msg );
+        IF ( clause_state OF ind AND step_indent ) /= 2r0 THEN
+            indent OF stack PLUSAB step OF indent_data
+        FI
+    FI;
+    write_line( indent OF stack, msg )
+END;
+
+PROC endseries_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+BOOL extra_nl = (( clause_state OF stack AND take_extra_nl ) /= 2r0 );
+
+    IF extra_nl THEN write_line( indent OF stack, msg ) FI
+END;
+
+PROC block_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    clause_head_action( ind, msg );
+    write_line( indent OF stack, msg )
+END;
+
+PROC fnspec_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    clause_sep_action( ind, msg );
+    clause_head_action( ind, msg )
+END;
+
+PROC endfnspec_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    clause_end_action( ind, msg );
+    clause_sep_action( ind, msg )
+END;
+
+PROC string_action = (REF INDTYPE ind, MESSAGEPROC msg )VOID:
+BEGIN
+    set_fnname_class( ind, msg );
+    clause_head_action( ind, msg )
+END;
+
+VECTOR[ num_inds ]INDTYPE indtypes;
+
+    FORALL it IN indtypes DO it := dummy_indtype OD;
+
+PROC add_indtype = (VECTOR[ ]INT indnos,
+                    INT delay, bias,
+                    BITS clause_state,
+                    PROC( REF INDTYPE, MESSAGEPROC )VOID action )VOID:
+BEGIN
+BOOL failed := FALSE;
+
+    FORALL n IN indnos
+    DO
+        REF INDTYPE it = indtypes[ n ];
+        IF number OF it /= 0 THEN
+            IF NOT failed THEN
+                put( screen, "The following indicators are already set: " );
+                failed := TRUE
+          ELSE
+                put( screen, "                                          " )
+            FI;
+            put( screen, ( ind_names[ n ], newline ))
+        FI;
+        it := ( n, delay, bias, clause_state, action )
+    OD;
+    IF failed THEN sysfault( "Failed to initialise intypes." ) FI
+END;
+
+PROC init_indtypes = VOID:
+BEGIN
+BITS  let_state = get_clause_state( let_clause ),
+     make_state = get_clause_state( make_clause ),
+     join_state = get_clause_state( join_clause ),
+     case_state = get_clause_state( case_clause ),
+       if_state = get_clause_state( if_clause ),
+    print_state = get_clause_state( print_clause ),
+  decstep_state = get_clause_state( decstep_clause ),
+      dec_state = get_clause_state( dec_clause ),
+     stat_state = get_clause_state( seqstat_clause ),
+      str_state = get_clause_state( str_clause ),
+  newalts_state = get_clause_state( newalts_clause ),
+    terms_state = get_clause_state( terms_clause ),
+    block_state = get_clause_state( block_clause ),
+    series_state = get_clause_state( serorseq_clause ),
+  monadic_state = get_clause_state( monadic_clause ),
+       no_state = 2r0;
+
+    indent_data := get_indent_data;
+
+    add_indtype(( adelay_ind,
+                  idelay_ind,
+                  sample_ind,
+                  faster_ind,
+                  slower_ind,
+                  reform_ind,
+                  import_ind,
+                  nobody_ind,
+                  ram_ind,
+                  fnname_ind,
+                  arith_ind ), 0, 0, no_state, set_fnname_class );
+    add_indtype(( becomes_ind ), 0, 0, no_state, set_becomes_class );
+    add_indtype(( dotdot_ind ), 0, 0, no_state, set_dotdot_class );
+    add_indtype(( operator_ind ), 0, 0, no_state, set_op_class );
+    add_indtype(( slashslash_ind ), 0, 0, no_state, set_slashslash_class );
+    add_indtype(( to_ind ), 0, 0, no_state, set_to_class );
+
+    add_indtype(( endfnspec_ind ), 0, 0, no_state, endfnspec_action );
+    add_indtype(( useries_ind,
+                  usequence_ind ), 0, 0, series_state, series_action );
+    add_indtype(( endseries_ind,
+                  endsequence_ind ), 0, 0, no_state, endseries_action );
+    add_indtype(( block_ind ), 1, 0, block_state, block_action );
+
+    add_indtype(( endstep_ind,
+                  endouterdec_ind,
+                  endblock_ind ), 0, 0, take_newline, clause_end_action );
+    add_indtype(( adecls_ind,
+                  idecls_ind,
+                  tdecls_ind,
+                  cdecls_ind,
+                  fdecls_ind,
+                  mdecls_ind ), 2, 0, decstep_state, clause_head_action );
+    add_indtype(( print_ind,
+                  fault_ind ), 2, 0, print_state, clause_head_action );
+    add_indtype(( make_ind ), 2, 0, make_state, clause_head_action );
+    add_indtype(( let_ind,
+                  seqlet_ind,
+                  seqvar_ind,
+                  seqpvar_ind ), 2, 0, let_state, clause_head_action );
+    add_indtype(( forjoin_ind,
+                  join_ind ), 2, 0, join_state, clause_head_action );
+    add_indtype(( seqstat_ind ), 1, 0, stat_state, clause_head_action );
+    add_indtype(( fnspec_ind ), 1, 0, no_state, fnspec_action );
+    add_indtype(( ureplace_ind ), 3, 0, monadic_state, clause_head_action );
+    add_indtype(( ustr_ind,
+                  tstr_ind,
+                  letstr_ind,
+                  seqletstr_ind,
+                  seqvarstr_ind,
+                  seqpvarstr_ind,
+                  attrstr_ind,
+                  attrbr_ind,
+                  startrepl_ind,
+                  ubr_ind,
+                  tbr_ind,
+                  fbr_ind,
+                  seqbr_ind ), 2, 0, str_state, clause_head_action );
+    add_indtype(( seqrepl_ind,
+                  seqrow_ind,
+                  seqassign_ind,
+                  ualts_ind,
+                  urepl_ind,
+                  urow_ind,
+                  trow_ind,
+                  udinst_ind,
+                  uconc_ind,
+                  makemult_ind,
+                  namelist_ind,
+                  mparams_ind,
+                  expmparams_ind,
+                  uindex_ind,
+                  utrim_ind,
+                  udyindex_ind,
+                  startcharrange_ind,
+                  startrange_ind,
+                  crange_ind,
+                  ccharrange_ind,
+                  formula_ind ), 1, 0, str_state, clause_head_action );
+    add_indtype(( uminst_ind ), 1, 0, monadic_state, clause_head_action );
+    add_indtype(( tstring_ind,
+                  ustring_ind ), 2, 0, monadic_state, string_action );
+    add_indtype(( newalts_ind,
+                  newint_ind,
+                  newchars_ind ), 3, 0, newalts_state, newalts_action );
+    add_indtype(( terms_ind,
+                  macspec_ind ), 1, 0, terms_state, clause_head_action );
+    add_indtype(( startjoin_ind,
+                  seqchoice_ind,
+                  choice_ind ), 1, 0, no_state, clause_head_action );
+    add_indtype(( endstr_ind,
+                  endalts_ind,
+                  endint_ind,
+                  endchars_ind,
+                  finishjoin_ind,
+                  endnamelist_ind,
+                  endmparams_ind,
+                  endreplace_ind,
+                  endseqrepl_ind,
+                  endseqrow_ind,
+                  endassign_ind,
+                  endurepl_ind,
+                  endudinst_ind,
+                  enduminst_ind,
+                  enduconc_ind,
+                  endmakemult_ind,
+                  endrepl_ind,
+                  endrow_ind,
+                  endindex_ind,
+                  endstring_ind,
+                  endrange_ind,
+                  endformula_ind,
+                  endchoice_ind,
+                  endmacspec_ind ), 0, 0, no_state, clause_end_action );
+
+    add_indtype(( ucase_ind,
+                  seqcase_ind ), 1, 5, case_state, clause_head_action );
+    add_indtype(( fif_ind,
+                  uif_ind,
+                  printif_ind,
+                  seqif_ind ), 1, 0, if_state,
+                               clause_head_action );
+    add_indtype(( sep_ind ), 0, 0, no_state, clause_sep_action );
+    add_indtype(( fi_ind,
+                  caseof_ind ), 0, 3, no_state, clause_sep_action );
+    add_indtype(( else_ind,
+                  caseelse_ind,
+                  esac_ind,
+                  then_ind ), 0, 5, no_state, clause_sep_action );
+    add_indtype(( elseof_ind ), 0, 7, no_state, clause_sep_action );
+    add_indtype(( endcase_ind,
+                  endif_ind ), 0, 0, no_state, clause_end_action );
+    add_indtype(( attrdec_ind,
+                  intdec_ind,
+                  typedec_ind,
+                  constdec_ind,
+                  fndec_ind,
+                  macdec_ind,
+                  expmacdec_ind ), 2, 0, dec_state, dec_action );
+    add_indtype(( enddec_ind ), 0, 0, no_state, enddec_action );
+
+BOOL unset := FALSE;
+
+    FOR n TO UPB indtypes
+    DO
+        REF INDTYPE it = indtypes[ n ];
+        IF number OF it = 0 THEN
+{            IF NOT unset THEN
+                unset := TRUE;
+                put( screen, "The following indicators are not used: " )
+          ELSE
+                put( screen, "                                       " )
+            FI;
+            put( screen, ( ind_names[ n ], newline ));
+}
+            number OF it := n
+        FI
+    OD
+END;
+
+PROC simple_layout = (OUTER dec,
+                      PROC( REF VECTOR[ ]CHAR, MESSAGEPROC )VOID out_line_proc,
+                      INT width,
+                      INDICATORS required_indicators,
+                      OPTIONS  options,
+                      MESSAGEPROC msg ) VOID:
+BEGIN
+BOOL pass_mode_all = required_indicators INCLUDES pass_all_terminators;
+INT enditem_ind_size = IF enditem_ind >= 127 THEN 2 ELSE 1 FI;
+INT enditem_ind_pos := -1;
+BOOL need_item_end := FALSE, have_sep := FALSE;
+
+    IF layout_format_changed THEN init_indtypes FI;
+    last_ind_num := 0;
+    out_line := out_line_proc;
+    lwidth := width;
+    cpos := ccnt := space_cnt := 0;
+    level := 0;
+    markers := nilmarker;
+    adjusts := niladjust;
+    underflowed := FALSE;
+    set_next_class( no_class );
+    set_last_class( space_class );
+    push_stack( dummy_indtype );
+
+    PROC set_ind = ( INT num )VOID:
+    BEGIN
+    REF INDTYPE ind = indtypes[ num ];
+
+        IF required_indicators INCLUDES num THEN
+            need_item_end := TRUE;
+            IF cpos = enditem_ind_pos THEN cpos MINUSAB enditem_ind_size FI;
+            IF num >= 127 THEN
+                line[ cpos PLUSAB 1 ] := REPR( 255 );
+                line[ cpos PLUSAB 1 ] := REPR( num )
+          ELSE
+                line[ cpos PLUSAB 1 ] := REPR( 128 + num )
+            FI;
+            enditem_ind_pos := -1
+        FI;
+        ( action OF ind )( ind, msg );
+        last_ind_num := num;
+        IF cpos = 0 OREL line[ cpos ] = " " THEN
+            set_last_class( space_class )
+        FI
+    END;
+
+    PROC write_text = (VECTOR[ ]CHAR n )VOID:
+    BEGIN
+    INT isize := UPB n, tmpsize, lwb := 1;
+    BOOL is_string = ( n[1] = """" );
+    BOOL need_space := space_required( n ),
+         need_quote := FALSE,
+         may_need_space := FALSE;
+    REF STACK st := nilstack;
+
+        WHILE isize + ABS need_space + ABS need_quote + ccnt > lwidth
+        DO
+            IF try_fold_clause( may_need_space, msg )
+          THEN  need_space := may_need_space ANDTH need_space
+          ELIF ccnt /= 0
+          THEN  { Drastic action needed, no suitable marker found }
+                st := stack;
+                WHILE st  ISNT nilstack
+                DO
+                    rest OF markers OF st  := nilmarker;
+                    st  := rest OF st
+                OD;
+                free_adjusts;
+                need_space := FALSE;
+                write_line( 0, msg )
+          ELIF is_string
+          THEN  need_space := FALSE;
+                tmpsize := lwidth - lwb;
+{                WHILE tmpsize > 0 ANDTH
+                      line[ lwb + tmpsize - 1 ] /= " " DO tmpsize MINUSAB 1 OD;
+                IF tmpsize <= 0 THEN tmpsize := lwidth - lwb FI; }
+                IF need_quote THEN
+                    line[ cpos PLUSAB 1 ] := """";
+                    ccnt PLUSAB 1;
+                    tmpsize MINUSAB 1
+                FI;
+                line[ cpos + 1 : cpos + tmpsize ] :=
+                                                   n[ lwb : lwb + tmpsize - 1 ];
+                cpos PLUSAB tmpsize;
+                line[ cpos PLUSAB 1 ] := """";
+                ccnt PLUSAB tmpsize + 1;
+                lwb PLUSAB tmpsize;
+                isize MINUSAB tmpsize;
+                need_quote := TRUE
+          ELSE
+                msg( system, "Simple_layout: Element too long." )
+            FI
+        OD;
+
+    REF ADJUST adj := adjusts;
+
+        IF need_space THEN
+            line[ cpos PLUSAB 1 ] := " ";
+            ccnt PLUSAB 1
+        FI;
+        WHILE adj ISNT niladjust
+        DO
+            IF ( item_cnt OF adj MINUSAB 1 ) >= 0 THEN
+                pos OF marker OF adj := cpos;
+                cnt OF marker OF adj := ccnt
+            FI;
+            adj := rest OF adj
+        OD;
+        IF need_quote THEN
+            line[ cpos PLUSAB 1 ] := """";
+            ccnt PLUSAB 1
+        FI;
+        line[ cpos + 1 : cpos + isize ] := n[ lwb : ];
+        cpos PLUSAB isize;
+        ccnt PLUSAB isize;
+        IF need_item_end THEN
+            set_ind( enditem_ind );
+            need_item_end := pass_mode_all;
+            enditem_ind_pos := cpos
+        FI
+    END;
+
+    write_ella( dec, write_text, set_ind, options, msg );
+    pop_stack;
+    clear_markers( freestack );
+    SKIP
+END;
+
+SKIP
+KEEP INDICATORS, INCLUDES( INDICATORS, INT ),
+     SETINDAB( REF INDICATORS, INT ), CLEARINDAB( REF INDICATORS, INT ),
+     no_indicators, all_indicators, these_indicators,
+     pass_all_terminators, simple_layout, write_no_comma_lists, 
+     write_expand_char_decs, write_ella_options, write_expand_delays
+FINISH

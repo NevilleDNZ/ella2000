@@ -1,0 +1,330 @@
+DECS multimakes CONTEXT VOID USE putstrings, basics, messageproc, assmodes,
+     modeprocs, transformprocs, options :
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: multimakes.a68,v 34.3 1995/03/29 13:03:00 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+12:12:90  Multimakes transform started, DJS.
+19:12:90  Correct generated name by prefixing with _i_   DJS.
+04:07:91  R6B56, failure to transform inner declarations.  DJS
+17:12:91  BODYDATA removed. EVW
+03:03:92  Declaration attributes added. EVW
+28:07:92  null_const removed. JIT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.006 
+26:08:94  33.002  DJS   CoreElla  Add closure to outer_multimakes and add
+                                  option to remove all rows of makes. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC makes_remove_all_rows = OPTIONS: MAKEOPTIONS 1;
+
+VECTOR[ ]VECTOR[ ]CHAR multimakes_options =
+    ( "Removes all MAKE rows replacing them by named instances." );
+
+{ Null FNBODY proc }
+PROC fnbody_multimakes = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_multimakes = (OUTER outer,
+                         CLOSURE closure,
+                         OPTIONS  options,
+                         MESSAGEPROC msg )OUTERC:
+BEGIN
+BOOL remove_all_rows = options INCLUDES makes_remove_all_rows;
+REF ENVIRON env = environ OF outer;
+
+PROC fndec_proc = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs ) FNDECC:
+BEGIN
+REF VECTOR[ ]NAMETYPE nametypes := nametypes OF fdec;
+INT new_nameno := UPB nametypes;
+INT max_names := new_nameno;
+
+PROC pre_pass_make = (REF MAKE m, TRANSFORMPROCS tprocs )MAKEC:
+BEGIN
+REF FORMULAS ff := sizes OF m;
+INT num_dim := 0, stride := 1;
+
+    WHILE ( ff ISNT nilformulas ) ANDTH
+          ( remove_all_rows OREL ( rest OF ff ISNT nilformulas ))
+    DO
+        stride TIMESAB formula_int( formula OF ff, msg );
+        num_dim PLUSAB 1;
+        ff := rest OF ff
+    OD;
+    IF num_dim > 0 THEN
+    REF NAMES nn := makenames OF m;
+    INT num_names := 0;
+
+        WHILE nn ISNT nilnames
+        DO
+            num_names PLUSAB 1;
+            nn := rest OF nn
+        OD;
+        max_names PLUSAB ( num_names * stride )
+    FI;
+    ( m, FALSE )
+END;
+
+PROC useries_make = (REF USERIES useries, TRANSFORMPROCS tprocs ) UNITC:
+BEGIN
+REF SERIES ss := body OF useries,
+           new_series := nilseries;
+REF REF SERIES stail := new_series;
+INT num_steps := 0;
+BOOL changed := FALSE;
+
+PROC copy_series = VOID:
+BEGIN
+    IF NOT changed THEN
+        changed := TRUE;
+        ss := body OF useries;
+        TO num_steps
+        DO
+            REF REF SERIES( stail ) := HEAP SERIES := ( step OF ss, nilseries );
+            stail := rest OF stail;
+            ss := rest OF ss
+        OD
+    FI
+END;
+
+PROC strip_dimentions = (REF FORMULAS dims, TYPE t )TYPE:
+    IF ( dims ISNT nilformulas ) ANDTH
+       ( remove_all_rows OREL ( rest OF dims ISNT nilformulas )) THEN
+        CASE t IN
+        (REF TROW tr ) strip_dimentions( rest OF dims, elem OF tr )
+        OUT
+            sysfault( "strip_dimentions" );
+            SKIP
+        ESAC
+  ELSE
+        t
+    FI;
+
+PROC strip_formulas = (REF FORMULAS ff )REF FORMULAS:
+    IF ( ff ISNT nilformulas ) ANDTH
+       ( remove_all_rows OREL ( rest OF ff ISNT nilformulas )) THEN
+        strip_formulas( rest OF ff )
+  ELSE
+        ff
+    FI;
+
+PROC do_step = (REF SERIES ss )VOID:
+BEGIN
+    CASE step OF ss IN
+    (REF MAKE make )
+    (
+        IF ( sizes OF make ISNT nilformulas ) ANDTH
+           ( remove_all_rows OREL
+             ( rest OF sizes OF make ISNT nilformulas )) THEN
+        INT first_nameno = new_nameno + 1;
+        REF NAMES new_names := nilnames,
+                  nn := makenames OF make;
+        REF REF NAMES ntail := new_names;
+        REF FORMULAS new_size = strip_formulas( sizes OF make );
+        TYPE new_type = strip_dimentions( sizes OF make,
+                                          type OF nametypes[ nameno OF nn ] );
+
+        PROC add_dimension = (REF FORMULAS size, ID name )UNIT:
+        BEGIN
+        REF USTR name_unit := nilustr;
+        REF REF USTR utail := name_unit;
+
+        PROC do_dim = (INT d )UNIT:
+        BEGIN
+        REF VECTOR[ ]CHAR new_n = oneline(( name, "_", d ));
+
+            IF ( rest OF size ISNT nilformulas ) ANDTH
+               ( remove_all_rows OREL
+                 ( rest OF rest OF size ISNT nilformulas )) THEN
+                add_dimension( rest OF size, new_n )
+          ELSE
+                new_nameno PLUSAB 1;
+                nametypes[ new_nameno ] := (new_n, new_type, attrnull);
+                REF REF NAMES( ntail ) := HEAP NAMES := (new_nameno, nilnames );
+                ntail := rest OF ntail;
+                HEAP UNAME := ( uiosource, new_nameno )
+            FI
+        END;
+
+            FOR d TO formula_int( formula OF size, msg )
+            DO
+                REF REF USTR( utail ) := HEAP USTR := ( do_dim( d ), nilustr );
+                utail := rest OF utail
+            OD;
+            name_unit
+        END;
+
+        REF USTR let_unit := nilustr;
+        REF REF USTR lutail := let_unit;
+
+            WHILE nn ISNT nilnames
+            DO  ID name = name OF nametypes[ nameno OF nn ];
+                REF REF USTR( lutail ) := HEAP USTR :=
+                ( add_dimension( sizes OF make, oneline(( "_i_", name ))),
+                  nilustr );
+                lutail := rest OF lutail;
+                nn := rest OF nn
+            OD;
+
+            copy_series;
+            REF REF SERIES( stail ) := HEAP SERIES :=
+                ( HEAP MAKE := ( new_size, inst OF make, new_names ),
+                  nilseries );
+            stail := rest OF stail;
+            REF REF SERIES( stail ) := HEAP SERIES :=
+                ( HEAP LET := ( makenames OF make,
+                                IF rest OF makenames OF make IS nilnames THEN
+                                    elem OF let_unit
+                              ELSE
+                                    let_unit
+                                FI ),
+                  nilseries );
+            stail := rest OF stail
+
+      ELIF changed THEN
+            copy_series;
+            REF REF SERIES( stail ) := HEAP SERIES := ( step OF ss, nilseries );
+            stail := rest OF stail
+        FI
+    )
+    OUT
+    STEPC sc = ( step OF dec_tprocs )( step OF ss, tprocs );
+
+        IF c OF sc OREL changed THEN
+            copy_series;
+            REF REF SERIES( stail ) := HEAP SERIES := ( s OF sc, nilseries );
+            stail := rest OF stail
+        FI
+    ESAC
+END;
+
+    WHILE ss ISNT nilseries
+    DO
+        do_step( ss );
+        num_steps PLUSAB 1;
+        ss := rest OF ss
+    OD;
+
+UNITC output = ( unit OF tprocs )( output OF useries, tprocs );
+
+     IF c OF output OREL changed THEN
+        ( HEAP USERIES := ( IF changed THEN new_series ELSE body OF useries FI,
+                            u OF output ),
+          TRUE )
+  ELSE
+        ( useries, FALSE )
+    FI
+END;
+
+PROC unit_make = (UNIT unit, TRANSFORMPROCS tprocs ) UNITC:
+    CASE unit IN (REF USERIES usr ) useries_make( usr, tprocs )
+    OUT
+        ( unit OF dec_tprocs )( unit, tprocs )
+    ESAC;
+
+  { Pre pass looks to see if this FNDEC needs changing and counts up number of
+    new names. Inner declarations must not be transformed so use 'nulltprocs' }
+
+TRANSFORMPROCS pre_pass_tprocs = make_newtprocs( nulltprocs,
+                                                 ( null_attr,
+                                                   null_formula,
+                                                   null_type,
+                                                   fnbody_multimakes,
+                                                   pre_pass_make ));
+
+    ( fnbody OF pre_pass_tprocs )( fnbody OF fdec, pre_pass_tprocs );
+
+    discard_tprocs( pre_pass_tprocs );
+
+TRANSFORMPROCS new_tprocs = make_newtprocs( dec_tprocs, unit_make );
+
+    IF max_names > new_nameno THEN
+    REF VECTOR[ ]NAMETYPE old_nametypes = nametypes;
+
+      { There are new names so make a new nametypes table }
+        nametypes := HEAP VECTOR[ max_names ]NAMETYPE;
+        nametypes[ : new_nameno ] := old_nametypes
+    FI;
+
+    {{ No possible change to macspecs or iospec }}
+FNBODYC fc = (fnbody OF new_tprocs)(fnbody OF fdec, new_tprocs);
+
+    IF c OF fc THEN
+    REF FNDEC new_dec = HEAP FNDEC := fdec;
+
+        nametypes OF new_dec := nametypes;
+        fnbody OF new_dec := f OF fc;
+        ( new_dec, TRUE )
+  ELSE
+        ( fdec, FALSE )
+    FI
+END;  {{ end of PROC fndec_proc }}
+
+
+TRANSFORMPROCS new_tprocs = make_newtprocs( nulltprocs,
+                                           ( null_attr,
+                                             null_formula,
+                                             null_type,
+                                             fnbody_multimakes,
+                                             fndec_proc ));
+
+OUTERC oc = ( outer OF new_tprocs )( outer, new_tprocs );
+
+    discard_tprocs( new_tprocs );
+    oc
+END;
+
+PROC transform_multimakes = (CLOSURE closure,
+                             OPTIONS  options,
+                             MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                                           ( null_attr,
+                                             null_formula,
+                                             null_type,
+                                             fnbody_multimakes,
+          (OUTER outer, TRANSFORMPROCS tprocs )OUTERC:
+                 outer_multimakes( outer, closure, options, msg )));
+
+    (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP outer_multimakes, transform_multimakes, multimakes_options
+FINISH

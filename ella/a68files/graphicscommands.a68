@@ -1,0 +1,340 @@
+DECS  graphicscommands  CONTEXT VOID  USE  putstrings, messageproc,
+      osinterface, basics, libmodes, libinterface, libprocs, ioprocs, options,
+      assclosure, assmodes, commandsyntax, command, compshell, compmessages,
+      libmessages, modeprocs, closureprocs, kernelreader, simple_layout:
+
+{ " Id: graphicscommands.sta,v 1.1 91/10/14 14:27:02 edcad Exp $" }
+configinfo A68CONFIG "$Id: graphicscommands.a68,v 34.3 1995/03/29 13:03:26 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+09:04:91 Module created. JIT
+19:04:91 Module modified. JIT
+18:11:91 UPdated to version 7 of assembler modes. EVW
+01:04:92 Attributes removed as ELLAGRAPHICS does not know about them. JIT
+04:02:93 Update to new spec for layout.  DJS
+08:02:93 Merged assembling of bodies and specs. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+26:08:94  33.002  DJS   SepTrans  Add nulloptions to call of simple_layout 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC find_outer = ( VALUE name, CLOSURE closure, MESSAGEPROC msg )
+                                                        UNION (OUTER, CLOSURE):
+BEGIN
+   BOOL found := FALSE;
+   ID id := nullid;
+   IF is_fnname(name) THEN  id := get_fnname(name, msg) FI;
+   IF id /= nullid
+   THEN  OUTER outer;
+         REF OUTERS outers := outers OF closure;
+         WHILE (outers ISNT nilouters) ANDTH NOT found
+         DO  OUTER o = outer OF outers;
+             IF sort OF o = outerfn
+             THEN REF FNDEC dec = get_outerfn(o);
+                  IF (dec ISNT nilfndec) ANDTH fnname OF dec = id
+                  THEN  outer := o;
+                        found := TRUE
+                  FI
+             FI;
+             outers := rest OF outers
+         OD;
+         IF found
+         THEN outer
+         ELSE msg(user, (id + " not found")); SKIP
+         FI
+   ELSE closure
+   FI
+END;
+
+PROC printdecs = ( VALUES names, CLOSURE closure, MESSAGEPROC msg ) VOID:
+BEGIN
+   PROC put_layout = (ID line, MESSAGEPROC msg ) VOID:
+        put( out, (line, newline));
+
+   PROC print_layout = (OUTER outerdec, MESSAGEPROC msg) VOID:
+        simple_layout(outerdec, put_layout, current_width, no_indicators,
+                      null_options, msg );
+
+   UNION (OUTER, CLOSURE) oc = IF UPB names > 1
+                               THEN find_outer(names[2], closure, msg)
+                               ELSE closure
+                               FI;
+   newline(out);
+   CASE oc IN
+   (OUTER o) print_layout(o, msg)
+   OUT REF OUTERS os := outers OF closure;
+       WHILE os ISNT nilouters
+       DO print_layout(outer OF os, msg);
+          os := rest OF os
+       OD
+   ESAC
+END;
+
+PROC printspecs = ( RCH channel, CLOSURE closure, MESSAGEPROC msg ) VOID:
+BEGIN
+   PROC put_layout = (ID line, MESSAGEPROC msg ) VOID:
+        put( channel, line);
+
+   PROC print_layout = (OUTER outerdec, MESSAGEPROC msg) VOID:
+        simple_layout(outerdec, put_layout, current_width, no_indicators,
+                      null_options, msg );
+
+   PROC fnbody_sort = (FNBODY fnbody) STR:
+      CASE fnbody IN
+      (REF UNITTAG) " UNIT.",
+      (REF ALIENCODE ac) IF biop OF ac THEN " BIOP." ELSE " ALIEN." FI,
+      (REF ARITH) " ARITH.",
+      (REF REFORM) " REFORM.",
+      (REF IMPORT) " IMPORT.",
+      (REF ADELAY) " ADELAY.",
+      (REF IDELAY) " IDELAY.",
+      (REF RAM) " RAM.",
+      (REF SAMPLE) " SAMPLE.",
+      (REF TIMESCALE) " TIMESCALE.",
+      (REF BODYCHECK bc) fnbody_sort(fnbody OF bc)
+      OUT " UNKNOWN BODY SORT."
+      ESAC;
+
+   REF OUTERS os := outers OF closure;
+   WHILE os ISNT nilouters
+   DO OUTER o = outer OF os;
+      CASE sort OF o IN
+      {outerattr} SKIP,
+       {Attributes ignored since ELLAGRAPHICS does not know about them.
+       (print_layout(o, msg);
+        put( channel, ("  ",  libv_spec OF usage OF get_outerattr(o), newline))
+       ),
+       }
+      {outerint}
+       (attr OF get_outerint(o) := attrnull;
+        print_layout(o, msg);
+        put( channel, ("  ",  libv_spec OF usage OF get_outerint(o), newline))
+       ),
+      {outertype}
+       (attr OF get_outertype(o) := attrnull;
+        print_layout(o, msg);
+        put( channel, ("  ",  libv_spec OF usage OF get_outertype(o), newline))
+       ),
+      {outerconst}
+       (attr OF get_outerconst(o) := attrnull;
+        print_layout(o, msg);
+        put( channel, ("  ", libv_spec OF usage OF get_outerconst(o), newline))
+       ),
+      {outerfn}
+        ( REF FNDEC dec = get_outerfn(o);
+          BOOL print := TRUE;
+          IF ((macspecs OF dec) ISNT nilmacspecs) ANDTH
+             UPB (macspecs OF dec) > 0
+          THEN FORALL ms IN (macspecs OF dec)
+               DO CASE spec OF ms IN
+                  (FNAME fn)
+                     attr OF (ints OF environ OF o)[intno OF fn] := attrnull,
+                  (TNAME tn)
+                     attr OF (types OF environ OF o)[typeno OF tn] := attrnull
+                  OUT print := FALSE    {ELLAGRAPHICS cannot deal with these}
+                  ESAC
+               OD
+          FI;
+          IF print
+          THEN STR body_sort = fnbody_sort(fnbody OF dec);
+               fnbody OF dec := MAKEUNITTAG(cvoid);
+               attr OF dec := attrnull;
+               FORALL n IN nametypes OF dec DO attr OF n := attrnull OD;
+               print_layout(o, msg);
+               put( channel, (body_sort, "  ", libv_spec OF usage OF dec, "  ",
+                         libv_body OF usage OF dec, newline))
+          FI
+        )
+      ESAC;
+      os := rest OF os
+   OD
+END;
+
+PROC graphicslayout = (VALUES names, MESSAGEPROC msg) VOID:
+{If names[2] exists and contains a valid fnname for context names[1] then this
+ function declaration is output. If no second parameter is supplied all
+ declarations in the context are output.}
+BEGIN
+   RVC ctn = get_contextname(names[1], msg);
+   REF CONTXT ct = check_context(ctn, msg);
+   CLOSURE alldecs = context_specs(ct, TRUE, msg);
+   printdecs(names, alldecs, msg)
+END;
+
+PROC graphicsspecs = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   RVC file_name;
+   BOOL invalid_ctname := FALSE;
+
+   RVC ctn = get_contextname(names[1], msg);
+   REF CONTXT ct = get_context(ctn);
+   IF ct IS nilcontxt
+   THEN invalid_ctname := TRUE;
+        file_name := name OF library
+   ELSE file_name := ctn
+   FI;
+   file_name:= filename OF parse_filename(file_name, ".esp", msg);
+
+   FILE esp_file = open_file(file_name, write_access, msg);
+
+   PROC flt_close = (MSGNO no, VECSTR params) VOID:
+        { Fault routine to trap faults, and close file }
+   ( close_file(esp_file, msg);
+     msg(no, params)
+   );
+
+   flt_if_interrupted(flt_close);
+
+   RCH esp_channel =
+         make_channel(80, (STR s) VOID: write_buffer(esp_file, s, flt_close));
+   put(esp_channel, ( "ESP FILE, version 1", newline, newline, "LIBRARY  ",
+       name OF library, ", version ", version OF library, "  ",
+       date_time(seconds), newline, newline , "CONTEXTS"));
+
+   INT no = ordercontexts;
+   FOR i TO no DO put(esp_channel, ( "  ", CTOS ctno_region(i))) OD;
+   put(esp_channel, (newline, newline));
+
+   IF invalid_ctname
+   THEN put(esp_channel, ("ERROR - invalid context name", newline, "END",
+                          newline))
+   ELSE put(esp_channel, ("CONTEXT  ", ctn, newline));
+        IF NOT no_text(ct, msg)
+        THEN CLOSURE allspecs = context_specs(ct, TRUE, flt_close);
+             printspecs(esp_channel, allspecs, flt_close)
+        FI;
+        put(esp_channel, ("END", newline))
+   FI;
+   close_file(esp_file, msg)
+END;
+
+PROC graphicscompile = (CREGION cr, FILENAME filename, MESSAGEPROC flt) VOID:
+BEGIN
+   DISCPTR  ptrlastcomp := nilptr;
+   FILE  comp_file = open_file(filename OF filename, read_access, flt);
+   RVC  ege_name = concat((name OF filename, ".ege"));
+   FILE ege_file = open_file(ege_name, write_access, flt);
+
+   PROC   flt_close = (MSGNO no, VECSTR params) VOID:
+      { Fault routine to trap faults, and close error file }
+   (  close_file(ege_file, flt);
+      close_file(comp_file, flt);
+      flt(no, params)
+   );
+   flt_if_interrupted(flt_close);
+
+   RCH ege_channel =
+      make_channel(80, (STR  s) VOID:  write_buffer(ege_file, s, flt_close));
+   put(ege_channel, ( "EGE FILE, version 1", newline, newline, "LIBRARY  ",
+       name OF library, ", version ", version OF library, "  ",
+       date_time(seconds), newline, newline ));
+   put(ege_channel, ( "Compiling  """, file_name(comp_file), """", lines(2) ));
+
+   PROC newmsg = (MSGNO msgno, VECSTR params) VOID:
+   IF is_comp_msg(msgno) ANDTH msg_number(msgno) > 0
+   THEN INT upb = UPB params;
+        IF upb >= 3  { Ignore messages without <lineno> <charno> <errno> }
+        THEN  put(ege_channel, (params[1], "  ", params[2], "  ", params[3]));
+              IF upb > 3
+              THEN FOR i FROM 4 TO upb
+                   DO  put(ege_channel, ("   ", UPB params[i], " ", params[i]))
+                   OD
+              FI
+        FI;
+        put(ege_channel, (newline))
+   ELIF is_lib_msg(msgno) ANDTH
+        msg_number(msgno) > 70 ANDTH msg_number(msgno) < 75
+   THEN INT final_msgno = msg_number(msgno);
+        CASE final_msgno - 70 IN
+        put(ege_channel, "0    0  235" CO"Compilation has failed"CO),
+        put(ege_channel, "0    0  236" CO"Current context has been updated"CO),
+        put(ege_channel, "0    0  237" CO"Compilation has been ignored"CO),
+        put(ege_channel, "0    0  238" CO"Current context has been updated"CO)
+        OUT SKIP
+        ESAC;
+        put(ege_channel, (newline))
+   ELSE flt(msgno, params)
+   FI;
+
+   ptrlastcomp := ella_shell(FALSE, cr, comp_file, newmsg);
+   merge_compiled(cr, ptrlastcomp, newmsg);
+   close_file(comp_file, flt);
+   close_file(ege_file, flt)
+END;
+
+
+PROC make_graphics_commands = COMMANDVEC:
+   MAKECOMMANDS VECTOR [] COMMAND
+   BEGIN
+   make_group( "GRAPHICS", "G", hidden access,
+      ( HEAP SIMPLE:=
+          ( MAKERVC "SPECS", nullstr, contextname_syntax,
+            normal access, continue,
+            MAKERVC "Assembles the closure of all declarations from the "
+                    "context specified and prints the specs in a .esp file",
+            (VALUES names, MESSAGEPROC flt) VOID: graphicsspecs(names, flt)
+          ),
+
+        HEAP SIMPLE:=
+          ( MAKERVC "LAYOUT", nullstr,
+            prod(( contextname_syntax, opt(fnname_syntax) )),
+            normal access, continue,
+            MAKERVC "Prints the declaration of fnname if found in the "
+                    "specified context or all declarations in the context "
+                    "if no fnname given",
+            (VALUES names, MESSAGEPROC flt) VOID: graphicslayout(names, flt)
+          ),
+
+        HEAP SIMPLE :=
+          ( MAKERVC "COMPILE", nullstr, filename_syntax,
+            normal access, continue,
+            MAKERVC "Compiles a file of ELLA-text into the declarations "
+                    "region of the selected context. Error messages in the "
+                    "form line number, char number, error number, parameters "
+                    "for error message, are sent to a .ege file.",
+            (VALUES names, MESSAGEPROC flt) VOID:
+            ( FILENAME  fname = get_filename(names[1], source_type, flt);
+              REF CONTXT ct = get_context(context OF currentct OF library);
+              CREGION cr = get_region(ct, import OF currentct OF library);
+              graphicscompile(cr, fname, flt)
+            )
+          )
+      ))
+   END
+
+
+
+KEEP  make_graphics_commands
+FINISH

@@ -1,0 +1,119 @@
+DECS range CONTEXT VOID USE putstrings,  basics,  messageproc,  assmodes, 
+                            modeprocs,  transformprocs,  options :
+
+configinfo A68CONFIG "$Id: range.a68,v 34.2 1995/03/29 13:02:46 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+12:10:90   DJS.  Range transform started.
+22:09:92   DJS.  Modified for new modes.
+22:03:94   DJS.  Add CPRIMRANGE.
+26:08:94  33.001  DJS   CoreElla  Install in transform environment 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR range_options;
+
+{ Null FNBODY proc }
+PROC fnbody_range = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outer_range = (OUTER outer,
+                    CLOSURE closure,
+                    OPTIONS  options,
+                    MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF outer;
+
+PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+    CASE u IN
+    (REF CRANGE cr )
+    (INT clwb = formula_int( lwb OF range OF cr, msg ),
+         cupb = formula_int( upb OF range OF cr, msg );
+     REF UALTS calts := nilualts;
+     REF REF UALTS ctail := calts;
+
+        FOR caltno FROM clwb TO cupb
+        DO
+            REF REF UALTS( ctail ) := HEAP UALTS :=
+                ( HEAP CINT := ( typeno OF cr, HEAP FINT := ( caltno, nullid )),
+                  nilualts );
+            ctail := rest OF ctail
+        OD;
+        ( calts, TRUE )
+    ),
+    (REF CPRIMRANGE pr )
+    (INT plwb = firstno OF pr,
+         upb = lastno OF pr;
+     REF UALTS palts := nilualts;
+     REF REF UALTS ptail := palts;
+
+        FOR paltno FROM plwb TO upb
+        DO
+            REF REF UALTS( ptail ) := HEAP UALTS :=
+                ( HEAP CPRIM := ( typeno OF pr, paltno ), nilualts );
+            ptail := rest OF ptail
+        OD;
+        ( palts, TRUE )
+    )
+    OUT
+        ( unit OF nulltprocs )( u, tprocs )
+    ESAC;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_formula,
+                                                         null_type,
+                                                         fnbody_range,
+                                                         unit_proc ));
+
+   ( outer OF nulltprocs )( outer, newtprocs )
+END;
+
+
+PROC transform_range = (CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg )CLOSUREC:
+BEGIN
+    PROC outer = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+                outer_range( o, closure, options, msg );
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( outer ));
+
+    ( closure OF nulltprocs )( closure, newtprocs, msg )
+END;
+
+SKIP
+KEEP outer_range, transform_range, range_options
+FINISH
