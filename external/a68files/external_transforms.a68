@@ -1,0 +1,336 @@
+DECS  external_transforms  CONTEXT VOID  USE  putstrings,  messageproc,
+      options,  osinterface,  basics, assmodes, openinterface, transformprocs:
+
+configinfo A68CONFIG "$Id: external_transforms.a68,v 34.2 1995/03/29 13:05:10 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:07:90  DCT  Loosely coupled shell for ELLA external transformations
+               (via the "external" command in "assemble").
+08:11:90  DJS  Modifications to dump file formats.
+20:12:90  DCT  Title added to assmodes file.
+22:02:91  DCT  Uses new put/get_buffer for UNIX packed format.
+19:04:91  DJS  R6B32. Last char < space should not be stripped from lines in
+               packed mode.
+               Mods for new message passing, see message for 22:03:91 in module
+               messageproc.
+17:06:91  DCT  R6B47: Buffer trimmed incorrectly for output.
+01:10:91  DJS  Wrong file variable being used in output section.
+25:01:95  33.001  ELLA  CreateDb  Install in database.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+MODE  TRANSFORM =
+          STRUCT ( STR  name,
+                   UNION ( PROC (CLOSURE, MESSAGEPROC) CLOSUREC,
+                           PROC (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC
+                         )  transform,
+                   VECTOR [0] STR  options_descriptions
+                 );
+
+MODE  STATUS = STRUCT ( INT status, STR message );
+
+STATUS  mess_changed   = ( 2, "Changes made" ),
+        mess_no_change = ( 4, "No changes" );
+
+PROC stop_message = (STATUS stat )VOID:
+BEGIN
+   default_msg( log, message OF stat );
+   exit( status OF stat )
+END;
+
+STR outn = "_in",  inn = "_out",  assfile_type = ".ela";
+
+INT  linesize = 160,
+     maxlinesize = 2048;  { maxlinesize added to allow for foreign systems }
+STR  name = "EXTERNAL TRANSFORM";
+
+VECTOR [0] STR  no_options;
+
+EXTERNALCLOSURE ass_build;
+
+PROC  do_transforms = ( VECTOR [] TRANSFORM  transforms) VOID:
+BEGIN
+REF IDS params := nilids;
+REF REF IDS ptail := params;
+BOOL show, write_unpacked;
+RVC in_fname;
+INT n_count:= 0;
+CHAR fc;
+
+   initialise_osinterface( ( name { facility name - used in error messages },
+                            "32.03", "12:04:94", "",
+                            "Sorry, its failed - Er Er Er Er....." ), TRUE );
+
+PROC  reset = VOID:
+BEGIN
+   in_fname:= nullstr;
+   params := nilids;
+   ptail := params;
+   n_count:= 0;
+   show:= write_unpacked:= FALSE
+END;
+
+PROC  check_arg = (STR  arg,  PROC STR  next) BOOL: { OK }
+   IF arg = "-s" THEN  show:= TRUE
+   ELIF arg = "-f"
+   THEN  filename_arg( oneline((next, inn, assfile_type)), "Input",
+                       "", in_fname, TRUE)
+   ELIF UPB arg >= 1  ANDTH  ( fc := arg[1]) = "-"
+   THEN  put(err, ("Unexpected option """, arg, """", newline));  FALSE
+   ELSE  IF fc < "0" OREL fc >= "9"
+         THEN n_count PLUSAB 1
+         FI;
+         REF REF IDS( ptail ) := HEAP IDS := ( MAKERVC arg, nilids );
+         ptail := rest OF ptail;
+         TRUE
+   FI;
+
+PROC  no_more = (BOOL  ok) BOOL: { OK }
+   IF ok  ANDTH  UPB in_fname > 0  ANDTH n_count > 0
+   THEN  TRUE { arguments successfully parsed }
+   ELSE  put(screen, ( newline, "-f <file> = open interface file from ELLA",
+                      "transform [options]", lines(2) ));
+         FALSE
+   FI;
+
+  parse_arguments(
+     "Give ELLA open interface file name ([-f <file>] <transform[ option]>): ",
+                   reset, check_arg, no_more );
+
+   { Make up output file name from the input file name, assume the input
+     file name ends _out.ela since the user cannot give his own type }
+
+INT infnleng = UPB in_fname;
+INT bdry = infnleng - UPB inn - UPB assfile_type;
+RVC out_fname = oneline(( in_fname[ : bdry ], outn, assfile_type ));
+
+   { Extract and check parameters before reading the assembler modes }
+
+   MODE  DATA = STRUCT (INT  index,  OPTIONS  options,  RVC  opt_str);
+   VECTOR [n_count] DATA  data;
+
+   FORALL d IN data
+   DO  RVC  name = LOWERCASE id OF params;
+       REF INT  index = index OF d;
+
+       params := rest OF params;
+       index:= 0;
+       FOR i TO UPB transforms WHILE index = 0
+       DO  IF name = name OF transforms[i] THEN  index:= i  FI  OD;
+       IF index = 0
+       THEN  put(screen, ( "Transform ", name, " is not known", lines(2),
+                           "The following transforms are available:", newline
+                         ));
+             FORALL tran IN transforms
+             DO  put(screen, (name OF tran, newline));
+                 IF UPB options_descriptions OF tran = 0
+                 THEN  put(screen, (tab(16), "has no options", newline))
+                 ELSE  INT  n:= 0;
+                       FORALL opt IN options_descriptions OF tran
+                       DO  put(screen, ( tab(16), intwidth(n PLUSAB 1, 2),
+                                         ":  ", opt, newline ))
+                       OD
+                FI
+             OD;
+             default_msg( fatal, "Transform not known")
+       FI;
+
+       options OF d:= null_options;
+       opt_str OF d:= nullstr;
+       INT  options_count:= 0;
+       WHILE  ( params ISNT nilids )  ANDTH
+                ( fc := ( id OF params )[1];
+                  fc >= "0"  ANDTH  fc <= "9" )
+       DO  BOOL  err:= FALSE;
+           INT  opt = chars to int(id OF params, err);
+
+           params := rest OF params;
+           IF err
+           THEN  default_msg( system, "Integer error")
+           FI;
+           IF UPB options_descriptions OF transforms[index] = 0
+           THEN  default_msg( fatal, oneline(( "Transform ", name,
+                                               " does not have any options" )))
+           ELIF opt < 1  OREL
+                opt > UPB options_descriptions OF transforms[index]
+           THEN default_msg( fatal, oneline(( "Transform ", name,
+                                              " does not have an option ",
+                                              opt )))
+           ELSE  options OF d PLUSAB MAKEOPTIONS opt;
+                 opt_str OF d:= oneline((opt_str OF d, intwidth(opt, 3)))
+           FI
+       OD
+   OD;
+
+   IF show THEN  put(screen, (time_str, "Reading closure", newline))  FI;
+
+   VECTOR [maxlinesize] CHAR  buffer;
+   INT  pos:= linesize, end:= 0;
+   FILE  file = open_file( in_fname, read_access, default_msg);
+   STR  filename = file_name(file);
+
+   PROC  ass_msg = (MSGNO  msgno,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(msgno)
+      THEN  put(screen, ("Closing file ", filename, newline));
+            close_file(file, default_msg)
+      FI;
+      default_msg(msgno, params)
+   END;
+
+   PROC get_char = CHAR:
+      IF pos >= end
+      THEN  IOSTATUS  reply = read_buffer(file, buffer, end, ass_msg);
+            IF reply = io_eof  ANDTH  end = 0
+            THEN  { io_error caught by msg previously }
+                  default_msg(user, "Premature end of dump stream file");
+                  " "
+            ELSE  pos:= 0;
+                  get_char
+            FI
+      ELSE  buffer[pos PLUSAB 1]
+      FI;
+
+   put(screen, (newline, "Reading open interface file  ", filename, newline));
+
+   ASSEMREADER reader = read_signature( get_char, default_msg );
+   ass_build := read_closure( reader, default_msg );
+   close_file( file, default_msg );
+
+   IF show THEN FORALL line IN head_data OF ass_build
+                DO put(screen, (line, newline)) OD
+   FI;
+
+   put(screen, (newline));
+
+   REF CLOSURE closure = closure OF ass_build;
+   BOOL  changed:= FALSE;
+
+   FORALL d IN data
+   DO  INT  index = index OF d;
+       VECSTR  descriptions = options_descriptions OF transforms[index];
+       IF show
+       THEN  put(screen, ( time_str, name OF transforms[index],
+                           " transformation", newline ));
+             FOR i TO UPB descriptions
+             DO  IF options OF d INCLUDES MAKEOPTIONS i
+                 THEN  put(screen, (tab(30), descriptions[i], newline))
+                 FI
+             OD
+       FI;
+       INT  start = get_cpu_time;
+       CLOSUREC  cl = CASE transform OF transforms[index] IN
+                         (PROC (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC  t1)
+                             t1(closure, options OF d, default_msg) ,
+                         (PROC (CLOSURE, MESSAGEPROC) CLOSUREC  t2)
+                             t2(closure, default_msg)
+                      ESAC;
+       INT  finish = get_cpu_time;
+       put(screen, ( name OF transforms[index], "  ", finish - start,
+                     "cS", IF c OF cl THEN  ""  ELSE  "  (No change)"  FI ));
+       IF UPB opt_str OF d > 0
+       THEN  put(screen, ("  options: ", opt_str OF d))
+       FI;
+       newline(screen);
+
+       closure:= cl OF cl;
+       IF c OF cl THEN  changed:= TRUE  FI
+   OD;
+
+   IF show THEN  put(screen, (time_str, "Writing closure", newline))  FI;
+   IF changed
+   THEN  FILE ass_file = open_file( out_fname, write_access, default_msg);
+         STR  filename = file_name( ass_file );
+         RVC  title = oneline(( "External ELLA transforms  ",
+                                date_time(seconds) ));
+
+         PROC  ass_msg = (MSGNO  msgno,  VECSTR  params) VOID:
+         BEGIN
+           IF error_msg(msgno)
+           THEN  put(screen, ("Closing file ", filename, newline));
+                 close_file(file, default_msg)
+           FI;
+           default_msg(msgno, params)
+         END;
+
+         VECTOR [linesize + 1] CHAR  buffer;   { +1 to allow for newline_char }
+         INT  pos:= 0;
+
+         PROC  buff_out_str = (STR  str) VOID:
+           IF UPB str + pos <= linesize
+           THEN  INT  l = pos + 1;
+                 buffer[l : pos PLUSAB UPB str]:= str
+           ELSE  INT  part = linesize - pos;
+                 buffer[pos + 1 : linesize]:= str[: part];
+                 buffer[UPB buffer]:= newline_char;        { removed by VMSIF }
+                 write_buffer(file, buffer, ass_msg);
+                 pos:= 0;
+                 buff_out_str(str[part + 1 :])
+           FI;
+      
+         PROC (STR) VOID  out_str =
+%4         IF write_unpacked THEN  buff_out_str
+%4                     ELSE  (STR  str) VOID:  write_buffer(file, str, ass_msg)
+%4         FI;
+*4         buff_out_str;
+
+         ASSEMWRITER writer = write_signature( out_str,
+                                               IF write_unpacked
+                                               THEN  unpacked_format
+                                               ELSE  packed_format
+                                               FI,
+                                               NOT write_unpacked,
+                                                        { write IDs hash table }
+                                               ass_msg );
+
+         write_closure((closure, head_data OF ass_build), writer, ass_msg);
+         finish_write_closure( writer, ass_msg );
+         close_file(ass_file, default_msg);
+
+         IF show
+         THEN  put(screen, (time_str, "End of transformations", newline))
+         FI;
+         stop_message(mess_changed)
+   ELSE
+         stop_message(mess_no_change)
+   FI
+END;
+
+PROC get_external_title = ID: ( head_data OF ass_build )[1];
+
+    SKIP
+
+KEEP  TRANSFORM,  no_options,  do_transforms, get_external_title
+FINISH

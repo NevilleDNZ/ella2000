@@ -1,0 +1,2933 @@
+DECS openinterface CONTEXT VOID USE  putstrings,  messageproc,  osinterface,
+     assmodes, closureprocs :
+
+configinfo A68CONFIG "$Id: openinterface.a68,v 34.5 1995/03/29 13:03:02 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989, 1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+22:02:93  Created, combine original assdump basic readers/writers and
+             shell calls to main dump reader/writer.  DJS
+19:04:93  Handling of replicator names altered. EVW
+15:06:93  Add SEQROW. EVW
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.003 
+24:01:95  33.003  DJS   CmodesMod  Changes to be compatible with cmode dump
+                                  file. 
+25:01:95  33.004  DJS   CmodesMod Re-work packed format yet again.
+29:03:95  34.005  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+COMMENT
+    History of previous modules:-
+
+  assdump_tokens
+   03:10:90  Module created from DUMPASSEM, holds assembler dumper token
+             values.  Also shows syntax of each token.  DJS
+   06:11:90  Re-write with modified modes removing the CHAR item type in
+             BASICVALUE.  DJS
+   19:12:90  Re-format signature so that first character defines the
+             format.  Add title.  DJS
+   12:08:91  Updated to version 7 of the assembler modes. EVW + DJS
+   16:10:91  tokens_version_no updated for new closure.  DCt
+   16:12:91  utermindex added and bodydata removed. EVW
+   02:03:92  attribute declarations added. EVW
+   17:07:92  Changes made for CONST / UNIT mode change. JIT
+   03:11:92  Updated for 'chars' mode changes. JIT
+
+  assdump_proc
+   01:09:89  Module created.  Dumps assembler modes to .ELA file
+   31:10:89  CMACPAR, changes to MACPARAM, MACSPEC.
+   17:12:89  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+   08:06:90  Updated to kernel. EVW
+   15:06:90  get_filename renamed file_name.  DCT
+   25:06:90  FNTYPE and macro parameter work added. EVW
+   06:08:90  joincheck changed from VECTOR to list. EVW
+   03:10:90  Split of tokens into separate module. DJS
+   05:10:90  Make into a procedure. DJS
+   06:11:90  Re-write with modified modes removing the CHAR item type in
+             BASICVALUE.  DJS
+   19:12:90  Re-format signature so that first character defines the
+             format.  Add title.  DJS
+   12:08:91  Updated to version 7 of assembler modes. EVW + DJS
+   16:10:91  New version of CLOSURE.  DCT
+   13:11:91  Text attributes add and layout removed. EVW
+   16:12:91  UTERMINDEX added and BODYDATA removed. EVW
+   02:03:92  Add attribute declarations. EVW
+   17:03:92  Multiple strings added to CQUOTE. EVW
+   17:07:92  Changes made for CONST / UNIT mode change. JIT
+   03:11:92  Updated for 'chars' mode changes. JIT
+
+  assbuild_proc
+     01:09:89  Module created.  Builds assembler modes from .ELA file
+     31:10:89  CMACPAR added MACPARAM, MACSPEC, CTYPE altered. EVW
+     17:12:89  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+     08:06:90  Updated to kernel. EVW
+     15:06:90  get_filename renamed file_name.  DCT
+     25:06:90  FNTYPE and macro parameter changes included. EVW
+     06:08:90  joincheck changed from VECTOR to list. EVW
+     05:10:90  Separate out tokens, and create shell procedure. DJS
+     06:11:90  Re-write with modified modes removing the CHAR item type in
+               BASICVALUE.  DJS
+     19:12:90  Re-format signature so that first character defines the
+               format.  Add title.  DJS
+     18:04:91  Remove side effecting. R6B17. DJS
+     12:08:91  Updated to version 7 of assembler modes. EVW + DJS
+     16:10:91  NEW definition of CLOSURE.  DCT
+     13:11:91  Add text attributes and remove layout. EVW
+     16:12:91  Add utermindex and remove bodydata. EVW
+     02:03:92  Add attribute declarations. EVW
+     17:03:92  Add multiple strings to CQUOTE. EVW
+     17:07:92  Changes made for CONST / UNIT mode change. JIT
+     03:11:92  Updated for 'chars' mode changes. JIT
+     08:02:93  BODYPTR removed. EVW
+
+  packed_assemble
+   06:11:90  Created, compact assembler dump/build to file or disk.  DJS
+   19:12:90  Re-format signature so that first character defines the
+             format.  Add title.  DJS
+   22:10:91  Change to BASICVALUE.  DCT
+   11:02:93  Padding at end of dump file done elsewhere. EVW
+
+  unpacked_assemble
+      1:09:89  Module created.  Builds assembler modes from .ELA file
+     31:10:89  CMACPAR added MACPARAM, MACSPEC, CTYPE altered. EVW
+     17:12:89  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+     08:06:90  Updated to kernel. EVW
+     15:06:90  get_filename renamed file_name.  DCT
+     25:06:90  FNTYPE and macro parameter changes included. EVW
+     06:08:90  joincheck changed from VECTOR to list. EVW
+     05:10:90  Split into separate modules. DJS
+     06:11:90  Re-write with modified modes removing the CHAR item type in
+               BASICVALUE.  DJS
+     19:12:90  Re-format signature so that first character defines the
+               format.  Add title.  DJS
+     29:04:91  Error in handling minus maxint.  R6B33.  DJS.
+     22:10:91  Change to BASICVALUE.  DCT
+     11:02:93  Padding spaces in file done elsewhere. EVW
+
+COMMENT
+
+{{
+
+This module combines the basic open interface file reader and writer.  It
+uses different conventions depending upon whether packed or unpacked format
+is being used.
+
+The first item of the file represents a unique signature for assembler dump
+files this also indicates whether the dump is packed or unpacked.  Procedures
+are supplied for reading and writing this signature separately, they must be
+called before doing any reading or writing of the main data, the one for
+reading a signature also determines which format to use.
+
+}}
+
+{{ ----------------------------------------------------------------------------
+
+                    The Packed format basic token reader.
+
+This assumes that there are 8 bits in a byte and it will cope with up to 64
+bits for an integer.  Integers are written in such a way that the files are
+compatible between machines of differing integer length up to 64 bits.
+
+ "tokens"
+      0                    not used
+      1
+      |         AD Tokens  from 1 -> 150
+      |
+      150
+      151 null_tok         NULL token follows
+      152 in1byte_tok      following char gives tokens from 151 -> 255
+      153 in2byte_tok      following 2 chars give tokens from 256 -> 65535
+      154 primary_tok      primary herald
+      155 secondary_tok    secondary herald
+      156 hashedid_tok     followed by byte integer giving index and hashcount
+      157 ident_range_start
+      |
+      |         idents of length 0 to 8, followed by chars*length
+      168
+      169 ident_tok        followed by int length, then chars*length
+      170 start_int_value
+      |
+      |         ints in the range -10 -> +60
+      241
+      242 pos1byte_int     followed by 1 byte
+      243 pos2byte_int     followed by 2 bytes
+      244 neg1byte_int     followed by 1 byte
+      245 neg2byte_int     followed by 2 bytes
+      246 extended_int     followed by control byte then <n> bytes
+      247 - 250            reserved for real
+      251 - 254            reserved
+      255                  not used
+
+      Note values 0 and 255 can occur within integers but do not stand by
+                            themselves.
+
+      The control byte in extended int mode has the most significant bit
+      set to indicate negative numbers, and the least significant 4 bits
+      give a count of bytes that follow.  The remaining bits are reserved.
+
+  ----------------------------------------------------------------------------
+
+                   The Un-Packed format basic token reader.
+
+The dump file has the following syntax, where * indicates one or more items,
+and << >> indicates an optional item.
+
+    file    :- value *
+
+    value   :- + number
+               - number
+               " number " string
+               # number / number
+               * number
+               % number
+               ~ value
+               ^ value
+
+     digit :- 0 to 9 in character form
+
+     number :=  digit *
+
+     character :- any character - only printable used at present
+
+     string :- <<character>>*
+
+The symbols have the following meaning
+ +  :-  positive integer
+ -  :-  negative integer
+ "  :-  identifier
+ #  :-  hashed identifier
+ *  :-  non-NIL valued token
+ %  :-  NIL valued token
+ ~  :-  primary herald
+ ^  :-  secondary herald
+
+The file is ended with a point (.).
+
+ ----------------------------------------------------------------------------
+
+                 Declare modes needed.
+
+}}
+
+MODE TOKEN = STRUCT( INT token,
+                     BOOL nil ),
+     HASHID = STRUCT( INT index, count ),
+     BASICVALUE = UNION( INT, STR, TOKEN, HASHID ),
+     ASSEMREADER = STRUCT( PROC CHAR getchar,
+                           PROC (PROC CHAR, MESSAGEPROC )BASICVALUE initem,
+                           REF REF VECTOR[ ]REF VECTOR[ ]RVC ids_lookup ),
+     ASSEMWRITER = STRUCT( PROC( VECTOR[ ]CHAR )VOID putstring,
+                           PROC( BASICVALUE,
+                                 PROC( VECTOR[ ]CHAR )VOID,
+                                 MESSAGEPROC )VOID outitem,
+                           BOOL write_idstable ),
+     EXTERNALCLOSURE = STRUCT( CLOSURE  closure,
+                               REF VECTOR[ ]RVC head_data );
+
+
+{{ ----------------------------------------------------------------------------
+
+                                Constants.
+
+ ---------------------------------------------------------------------------- }}
+
+VECTOR[ ]CHAR file_signature = "-CMODES-IF-25-01-95";
+
+INT tokens_version_no = 921103;
+BOOL packed_format = TRUE,
+     unpacked_format = FALSE;
+
+INT null_tok          = 151,
+    in1byte_tok       = 152,
+    in2byte_tok       = 153,
+    primary_tok       = 154,
+    secondary_tok     = 155,
+    hashedid_tok      = 156,
+    ident_range_start = 157,
+    ident_tok         = 169,
+    start_int_value   = 170,
+    pos1byte_int      = 242,
+    neg1byte_int      = 244,
+    extended_int      = 246;
+INT lowint            = -10;         { Must be at least as low as -1 }
+INT short_string_top  = ident_tok - ident_range_start - 1;
+INT zeroint           = start_int_value - lowint;
+INT highint           = pos1byte_int - zeroint - 1;
+
+CHAR lf = REPR 10;
+INT zero = ABS "0";
+
+{{ ----------------------------------------------------------------------------
+
+                              Reading procedure.
+
+ ---------------------------------------------------------------------------- }}
+
+PROC dummy_initem = (PROC CHAR getchar, MESSAGEPROC msg )BASICVALUE: SKIP;
+
+PROC packed_initem = (PROC CHAR getchar, MESSAGEPROC msg )BASICVALUE:
+BEGIN
+INT val = ABS getchar;
+
+    PROC inpkdint = (BOOL neg, INT n )INT:
+    BEGIN
+        BITS b := 2r0;
+
+        IF n > int_size THEN
+            msg( user, "Integer value too large in interface file." )
+        FI;
+        TO n DO  b := ( b SHL 8 ) OR BIN ABS getchar  OD;
+        IF neg THEN ABS NOT b ELSE ABS b FI
+    END;
+
+    IF val = 0 OREL val = 255 THEN
+         msg( system,  "packed_initem: illegal file token" ); SKIP
+  ELIF val < null_tok THEN
+        TOKEN( val, FALSE )
+  ELIF val = null_tok THEN
+        CASE packed_initem( getchar, msg ) IN
+        (TOKEN t )
+            TOKEN( token OF t, TRUE )
+        OUT
+            msg( system, "packed_initem: null_token" ); SKIP
+        ESAC
+  ELIF val <= in2byte_tok THEN
+    BITS tb := 2r0;
+
+        TO val - in1byte_tok + 1
+        DO
+            tb := ( tb SHL 8 ) OR BIN ABS getchar
+        OD;
+        TOKEN( ABS tb, FALSE )
+  ELIF val < hashedid_tok THEN
+        msg( system,  "packed_initem: primary or secondary" ); SKIP
+  ELIF val = hashedid_tok THEN
+    HASHID hid;
+
+        index OF hid := ABS getchar;
+        count OF hid := CASE packed_initem( getchar, msg ) IN (INT i ) i
+                        OUT  msg( system,  "packed_initem: hashed id" ); SKIP
+                        ESAC;
+        hid
+  ELIF val < ident_tok THEN
+        VECTOR[ val - ident_range_start ]CHAR str;
+
+        FORALL c IN str DO c := getchar OD;
+        str
+  ELIF val = ident_tok THEN
+        INT size = CASE packed_initem( getchar, msg ) IN (INT i ) i
+                   OUT  msg( system,  "packed_initem: idsize" ); SKIP
+                   ESAC;
+        VECTOR[ size ]CHAR str;
+
+        FORALL c IN str DO c := getchar OD;
+        str
+  ELIF val < pos1byte_int THEN
+        val - zeroint
+  ELIF val < neg1byte_int THEN
+        inpkdint( FALSE, val - pos1byte_int + 1 )
+  ELIF val < extended_int THEN
+        inpkdint( TRUE, val - neg1byte_int + 1 )
+  ELIF val = extended_int THEN
+        BITS ctrl = BIN ABS getchar;
+        inpkdint((( ctrl AND 16r80 ) /= 2r0 ), ABS( ctrl AND 16rf ))
+  ELSE
+        msg( system,  "packed_initem: reserved" ); SKIP
+    FI
+END;
+
+CHAR next := lf;
+
+PROC unpacked_initem = (PROC CHAR getchar, MESSAGEPROC msg )BASICVALUE:
+BEGIN
+
+    PROC getupchar = CHAR:
+    BEGIN
+       CHAR c = getchar;
+       IF c = lf THEN getupchar ELSE c FI
+    END;
+
+    PROC getint = INT:
+    BEGIN INT integer := 0;
+          WHILE next := getupchar;
+                ( next >= "0" ANDTH next <= "9" )
+          DO  integer TIMESAB 10 MINUSAB ( ABS next - zero) OD;
+          integer
+    END;
+
+               { Newlines can only occur between items, except
+                 in the case of identifers, which may be split }
+
+   IF next = lf THEN next := getupchar FI;
+   IF next = "-" OREL next = "+"
+     THEN BOOL neg = ( next = "-" );
+          INT integer = getint;
+          IF neg THEN integer ELSE -integer FI
+   ELIF next = """"
+     THEN INT size = -getint;
+          VECTOR [size] CHAR ident;
+          IF size > 0 THEN
+             FOR j TO size DO ident[ j ] := getupchar OD
+          FI;
+          next := lf;
+          ident
+   ELIF next = "*" OREL next = "%"
+     THEN BOOL nil = ( next = "%");
+          INT tok = -getint;
+          TOKEN( tok, nil )
+   ELIF next = "#"
+     THEN HASHID hid;
+          index OF hid := -getint;
+          IF next /= "/" THEN msg( system, ( "Illegal char in hashed id" )) FI;
+          count OF hid := -getint;
+          hid
+   ELSE   put(screen, ( """", next,
+                        """ is an unrecognised value herald", newline));
+          msg( system, "Stopped reading assembler file");
+          SKIP
+   FI
+END;
+
+{{ ----------------------------------------------------------------------------
+
+                             Writing procedure.
+
+ ---------------------------------------------------------------------------- }}
+
+PROC packed_outitem = (BASICVALUE item,
+                       PROC( VECTOR[ ]CHAR )VOID putstring,
+                       MESSAGEPROC msg )VOID:
+BEGIN
+VECTOR[ 24 ]CHAR cc;
+INT cnt := 25;
+
+    PROC put_int = (INT i )VOID:
+    BEGIN
+        IF i >= lowint ANDTH i <= highint THEN
+            cc[ cnt MINUSAB 1 ] := REPR( i + zeroint )
+        ELSE
+            BOOL neg = ( i < 0 );
+            BITS b := IF neg THEN NOT BIN i ELSE BIN i FI;
+            INT n := 0;
+            WHILE b /= 2r0   { This is ok if lowint is less than 0 }
+            DO
+                cc[ cnt MINUSAB 1 ] := REPR ABS( b AND 16rff );
+                n PLUSAB 1;
+                b := b SHR 8
+            OD;
+            IF n > 2 THEN
+               IF neg THEN n PLUSAB ABS 16r80 FI;
+               cc[ cnt MINUSAB 1 ] := REPR( n );
+               cc[ cnt MINUSAB 1 ] := REPR( extended_int )
+          ELIF neg THEN cc[ cnt MINUSAB 1 ] := REPR( neg1byte_int + n - 1)
+                   ELSE cc[ cnt MINUSAB 1 ] := REPR( pos1byte_int + n - 1)
+            FI
+        FI
+    END;
+
+    CASE item IN
+    (INT i )( put_int( i ); putstring( cc[ cnt : ] )),
+    (STR id )
+    (INT top = UPB id;
+
+        IF top <= short_string_top THEN
+            cc[ cnt MINUSAB 1 ] := REPR( ident_range_start + top )
+       ELSE
+            put_int( top );
+            cc[ cnt MINUSAB 1 ] := REPR ident_tok
+        FI;
+        putstring( cc[ cnt : ] );
+        putstring( id )
+     ),
+    (TOKEN tok )
+    (   IF token OF tok >= in1byte_tok THEN
+            BITS tb := BIN token OF tok;
+            INT tn := -1;
+            WHILE tb /= 2r0
+            DO
+                cc[ cnt MINUSAB 1 ] := REPR ABS( tb AND 16rff );
+                tn PLUSAB 1;
+                tb := tb SHR 8
+            OD;
+            IF tn > 1 THEN
+                msg( system, "packed_outitem: Token value too big" )
+            FI;
+            cc[ cnt MINUSAB 1 ] := REPR( in1byte_tok + tn )
+      ELSE
+            cc[ cnt MINUSAB 1 ] := REPR token OF tok
+        FI;
+        IF nil OF tok THEN cc[ cnt MINUSAB 1 ] := REPR null_tok FI;
+        putstring( cc[ cnt : ] )
+    ),
+    (HASHID hid)
+    (  put_int( count OF hid );
+       cc[ cnt MINUSAB 1 ] := REPR index OF hid;
+       cc[ cnt MINUSAB 1 ] := REPR hashedid_tok;
+       putstring( cc[ cnt : ] )
+    )
+    OUT
+        SKIP
+    ESAC
+END;
+
+PROC unpacked_outitem = (BASICVALUE item,
+                         PROC( VECTOR[ ]CHAR )VOID putstring,
+                         MESSAGEPROC msg )VOID:
+BEGIN
+VECTOR[ 16 ]CHAR chars;
+INT cpos := 17;
+
+    PROC putint = (INT i, CHAR herald )VOID:
+    BEGIN
+    INT tmp := i;
+    VECTOR[ ]CHAR tab = IF i < 0 THEN "0987654321" ELSE "0123456789" FI;
+    BOOL first := TRUE;
+
+        WHILE first OREL tmp /= 0
+        DO
+            first := FALSE;
+            chars[ cpos MINUSAB 1 ] := tab[ (tmp MOD 10) + 1 ];
+            tmp := tmp % 10
+        OD;
+        chars[ cpos MINUSAB 1 ] := herald;
+        putstring( chars[ cpos : ] )
+    END;
+
+    CASE item IN
+    (INT i )     putint( i, IF i < 0 THEN "-" ELSE "+" FI ),
+    (STR id )
+    (   INT s = UPB id;
+        chars[ cpos MINUSAB 1 ] := """";
+        putint( s, """" );
+        IF s > 0 THEN putstring( id ) FI
+    ),
+    (TOKEN tok ) IF nil OF tok
+               THEN putint( token OF tok, "%" )
+               ELSE putint( token OF tok, "*" )
+                 FI,
+    (HASHID hid)
+    (  putint( index OF hid, "#" );
+       putint( count OF hid, "/" )
+    )
+    OUT
+        SKIP
+    ESAC
+END;
+
+{{
+
+ ----------------------------------------------------------------------------
+
+                     Assembler modes tokens etc.
+}}
+
+    {  basic tokens }
+INT  inttok = 1, 
+     idtok = 2,
+     listtok = 3,
+     vectok = 4,
+
+     { get_formularange, 11 .. 21 }
+     fnametok = 11,
+     finttok = 12,
+     fchecktok = 13,
+     farithtok = 14,
+     fdoptok = 15,
+     fmoptok = 16,
+     fcondtok = 17,
+     fbrackettok = 18,
+     fmacpartok = 19,
+     fnull_tok = 20,
+     rangetok = 21,
+
+     { get_type, 23 .. 31 }
+     tnametok = 23,
+     trowtok = 24,
+     tstrtok = 25,
+     tfntok = 26,
+     tstringtok = 27,
+     tbrackettok = 28,
+     tvoidtok = 29,
+     tmacpartok = 30,
+     tnull_tok = 31,
+
+     { get_unit, 33 .. 66 }
+     cnametok = 33,
+     cprimtok = 34,
+     cinttok = 35,
+     cquotetok = 36,
+     cquerytok = 37,
+     cvoidtok = 38,
+     ctypetok = 39,
+     crangetok = 40,
+     cprimrangetok = 41,
+     ualtstok = 42,
+     unametok = 43,
+     ufntok = 44,
+     uassoctok = 45,
+     uextracttok = 46,
+     uportnametok = 47,
+     uindextok = 48,
+     utrimtok = 49,
+     udyindextok = 50,
+     ureplacetok = 51,
+     urowtok = 52,
+     ustrtok = 53,
+     uconctok = 54,
+     uminsttok = 55,
+     udinsttok = 56,
+     ucasetok = 57,
+     ucondtok = 58,
+     urepltok = 59,
+     usequencetok = 60,
+     useriestok = 61,
+     uattrtok = 62,
+     uchecktok = 63,
+     ustringtok = 64,
+     ubrackettok = 65,
+     unull_tok = 66,
+
+     { get_step & get_seqstep, 70 .. 86 }
+     lettok = 70,
+     maketok = 71,
+     jointok = 72,
+     repljointok = 73,
+     stepnull_tok = 74,
+     printtok = 75,
+     faulttok = 76,
+     sequencetok = 77,
+     seqlettok = 78,
+     seqvartok = 79,
+     seqpvartok = 80,
+     seqassigntok = 81,
+     seqcasetok = 82,
+     seqcondtok = 83,
+     seqrepltok = 84,
+     seqrowtok = 85,
+     seqnull_tok = 86,
+
+     { get_fnbody, 91 .. 102 }
+     alientok = 91,
+     arithtok = 92,
+     reformtok = 93,
+     importtok = 94,
+     adelaytok = 95,
+     idelaytok = 96,
+     ramtok = 97,
+     sampletok = 98,
+     timescaletok = 99,
+     bodychecktok = 100,
+     bodynull_tok = 101,
+     unittagtok = 102,
+
+     { get_macparam, 103 .. 105 (overlaps with get_typebody and get_fnbody) }
+     attrtagtok = 103,
+     formulatagtok = 104,
+     instancetok = 105,
+
+     { get_typebody, 106 .. 109 }
+     typetagtok = 106,
+     rvalternativetok = 107,
+     newintstok = 108,
+     newcharstok = 109,
+
+     { declaration tokens 114 .. 118 }
+     attrdectok = 114,
+     intdectok = 115,
+     typedectok = 116,
+     constdectok = 117,
+     fndectok = 118,
+
+     { get_attr, 120..124 }
+     attrnametok = 120,
+     attrdatatok = 121,
+     attrstrtok = 122,
+     attrbrackettok = 123,
+     attrnull_tok = 124,
+
+     { others 125 .. 135 }
+     usagetok = 125,
+     ctnametok = 126,
+     alternativetok = 127,
+     macparamtok = 128,
+     macspectok = 129,
+     nametypetok = 130,
+     uchoicetok = 131,
+     seqchoicetok = 132,
+     environtok = 133,
+     outertok = 134,
+     closuretok = 135,
+
+     { Inner declaration tokens 141 .. 145 }
+     attrlocdectok = 141,
+     flocdectok = 142,
+     tlocdectok = 143,
+     clocdectok = 144,
+     fnlocdectok = 145,
+
+     { Macro spec item tokens 151 .. 155 }
+     attrmacspectok = 151,
+     fmacspectok = 152,
+     tmacspectok = 153,
+     cmacspectok = 154,
+     fnmacspectok = 155,
+
+     { Special tag for identifiers in printitems }
+
+     idtag = 160,
+
+    { UNION tokens -preceeded by in1bytetok 201 .. 212, not all are used here? }
+     attrtok = 201,
+     formulatok = 202,
+     formularangetok = 203,
+     typetok = 204,
+     typebodytok = 205,
+     unittok = 206,
+     mparamtok = 207, 
+     macspecbodytok = 208,
+     seqsteptok = 209,
+     steptok = 210,
+     fnbodytok = 211,
+     printitemtok = 212;
+
+{{ ----------------------------------------------------------------------------
+
+                         Cmodes to Algol68 translations.
+
+ ---------------------------------------------------------------------------- }}
+
+VECTOR[ ]CHAR signature = "V06_ELLA_AssDmp";
+
+VECTOR [] INT a68_c = (
+   1,   2,   3,   3,   0,   0,   0,   0,   0,   0,  33,  28,  29,  30,  34,
+  35,  36,  37,  38,  39,  41,   0,  44,  45,  46,  47,  49,  48,  50,  51,
+  52,   0,  60,  61,  62,  64,  63,  65,  66,  67,  68,  69,  70,  71,  72,
+  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  85,  86,  87,  88,
+  89,  90,  91,  93,  92,  94,   0,   0,   0, 103, 115, 116, 117, 118, 101,
+ 102, 114, 104, 105, 106, 107, 109, 110, 111, 112, 113,   0,   0,   0,   0,
+ 119, 120, 121, 123, 124, 125, 126, 127, 128, 129, 130,  95,  27,  40,  99,
+  53,  56,  57,  54,   0,   0,   0,   0, 134, 135, 136, 137, 138,   0,  22,
+  23,  24,  25,  26, 133, 122,  55,  98, 131, 132,  84, 108, 139, 140, 141,
+   0,   0,   0,   0,   0,  20,  31,  42,  58,  96,   0,   0,   0,   0,   0,
+  21,  32,  43,  59,  97,   0,   0,   0,   0, 100,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0, 200, 201, 202, 203, 204, 205, 206, 211, 208, 209,
+ 210, 207 );
+
+VECTOR [] INT c_a68 = (
+   1,   2,   3,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0, 141, 151, 120, 121, 122, 123, 124, 103,  12,  13,  14,
+ 142, 152,  11,  15,  16,  17,  18,  19,  20, 104,  21, 143, 153,  23,  24,
+  25,  26,  28,  27,  29,  30,  31, 106, 109, 127, 107, 108, 144, 154,  33,
+  34,  35,  37,  36,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
+  49,  50,  51,  52,  53,  54,  55,  56, 131,  57,  58,  59,  60,  61,  62,
+  63,  65,  64,  66, 102, 145, 155, 128, 105, 160,  75,  76,  70,  78,  79,
+  80,  81, 132,  82,  83,  84,  85,  86,  77,  71,  72,  73,  74,  91,  92,
+  93, 126,  94,  95,  96,  97,  98,  99, 100, 101, 129, 130, 125, 114, 115,
+ 116, 117, 118, 133, 134, 135,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+   0,   0,   0,   0, 201, 202, 203, 204, 205, 206, 207, 212, 209, 210, 211,
+ 208,   0 );
+
+
+{{ 
+
+ ----------------------------------------------------------------------------
+
+                     Assembler modes reader.
+}}
+
+
+VECTOR[ ]CHAR errmsghead = "Error reading open interface file:- ";
+PROC fail_token = (BASICVALUE val, VECTOR[ ]CHAR text, MESSAGEPROC msg) VOID:
+BEGIN
+   CASE val IN
+   (INT i)
+       msg( system,
+            oneline(( errmsghead, "integer ", i, " ", text, " wanted." ))),
+   (STR id)
+       msg( system,
+            oneline(( errmsghead, "identifier ", id, " ", text, " wanted." ))),
+   (TOKEN tok)
+       msg( system,
+            oneline(( errmsghead,
+                      IF nil OF tok THEN "NIL token "
+                                    ELSE "Token "
+                      FI, token OF tok, " ", text, " wanted." ))),
+   (HASHID hid)
+       msg( system,
+            oneline(( errmsghead,
+                      "hashed identifier ", index OF hid, " ", count OF hid )))
+   OUT msg( system,
+            oneline(( errmsghead, "unknown symbol ", text, " wanted." )))
+   ESAC
+END;
+
+PROC inassemint = (ASSEMREADER reader, MESSAGEPROC msg )INT:
+(  BASICVALUE r = ( initem OF reader )( getchar OF reader, msg );
+   CASE r IN
+   (INT i) i
+   OUT fail_token( r, "integer", msg ); SKIP
+   ESAC
+);
+
+PROC inassembool = (ASSEMREADER reader, MESSAGEPROC msg )BOOL:
+                                        ( inassemint( reader, msg ) = 1 );
+
+PROC inassemtok = (ASSEMREADER reader, MESSAGEPROC msg )TOKEN:
+(  BASICVALUE r = ( initem OF reader )( getchar OF reader, msg );
+   CASE r IN
+   (TOKEN t) ( c_a68[ token OF t ], nil OF t )
+   OUT fail_token( r, "token", msg ); SKIP
+   ESAC
+);
+
+PROC inassemstr = (ASSEMREADER reader, MESSAGEPROC msg )STR:
+(  BASICVALUE r = ( initem OF reader )( getchar OF reader, msg );
+   CASE r IN
+   (STR i) i
+   OUT fail_token( r, "string", msg ); SKIP
+   ESAC
+);
+
+PROC inassemchar = (ASSEMREADER reader, MESSAGEPROC msg )CHAR:
+(  BASICVALUE r = ( initem OF reader )( getchar OF reader, msg );
+   CASE r IN
+   (STR i) IF UPB i /= 1
+           THEN  fail_token( r, "character", msg ); SKIP
+           ELSE  i[1] FI
+   OUT fail_token( r, "character", msg ); SKIP
+   ESAC
+);
+
+PROC inassemid = (ASSEMREADER reader, MESSAGEPROC msg )ID:
+BEGIN
+   BASICVALUE r = ( initem OF reader )( getchar OF reader, msg );
+   CASE r IN
+      (STR  str)  MAKERVC str,
+      (HASHID hid)
+      ( INT  index = index OF hid,
+             count = count OF hid;
+           REF VECTOR[ ]REF VECTOR[ ]RVC ids_lookup = ids_lookup OF reader;
+           IF index < 1  OREL  index > UPB ids_lookup
+           THEN  msg( system,
+                      oneline(( "Inconsistent hash index: ", index, " max = ",
+                         UPB ids_lookup )))
+           ELIF count < 1  OREL  count > UPB ids_lookup[index]
+           THEN  msg( system,
+                      oneline(( "Inconsistent hash count: ", count, " max = ",
+                                UPB ids_lookup[index] )))
+           FI;
+           ids_lookup[index][count]
+         )
+   OUT  fail_token(r, "identifier", msg ); SKIP
+   ESAC
+END;
+
+PROC read_closure = (ASSEMREADER reader, MESSAGEPROC msg)EXTERNALCLOSURE:
+BEGIN
+
+
+{{ =================================================================== }}
+{{   Procedure to read idstable and merge with the one in ASSMODES     }}
+
+
+{{   The Ids hash table is defined as follows:
+
+     <hash width> followed by <hash width> times:
+          <n entries for the ith row> followed by <n> times:
+               <string>
+
+     The hash is defined as follows:
+          INT  hash:= 0;  FORALL c IN string DO  hash PLUSAB ABS c  OD;
+          hash:= (hash MOD hash_width) + 1;
+          INT  index = ith position (starting from 1) in arm number hash.
+
+     The <hash width> used in the .ELA file need not match that used internally
+     as identifiers are re-hashed when read.  (Use MAKEID from ASSMODES to
+     hash and MAKERVC to generate unique copies).
+
+     IF no hash table is present or wanted, <hash width> should be zero.
+
+     NB: There is no requirement that an identifier should be hashed - ie
+         <ident> = <string> | <int> <int>
+
+     ELLA characters and the empty string are held as <string>
+}}
+
+
+PROC get_idstable = VOID:
+BEGIN
+   INT  hash_width = inassemint( reader, msg );
+   IF hash_width > 0
+   THEN  { Have an Ids table }
+         REF REF VECTOR[ ]REF VECTOR[ ]RVC( ids_lookup OF reader ) :=
+                                    HEAP VECTOR [hash_width] REF VECTOR [] RVC;
+         FORALL arm IN ids_lookup OF reader
+         DO  INT  width = inassemint( reader, msg );
+             arm:= HEAP VECTOR [width] RVC;
+             FORALL id IN arm
+             DO  id:= MAKEID inassemstr( reader, msg )  OD
+         OD
+   FI
+END;
+
+
+{{ =================================================================== }}
+{{   Procedures to generate modes                                      }}
+
+PROC get_ids = REF IDS:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { idtok }
+   REF IDS strings := nilids; 
+   REF REF IDS nextstrings := strings;
+   TO listnumb
+   DO REF REF IDS (nextstrings) := HEAP IDS := (inassemid( reader, msg ), NIL);
+      nextstrings := rest OF nextstrings
+   OD;
+   strings
+END;
+
+PROC get_attr = ATTR:
+BEGIN
+  INT listnumb := 0;
+  CASE (token OF inassemtok( reader, msg )) + 1 - attrnametok IN
+    MAKEATTRNAME(inassemint( reader, msg )),
+    ( ID classname = inassemid( reader, msg );
+      REF IDS strings = get_ids;
+      HEAP ATTRDATA := (classname, strings)
+    ),
+    ( inassemtok( reader, msg ); { listtok }
+      listnumb := inassemint( reader, msg );
+      inassemtok( reader, msg ); { attrtok }
+      REF ATTRSTR attrs := nilattrstr;
+      REF REF ATTRSTR nextattrs := attrs;
+      TO listnumb
+      DO REF REF ATTRSTR (nextattrs) := HEAP ATTRSTR := (get_attr, nilattrstr);
+         nextattrs := rest OF nextattrs
+      OD;
+      attrs
+    ),
+    MAKEATTRBRACKET(get_attr),
+    attrnull
+  OUT msg( system, "get_attr"); attrnull
+  ESAC
+END;
+
+PROC FORMULA get_formula;
+
+
+PROC get_formularange = FORMULARANGE:
+BEGIN
+  CASE (token OF inassemtok( reader, msg ))+ 1 - fnametok IN
+    MAKEFNAME(inassemint( reader, msg )),
+   (INT int = inassemint( reader, msg );
+    ID text = inassemid( reader, msg );
+        HEAP FINT := ( int, text )
+   ),
+   (INT sort = inassemint( reader, msg );
+    FORMULA test = get_formula, standard = get_formula;
+        HEAP FCHECK := ( sort, test, standard )
+   ),
+    MAKEFARITH(inassemint( reader, msg )),
+   (FORMULA left = get_formula;
+    INT sort = inassemint( reader, msg );
+    FORMULA right = get_formula;
+        HEAP FDOP := ( left, sort, right )
+   ),
+   (INT sort = inassemint( reader, msg );
+    FORMULA right = get_formula;
+        HEAP FMOP := ( sort, right )
+   ),
+   (FORMULA cond = get_formula, true = get_formula, false = get_formula;
+        HEAP FCOND := ( cond, true, false )
+   ),
+    MAKEFBRACKET(get_formula),
+    MAKEFMACPAR(inassemint( reader, msg )),
+    fnull,
+   ( FORMULA lwb = get_formula, upb = get_formula;
+      RANGE (lwb, upb)
+   )
+   OUT msg( system, "get_formularange"); fnull
+   ESAC
+END;
+
+get_formula := FORMULA: 
+  CASE get_formularange IN (FORMULA f) f 
+   OUT msg( system, "get_formula"); fnull
+   ESAC;
+
+PROC get_formulas = REF FORMULAS:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { formulatok }
+   REF FORMULAS formulas := nilformulas;
+   REF REF FORMULAS nextformulas := formulas;
+   TO listnumb
+   DO REF REF FORMULAS (nextformulas)
+          := HEAP FORMULAS := (get_formula, nilformulas);
+      nextformulas := rest OF nextformulas
+  OD;
+  formulas
+END;
+
+
+PROC get_range = RANGE:
+  CASE get_formularange IN (RANGE r) r 
+   OUT msg( system, "get_range"); SKIP
+   ESAC;
+
+
+PROC get_type = TYPE:
+BEGIN
+   CASE (token OF inassemtok( reader, msg )) + 1 - tnametok IN
+     MAKETNAME(inassemint( reader, msg )),
+     (FORMULA size = get_formula;
+      TYPE elem = get_type;
+        HEAP TROW := ( size, elem )
+     ),
+     ( inassemtok( reader, msg ); { listtok }
+       INT listnumb = inassemint( reader, msg );
+       inassemtok( reader, msg ); { typetok }
+       REF TSTR tstr := niltstr;
+       REF REF TSTR nexttstr := tstr;
+       TO listnumb
+       DO  REF REF TSTR (nexttstr) := HEAP TSTR := (get_type, NIL);
+           nexttstr := rest OF nexttstr
+       OD;
+       tstr
+     ) ,
+     (TYPE from = get_type, to = get_type;
+        HEAP TFN := ( from, to )
+     ),
+     (FORMULA size = get_formula;
+      TYPE char = get_type;
+        HEAP TSTRING := ( size, char )
+     ),
+     MAKETBRACKET(get_type),
+     tvoid,
+     MAKETMACPAR(inassemint( reader, msg )),
+     tnull
+    OUT msg( system, "get_type"); tnull
+   ESAC
+END;
+
+PROC INSTANCE  get_instance;
+
+PROC REF SEQUENCE get_sequence;
+
+PROC REF SERIES get_series;
+
+PROC get_unit = UNIT :
+BEGIN
+    PROC get_uchoices = REF UCHOICES :
+    BEGIN
+       inassemtok( reader, msg ); { listtok }
+       INT listnumb = inassemint( reader, msg );
+       inassemtok( reader, msg ); { uchoicetok } 
+      REF UCHOICES uchoices := niluchoices;
+      REF REF UCHOICES nextuchoices := uchoices;
+      BOOL check;
+      INT sort;
+      UNIT test;
+      UNIT output;
+      TO listnumb
+      DO inassemtok( reader, msg ); { uchoicetok }
+        check := inassembool( reader, msg );
+        sort := inassemint( reader, msg );
+        test := get_unit;
+        output := get_unit;
+        REF REF UCHOICES (nextuchoices)
+          := HEAP UCHOICES := (check, sort, test, output, NIL);
+         nextuchoices := rest OF nextuchoices
+      OD;
+      uchoices
+    END;
+
+     INT hold = token OF inassemtok( reader, msg );
+     CASE hold + 1 - cnametok IN
+       MAKECNAME(inassemint( reader, msg )),
+       (INT typeno = inassemint( reader, msg ),
+            primno = inassemint( reader, msg );
+          HEAP CPRIM := ( typeno, primno )
+       ),
+       (INT typeno = inassemint( reader, msg );
+        FORMULA index = get_formula;
+          HEAP CINT := ( typeno, index )
+       ),
+       (INT typeno = inassemint( reader, msg ); 
+        inassemtok( reader, msg ); { vectok }
+        INT upb = inassemint( reader, msg );
+        inassemtok( reader, msg ); { inttok } 
+        REF VECTOR [] INT string := HEAP VECTOR [upb] INT;
+        FOR i TO upb DO string[i] := inassemint( reader, msg ) OD;
+          HEAP CQUOTE := ( typeno, string )
+       ),
+       MAKECQUERY(get_type),
+       cvoid,
+       MAKECTYPE(get_type),
+       (INT typeno = inassemint( reader, msg );
+        RANGE range = get_range;
+          HEAP CRANGE := ( typeno, range )
+       ),
+       (INT typeno = inassemint( reader, msg ),
+            first = inassemint( reader, msg ), last = inassemint( reader, msg );
+          HEAP CPRIMRANGE := ( typeno, first, last)
+       ),
+       ( inassemtok( reader, msg ); { listtok }
+         INT listnumb = inassemint( reader, msg );
+         inassemtok( reader, msg ); { unittok } 
+         REF UALTS ualts := nilualts;
+         REF REF UALTS nextualts := ualts;
+         TO listnumb
+         DO REF REF UALTS (nextualts) := HEAP UALTS := (get_unit, NIL);
+            nextualts := rest OF nextualts
+         OD;
+         ualts
+       ),
+       (INT sort = inassemint( reader, msg ),
+            nameno = inassemint( reader, msg );
+            HEAP UNAME := ( sort, nameno )
+       ),
+       (UNIT sink = get_unit, source = get_unit;
+            HEAP UFN := ( sink, source )
+       ),
+       (INT typeno = inassemint( reader, msg ),
+            altno = inassemint( reader, msg );
+        UNIT assoc = get_unit;
+            HEAP UASSOC := ( typeno, altno, assoc )
+       ),
+       (UNIT extract = get_unit;
+        INT typeno = inassemint( reader, msg ),
+            altno = inassemint( reader, msg );
+            HEAP UEXTRACT := ( extract, typeno, altno )
+       ),
+       (UNIT unit = get_unit;
+        INT fnno = inassemint( reader, msg ),
+            nameno = inassemint( reader, msg );
+            HEAP UPORTNAME := ( unit, fnno, nameno )
+       ),
+       (UNIT unit = get_unit;
+        FORMULA index = get_formula;
+            HEAP UINDEX := ( unit, index )
+       ),
+       (UNIT unit = get_unit;
+        RANGE range = get_range;
+            HEAP UTRIM := ( unit, range )
+       ),
+       (UNIT unit = get_unit, index = get_unit;
+            HEAP UDYINDEX := ( unit, index )
+       ),
+       (UNIT unit = get_unit, index = get_unit,  from = get_unit;
+            HEAP UREPLACE := ( unit, index, from )
+       ),
+       (FORMULA size = get_formula;
+        UNIT elem = get_unit;
+            HEAP UROW := ( size, elem )
+       ),
+       ( inassemtok( reader, msg ); { listtok }
+         INT listnumb = inassemint( reader, msg );
+         inassemtok( reader, msg ); { unittok } 
+         REF USTR ustr := nilustr;
+         REF REF USTR nextustr := ustr;
+         TO listnumb
+         DO REF REF USTR (nextustr) := HEAP USTR := (get_unit, NIL);
+            nextustr := rest OF nextustr
+         OD;
+         ustr
+       ),
+       (BOOL string = inassembool( reader, msg );
+        INT sort = inassemint( reader, msg );
+        UNIT left = get_unit, right = get_unit;
+            HEAP UCONC := ( string, sort, left, right )
+       ),
+       (inassemtok( reader, msg ); { instancetok }  
+        INSTANCE inst = get_instance;
+        UNIT right = get_unit;
+            HEAP UMINST := ( inst, right )
+       ),
+       (UNIT left = get_unit;
+        inassemtok( reader, msg ); { instancetok }  
+        INSTANCE inst = get_instance;
+        UNIT right = get_unit;
+            HEAP UDINST := ( left, inst, right )
+       ),
+       (UNIT input = get_unit;
+        REF UCHOICES choices = get_uchoices;
+            HEAP UCASE := ( input, choices )
+       ),
+       (FORMULA cond = get_formula;
+        UNIT true = get_unit, false = get_unit;
+            HEAP UCOND := ( cond, true, false )
+       ),
+       (FORMULA repl = get_formula;
+        UNIT body = get_unit;
+            HEAP UREPL := ( repl, body )
+       ),
+       (REF SEQUENCE body = get_sequence;
+        UNIT output = get_unit;
+            HEAP USEQUENCE := ( body, output )
+       ),
+       (REF SERIES body = get_series;
+        UNIT output = get_unit;
+            HEAP USERIES := ( body, output )
+       ),
+       (UNIT unit = get_unit;
+        ATTR attr = get_attr;
+            HEAP UATTR := ( unit, attr )
+       ),
+       (UNIT unit = get_unit;
+        FCHECK check = CASE get_formula IN (REF FCHECK f) f ESAC;
+            HEAP UCHECK := ( unit, check )
+       ),
+       (FORMULA size = get_formula;
+        UNIT char = get_unit;
+            HEAP USTRING := ( size, char )
+       ),
+       MAKEUBRACKET(get_unit),
+       unull
+    OUT msg( system, "get_unit"); unull
+    ESAC
+END;
+
+
+PROC get_macparams = REF VECTOR [] MACPARAM:
+BEGIN
+   inassemtok( reader, msg ); { vectok }
+   INT size = inassemint( reader, msg );
+   inassemtok( reader, msg ); { macparamtok } 
+   IF size = -1
+   THEN nilmacparams
+   ELSE HEAP VECTOR [size] MACPARAM params;
+        FORALL p IN params
+        DO inassemtok( reader, msg ); { macparamtok } 
+           INT sort = inassemint( reader, msg );
+           INT ihold = token OF inassemtok( reader, msg );
+            p:= CASE ihold + 1 - unittagtok IN
+                (sort, MAKEUNITTAG(get_unit)),
+                (sort, MAKEATTRTAG(get_attr)),
+                (sort, MAKEFORMULATAG(get_formula)),
+                (sort, get_instance),
+                (sort, MAKETYPETAG(get_type))
+                OUT msg( system, "get_macparam"); SKIP
+                ESAC
+        OD;
+        params
+    FI
+END;
+
+get_instance := INSTANCE:
+BEGIN  
+   INT fnno = inassemint( reader, msg );
+   REF VECTOR [] MACPARAM params = get_macparams;
+   ( fnno, params, get_attr )
+END;
+
+
+PROC get_localdec = (INT ihold, VECTOR[ ]CHAR etext ) DECLARATION:
+BEGIN
+   IF ihold = attrlocdectok THEN MAKEATTRNAME(inassemint( reader, msg ))
+ ELIF ihold = flocdectok    THEN MAKEFNAME(inassemint( reader, msg ))
+ ELIF ihold = tlocdectok    THEN MAKETNAME(inassemint( reader, msg ))
+ ELIF ihold = clocdectok    THEN MAKECNAME(inassemint( reader, msg ))
+ ELIF ihold = fnlocdectok   THEN MAKEFNNAME(inassemint( reader, msg ))
+ ELSE msg( system, etext ); SKIP
+    FI
+END;
+
+PROC get_macspecitem = (INT ihold ) DECLARATION:
+BEGIN
+   IF ihold = attrmacspectok THEN MAKEATTRNAME(inassemint( reader, msg ))
+ ELIF ihold = fmacspectok    THEN MAKEFNAME(inassemint( reader, msg ))
+ ELIF ihold = tmacspectok    THEN MAKETNAME(inassemint( reader, msg ))
+ ELIF ihold = cmacspectok    THEN MAKECNAME(inassemint( reader, msg ))
+ ELIF ihold = fnmacspectok   THEN MAKEFNNAME(inassemint( reader, msg ))
+ ELSE msg( system, "get_macspecitem" ); SKIP
+    FI
+END;
+
+PROC get_printitems = REF PRINTITEMS:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { printitemtok } 
+   REF PRINTITEMS pitems := nilprintitems;
+   REF REF PRINTITEMS nextpitems := pitems;
+   TO listnumb
+   DO  INT ihold = token OF inassemtok( reader, msg );
+       REF REF PRINTITEMS (nextpitems) := HEAP PRINTITEMS
+         := (IF ihold = idtag         THEN inassemid( reader, msg )
+           ELIF ihold = formulatagtok THEN MAKEFORMULATAG(get_formula)
+           ELSE msg( system, "printitem"); SKIP
+             FI, nilprintitems);
+       nextpitems := rest OF nextpitems
+   OD;
+   pitems
+END;
+
+PROC get_print = REF PRINT:
+BEGIN
+FORMULA cond = get_formula;
+REF PRINTITEMS print = get_printitems;
+    HEAP PRINT := ( cond, print )
+END;
+
+PROC get_fault = REF FAULT:
+BEGIN
+FORMULA cond = get_formula;
+REF PRINTITEMS fault = get_printitems;
+    HEAP FAULT := ( cond, fault )
+END;
+
+PROC get_names = REF NAMES:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { inttok } 
+   REF NAMES names := nilnames;
+   REF REF NAMES nextnames := names;
+   INT nameno;
+   TO listnumb
+   DO
+      nameno := inassemint( reader, msg );
+      REF REF NAMES (nextnames) := HEAP NAMES := ( nameno, NIL);
+      nextnames := rest OF nextnames
+   OD;
+   names
+END;
+
+PROC get_let = REF LET:
+BEGIN
+REF NAMES letnames = get_names;
+UNIT unit = get_unit;
+    HEAP LET := ( letnames, unit )
+END;
+
+PROC get_seqstep = SEQSTEP:
+BEGIN
+   PROC get_seqchoices = REF SEQCHOICES:
+   ( inassemtok( reader, msg ); { listtok }
+     INT listnumb = inassemint( reader, msg );
+     inassemtok( reader, msg ); { seqchoicetok } 
+     REF SEQCHOICES seqchoice := nilseqchoices;
+     REF REF SEQCHOICES nextseqchoice := seqchoice;
+     BOOL check;
+     INT sort;
+     UNIT test;
+     SEQSTEP output;
+     TO listnumb
+     DO inassemtok( reader, msg ); { seqchoicetok } 
+        check := inassembool( reader, msg );
+        sort := inassemint( reader, msg );
+        test := get_unit;
+        output := get_seqstep;
+        REF REF SEQCHOICES (nextseqchoice) := HEAP SEQCHOICES :=
+          ( check, sort, test, output, nilseqchoices);
+        nextseqchoice := rest OF nextseqchoice
+     OD;
+     seqchoice
+   );
+
+   INT ihold = token OF inassemtok( reader, msg );
+   CASE ihold + 1 - printtok IN
+   get_print,
+   get_fault,
+   get_sequence,
+   ( HEAP SEQLET seqlet;
+     inassemtok( reader, msg ); { lettok }
+     seqlet OF seqlet := get_let;
+     seqlet
+   ),
+   ( HEAP SEQVAR seqvar;
+     inassemtok( reader, msg ); { lettok }
+     seqvar OF seqvar := get_let;
+     seqvar
+   ),
+   (inassemtok( reader, msg ); { lettok }
+    REF NAMES pvarnames = get_names;
+    UNIT init = get_unit;
+        HEAP SEQPVAR := ( pvarnames, init )
+   ),
+   (UNIT to = get_unit, from = get_unit;
+        HEAP SEQASSIGN := ( to, from )
+   ),
+   (UNIT input = get_unit;
+    REF SEQCHOICES choices = get_seqchoices;
+        HEAP SEQCASE := ( input, choices )
+   ),
+   (FORMULA cond = get_formula;
+    SEQSTEP true = get_seqstep, false = get_seqstep;
+        HEAP SEQCOND := ( cond, true, false )
+   ),
+   (FORMULA repl = get_formula;
+    SEQSTEP body = get_seqstep;
+        HEAP SEQREPL := ( repl, body )
+   ),
+   (FORMULA size = get_formula;
+    SEQSTEP elem = get_seqstep;
+        HEAP SEQROW := ( size, elem )
+   ),
+   seqnull
+   OUT  get_localdec(ihold, "get_seqstep" )
+   ESAC
+END;
+
+get_sequence := REF SEQUENCE:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { seqsteptok } 
+   REF SEQUENCE sequence := nilsequence;
+   REF REF SEQUENCE nextsequence := sequence;
+   SEQSTEP step;
+   TO listnumb
+   DO
+      step := get_seqstep;
+      REF REF SEQUENCE (nextsequence) := HEAP SEQUENCE
+            := ( step, nilsequence);
+      nextsequence := rest OF nextsequence
+   OD;
+   sequence
+END;
+
+
+PROC get_step = STEP:
+BEGIN
+   PROC get_joins = REF JOINS:
+   ( inassemtok( reader, msg ); { listtok }
+     INT listnumb = inassemint( reader, msg );
+     inassemtok( reader, msg ); { jointok } 
+     REF JOINS joins := niljoins;
+     REF REF JOINS nextjoins := joins;
+     UNIT from, to;
+     TO listnumb
+     DO inassemtok( reader, msg ); { jointok } 
+        from := get_unit;
+        to := get_unit;
+        REF REF JOINS (nextjoins) := HEAP JOINS :=
+          (( from, to ), niljoins);
+        nextjoins := rest OF nextjoins
+     OD;
+     joins
+   );
+
+   INT ihold = token OF inassemtok( reader, msg );
+   CASE ihold + 1 - lettok IN
+   get_let,
+   (REF FORMULAS sizes = get_formulas;
+    inassemtok( reader, msg ); { instancetok }  
+    INSTANCE inst = get_instance;
+    REF NAMES makenames = get_names;
+        HEAP MAKE := ( sizes, inst, makenames )
+   ),
+   (UNIT from = get_unit, to = get_unit;
+        HEAP JOIN := ( from, to )
+   ),
+   (REF FORMULAS repls = get_formulas;
+    REF JOINS joins = get_joins;
+        HEAP REPLJOIN := ( repls, joins )
+   ),
+   stepnull,
+   get_print,
+   get_fault
+   OUT get_localdec(ihold, "get_step" )
+   ESAC
+END;
+
+get_series := REF SERIES:
+BEGIN
+   inassemtok( reader, msg ); { listtok }
+   INT listnumb = inassemint( reader, msg );
+   inassemtok( reader, msg ); { steptok } 
+   REF SERIES series := nilseries;
+   REF REF SERIES nextseries := series;
+   STEP step;
+   TO listnumb
+   DO
+      step := get_step;
+      REF REF SERIES (nextseries) := HEAP SERIES := ( step, nilseries);
+      nextseries := rest OF nextseries
+   OD;
+   series
+END;
+
+
+PROC get_fnbody = FNBODY:
+BEGIN
+   TOKEN tok = inassemtok( reader, msg );
+   CASE (token OF tok) + 1 - alientok IN
+   ( BOOL biop = inassembool( reader, msg );
+     ID name = inassemid( reader, msg );
+     HEAP ALIENCODE := (biop, name, get_macparams)
+   ),
+   MAKEARITH(get_formula),
+   reform,
+   ( IF nil OF tok
+     THEN  nilimport
+     ELSE  ID name = inassemid( reader, msg );
+           INT contextno = inassemint( reader, msg );
+           inassemtok( reader, msg ); { ctnametok } 
+            ID context = inassemid( reader, msg ),
+              import = inassemid( reader, msg );
+           HEAP IMPORT := ( name, contextno, ( context, import))
+     FI
+   ),
+   (INT sort = inassemint( reader, msg );
+    UNIT init = get_unit;
+    FORMULA ambigtime = get_formula;
+    UNIT ambig = get_unit;
+    FORMULA delaytime = get_formula;
+        HEAP ADELAY := ( sort, init, ambigtime, ambig, delaytime )
+   ),
+   (UNIT init = get_unit;
+    FORMULA delaytime = get_formula;
+        HEAP IDELAY := ( init, delaytime )
+   ),
+   (UNIT init = get_unit;
+        MAKERAM( init )
+   ),
+   (INT sort = inassemint( reader, msg );
+    FORMULA interval = get_formula;
+    UNIT init = get_unit;
+    FORMULA skew = get_formula;
+        HEAP SAMPLE := ( sort, interval, init, skew )
+   ),
+   (BOOL faster = inassembool( reader, msg );
+    INT sort = inassemint( reader, msg );
+    inassemtok( reader, msg ); { instancetok }  
+    INSTANCE inst = get_instance;
+    FORMULA scale = get_formula;
+    UNIT init = get_unit;
+    FORMULA skew = get_formula;
+        HEAP TIMESCALE:= ( faster, sort, inst, scale, init, skew )
+   ),
+   (inassemtok( reader, msg ); { listtok }
+    INT listnumb = inassemint( reader, msg );
+    inassemtok( reader, msg ); { inttok } 
+    REF INTS joincheck := nilints;
+     REF REF INTS nextjoincheck := joincheck;
+     TO listnumb
+     DO REF REF INTS (nextjoincheck) := HEAP INTS :=
+                                        (inassemint( reader, msg ), nilints);
+        nextjoincheck := rest OF nextjoincheck
+     OD;
+     BOOL check = inassembool( reader, msg );
+     HEAP BODYCHECK := ( joincheck, check, get_fnbody )
+   ),
+   bodynull,
+   ( IF nil OF tok
+     THEN nilunit
+     ELSE MAKEUNITTAG(get_unit)
+     FI
+   )
+   OUT msg( system, "fnbody"); SKIP
+   ESAC
+END;
+
+
+PROC get_typebody = TYPEBODY:
+ CASE (token OF inassemtok( reader, msg )) + 1 - typetagtok IN
+    MAKETYPETAG(get_type),
+    (  inassemtok( reader, msg ); { vectok }
+       INT size = inassemint( reader, msg );
+       inassemtok( reader, msg ); { alternativetok } 
+       HEAP VECTOR  [size] ALTERNATIVE alts;
+      ID altname;
+      TYPE assoc;
+      FOR count TO UPB alts
+      DO inassemtok( reader, msg ); { alternativetok } 
+         altname := inassemid( reader, msg );
+         assoc := get_type;
+         alts[count] := ( altname, assoc )
+      OD;
+      alts
+    ),
+    (ID tagname = inassemid( reader, msg );
+     RANGE range = get_range;
+        HEAP NEWINTS := ( tagname, range )
+    ),
+    ( ID name = inassemid( reader, msg );
+      ID chars = inassemid( reader, msg ); 
+      HEAP NEWCHARS := (name, chars)
+    )
+   OUT msg( system, "typebody"); SKIP
+   ESAC;
+
+
+PROC get_usage = REF USAGE:
+BEGIN
+   TOKEN tok = inassemtok( reader, msg );
+   IF nil OF tok
+   THEN nilusage
+   ELSE INT contextno = inassemint( reader, msg ),
+            closureno = inassemint( reader, msg ),
+            libv_spec = inassemint( reader, msg ),
+            libv_body = inassemint( reader, msg );
+        BOOL import = inassembool( reader, msg ),
+             export = inassembool( reader, msg );
+        HEAP USAGE := ( contextno, closureno, libv_spec, libv_body, import,
+                        export )
+   FI
+END;
+
+PROC get_attrdec = REF ATTRDEC:
+(TOKEN tok = inassemtok( reader, msg );
+ IF nil OF tok
+ THEN nilattrdec
+ ELSE INT sort = inassemint( reader, msg );
+      ID attrname = inassemid( reader, msg );
+      ATTR attr = get_attr;
+      REF USAGE usage = get_usage;
+        HEAP ATTRDEC  := ( sort, attrname, attr, usage )
+ FI
+);
+
+PROC get_intdec = REF INTDEC:
+(TOKEN tok = inassemtok( reader, msg );
+ IF nil OF tok
+ THEN nilintdec
+ ELSE INT sort = inassemint( reader, msg );
+      ID intname = inassemid( reader, msg );
+      ATTR attr = get_attr;
+      FORMULARANGE value = get_formularange;
+      REF USAGE usage = get_usage;
+        HEAP INTDEC  := ( sort, intname, attr, value, usage )
+ FI
+);
+
+PROC get_typedec = REF TYPEDEC:
+(TOKEN tok = inassemtok( reader, msg );
+ IF nil OF tok
+ THEN niltypedec
+ ELSE INT sort = inassemint( reader, msg );
+      ID typename = inassemid( reader, msg );
+      ATTR attr = get_attr;
+      TYPEBODY body = get_typebody;
+      REF USAGE usage = get_usage;
+        HEAP TYPEDEC := ( sort, typename, attr, body, usage )
+ FI
+);
+
+PROC get_constdec = REF CONSTDEC:
+(TOKEN tok = inassemtok( reader, msg );
+ IF nil OF tok
+ THEN nilconstdec
+ ELSE INT sort = inassemint( reader, msg );
+      ID constname = inassemid( reader, msg );
+      ATTR attr = get_attr;
+      UNIT value = get_unit;
+      REF USAGE usage = get_usage;
+         HEAP CONSTDEC := ( sort, constname, attr, value, usage )
+ FI
+);
+
+
+
+PROC get_fndec = REF FNDEC:
+BEGIN
+  TOKEN tok = inassemtok( reader, msg );
+  IF nil OF tok
+  THEN nilfndec
+  ELSE INT sort = inassemint( reader, msg );
+       BOOL macro = inassembool( reader, msg );
+       ID fnname = inassemid( reader, msg );
+       inassemtok( reader, msg ); { vectok }
+       INT macspecno = inassemint( reader, msg );
+       inassemtok( reader, msg ); { macspectok } 
+       REF VECTOR [] MACSPEC macspecs :=
+          IF macspecno = -1
+          THEN nilmacspecs
+          ELSE HEAP VECTOR [ macspecno ] MACSPEC ms;
+               DECLARATION spec;
+               FORALL m IN ms
+               DO  inassemtok( reader, msg ); { macspectok } 
+                   INT msort = inassemint( reader, msg );
+                   INT ihold = token OF inassemtok( reader, msg );
+                   spec := get_macspecitem(ihold);
+                   m := ( msort, spec )
+               OD;
+                ms
+          FI;
+       ATTR attr = get_attr;
+       REF NAMES inputs := get_names,
+                     outputs := get_names;
+       inassemtok( reader, msg ); { vectok }
+       INT size = inassemint( reader, msg );
+       inassemtok( reader, msg ); { nametypetok } 
+       HEAP VECTOR [size] NAMETYPE nametypes;
+       FOR i TO UPB nametypes
+       DO inassemtok( reader, msg ); { nametypetok } 
+          ID name = inassemid( reader, msg );
+          TYPE type = get_type;
+          ATTR nattr = get_attr;
+          nametypes[i] := (name, type, nattr)
+       OD;
+       FNBODY fnbody = get_fnbody;
+       REF USAGE usage = get_usage;
+       HEAP FNDEC := (sort, macro, fnname, macspecs, attr,
+                      inputs, outputs, nametypes, fnbody, usage )
+  FI
+END;
+
+PROC get_environ = REF ENVIRON:
+BEGIN
+   inassemtok( reader, msg ); { environtok } 
+     inassemtok( reader, msg ); { vectok }
+     INT size := inassemint( reader, msg );
+     inassemtok( reader, msg ); { attrdectok } 
+   HEAP VECTOR [size] REF ATTRDEC attrs;
+   FOR i TO UPB attrs DO attrs[i] := get_attrdec OD;
+     inassemtok( reader, msg ); { vectok }
+     size := inassemint( reader, msg );
+     inassemtok( reader, msg ); { intdectok } 
+   HEAP VECTOR [size] REF INTDEC ints;
+   FOR i TO UPB ints DO ints[i] := get_intdec OD;
+     inassemtok( reader, msg ); { vectok }
+     size := inassemint( reader, msg );
+     inassemtok( reader, msg ); { typedectok } 
+   HEAP VECTOR [size] REF TYPEDEC types;
+   FOR i TO UPB types DO types[i] := get_typedec OD;
+     inassemtok( reader, msg ); { vectok }
+     size := inassemint( reader, msg );
+     inassemtok( reader, msg ); { constdectok } 
+   HEAP VECTOR [size] REF CONSTDEC consts;
+   FOR i TO UPB consts DO consts[i] := get_constdec OD;
+     inassemtok( reader, msg ); { vectok }
+     size := inassemint( reader, msg );
+     inassemtok( reader, msg ); { fndectok } 
+   HEAP VECTOR [size] REF FNDEC fns;
+   FOR i TO UPB fns DO fns[i] := get_fndec OD;
+   HEAP ENVIRON := ( attrs, ints, types, consts, fns )
+END;
+
+PROC get_closure = CLOSURE:
+BEGIN
+   get_idstable;
+   inassemint(reader, msg); { ignore secondary number }
+   inassemtok(reader, msg); { closuretok }
+   CLOSURE  closure = make_closure;
+   inassemtok( reader, msg ); { listtok }
+   INT n_outers = inassemint( reader, msg );
+   inassemtok( reader, msg ); { outertok } 
+   REF REF OUTERS  ptr:= outers OF closure;
+   TO n_outers
+   DO  inassemtok( reader, msg ); { outertok } 
+       INT  closureno = inassemint( reader, msg ),
+            sort = inassemint( reader, msg );
+       REF ENVIRON  env = get_environ;
+       WHILE maxclosureno(closure) < closureno
+       DO  new_outers(closure)  OD;
+       REF REF OUTERS (ptr):= find_outers(closureno, closure, msg);
+       outer OF ptr:= (closureno, sort, env);
+       ptr:= rest OF ptr
+   OD;
+   closure
+END;
+
+INT head_data_top = inassemint( reader, msg );
+REF VECTOR[ ]RVC head_data = HEAP VECTOR[ head_data_top ]RVC;
+
+    FORALL hd IN head_data DO hd := inassemid( reader, msg ) OD;
+    ( get_closure, head_data )
+END { read_closure };
+
+{{
+
+ ----------------------------------------------------------------------------
+
+                     Assembler modes writer.
+}}
+
+PROC outassemchar = ( CHAR c, ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+    ( outitem OF writer )( STR( c ), putstring OF writer, msg );
+PROC outassemint = ( INT i, ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+    ( outitem OF writer )( i, putstring OF writer, msg );
+PROC outassemstr = ( RVC n, ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+    ( outitem OF writer )( n, putstring OF writer, msg );
+
+PROC outassemtok = ( INT tok,
+                     BOOL nil,
+                     ASSEMWRITER writer,
+                     MESSAGEPROC msg )VOID:
+BEGIN
+   INT c_tok = a68_c[ tok ];
+   ( outitem OF writer )( TOKEN( c_tok, nil ), putstring OF writer, msg )
+END;
+
+PROC outassembool = (BOOL b, ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+    ( outitem OF writer )( ABS b, putstring OF writer, msg );
+
+{ The Idstable is a global kept in ASSMODES - identifiers not recorded in
+  the hash table are output as strings.  Those recorded are output as hash
+  integers (if write_idstable OF writer is set).
+}
+
+PROC outassemid = (ID  id, ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+     IF UPB id = 0
+     THEN  outassemstr(id, writer, msg)
+     ELSE  INT  width = UPB idstable;
+           INT  index := 0;
+           FORALL c IN id DO  index PLUSAB ABS c  OD;
+           index := (index MOD width) + 1;
+           REF REF IDS  ptr := idstable[index];
+           INT  count := 1;
+           WHILE  (ptr ISNT nilids)  ANDTH  (id OF ptr /= id)
+           DO  ptr:= rest OF ptr;  count PLUSAB 1  OD;
+           IF ptr IS nilids
+           THEN  outassemstr( id, writer, msg)  { Not in table - output as STR }
+           ELSE  ( outitem OF writer )( HASHID( index, count ),
+                                        putstring OF writer, msg )
+           FI
+     FI;
+
+PROC write_closure = (EXTERNALCLOSURE dc,
+                      ASSEMWRITER writer,
+                      MESSAGEPROC msg )VOID:
+BEGIN
+INT listnumb;
+
+PROC (ID, ASSEMWRITER, MESSAGEPROC  )VOID outid =
+   IF write_idstable OF writer THEN  outassemid ELSE  outassemstr FI;
+
+PROC pt_idstable = VOID:
+   IF write_idstable OF writer
+   THEN  outassemint(UPB idstable, writer, msg);
+         INT  n:= 0;
+         REF IDS  ptr:= nilids;
+         FORALL ids IN idstable
+         DO  ptr:= ids;  n:= 0;
+             WHILE ptr ISNT nilids
+             DO  ptr:= rest OF ptr;  n PLUSAB 1  OD;
+             outassemint(n, writer, msg);
+             ptr:= ids;  n:= 0;
+             WHILE ptr ISNT nilids
+             DO  outassemstr(id OF ptr, writer, msg);  ptr:= rest OF ptr  OD
+         OD
+   ELSE  outassemint(0, writer, msg)
+   FI;
+
+PROC pt_ids = (REF IDS ids) VOID:
+BEGIN
+   INT listnumb := 0;
+   REF IDS strings := ids;
+   WHILE strings ISNT nilids
+   DO listnumb PLUSAB 1;
+      strings := rest OF strings
+   OD;
+   strings := ids;
+   IF listnumb = 0 THEN listnumb := -1 FI; 
+   outassemtok(listtok, FALSE, writer, msg);
+   outassemint(listnumb, writer, msg);
+   outassemtok(idtok, FALSE, writer, msg);
+   WHILE strings ISNT nilids
+   DO outid(id OF strings, writer, msg);
+      strings := rest OF strings
+   OD
+END;
+
+
+PROC pt_attr = (ATTR at) VOID:
+BEGIN
+   CASE at IN
+   (REF ATTRNAME an)  ( outassemtok(attrnametok, FALSE, writer, msg);
+                        outassemint(attrno OF an, writer, msg)
+                      ),
+   (REF ATTRDATA ad)  ( outassemtok(attrdatatok, FALSE, writer, msg);
+                        outid(classname OF ad, writer, msg);
+                        pt_ids(strings OF ad)
+                      ),
+   (REF ATTRSTR ts)   ( REF ATTRSTR astr := ts;
+                        INT listnumb := 0;
+                        WHILE astr ISNT nilattrstr
+                        DO  listnumb PLUSAB 1;
+                            astr := rest OF astr
+                        OD;
+                        astr := ts;
+                        IF listnumb = 0 THEN listnumb := -1 FI;
+                        outassemtok(attrstrtok, FALSE, writer, msg);
+                        outassemtok(listtok, FALSE, writer, msg);
+                        outassemint(listnumb, writer, msg);
+                        outassemtok(attrtok, FALSE, writer, msg);
+                        WHILE astr ISNT nilattrstr
+                        DO  pt_attr(elem OF astr);
+                            astr:= rest OF astr
+                        OD
+                      ),
+   (REF ATTRBRACKET ab)( outassemtok(attrbrackettok, FALSE, writer, msg);
+                         pt_attr(attr OF ab)
+                       ),
+   (REF ATTRNULL)     outassemtok(attrnull_tok, FALSE, writer, msg)
+   ESAC
+END;
+
+
+PROC pt_formula  = (FORMULA int) VOID:
+BEGIN
+  CASE int IN
+   (REF FINT i)
+    ( outassemtok(finttok, FALSE, writer, msg);
+      outassemint(int OF i, writer, msg);
+      outid(text OF i, writer, msg)
+    ),
+   (REF FCHECK  fc)
+    ( outassemtok(fchecktok, FALSE, writer, msg);
+      outassemint(sort OF fc, writer, msg);
+      pt_formula(test OF fc);
+      pt_formula(standard OF fc)
+    ),
+   (REF FARITH fa)
+    ( outassemtok(farithtok, FALSE, writer, msg);
+      outassemint(nameno OF fa, writer, msg)
+    ),
+   (REF FNAME fn)
+    ( outassemtok(fnametok, FALSE, writer, msg);
+      outassemint(intno OF fn, writer, msg)
+    ),
+   (REF FDOP fd)
+    ( outassemtok(fdoptok, FALSE, writer, msg);
+      pt_formula(left OF fd);
+      outassemint(sort OF fd, writer, msg);
+      pt_formula(right OF fd)
+    ),
+   (REF FMOP fm)
+    ( outassemtok(fmoptok, FALSE, writer, msg);
+      outassemint(sort OF fm, writer, msg);
+      pt_formula(right OF fm)
+    ),
+   (REF FCOND fc)
+    ( outassemtok(fcondtok, FALSE, writer, msg);
+      pt_formula(cond OF fc);
+      pt_formula(true OF fc);
+      pt_formula(false OF fc)
+    ),
+   (REF FBRACKET fb)
+    ( outassemtok(fbrackettok, FALSE, writer, msg);
+      pt_formula(formula OF fb)
+    ),
+   (REF FMACPAR fm)
+    ( outassemtok(fmacpartok, FALSE, writer, msg);
+      outassemint(macparno OF fm, writer, msg)
+    ),
+   (REF FNULL fn)
+     outassemtok(fnull_tok, FALSE, writer, msg)
+   OUT msg( system, "pt_formula")
+   ESAC
+END;
+
+PROC pt_range = (RANGE rg) VOID:
+(  outassemtok(rangetok, FALSE, writer, msg);
+   pt_formula(lwb OF rg);
+   pt_formula(upb OF rg)
+);
+
+PROC pt_formulas = (REF FORMULAS fs) VOID:
+(  REF FORMULAS formulas := fs;
+   listnumb := 0;
+   WHILE formulas ISNT nilformulas
+   DO listnumb PLUSAB 1;
+      formulas := rest OF formulas
+   OD;
+   formulas := fs;
+   IF listnumb = 0 THEN listnumb := -1 FI;
+   outassemtok(listtok, FALSE, writer, msg);
+   outassemint(listnumb, writer, msg);
+   outassemtok(formulatok, FALSE, writer, msg);
+   WHILE formulas ISNT nilformulas
+   DO pt_formula(formula OF formulas);
+      formulas := rest OF formulas
+   OD
+);
+
+PROC pt_formularange = (FORMULARANGE frg) VOID:
+(  CASE frg IN
+   (FORMULA form ) pt_formula( form ),
+   (RANGE rng ) pt_range( rng )
+   OUT  msg( system, "pt_formularange" )
+   ESAC
+);
+
+PROC pt_type = (TYPE type)VOID:
+BEGIN
+   CASE type IN
+     (REF TNAME tn)
+      ( outassemtok(tnametok, FALSE, writer, msg);
+        outassemint(typeno OF tn, writer, msg)
+      ),
+     (REF TROW tr)
+      ( outassemtok(trowtok, FALSE, writer, msg);
+        pt_formula(size OF tr);
+        pt_type(elem OF tr)
+      ),
+     (REF TSTR ts)
+      ( REF TSTR tstr := ts;
+        listnumb := 0;
+        WHILE tstr ISNT niltstr
+        DO  listnumb PLUSAB 1;
+            tstr := rest OF tstr
+        OD;
+        tstr := ts;
+        IF listnumb = 0 THEN listnumb := -1 FI;
+        outassemtok(tstrtok, FALSE, writer, msg);
+        outassemtok(listtok, FALSE, writer, msg);
+        outassemint(listnumb, writer, msg);
+        outassemtok(typetok, FALSE, writer, msg);
+        WHILE tstr ISNT niltstr
+        DO  pt_type(elem OF tstr);
+            tstr:= rest OF tstr
+        OD
+      ),
+     (REF TFN tf)
+      ( outassemtok(tfntok, FALSE, writer, msg);
+        pt_type(from OF tf);
+        pt_type(to OF tf)
+      ),
+     (REF TBRACKET tb)
+      ( outassemtok(tbrackettok, FALSE, writer, msg);
+        pt_type(type OF tb)
+      ),
+     (REF TSTRING ts)
+      ( outassemtok(tstringtok, FALSE, writer, msg);
+        pt_formula(size OF ts);
+        pt_type(char OF ts)
+      ),
+     (REF TVOID tv)
+        outassemtok(tvoidtok, FALSE, writer, msg),
+     (REF TMACPAR tm)
+      ( outassemtok(tmacpartok, FALSE, writer, msg);
+        outassemint(macparno OF tm, writer, msg)
+      ),
+     (REF TNULL tn)
+        outassemtok(tnull_tok, FALSE, writer, msg)
+    OUT msg( system, "pt_type")
+   ESAC
+END;
+
+PROC pt_printfault = ( INT tok, FORMULA cond, REF PRINTITEMS ptm ) VOID:
+(  outassemtok( tok, FALSE, writer, msg);
+   pt_formula(cond);
+
+   REF PRINTITEMS printitems := ptm;
+   listnumb := 0;
+   WHILE printitems ISNT nilprintitems
+   DO listnumb PLUSAB 1;
+      printitems := rest OF printitems
+   OD;
+   printitems := ptm;
+   IF listnumb = 0 THEN listnumb := -1 FI;
+   outassemtok(listtok, FALSE, writer, msg);
+   outassemint(listnumb, writer, msg);
+   outassemtok(printitemtok, FALSE, writer, msg);
+   WHILE printitems ISNT nilprintitems
+   DO CASE item OF printitems IN
+      (ID id ) ( outassemtok(idtag, FALSE, writer, msg);
+                 outid(id, writer, msg)),
+      (REF FORMULATAG ftg)
+        ( outassemtok(formulatagtok, FALSE, writer, msg);
+          pt_formula(tag OF ftg)
+        )
+      ESAC;
+      printitems := rest OF printitems
+   OD
+);
+
+PROC pt_names = (REF NAMES ns) VOID:
+(  REF NAMES ids := ns;
+   listnumb := 0;
+   WHILE ids ISNT nilnames
+   DO  listnumb PLUSAB 1;
+       ids:= rest OF ids
+   OD;
+   ids := ns;
+   IF listnumb = 0 THEN listnumb := -1 FI;
+   outassemtok(listtok, FALSE, writer, msg);
+   outassemint(listnumb, writer, msg);
+   outassemtok(inttok, FALSE, writer, msg);
+   WHILE ids ISNT nilnames
+   DO  outassemint(nameno OF ids, writer, msg);
+       ids:= rest OF ids
+   OD
+);
+
+PROC pt_let = (LET let, PROC(UNIT )VOID pt_unit) VOID:
+(   outassemtok(lettok, FALSE, writer, msg);
+    pt_names(letnames OF let);
+    pt_unit(unit OF let)
+);
+
+PROC pt_localdec = (DECLARATION d ) VOID:
+(  CASE d IN
+   (ATTRNAME an)
+    ( outassemtok(attrlocdectok, FALSE, writer, msg);
+      outassemint(attrno OF an, writer, msg)
+    ),
+   (FNAME fn)
+    ( outassemtok(flocdectok, FALSE, writer, msg);
+      outassemint(intno OF fn, writer, msg)
+    ),
+   (TNAME tn)
+    ( outassemtok(tlocdectok, FALSE, writer, msg);
+      outassemint(typeno OF tn, writer, msg)
+    ),
+   (CNAME cn)
+    ( outassemtok(clocdectok, FALSE, writer, msg);
+      outassemint(constno OF cn, writer, msg)
+    ),
+   (FNNAME fnn)
+    ( outassemtok(fnlocdectok, FALSE, writer, msg);
+      outassemint(fnno OF fnn, writer, msg)
+    )
+   OUT  msg( system, "pt_localdec" )
+   ESAC
+);
+
+PROC (REF SEQUENCE, PROC(UNIT )VOID ) VOID pt_sequence :=
+                       (REF SEQUENCE sq, PROC(UNIT )VOID pt_unit) VOID: SKIP;
+
+PROC pt_seqstep = (REF SEQSTEP step, PROC(UNIT )VOID pt_unit) VOID:
+(  PROC pt_seqchoices = (REF SEQCHOICES sc)VOID:
+    ( REF SEQCHOICES seqchoices := sc;
+      listnumb := 0;
+      WHILE seqchoices ISNT nilseqchoices
+      DO listnumb PLUSAB 1;
+         seqchoices := rest OF seqchoices
+      OD;
+      seqchoices := sc;
+      IF listnumb = 0 THEN listnumb := -1 FI;
+      outassemtok(listtok, FALSE, writer, msg);
+      outassemint(listnumb, writer, msg);
+      outassemtok(seqchoicetok, FALSE, writer, msg);
+      WHILE seqchoices ISNT nilseqchoices
+      DO outassemtok(seqchoicetok, FALSE, writer, msg);
+         outassembool(check OF seqchoices, writer, msg);
+         outassemint(sort OF seqchoices, writer, msg);
+         pt_unit(test OF seqchoices);
+         pt_seqstep(output OF seqchoices, pt_unit);
+         seqchoices := rest OF seqchoices
+      OD
+    );
+
+   CASE step IN
+   (DECLARATION d ) pt_localdec( d ),
+   (REF PRINT ps)
+    ( pt_printfault( printtok, cond OF ps, print OF ps )
+    ),
+   (REF FAULT fs)
+    ( pt_printfault( faulttok, cond OF fs, fault OF fs )
+    ),
+   (REF SEQLET sl)
+    ( outassemtok(seqlettok, FALSE, writer, msg);
+      pt_let(seqlet OF sl, pt_unit)
+    ),
+   (REF SEQVAR sv)
+    ( outassemtok(seqvartok, FALSE, writer, msg);
+      pt_let(seqvar OF sv, pt_unit)
+    ),
+   (REF SEQPVAR spv)
+    ( outassemtok(seqpvartok, FALSE, writer, msg);
+      outassemtok(lettok, FALSE, writer, msg);
+      pt_names(pvarnames OF spv);
+      pt_unit(init OF spv)
+    ),
+   (REF SEQASSIGN sa)
+    ( outassemtok(seqassigntok, FALSE, writer, msg);
+      pt_unit(to OF sa);
+      pt_unit(from OF sa)
+    ),
+   (REF SEQCASE sc)
+    ( outassemtok(seqcasetok, FALSE, writer, msg);
+      pt_unit(input OF sc);
+      pt_seqchoices(choices OF sc)
+    ),
+   (REF SEQCOND scond)
+    ( outassemtok(seqcondtok, FALSE, writer, msg);
+      pt_formula(cond OF scond);
+      pt_seqstep(true OF scond, pt_unit);
+      pt_seqstep(false OF scond, pt_unit)
+    ),
+   (REF SEQREPL sd)
+    ( outassemtok(seqrepltok, FALSE, writer, msg);
+      pt_formula(repl OF sd);
+      pt_seqstep(body OF sd, pt_unit)
+    ),
+   (REF SEQROW sr)
+    ( outassemtok(seqrowtok, FALSE, writer, msg);
+      pt_formula(size OF sr);
+      pt_seqstep(elem OF sr, pt_unit)
+    ),
+   (REF SEQNULL sn)
+      outassemtok(seqnull_tok, FALSE, writer, msg),
+   (REF SEQUENCE sq)
+    ( outassemtok(sequencetok, FALSE, writer, msg);
+      pt_sequence(sq, pt_unit)
+    )
+    OUT
+       msg( system, "pt_seqstep" )
+    ESAC
+);
+
+PROC do_pt_sequence = (REF SEQUENCE sq, PROC(UNIT )VOID pt_unit) VOID:
+(  REF SEQUENCE sequence := sq;
+   INT listnumb := 0;
+   WHILE sequence ISNT nilsequence
+   DO listnumb PLUSAB 1;
+      sequence := rest OF sequence
+   OD;
+   sequence := sq;
+   IF listnumb = 0 THEN listnumb := -1 FI;
+   outassemtok(listtok, FALSE, writer, msg);
+   outassemint(listnumb, writer, msg);
+   outassemtok(seqsteptok, FALSE, writer, msg);
+   WHILE sequence ISNT nilsequence
+   DO pt_seqstep(step OF sequence, pt_unit);
+      sequence := rest OF sequence
+   OD
+);
+
+  pt_sequence := do_pt_sequence;
+
+PROC (REF VECTOR [] MACPARAM ) VOID pt_macparams :=
+                                      (REF VECTOR [] MACPARAM mps) VOID: SKIP;
+
+PROC pt_instance = (INSTANCE ins) VOID:
+    ( outassemtok(instancetok, FALSE, writer, msg);
+      outassemint(fnno OF ins, writer, msg);
+      pt_macparams(macparams OF ins);
+      pt_attr(attr OF ins)
+    );
+
+PROC pt_step = ( STEP step, PROC(UNIT )VOID pt_unit ) VOID:
+(  CASE step IN
+   (DECLARATION d ) pt_localdec( d ),
+   (REF PRINT ps)
+    ( pt_printfault( printtok, cond OF ps, print OF ps )
+    ),
+   (REF FAULT fs)
+    ( pt_printfault( faulttok, cond OF fs, fault OF fs )
+    ),
+   (REF LET let)
+    ( pt_let(let, pt_unit)
+    ),
+   (REF MAKE mk)
+    ( outassemtok(maketok, FALSE, writer, msg);
+      pt_formulas(sizes OF mk);
+      pt_instance(inst OF mk);
+      pt_names(makenames OF mk)
+    ),
+   (REF JOIN jn)
+    ( outassemtok(jointok, FALSE, writer, msg);
+      pt_unit(from OF jn);
+      pt_unit(to OF jn)
+    ),
+   (REF REPLJOIN rjn)
+    ( outassemtok(repljointok, FALSE, writer, msg);
+      pt_formulas(repls OF rjn);
+      REF JOINS joins := joins OF rjn;
+      listnumb := 0;
+      WHILE joins ISNT niljoins
+      DO listnumb PLUSAB 1;
+         joins := rest OF joins
+      OD;
+      joins := joins OF rjn;
+      IF listnumb = 0 THEN listnumb := -1 FI;
+      outassemtok(listtok, FALSE, writer, msg);
+      outassemint(listnumb, writer, msg);
+      outassemtok(jointok, FALSE, writer, msg);
+      WHILE joins ISNT niljoins
+      DO  outassemtok(jointok, FALSE, writer, msg);
+          pt_unit(from OF join OF joins);
+          pt_unit(to OF join OF joins);
+         joins := rest OF joins
+      OD
+    ),
+   (REF STEPNULL sn)  outassemtok(stepnull_tok, FALSE, writer, msg)
+   OUT  msg( system, "pt_step" )
+   ESAC
+);
+
+PROC pt_unit = (UNIT unit) VOID:
+BEGIN
+    PROC pt_uchoices = (REF UCHOICES uc) VOID :
+    BEGIN
+      REF UCHOICES uchoices := uc;
+      listnumb := 0;
+      WHILE uchoices ISNT niluchoices
+      DO listnumb PLUSAB 1;
+         uchoices := rest OF uchoices
+      OD;
+      uchoices := uc;
+      IF listnumb = 0 THEN listnumb := -1 FI;
+      outassemtok(listtok, FALSE, writer, msg);
+      outassemint(listnumb, writer, msg);
+      outassemtok(uchoicetok, FALSE, writer, msg);
+      WHILE uchoices ISNT niluchoices
+      DO outassemtok(uchoicetok, FALSE, writer, msg);
+         outassembool( check OF uchoices, writer, msg);
+         outassemint(sort OF uchoices, writer, msg);
+         pt_unit(test OF uchoices);
+         pt_unit(output OF uchoices);
+         uchoices := rest OF uchoices
+      OD
+    END;
+
+    CASE unit IN
+    (REF CNAME cn)
+     ( outassemtok(cnametok, FALSE, writer, msg);
+       outassemint(constno OF cn, writer, msg)
+     ),
+    (REF CPRIM cp)
+     ( outassemtok(cprimtok, FALSE, writer, msg);
+       outassemint(typeno OF cp, writer, msg);
+       outassemint(primno OF cp, writer, msg)
+     ),
+    (REF CINT ci)
+     ( outassemtok(cinttok, FALSE, writer, msg);
+       outassemint(typeno OF ci, writer, msg);
+       pt_formula(index OF ci)
+     ),
+    (REF CQUERY cq)
+     ( outassemtok(cquerytok, FALSE, writer, msg);
+       pt_type(querytype OF cq)
+     ),
+    (REF CVOID cv) outassemtok(cvoidtok, FALSE, writer, msg),
+    (REF CQUOTE cq)
+     ( outassemtok(cquotetok, FALSE, writer, msg);
+       outassemint(typeno OF cq, writer, msg);
+       outassemtok(vectok, FALSE, writer, msg);
+       outassemint(UPB string OF cq, writer, msg);
+       outassemtok(inttok, FALSE, writer, msg); 
+       FOR index TO UPB string OF cq
+       DO outassemint((string OF cq)[index], writer, msg) OD
+     ),
+    (REF CRANGE cr)
+     ( outassemtok(crangetok, FALSE, writer, msg);
+       outassemint(typeno OF cr, writer, msg);
+       pt_range( range OF cr)
+     ),
+    (REF CPRIMRANGE cpr)
+     ( outassemtok(cprimrangetok, FALSE, writer, msg);
+       outassemint(typeno OF cpr, writer, msg);
+       outassemint(firstno OF cpr, writer, msg);
+       outassemint(lastno OF cpr, writer, msg)
+     ),
+    (REF CTYPE ct)
+     ( outassemtok(ctypetok, FALSE, writer, msg);
+       pt_type(type OF ct)
+     ),
+    (REF UALTS ua)
+     ( REF UALTS ualts := ua;
+       listnumb := 0;
+       WHILE ualts ISNT nilualts
+       DO  listnumb PLUSAB 1;
+           ualts := rest OF ualts
+       OD;
+       ualts := ua;
+       IF listnumb = 0 THEN listnumb := -1 FI;   
+       outassemtok(ualtstok, FALSE, writer, msg);
+       outassemtok(listtok, FALSE, writer, msg);
+       outassemint(listnumb, writer, msg);
+       outassemtok(unittok, FALSE, writer, msg);
+       WHILE ualts ISNT nilualts
+       DO  pt_unit(alt OF ualts);
+           ualts:= rest OF ualts
+       OD
+     ),
+    (REF UNAME un)
+     ( outassemtok(unametok, FALSE, writer, msg);
+       outassemint(sort OF un, writer, msg);
+       outassemint(nameno OF un, writer, msg)
+     ),
+    (REF UREPLACE ud)
+     ( outassemtok(ureplacetok, FALSE, writer, msg);
+       pt_unit(unit OF ud);
+       pt_unit(index OF ud);
+       pt_unit(from OF ud)
+     ),
+    (REF UFN ufn)
+      ( outassemtok(ufntok, FALSE, writer, msg);
+       pt_unit(sink OF ufn);
+       pt_unit(source OF ufn)
+     ),
+    (REF UASSOC ua)
+     ( outassemtok(uassoctok, FALSE, writer, msg);
+       outassemint(typeno OF ua, writer, msg);
+       outassemint(altno OF ua, writer, msg);
+       pt_unit(assoc OF ua)
+     ),
+    (REF UEXTRACT ue)
+     ( outassemtok(uextracttok, FALSE, writer, msg);
+       pt_unit(extract OF ue);
+       outassemint(typeno OF ue, writer, msg);
+       outassemint(altno OF ue, writer, msg)
+     ),
+    (REF UPORTNAME ut)
+     ( outassemtok(uportnametok, FALSE, writer, msg);
+       pt_unit(unit OF ut);
+       outassemint(fnno OF ut, writer, msg);
+       outassemint(nameno OF ut, writer, msg)
+     ),
+    (REF UINDEX ui)
+     ( outassemtok(uindextok, FALSE, writer, msg);
+       pt_unit(unit OF ui);
+       pt_formula(index OF ui)
+     ),
+    (REF UTRIM ut)
+     ( outassemtok(utrimtok, FALSE, writer, msg);
+       pt_unit(unit OF ut);
+       pt_range(range OF ut)
+     ),
+    (REF UDYINDEX ud)
+     ( outassemtok(udyindextok, FALSE, writer, msg);
+       pt_unit(unit OF ud);
+       pt_unit(index OF ud)
+     ),
+    (REF UROW ur)
+     ( outassemtok(urowtok, FALSE, writer, msg);
+       pt_formula(size OF ur);
+       pt_unit(elem OF ur)
+     ),
+    (REF USTR us)
+     ( REF USTR ustr := us;
+       listnumb := 0;
+       WHILE ustr ISNT nilustr
+       DO listnumb PLUSAB 1;
+          ustr := rest OF ustr
+       OD;
+       ustr := us;
+       IF listnumb = 0 THEN listnumb := -1 FI;
+       outassemtok(ustrtok, FALSE, writer, msg);
+       outassemtok(listtok, FALSE, writer, msg);
+       outassemint(listnumb, writer, msg);
+       outassemtok(unittok, FALSE, writer, msg);
+       WHILE ustr ISNT nilustr
+       DO pt_unit(elem OF ustr);
+          ustr := rest OF ustr
+       OD
+     ),
+    (REF UCONC uc)
+     ( outassemtok(uconctok, FALSE, writer, msg);
+       outassembool(string OF uc, writer, msg);
+       outassemint(sort OF uc, writer, msg);
+       pt_unit(left OF uc);
+       pt_unit(right OF uc)
+     ),
+    (REF UMINST um)
+     ( outassemtok(uminsttok, FALSE, writer, msg);
+       pt_instance(inst OF um);
+       pt_unit(right OF um)
+     ),
+    (REF UDINST ud)
+     ( outassemtok(udinsttok, FALSE, writer, msg);
+       pt_unit(left OF ud);
+       pt_instance(inst OF ud);
+       pt_unit(right OF ud)
+     ),
+    (REF UCASE uc)
+     ( outassemtok(ucasetok, FALSE, writer, msg);
+       pt_unit(input OF uc);
+       pt_uchoices(choices OF uc)
+     ),
+    (REF UCOND ucond)
+     ( outassemtok(ucondtok, FALSE, writer, msg);
+       pt_formula(cond OF ucond);
+       pt_unit(true OF ucond);
+       pt_unit(false OF ucond)
+     ),
+    (REF UREPL ur)
+     ( outassemtok(urepltok, FALSE, writer, msg);
+       pt_formula(repl OF ur);
+       pt_unit(body OF ur)
+     ),
+    (REF USEQUENCE us)
+     ( outassemtok(usequencetok, FALSE, writer, msg);
+       pt_sequence(body OF us, pt_unit);
+       pt_unit(output OF us)
+     ),
+    (REF USERIES us)
+     ( REF SERIES series := body OF us;
+       outassemtok(useriestok, FALSE, writer, msg);
+       listnumb := 0;
+       WHILE series ISNT nilseries
+       DO listnumb PLUSAB 1;
+          series := rest OF series
+       OD;
+       series := body OF us;
+       IF listnumb = 0 THEN listnumb := -1 FI;
+       outassemtok(listtok, FALSE, writer, msg);
+       outassemint(listnumb, writer, msg);
+       outassemtok(steptok, FALSE, writer, msg);
+       WHILE series ISNT nilseries
+       DO pt_step(step OF series, pt_unit);
+          series := rest OF series
+       OD;
+       pt_unit(output OF us)
+     ),
+    (REF UBRACKET ub)
+     ( outassemtok(ubrackettok, FALSE, writer, msg);
+       pt_unit(unit OF ub)
+     ),
+    (REF UATTR ua)
+     ( outassemtok(uattrtok, FALSE, writer, msg);
+       pt_unit(unit OF ua);
+       pt_attr(attr OF ua)
+     ),
+    (REF UCHECK uc)
+     ( outassemtok(uchecktok, FALSE, writer, msg);
+       pt_unit(unit OF uc);
+       pt_formula(check OF uc)
+     ),
+    (REF USTRING us)
+     ( outassemtok(ustringtok, FALSE, writer, msg);
+       pt_formula(size OF us);
+       pt_unit(char OF us)
+     ),
+    (REF UNULL un) outassemtok(unull_tok, FALSE, writer, msg)
+    OUT msg( system, "pt_unit")
+    ESAC
+END;
+
+PROC pt_macparam = (MACPARAM mp) VOID:
+(  outassemtok(macparamtok, FALSE, writer, msg);
+   outassemint(sort OF mp, writer, msg);
+   CASE param OF mp IN
+   (ATTRTAG ag)    ( outassemtok(attrtagtok, FALSE, writer, msg);
+                     pt_attr(tag OF ag)
+                   ),
+   (FORMULATAG ft) ( outassemtok(formulatagtok, FALSE, writer, msg);
+                     pt_formula(tag OF ft)
+                   ),
+   (TYPETAG tg)    ( outassemtok(typetagtok, FALSE, writer, msg);
+                     pt_type(tag OF tg)
+                   ),
+   (UNITTAG cg)    ( outassemtok(unittagtok, FALSE, writer, msg);
+                     pt_unit(tag OF cg)
+                   ),
+   (INSTANCE i)    ( pt_instance(i) )
+   ESAC
+);
+
+
+PROC do_pt_macparams = (REF VECTOR [] MACPARAM mps) VOID:
+(  outassemtok(vectok, FALSE, writer, msg);
+   INT size = IF mps ISNT nilmacparams
+              THEN UPB mps
+              ELSE -1
+              FI;
+   outassemint(size, writer, msg);
+   outassemtok(macparamtok, FALSE, writer, msg);
+   IF size > 0
+   THEN  FOR index TO UPB mps DO pt_macparam(mps[index]) OD
+   FI
+);    
+
+   pt_macparams := do_pt_macparams;
+
+PROC pt_fnbody = (FNBODY body, PROC(UNIT )VOID pt_unit )VOID:
+(   CASE body IN
+    (REF UNITTAG ug)
+    ( outassemtok(unittagtok, ug IS nilunit, writer, msg);
+      IF ug ISNT nilunit THEN pt_unit(tag OF ug) FI
+    ),
+    (REF ARITH ra)
+    ( outassemtok(arithtok, FALSE, writer, msg);
+      pt_formula(output OF ra)
+    ),
+   (REF ALIENCODE al)
+    ( outassemtok(alientok, FALSE, writer, msg);
+      outassembool(biop OF al, writer, msg);
+      outid(name OF al, writer, msg);
+      pt_macparams(macparams OF al)
+    ),
+   (REF IMPORT im)
+    ( IF im ISNT nilimport
+         THEN  outassemtok(importtok, FALSE, writer, msg);
+               outid(name OF im, writer, msg);
+               outassemint(contextno OF im, writer, msg);
+               outassemtok(ctnametok, FALSE, writer, msg);
+               outid(context OF ctname OF im, writer, msg);
+               outid(import OF ctname OF im, writer, msg)
+         ELSE  outassemtok(importtok, TRUE, writer, msg)
+      FI
+    ),
+   (REF IDELAY id)
+    ( outassemtok(idelaytok, FALSE, writer, msg);
+      pt_unit(init OF id);
+      pt_formula(delaytime OF id)
+    ),
+   (REF ADELAY ad)
+    ( outassemtok(adelaytok, FALSE, writer, msg);
+      outassemint(sort OF ad, writer, msg);
+      pt_unit(init OF ad);
+      pt_formula(ambigtime OF ad);
+      pt_unit(ambig OF ad);
+      pt_formula(delaytime OF ad)
+    ),
+   (REF RAM rm)
+    ( outassemtok(ramtok, FALSE, writer, msg);
+      pt_unit(init OF rm)
+    ),
+   (REF REFORM rf)
+    ( outassemtok(reformtok, FALSE, writer, msg)
+    ),
+   (REF SAMPLE sp)
+    ( outassemtok(sampletok, FALSE, writer, msg);
+      outassemint(sort OF sp, writer, msg);
+      pt_formula(interval OF sp);
+      pt_unit(init OF sp);
+      pt_formula(skew OF sp)
+    ),
+   (REF TIMESCALE ts)
+    ( outassemtok(timescaletok, FALSE, writer, msg);
+      outassembool(faster OF ts, writer, msg);
+      outassemint(sort OF ts, writer, msg);
+      pt_instance(inst OF ts);
+      pt_formula(scale OF ts);
+      pt_unit(init OF ts);
+      pt_formula(skew OF ts)
+    ),
+   (REF BODYCHECK bc)
+    ( outassemtok(bodychecktok, FALSE, writer, msg);
+      REF INTS joincheck := joincheck OF bc;
+      listnumb := 0;
+      WHILE joincheck ISNT nilints
+      DO listnumb PLUSAB 1;
+         joincheck := rest OF joincheck
+      OD;
+      IF listnumb = 0 THEN listnumb := -1 FI;
+      outassemtok(listtok, FALSE, writer, msg);
+      outassemint(listnumb, writer, msg);
+      outassemtok(inttok, FALSE, writer, msg);
+      joincheck := joincheck OF bc;
+      WHILE joincheck ISNT nilints
+      DO outassemint(int OF joincheck, writer, msg);
+         joincheck := rest OF joincheck
+      OD;
+      outassembool(check OF bc, writer, msg);
+      pt_fnbody(fnbody OF bc, pt_unit)
+    ),
+   (REF BODYNULL bn)
+      outassemtok(bodynull_tok, FALSE, writer, msg)
+   OUT  msg( system, "pt_fnbody" )
+   ESAC
+);
+
+PROC pt_macspec = (REF MACSPEC ms) VOID:
+(  outassemtok(macspectok, FALSE, writer, msg);
+   outassemint(sort OF ms, writer, msg);
+   CASE spec OF ms IN
+   (ATTRNAME an)
+    ( outassemtok(attrmacspectok, FALSE, writer, msg);
+      outassemint(attrno OF an, writer, msg)
+    ),
+   (FNAME fn)
+    ( outassemtok(fmacspectok, FALSE, writer, msg);
+      outassemint(intno OF fn, writer, msg)
+    ),
+   (TNAME tn)
+    ( outassemtok(tmacspectok, FALSE, writer, msg);
+      outassemint(typeno OF tn, writer, msg)
+    ),
+   (CNAME cn)
+    ( outassemtok(cmacspectok, FALSE, writer, msg);
+      outassemint(constno OF cn, writer, msg)
+    ),
+   (FNNAME fnn)
+    ( outassemtok(fnmacspectok, FALSE, writer, msg);
+      outassemint(fnno OF fnn, writer, msg)
+    )
+   OUT  msg( system, "pt_macspec" )
+   ESAC
+);
+
+PROC pt_usage = (REF USAGE us) VOID:
+(  IF us IS nilusage
+   THEN  outassemtok(usagetok, TRUE, writer, msg)
+   ELSE  outassemtok(usagetok, FALSE, writer, msg);
+         outassemint(contextno OF us, writer, msg);
+         outassemint(closureno OF us, writer, msg);
+         outassemint(libv_spec OF us, writer, msg);
+         outassemint(libv_body OF us, writer, msg);
+         outassembool(import OF us, writer, msg);
+         outassembool(export OF us, writer, msg)
+   FI
+);
+
+PROC pt_attrdec = (REF ATTRDEC ad) VOID:
+(  IF ad IS nilattrdec
+   THEN outassemtok(attrdectok, TRUE, writer, msg)
+   ELSE outassemtok(attrdectok, FALSE, writer, msg);
+        outassemint(sort OF ad, writer, msg);
+        outid(attrname OF ad, writer, msg);
+        pt_attr(value OF ad);
+        pt_usage(usage OF ad)
+   FI
+);
+
+PROC pt_intdec = (REF INTDEC id) VOID:
+(  IF id IS nilintdec
+   THEN outassemtok(intdectok, TRUE, writer, msg)
+   ELSE outassemtok(intdectok, FALSE, writer, msg);
+        outassemint(sort OF id, writer, msg);
+        outid(intname OF id, writer, msg);
+        pt_attr(attr OF id);
+        pt_formularange(value OF id);
+        pt_usage(usage OF id)
+   FI
+);
+
+PROC pt_typebody = (TYPEBODY body ) VOID:
+(  CASE body IN
+   (REF VECTOR [] ALTERNATIVE nn)
+    ( outassemtok(rvalternativetok, FALSE, writer, msg);
+      outassemtok(vectok, FALSE, writer, msg);
+      outassemint(UPB nn, writer, msg);
+      outassemtok(alternativetok, FALSE, writer, msg);
+      FOR index TO UPB nn
+      DO ALTERNATIVE al = nn[index];
+         outassemtok(alternativetok, FALSE, writer, msg); 
+         outid(altname OF al, writer, msg);
+         pt_type(assoc OF al)
+      OD
+    ),
+   (REF NEWINTS ni)
+    ( outassemtok(newintstok, FALSE, writer, msg);
+      outid(tagname OF ni, writer, msg);
+      pt_range(range OF ni)
+    ),
+   (REF NEWCHARS nc)
+    ( outassemtok(newcharstok, FALSE, writer, msg);
+      outid(tagname OF nc, writer, msg);
+      outid(chars OF nc, writer, msg)
+    ),
+   (REF TYPETAG tg)
+    ( outassemtok(typetagtok, FALSE, writer, msg);
+      pt_type(tag OF tg)
+    )
+    OUT  msg( system, "pt_typebody" )
+    ESAC
+);
+
+PROC pt_typedec = (REF TYPEDEC ty) VOID:
+(  IF ty IS niltypedec
+   THEN outassemtok(typedectok, TRUE, writer, msg)
+   ELSE outassemtok(typedectok, FALSE, writer, msg);
+        outassemint(sort OF ty, writer, msg);
+        outid(typename OF ty, writer, msg);
+        pt_attr(attr OF ty);
+        pt_typebody(body OF ty);
+        pt_usage(usage OF ty)
+   FI
+);
+
+PROC pt_constdec = (REF CONSTDEC cd) VOID:
+(  IF cd IS nilconstdec
+   THEN outassemtok(constdectok, TRUE, writer, msg)
+   ELSE outassemtok(constdectok, FALSE, writer, msg);
+        outassemint(sort OF cd, writer, msg);
+        outid(constname OF cd, writer, msg);
+        pt_attr(attr OF cd);
+        pt_unit(value OF cd);
+        pt_usage(usage OF cd)
+   FI
+);
+
+PROC pt_fndec = (REF FNDEC fd) VOID:
+(  IF fd IS nilfndec
+   THEN outassemtok(fndectok, TRUE, writer, msg)
+   ELSE outassemtok(fndectok, FALSE, writer, msg);
+        outassemint(sort OF fd, writer, msg);
+        outassembool(macro OF fd, writer, msg);
+        outid(fnname OF fd, writer, msg);
+        outassemtok(vectok, FALSE, writer, msg);
+        IF (macspecs OF fd) IS nilmacspecs
+        THEN outassemint(-1, writer, msg)
+        ELSE outassemint(UPB (macspecs OF fd), writer, msg)
+        FI;
+        outassemtok(macspectok, FALSE, writer, msg);
+        FORALL ms IN (macspecs OF fd) DO pt_macspec(ms) OD;
+        pt_attr(attr OF fd);
+        pt_names(inputs OF fd);
+        pt_names(outputs OF fd);
+        outassemtok(vectok, FALSE, writer, msg);
+        outassemint(UPB (nametypes OF fd), writer, msg);
+        outassemtok(nametypetok, FALSE, writer, msg);
+        FORALL nametype IN (nametypes OF fd)
+        DO outassemtok(nametypetok, FALSE, writer, msg);
+           outid(name OF nametype, writer, msg);
+           pt_type(type OF nametype);
+           pt_attr(attr OF nametype)
+        OD;
+        pt_fnbody(fnbody OF fd, pt_unit);
+        pt_usage(usage OF fd)
+   FI
+);
+
+PROC pt_environ = (REF ENVIRON env) VOID:
+(  outassemtok(environtok, FALSE, writer, msg);
+   outassemtok(vectok, FALSE, writer, msg);
+   outassemint(UPB attrs OF env, writer, msg);
+   outassemtok(attrdectok, FALSE, writer, msg);  
+    FORALL attr IN attrs OF env DO pt_attrdec(attr) OD;
+   outassemtok(vectok, FALSE, writer, msg);
+   outassemint(UPB ints OF env, writer, msg);
+   outassemtok(intdectok, FALSE, writer, msg);  
+    FORALL int IN ints OF env DO pt_intdec(int) OD;
+   outassemtok(vectok, FALSE, writer, msg);
+   outassemint(UPB types OF env, writer, msg);
+   outassemtok(typedectok, FALSE, writer, msg); 
+    FORALL type IN types OF env DO pt_typedec(type) OD;
+   outassemtok(vectok, FALSE, writer, msg);
+   outassemint(UPB  consts OF env, writer, msg);
+   outassemtok(constdectok, FALSE, writer, msg);  
+    FORALL const IN consts OF env  DO pt_constdec(const) OD;
+   outassemtok(vectok, FALSE, writer, msg);
+   outassemint(UPB fns OF env, writer, msg);
+   outassemtok(fndectok, FALSE, writer, msg);
+    FORALL fn IN fns OF env DO pt_fndec(fn) OD
+);
+
+PROC pt_closure = (CLOSURE closure) VOID:
+BEGIN
+    pt_idstable;
+    outassemint(0, writer, msg);  { zero secondaries }
+    outassemtok(closuretok, FALSE, writer, msg);
+    REF OUTERS outers := outers OF closure;
+    INT  n:= 0;
+    WHILE outers ISNT nilouters DO  n PLUSAB 1;  outers:= rest OF outers  OD;
+    IF n = 0 THEN n := -1 FI;
+    outassemtok(listtok, FALSE, writer, msg);
+    outassemint(n, writer, msg);
+    outassemtok(outertok, FALSE, writer, msg);
+    outers:= outers OF closure;
+    WHILE outers ISNT nilouters
+    DO outassemtok(outertok, FALSE, writer, msg);
+       outassemint(closureno OF outer OF outers, writer, msg);
+       outassemint(sort OF outer OF outers, writer, msg);
+       pt_environ(environ OF outer OF outers);
+       outers := rest OF outers
+    OD
+END;
+
+    IF tokens_version_no /= assembler_version_no THEN
+        msg( system, "Assembler and tokens version numbers do not match" )
+    FI;
+    outassemint( UPB head_data OF dc, writer, msg);
+    FORALL hd IN head_data OF dc DO outid( hd, writer, msg ) OD;
+
+    pt_closure(closure OF dc);
+    SKIP
+END { write_closure };
+
+
+{{
+
+ ----------------------------------------------------------------------------
+
+                 Signature and format mode procedures
+}}
+
+VECTOR[ ]CHAR bad_dump_sig =
+            "The given file is not a cmodes dump file or is out of date";
+VECTOR[ 0 ]REF VECTOR[ ]RVC null_ids_lookup;
+
+PROC read_signature = (PROC CHAR getchar, MESSAGEPROC msg )ASSEMREADER:
+BEGIN
+CHAR fc = getchar;
+
+    FORALL c IN file_signature
+    DO
+        IF getchar /= c THEN msg( user, bad_dump_sig ) FI
+    OD;
+
+ASSEMREADER reader =
+    ( getchar,
+      IF fc = "P" THEN
+          packed_initem
+    ELIF fc = "R" THEN
+          next := lf;  { Force reader to start by getting first symbol herald }
+          unpacked_initem
+    ELSE msg( user, bad_dump_sig );
+          dummy_initem
+      FI,
+      HEAP REF VECTOR[ ]REF VECTOR[ ]RVC := null_ids_lookup );
+
+STR language = inassemstr( reader, msg );
+
+    IF language /= signature
+    THEN  msg( user, "Wrong language in dump file" )
+    FI;
+    reader
+END;
+
+PROC write_signature = (PROC( VECTOR[ ]CHAR )VOID putstring,
+                        BOOL mode,
+                             write_idstable,
+                        MESSAGEPROC msg )ASSEMWRITER:
+BEGIN
+INT sigtop = UPB file_signature;
+VECTOR[ sigtop + 1 ]CHAR cc;
+VECTOR[ UPB signature ]CHAR language := signature;
+
+    cc[ 1 ] := IF mode THEN "P" ELSE "R" FI;
+    cc[ 2 : ] := file_signature;
+    putstring( cc );
+
+ASSEMWRITER writer =
+    ( putstring,
+      IF mode THEN packed_outitem ELSE unpacked_outitem FI,
+      write_idstable  ANDTH  UPB idstable > 0 );
+
+   outassemstr( language, writer, msg );
+   writer
+END;
+
+PROC finish_write_closure = (ASSEMWRITER writer, MESSAGEPROC msg )VOID:
+BEGIN
+    ( putstring OF writer )( "." )
+END;
+
+    SKIP
+KEEP TOKEN, BASICVALUE, EXTERNALCLOSURE, ASSEMREADER, ASSEMWRITER,
+     inassemint, inassembool, inassemtok, inassemstr, inassemchar, inassemid,
+     outassemchar, outassemint, outassemstr, outassemtok, outassembool,
+     outassemid, packed_format, unpacked_format,
+     read_signature, read_closure,
+     write_signature, write_closure, finish_write_closure
+FINISH

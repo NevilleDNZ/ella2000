@@ -1,0 +1,105 @@
+PROGRAM  ellatransform CONTEXT VOID USE putstrings, osinterface, messageproc,
+         options,  assmodes,  transformprocs,  external_transforms,
+         dinst, revdinst
+BEGIN
+
+configinfo A68CONFIG "$Id: ellatransform.a68,v 34.3 1995/03/29 13:05:09 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:07:90 DCT  Module for users to specify transforms that can be called from
+              the EXTERNAL command in the ASSEMBLE environment.
+25:01:95  33.001  ELLA  CreateDb  Install in database.
+22:03:95  33.002  DJS   Release   Prepare for release, remove superflous
+                                  transforms, and add example transform
+                                  'revdinst'
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+COMMENT
+   How to use this Module:
+
+   1)  Add your transform Module name to the use list.
+
+   2)  Introduce your transform:
+
+   "do_transform" takes two parameters,
+        the first is a STR which is the command line obtained by using
+            get_command_line, this has different parameters depending
+            upon the operating system, the unix version must be called from the
+            program module.
+        the second is a VECTOR [] TRANSFORM as its parameter.  To create one
+   of these it is necessary to supply three items for each transform:
+
+   - the name of the transform (STR)
+
+   - the transform procedure itself - this should be in one of the two standard
+     forms:
+             PROC (CLOSURE, OPTIONS, MESSAGEPROC) CLOSUREC   or
+             PROC (CLOSURE, MESSAGEPROC) CLOSUREC
+     if it is not, then wrap it up:
+             (CLOSURE  closure,  MESSAGEPROC  msg) CLOSUREC:
+             ( call_my_transform;
+               (new_closure, whether_changed)
+             )
+
+   - a VECTOR [] STR describing the options available (use "no_options" if
+     your transform does not have any).
+
+   Create the VECTOR and call "do_transform" thus:
+
+      do_transform(( TRANSFORM ("name1", transform1, options1),
+                     TRANSFORM ("name2", transform2, options2)
+                   ))
+
+   3)  Compile and link this Module:
+
+   4)  Define the environmnt variable ELLATRANSFORM :-
+
+        setenv ELLATRANSFORM "/u/mydir/bin/ellatransform"
+
+   5)  Call ELLA:
+
+       transform
+       <call any other transforms needed first>
+       external <mytransform>
+       <examine the result using layout or whatever>
+
+COMMENT
+
+do_transforms(( ("dinst", transform_dinst, no_options ),
+                ("revdinst", transform_revdinst, no_options )
+             ))
+
+END
+FINISH
