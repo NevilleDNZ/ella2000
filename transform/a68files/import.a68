@@ -1,0 +1,301 @@
+DECS  import  CONTEXT VOID  USE  putstrings,  messageproc,  assmodes,
+      modeprocs, transformprocs, closureprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: import.a68,v 34.2 1995/03/29 13:02:54 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:07:88   Import transformation added
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.001 {{ must be called before macro
+                                  transformation }} 15:11:88   IMPORT
+                                  declarations now also flag change.  EVW
+                                  07:02:89   CR 642.  Updated to kernel.  EVW
+                                  23:02:89   R4B128.  Trace IMPORT declarations
+                                  which are them-selves IMPORTS.  EVW 06:10:89 
+                                   R4B492.  Add INTs, TYPEs in IMPORT spec to
+                                  calling ENVIRON.  EVW 29:01:90   CR ???. 
+                                  Handles nullouterfns in CLOSURE -
+                                  timescaling. EVW 02:05:90   CR 643. 
+                                  Consequential change for FNTYPE work. EVW
+                                  03:07:90   Now delivers CLOSUREC. Does not
+                                  generate newfns unless needed. DCT 07:10:91  
+                                  R6B78.   Include TVOID. EVW 02:09:91  
+                                  Updated do version 7 of assembler modes. EVW
+                                  03:03:92   Declaration attributes added. EVW
+                                  08:06:92   R6B106:  SPec of findnew* procs
+                                  altered. EVW 04:11:92   outer -> outerdec and
+                                  macpar -> macpardec. JIT 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC transform_imports = (CLOSURE oldclosure, MESSAGEPROC msg) CLOSUREC:
+BEGIN
+
+PROC  sys fault = (STR  s) VOID:  msg(system, s);
+
+
+INT envintno := 0,
+    envtypeno := 0;
+
+PROC add_envint = (REF INTDEC id, REF ENVIRON newenv) INT:
+BEGIN
+   INT max = UPB (ints OF newenv);
+   envintno PLUSAB 1;
+   IF envintno > max
+   THEN  HEAP VECTOR [max + 10] REF INTDEC newints;
+         newints[:max] := ints OF newenv;
+         ints OF newenv := newints
+   FI;
+   (ints OF newenv)[envintno] := id;
+   envintno
+END;
+
+
+PROC set_envint = (FORMULA f, TRANSFORMPROCS tprocs,
+                              REF ENVIRON impenv, callenv) FORMULAC:
+BEGIN
+   CASE f IN
+   (REF FNAME fn)
+      ( INT oldintno = intno OF fn;
+        REF INTDEC idec = (ints OF impenv)[oldintno];
+        IF sort OF idec = outerdec
+        THEN INT newintno := findnewintno(usage OF idec, ints OF callenv);
+             IF newintno = 0
+             THEN INTDECC newic = (intdec OF nulltprocs)(idec, tprocs);
+                  newintno := add_envint(i OF newic, callenv)
+             FI;
+             (MAKEFNAME(newintno), TRUE)
+        ELIF sort OF idec = macpardec
+        THEN (MAKEFMACPAR(oldintno), TRUE)
+        ELSE sys fault("set_envint"); SKIP
+        FI
+      )
+   OUT (formula OF nulltprocs)(f, tprocs)
+   ESAC
+END;
+
+PROC add_envtype = (REF TYPEDEC td, REF ENVIRON newenv) INT:
+BEGIN
+   INT max = UPB (types OF newenv);
+   envtypeno PLUSAB 1;
+   IF envtypeno > max
+   THEN  HEAP VECTOR [max + 10] REF TYPEDEC newtypes;
+         newtypes[:max] := types OF newenv;
+         types OF newenv := newtypes
+   FI;
+   (types OF newenv)[envtypeno] := td;
+   envtypeno
+END;
+
+PROC set_envtype =(TYPE type, TRANSFORMPROCS tprocs,
+                              REF ENVIRON impenv, callenv) TYPEC:
+BEGIN
+   CASE type IN
+   (REF TNAME tn)
+      ( INT oldtypeno = typeno OF tn;
+        REF TYPEDEC td = (types OF impenv)[oldtypeno];
+        IF sort OF td = outerdec
+        THEN INT newtypeno := findnewtypeno(usage OF td, types OF callenv);
+             IF newtypeno = 0
+             THEN TYPEDECC newtc = (typedec OF nulltprocs)(td, tprocs);
+                  newtypeno := add_envtype(t OF newtc, callenv)
+             FI;
+             (MAKETNAME(newtypeno), TRUE)
+        ELIF sort OF td = macpardec
+        THEN (MAKETMACPAR(oldtypeno), TRUE)
+        ELSE sys fault("TYPEDEC - set_envtype"); SKIP
+        FI
+      )
+   OUT (type OF nulltprocs)(type, tprocs)
+   ESAC
+END;
+
+
+PROC find_importbody = (ID name, INT contextno, CLOSURE closure) OUTER:
+BEGIN
+   OUTER result;
+   BOOL found := FALSE;
+   REF OUTERS outers := outers OF closure;
+   WHILE NOT found ANDTH (outers ISNT nilouters)
+   DO IF (sort OF outer OF outers = outerfn)
+      THEN REF FNDEC fdec = (fns OF environ OF outer OF outers)[1];
+           IF (contextno OF usage OF fdec = contextno) ANDTH
+              (fnname OF fdec = name)
+           THEN result := outer OF outers;
+                found := TRUE
+           FI
+      FI;
+      outers := rest OF outers
+   OD;
+   result
+END;
+
+PROC trace_imports = (REF FNDEC fdec, CLOSURE closure) OUTER:
+BEGIN
+   REF IMPORT imp = CASE fnbody OF fdec IN
+                    (REF IMPORT im) im
+                    OUT sys fault("outerfn_imp"); SKIP
+                   ESAC;
+   OUTER importbody = find_importbody(name OF imp, contextno OF imp, closure);
+   REF FNDEC impfdec = (fns OF environ OF importbody)[1];
+   IF import OF usage OF impfdec
+   THEN  trace_imports(impfdec, closure)
+   ELSE  importbody
+   FI
+END;
+
+
+PROC  update_fndec = (REF FNDEC fdec, TRANSFORMPROCS tprocs,
+                                      REF ENVIRON impenv, callenv) FNDECC:
+BEGIN
+   IF fdec ISNT nilfndec
+   THEN  REF VECTOR [] NAMETYPE  nametypes:= nametypes OF fdec;
+         BOOL changed:= FALSE;
+
+         PROC  terminals = (REF NAMES t, TRANSFORMPROCS tprocs) NAMESC:
+         BEGIN
+            REF NAMES ts := t;
+            WHILE ts ISNT nilnames
+            DO  NAMETYPE nt = nametypes[nameno OF ts];
+                TYPEC  t = (type OF tprocs)(type OF nt, tprocs);
+                IF c OF t
+                THEN  IF NOT changed
+                      THEN  changed := TRUE;
+                            nametypes:= HEAP VECTOR [UPB nametypes] NAMETYPE
+                               := nametypes
+                      FI;
+                      type OF nametypes[nameno OF ts]:= t OF t
+                FI;
+                ts := rest OF ts
+            OD;
+            (t, FALSE)
+         END;
+
+         TRANSFORMPROCS  newprocs = make_newtprocs(tprocs,
+             ( (FORMULA f, TRANSFORMPROCS tp) FORMULAC:
+                   set_envint(f, tp, impenv, callenv),
+               (TYPE t, TRANSFORMPROCS tp) TYPEC:
+                   set_envtype(t, tp, impenv, callenv) ));
+
+         NAMESC
+            ic = terminals(inputs OF fdec, newprocs),
+            oc = terminals(outputs OF fdec, newprocs);
+
+         HEAP FNDEC newfdec := fdec;
+         nametypes OF newfdec := nametypes;
+         macspecs OF newfdec :=
+            IF macro OF fdec THEN nullmacspecs ELSE nilmacspecs FI;
+         fnbody OF newfdec := bodynull;
+         (newfdec, TRUE)
+   ELSE  (fdec, FALSE)
+   FI
+END;
+
+
+
+PROC remove_imports = (OUTER ofn, CLOSURE closure) OUTERC:
+BEGIN
+   BOOL changed := FALSE;
+   REF ENVIRON env = environ OF ofn;
+   HEAP VECTOR [UPB fns OF env] REF FNDEC newfns;
+   HEAP ENVIRON newenv := env;
+   fns OF newenv := newfns;
+   envintno := UPB ints OF env;
+   envtypeno := UPB types OF env;
+   FORALL old IN fns OF env, new IN newfns
+   DO REF USAGE us = usage OF old;
+      new :=
+        IF (sort OF old = outerdec) ANDTH import OF us
+        THEN  changed := TRUE;
+              OUTER imp = outer OF find_outers(closureno OF us, closure, msg);
+              REF FNDEC impdec = (fns OF environ OF imp)[1];
+              OUTER importbody = trace_imports(impdec, closure);
+              FNDECC fc =
+                update_fndec((fns OF environ OF importbody)[1], nulltprocs,
+                             environ OF importbody, newenv);
+              f OF fc
+        ELSE  old
+        FI
+   OD;
+   IF changed
+   THEN  ints OF newenv := (ints OF newenv)[:envintno];
+         types OF newenv := (types OF newenv)[:envtypeno];
+         ((closureno OF ofn, sort OF ofn, newenv), TRUE)
+   ELSE  (ofn, FALSE)
+   FI
+END;
+
+
+{  *** Main body of transform_imports *** }
+
+   BOOL  changed := FALSE;
+   CLOSURE  newclosure := oldclosure;
+   REF REF OUTERS  newptr:= outers OF newclosure;
+
+   PROC  update_closure = VOID:
+   ( changed := TRUE;
+     newclosure := copy_closure(newclosure, msg);
+     { Now refind the current place in the outers list }
+     INT  place = closureno OF outer OF newptr;
+     newptr:= outers OF newclosure;
+     WHILE closureno OF outer OF newptr /= place
+     DO  newptr:= rest OF newptr  OD
+   );
+
+   REF OUTERS outers := outers OF oldclosure;
+   WHILE outers ISNT nilouters
+   DO OUTER outer = outer OF outers;
+      IF sort OF outer = outerfn
+      THEN IF NOT import OF usage OF (fns OF environ OF outer)[1]
+           THEN OUTERC oc = remove_imports(outer, oldclosure);
+                IF NOT changed ANDTH c OF oc THEN update_closure FI;
+                outer OF newptr := o OF oc;
+                newptr := rest OF newptr
+           ELSE IF NOT changed THEN update_closure FI;
+                free_outers(newptr, newclosure, msg)
+                  {dont add IMPORT bodies}
+           FI
+      ELSE newptr := rest OF newptr
+      FI;
+      outers := rest OF outers
+   OD;
+
+   (newclosure, changed)
+END
+
+KEEP transform_imports
+FINISH
+
