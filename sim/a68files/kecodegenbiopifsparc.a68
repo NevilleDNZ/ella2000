@@ -1,0 +1,2046 @@
+DECS  kecodegenbiopifsparc  CONTEXT VOID USE  putstrings, osinterface, basics,
+      kemassemsparc, kecodegenserversparc, kecodegenstacksparc:
+
+{  "  Id: kecodegenbiopifsparc.sta,v 1.1 91/10/14 14:29:14 edcad Exp $ " }
+configinfo A68CONFIG "$Id: kecodegenbiopifsparc.a68,v 34.2 1995/03/29 13:04:44 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:04:89 Module created from MC68k version
+31:05:89 Fixed stack offsets in oolbiop{bs, tv, struct}. R4B350. MDR.
+31:05:89 Made biop linkage re-locatable. R4B350. MDR.
+23:06:89 Ensure stack pointer is always doubleword aligned.
+             Stopped ms_push i forcing constants into register.
+             Fixed various in-line biops.
+             Fixed long real machine-stack push.
+             Stopped oolbiop * using g1 & g2 as temp registers. R4B363. MDR.
+30:06:89 Corrected convert_real_2 workspace calculation in line with VAX.
+             R4B383. SPT.
+10:01:90 F_TO_R and R_TO_F added.  PAR.
+13:08:93 Updated to ANSI / new Ctrans ALIEN specifications.  AAP
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.007 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{==============================================================================}
+{ Code generator for in-line biops and linkage to out-of-line routines.        }
+{==============================================================================}
+
+{ boolean deciding whether or not to optimise out-of-line biops }
+
+BOOL optimise on = TRUE;
+
+{------------------------------------------------------------------------------}
+{ definitions of out-of-line biops                                             }
+{------------------------------------------------------------------------------}
+{operator to return address of out of line routine as an INT, env is 0}
+OP (PROC VOID)STRUCT(MACHINEOFFSET addr, env) OOLROUTINE = BIOP 99;
+
+
+PROC VOID plus_us_1 = ALIEN "ADD_US" "extern void ADD_US();";
+PROC VOID minus_us_1 = ALIEN "SUB_US" "extern void SUB_US();";
+PROC VOID plus_s_1 = ALIEN "ADD_S" "extern void ADD_S();";
+PROC VOID minus_s_1 = ALIEN "SUB_S" "extern void SUB_S();";
+PROC VOID times_us_1 = ALIEN "TIMES_US" "extern void TIMES_US();";
+PROC VOID times_s_1 = ALIEN "TIMES_S" "extern void TIMES_S();";
+PROC VOID divide_s_1 = ALIEN "DIVIDE_S" "extern void DIVIDE_S();";
+PROC VOID divide_us_1 = ALIEN "DIVIDE_US" "extern void DIVIDE_US();";
+PROC VOID range_us_1 = ALIEN "RANGE_US" "extern void RANGE_US();";
+PROC VOID range_s_1 = ALIEN "RANGE_S" "extern void RANGE_S();";
+PROC VOID lt_us_1 = ALIEN "LT_US" "extern void LT_US();";
+PROC VOID lt_s_1 = ALIEN "LT_S" "extern void LT_S();";
+PROC VOID gt_us_1 = ALIEN "GT_US" "extern void GT_US();";
+PROC VOID gt_s_1 = ALIEN "GT_S" "extern void GT_S();";
+PROC VOID abs_s_1 = ALIEN "ABS_S" "extern void ABS_S();";
+PROC VOID negate_s_1 = ALIEN "NEGATE_S" "extern void NEGATE_S();";
+PROC VOID negate_us_1 = ALIEN "NEGATE_US" "extern void NEGATE_US();";
+PROC VOID mod_s_1 = ALIEN "MOD_S" "extern void MOD_S();";
+PROC VOID mod_us_1 = ALIEN "MOD_US" "extern void MOD_US();";
+PROC VOID and_1 = ALIEN "AND" "extern void AND();";
+PROC VOID or_1 = ALIEN "OR" "extern void OR();";
+PROC VOID not_1 = ALIEN "NOT" "extern void NOT();";
+PROC VOID xor_1 = ALIEN "XOR" "extern void XOR();";
+PROC VOID sl_1 = ALIEN "SL" "extern void SL();";
+PROC VOID sr_us_1 = ALIEN "SR_US" "extern void SR_US();";
+PROC VOID sr_s_1 = ALIEN "SR_S" "extern void SR_S();";
+PROC VOID transform_us_1 = ALIEN "TRANSFORM_US_1" "extern void TRANSFORM_US_1();";
+PROC VOID transform_s_1 = ALIEN "TRANSFORM_S_1" "extern void TRANSFORM_S_1();";
+PROC VOID transform_us_2 = ALIEN "TRANSFORM_US_2" "extern void TRANSFORM_US_2();";
+PROC VOID transform_s_2 = ALIEN "TRANSFORM_S_2" "extern void TRANSFORM_S_2();";
+PROC VOID eq_us_1 = ALIEN "EQ_US" "extern void EQ_US();";
+PROC VOID eq_s_1 = ALIEN "EQ_S" "extern void EQ_S();";
+PROC VOID le_us_1 = ALIEN "LE_US" "extern void LE_US();";
+PROC VOID le_s_1 = ALIEN "LE_S" "extern void LE_S();";
+PROC VOID ge_us_1 = ALIEN "GE_US" "extern void GE_US();";
+PROC VOID ge_s_1 = ALIEN "GE_S" "extern void GE_S();";
+PROC VOID sqrt_us_1 = ALIEN "SQRT_US" "extern void SQRT_US();";
+PROC VOID convert_us_1 = ALIEN "CONVERT_US_1" "extern void CONVERT_US_1();";
+PROC VOID convert_us_2 = ALIEN "CONVERT_US_2" "extern void CONVERT_US_2();";
+PROC VOID change_real_1 = ALIEN "CHANGE_REAL_1" "extern void CHANGE_REAL_1();";
+PROC VOID change_real_2 = ALIEN "CHANGE_REAL_2" "extern void CHANGE_REAL_2();";
+PROC VOID convert_real_1 = ALIEN "CONVERT_REAL_1" "extern void CONVERT_REAL_1();";
+PROC VOID convert_real_2 = ALIEN "CONVERT_REAL_2" "extern void CONVERT_REAL_2();";
+PROC VOID f_to_r_1 = ALIEN "F_TO_R_1" "extern void F_TO_R_1();";
+PROC VOID f_to_r_2 = ALIEN "F_TO_R_2" "extern void F_TO_R_2();";
+PROC VOID r_to_f_1 = ALIEN "R_TO_F_1" "extern void R_TO_F_1();";
+PROC VOID r_to_f_2 = ALIEN "R_TO_F_2" "extern void R_TO_F_2();";
+PROC VOID divide_real_1 = ALIEN "DIVIDE_REAL_1" "extern void DIVIDE_REAL_1();";
+PROC VOID divide_real_2 = ALIEN "DIVIDE_REAL_2" "extern void DIVIDE_REAL_2();";
+PROC VOID eq_real_1 = ALIEN "EQ_REAL_1" "extern void EQ_REAL_1();";
+PROC VOID eq_real_2 = ALIEN "EQ_REAL_2" "extern void EQ_REAL_2();";
+PROC VOID gt_real_1 = ALIEN "GT_REAL_1" "extern void GT_REAL_1();";
+PROC VOID gt_real_2 = ALIEN "GT_REAL_2" "extern void GT_REAL_2();";
+PROC VOID lt_real_1 = ALIEN "LT_REAL_1" "extern void LT_REAL_1();";
+PROC VOID lt_real_2 = ALIEN "LT_REAL_2" "extern void LT_REAL_2();";
+PROC VOID minus_real_1 = ALIEN "MINUS_REAL_1" "extern void MINUS_REAL_1();";
+PROC VOID minus_real_2 = ALIEN "MINUS_REAL_2" "extern void MINUS_REAL_2();";
+PROC VOID negate_real_1 = ALIEN "NEGATE_REAL_1" "extern void NEGATE_REAL_1();";
+PROC VOID negate_real_2 = ALIEN "NEGATE_REAL_2" "extern void NEGATE_REAL_2();";
+PROC VOID plus_real_1 = ALIEN "PLUS_REAL_1" "extern void PLUS_REAL_1();";
+PROC VOID plus_real_2 = ALIEN "PLUS_REAL_2" "extern void PLUS_REAL_2();";
+PROC VOID times_real_1 = ALIEN "TIMES_REAL_1" "extern void TIMES_REAL_1();";
+PROC VOID times_real_2 = ALIEN "TIMES_REAL_2" "extern void TIMES_REAL_2();";
+
+
+{------------------------------------------------------------------------------}
+{ BIOP input parameter types                                                   }
+{------------------------------------------------------------------------------}
+INT bs =1, tv =2, ch =3, ee =4, ei =5, ds =6, sr =7, lr =8, i =9, q =10, r =11;
+
+{------------------------------------------------------------------------------}
+{ A set of operations which implement an unsigned reverse polish calculator,   }
+{ used to calculate workspace and result space required by out of line biops.  }
+{ The calculator will generate code to leave the result on the real
+}
+{ machine stack if any of it's operands are unknown at code generation time    }
+{------------------------------------------------------------------------------}
+
+INT ms_tos = 92; {The offset from sp of the nearest word we can safely use}
+
+{ an operator which selects one of two AM stack locations,
+  in an attempt to avoid code generation by the calculator }
+PROC either = (REF STACKALLOCATOR s, STACKNUMBER a, b)STACKNUMBER:
+  CASE location_stack OF s TYPEOF a IN
+  (UNKNOWNSTACKLOCATION): b
+   OUT                    a
+  ESAC;
+
+{ An operator to return the size of a given AM stack location }
+OP SIZE = (REF STACKALLOCATOR s, STACKNUMBER o) UNION(R,I):
+   CASE location_stack OF s TYPEOF o IN
+   (UNKNOWNSTACKLOCATION):
+      BEGIN
+        ld USING (s SIZEOPERANDS o);
+        tempreg1
+      END
+   OUT location_stack OF s SIZEOF o
+   ESAC;
+
+{ An operator to return the integer value of a given small AM stack location }
+OP VALUE = (REF STACKALLOCATOR s, STACKNUMBER o) UNION(R,I): s SOURCE o;
+
+{ The arithmetic stack }
+MODE ARITHSTACKOBJECT = STRUCT(REF VECTOR [] INT locations,
+                               INT top,
+                               BOOL in line);
+
+MODE ARITHSTACK = REF ARITHSTACKOBJECT;
+
+   PROC arithstack = ARITHSTACK:
+      HEAP ARITHSTACKOBJECT := (HEAP VECTOR [100] INT, 0, FALSE);
+
+
+   { Push a value onto arith stack,
+       NOTE - sets in line = TRUE, and writes arith stack contents
+       onto real machine stack when first R recieved.
+       (ie. don't known value of an R at code generation time.)
+       Top of stack is left in tempreg1 when in line = TRUE
+    }
+   OP PUSH = (ARITHSTACK s, UNION(R,I) val)ARITHSTACK:
+      BEGIN
+         top OF s +:=1;
+
+         CASE val IN
+         (R r)
+            BEGIN
+               IF NOT in line OF s THEN
+                  sub USING RIR(sp, top OF s*8, sp);
+                  FOR i FROM (top OF s)-1 BY -1 TO 1 DO
+                     or USING RIR(g0, (locations OF s)[i], tempreg2);
+                     st USING RIR(sp, ms_tos+(i*8), tempreg2)
+                  OD;
+                  or USING RRR(r, g0, tempreg1);
+                  in line OF s := TRUE
+               ELSE
+                  IF top OF s > 1 THEN
+                     sub USING RIR(sp, 8, sp);
+                     st USING RIR(sp, ms_tos, tempreg1)
+                  FI;
+                  or USING RRR(r, g0, tempreg1)
+               FI
+            END,
+         (I i)
+            BEGIN
+               IF in line OF s THEN
+                  sub USING RIR(sp, 8, sp);
+                  st USING RIR(sp, ms_tos, tempreg1);
+                  or USING RIR(g0, i, tempreg1)
+               ELSE
+                  IF top OF s > UPB locations OF s THEN
+                     HEAP VECTOR [UPB locations OF s + 100]INT newstack;
+                     newstack[1:UPB locations OF s] := locations OF s;
+                     locations OF s := newstack
+                  FI;
+                  (locations OF s)[top OF s] := i
+               FI
+            END
+         ESAC;
+         s
+      END;
+
+   { Remove one arith stack item }
+   OP POP = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         top OF s -:=1;
+         "arith stack underflow" ASSERT top OF s >= 0;
+         IF in line OF s ANDTH top OF s > 1 THEN
+            ld USING RIR(sp, ms_tos, tempreg1);
+            add USING RIR(sp, 8, sp)
+         FI;
+         s
+      END;
+
+  { Return value at top of stack, only valid if INLINE is FALSE}
+   OP TOS = (ARITHSTACK s)INT: (locations OF s)[top OF s];
+
+   {Return 'code generated' flag}
+   OP INLINE = (ARITHSTACK s)BOOL: in line OF s;
+
+   {Ensure that the stack is in the expected state}
+   OP CHECKSIZEIS = (ARITHSTACK s, INT size)VOID:
+      "Check size is: stack size incorrect" ASSERT top OF s = size;
+
+   { ADD two values at top of stack }
+   OP ADD = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: ADD" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             ld USING RIR(sp, ms_tos, tempreg2);
+             add USING RIR(sp, 8, sp);
+             add USING RRR(tempreg2, tempreg1, tempreg1)
+          ELSE
+             (locations OF s)[top OF s -1] +:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Subtract value at top of stack from one below it }
+   OP SUB = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: SUB" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             ld USING RIR(sp, ms_tos, tempreg2);
+             add USING RIR(sp, 8, sp);
+             sub USING RRR(tempreg2, tempreg1, tempreg1)
+          ELSE
+             (locations OF s)[top OF s -1] -:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Multiply two values at top of stack }
+   OP MUL = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: MUL" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             ld USING RIR(sp, ms_tos, tempreg2);
+             ma mul;
+             add USING RIR(sp, 8, sp)
+          ELSE
+             (locations OF s)[top OF s -1] *:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+  { Divide value at top of stack INTO value below it }
+   OP DIV = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: DIV" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             ld USING RIR(sp, ms_tos, o0);
+             add USING RIR(sp, 8, sp);
+             ma div;
+             or USING RRR(tempreg1, g0, o1);
+
+             or USING RRR(o0, g0, tempreg1)
+          ELSE
+             (locations OF s)[top OF s -1] %:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Find maximum of two values at top of stack }
+   OP MAX = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: MAX" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             ld USING RIR(sp, ms_tos, tempreg2);
+             add USING RIR(sp, 8, sp);
+             {tempreg1 = x, tempreg2 = y}
+
+
+
+             subcc USING RRR(tempreg2, tempreg1, tempreg3);
+             {tempreg3 = y-x;
+               IF x > y THEN carry = 1
+                        ELSE carry = 0
+               FI}
+
+             subx USING RRR(tempreg2, tempreg2, tempreg2);
+             {IF x > y THEN  tempreg2 = -1
+                       ELSE  tempreg2 =  0
+              FI}
+
+             or USING RRR(tempreg3, tempreg2, tempreg2);
+             {IF x > y THEN tempreg2 = -1
+                       ELSE tempreg2 = y-x
+              FI;
+              carry unchanged. }
+
+             addx USING RRR(tempreg2, tempreg1, tempreg1)
+             {IF x > y THEN tempdata = x + (-1)   + 1
+                       ELSE tempdata = x + (y-x)  + 0
+              FI}
+
+          ELSE
+             (locations OF s)[top OF s -1] :=
+                IF (locations OF s)[top OF s] > (locations OF s)[top OF s -1]
+                THEN
+                   (locations OF s)[top OF s]
+                ELSE
+                   (locations OF s)[top OF s -1]
+                FI
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+{------------------------------------------------------------------------------}
+{ A set of routines to calculate workspace required by OOL code in longwords,  }
+{ and size of bit-string results, in bits.                                     }
+{ The general format of the routines is,                                       }
+{ Return TRUE & size if possible, else return FALSE and generate code to       }
+{ produce size at top of machine stack                                         }
+{------------------------------------------------------------------------------}
+MODE SPACEPROC = PROC (REF STACKALLOCATOR, REF INT)BOOL;
+
+PROC no space = (REF STACKALLOCATOR s, REF INT i)BOOL:
+   { used when no space is actualy required }
+   BEGIN
+     i := 0;
+     TRUE
+    END;
+
+PROC bsxbs logical ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+  { Calculates workspace for bitwise logicals on bit strings.
+    Both params must be same size.
+    size is: (n+31)/32 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE either (s, tos+1, tos+3));
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bs logical ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+  { Calculates workspace for bitwise logicals on single bit string.
+    size is: (n+31)/32 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE tos1);
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bsxbs logical rs = (REF STACKALLOCATOR s, REF INT resspc) BOOL:
+  { Calculates result size for bitwise logicals on bit strings.}
+  { result size = size of tos1 = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE either (s, tos+1, tos+3));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bs logical rs = (REF STACKALLOCATOR s, REF INT resspc) BOOL:
+  { Calculates result size for bitwise logicals on single bit string.}
+  { result size = size of tos1 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE tos1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC divide ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for divide on bit strings.
+    space required :- (n+7/8)*2 + (m+7/8)*3 + 2 bytes.
+    = (((n+7)/8)*2 + ((m+7)/8)*3 +5)/4  longwords
+    n= size of tos1, m= size of tos3.
+ }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 2); { ((n+7)/8)*2 }
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((m+7)/8)*3 }
+      as := ADD as;
+      as := ADD (as PUSH 5);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+
+PROC times rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+  { result size = size of tos1 + size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s SIZE (tos+3)));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC times ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     { result size = (((n+7)/8) + ((m+7)/8) + ((m+n+7)/8) +3)/4
+       where n = size of tos1, m= size of tos3}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := as PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC shift rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   {result size = m + p
+    where m = size of tos1, p = value of tos2 (ie shift count)}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s VALUE (tos+2)));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC plus ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = (((max (m, n)+1)+31)/32) *2
+     where m = size of tos1, n = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MAX (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH (1+31));
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 8);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC plus rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = max ( m, n) +1,
+     where m = size of tos1, n = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MAX (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH 1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC not rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { result size = size of tos1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_1 ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = ((m +7)/8 + p + 3)/4,
+     where m = size of tos1, p is value of tos2 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD (as PUSH (s VALUE (tos+2)));
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_2 ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = ((m +7)/8 + (p+7)/8) +3)/4
+     where m = size of tos1, p = value of tos2 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s VALUE (tos+2));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC negate ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     {size = (size of tos1 +31) /32}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 16);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC negate rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = size of tos1 +1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC sqrt ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     {size = (((((n+1)/2)+8)/8) + (((((n+1)/2)+7)/8)*6) +3)/4 bytes)
+      where n = size of tos1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as := ADD (as PUSH 8);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 6);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC sqrt rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = (size of tos1 +1) /2}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+
+PROC mod ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for mod on bit strings.
+    space required :- (n+7/8)*3 + (m+7/8)*3 + 4 bytes.
+    = (((n+7)/8)*3 + ((m+7)/8)*3 +7)/4  longwords
+    n= size of tos1, m= size of tos3.
+ }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((n+7)/8)*3 }
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((m+7)/8)*3 }
+      as := ADD as;
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_real_1 ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for convert_real_1 from the formula:
+
+       (14m + 24p + 3q + 551) / 24 bytes
+
+   where m = size of tos+1, p = tos+4, q = tos+5
+}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MUL (as PUSH 14);
+      as := as PUSH (s VALUE (tos+4));
+      as := MUL (as PUSH 24);
+      as := ADD as;
+      as := as PUSH (s VALUE (tos+5));
+      as := MUL (as PUSH 3);
+      as := ADD as;
+      as := ADD (as PUSH 551);
+      as := DIV (as PUSH 24);  { # bytes }
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);  { # bytes aligned longwords # }
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_real_2 ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for convert_real_2 from the formula:
+
+       (8q + n + m + 180) / 8 bytes
+
+   where q = size of tos+3, m = tos+4, n = tos+5
+}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+3));
+      as := MUL (as PUSH 8);
+      as := as PUSH (s VALUE (tos+5));
+      as := ADD as;
+      as := as PUSH (s VALUE (tos+4));
+      as := ADD as;
+      as := ADD (as PUSH 180);
+      as := DIV (as PUSH 8);  { # bytes }
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);  { # bytes aligned longwords # }
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+{------------------------------------------------------------------------------}
+{ A set of operations to push biop params onto the real machine stack          }
+{------------------------------------------------------------------------------}
+
+INT param count;
+PROC start new params = (INT no of params) VOID:
+   BEGIN
+      param count := 0;
+      IF no of params > 6 THEN
+         {make space for params on the stack. The first 6 are in registers.
+          Ensure that the stack doubleword alignment is preserved by allowing
+          8 bytes for each parameter. Only 4 bytes per parameter are really
+          used.}
+          sub USING RIR(sp, (no of params-6) *8, sp)
+      FI
+   END;
+
+PROC param reg = R:
+   IF param count < 6 THEN
+        BIN (ABS o0 + param count)
+   ELSE
+      tempreg1
+   FI;
+
+PROC pass new param = VOID:
+   BEGIN
+      IF param count >= 6 THEN
+         st USING RIR(sp, ms_tos + (param count - 6)*4, tempreg1)
+      FI;
+      param count +:=1
+   END;
+
+PROC remove parameters = (INT no of params) VOID:
+   IF no of params > 6 THEN
+      add USING RIR(sp, (no of params-6) *8, sp)
+   FI;
+
+
+PROC ms_push bs = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push representation for bitstring onto machine stack (from AM stack)}
+
+      { address of first byte, offset, length}
+      CASE location_stack OF s TYPEOF o IN
+      (UNKNOWNSTACKLOCATION loc):
+         BEGIN
+            or USING RRR(s RSOURCE o, g0, param reg);
+            pass new param;
+            or USING RRR(g0, g0, param reg);
+            pass new param;
+            ld USING RIR(s RSOURCE o, -4, param reg);
+            pass new param
+         END,
+      (LARGESTACKLOCATION loc):
+         BEGIN
+            RRR rrr = s LOADOPERANDS o;
+            or USING RRR(rs1 OF rrr, g0, param reg);
+            pass new param;
+            or USING RRR(g0, g0, param reg);
+            pass new param;
+            ma mov ir ( location_stack OF s SIZEOF o, param reg);
+            pass new param
+         END,
+      (SMALLSTACKLOCATION loc):
+         BEGIN
+            s CALCULATENEWDYNAMICADDR o;
+            st USING RRR(tempreg3, g0, s RSOURCE o);
+            or USING RRR(tempreg3, g0, param reg);
+            pass new param;
+            or USING RRR(g0, g0, param reg);
+            pass new param;
+            ma mov ir ( location_stack OF s SIZEOF o, param reg);
+            pass new param
+         END
+      ESAC;
+
+
+PROC ms_push ei= (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push representation for ELLA integer onto machine stack (from AM tos)}
+   BEGIN
+      s CALCULATENEWDYNAMICADDR o;
+      st USING RRR(tempreg3, g0, s RSOURCE o);
+      or USING RRR(tempreg3, g0, param reg);
+      pass new param
+   END;
+
+
+PROC ms_push ds= (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push representation for ELLA decimal string onto machine stack (from AM tos)}
+   BEGIN
+      CASE location_stack OF s TYPEOF o IN
+      (SMALLSTACKLOCATION):
+         BEGIN
+            s CALCULATENEWDYNAMICADDR o;
+            st USING RRR(tempreg3, g0, s RSOURCE o);
+            or USING RRR(tempreg3, g0, param reg);
+            pass new param
+         END
+      OUT
+         RRR rrr = s LOADOPERANDS o;
+         or USING RRR(rs1 OF rrr, g0, param reg);
+         pass new param
+      ESAC;
+      CASE location_stack OF s TYPEOF o IN
+      (UNKNOWNSTACKLOCATION):
+         BEGIN
+            ld USING RIR(s RSOURCE o, -4, param reg);
+            add USING RIR (param reg, 7, param reg);
+            sra USING RIR (param reg, 3, param reg);
+            pass new param
+         END
+      OUT
+         or USING RIR(g0, ((location_stack OF s SIZEOF o)+7)OVER 8, param reg);
+         pass new param
+      ESAC
+   END;
+
+PROC ms_push lr = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push pointer to ELLA long real onto machine stack. }
+   BEGIN
+        RRR rrr = s LOADOPERANDS o;
+        or USING RRR(rs1 OF rrr, g0, param reg);
+        pass new param
+   END;
+
+PROC ms_push i = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push representation for integer onto machine stack (from AM tos)}
+   BEGIN
+        { This type of stack item is usually a constant, and likely
+          to be used in workspace calculations later, so we avoid
+          forcing it into register if possible.}
+        CASE s SOURCE o IN
+        (R r): or USING RRR(g0, r, param reg),
+        (I i): or USING RIR(g0, i, param reg)
+        ESAC;
+        pass new param
+   END;
+
+PROC ms_push r = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+{ push value of pointer for output into machine stack. }
+   BEGIN
+        add USING (s SMALLIND o);
+        or USING RRR(s RDEST o, g0, param reg);
+        pass new param
+   END;
+
+PROC ms_push = (REF STACKALLOCATOR s, STACKNUMBER o, INT param type) VOID:
+   {tv, ch, ee, query have same representation, and are same size as
+     integer on machine stack.
+    sr, lr require same parameter format as ei.}
+   CASE param type IN
+     ms_push bs (s, o),
+     ms_push i  (s, o), {tv}
+     ms_push i  (s, o), {ch}
+     ms_push i  (s, o), {ee}
+     ms_push ei (s, o),
+     ms_push ds (s, o),
+     ms_push ei (s, o), {sr}
+     ms_push lr (s, o),
+     ms_push i  (s, o), {i}
+     ms_push i  (s, o), {q}
+     ms_push r  (s, o)  {r}
+   OUT
+      simfault ("ms_push: unknown case")
+   ESAC;
+
+{-----------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns bit-string  }
+{-----------------------------------------------------------------------------}
+PROC oolbiop bs = (REF STACKALLOCATOR s,
+                   SPACEPROC fixed ws,
+                   SPACEPROC fixed rs,
+                   PROC VOID biop,
+                   []INT in param type)VOID:
+
+   BEGIN
+      INT fws,
+          frs;
+      {save stack pointer & imporant global registers relative to
+       the frame pointer. We cannot use fp -4 as this may be in use
+       by the code generator (This location is used as a scratch pad
+       for storing the dynamic memory pointer across a call)}
+
+      or USING RRR(sp, g0, tempreg1);
+
+      {We are going to use the location at sp - ms_tos as our
+       logical top of stack, so we add ms_tos to the sp to
+       ensure that there is enough space in the current stack frame.
+       We also need to ensure that the sp is doubleword aligned}
+      add USING RIR(sp, -ms_tos-(5*4), sp);
+      st USING RIR(fp, -8, tempreg1);
+      st USING RIR(fp, -12, g1);
+      st USING RIR(fp, -16, g2);
+      st USING RIR(fp, -20, g3);
+
+      {allocate the required workspace, ensuring that sp is doubleword aligned}
+      IF fixed ws (s, fws) THEN
+         sub USING RIR(sp, ((fws+7)OVER 8)* 8, sp)
+      ELSE
+         add USING RIR(tempreg1, 7, tempreg1);
+         sra USING RIR(tempreg1, 3, tempreg1);
+         sll USING RIR(tempreg1, 3, tempreg1);
+         sub USING RRR(sp, tempreg1, sp)
+      FI;
+      {save pointer to workspace *in a register which is NOT used
+       in result space calculations or input pushing*}
+      add USING RIR(sp, ms_tos, tempreg4);
+
+
+      {allocate the required result space (rounded to doublewords
+       & allowing for query flag)}
+      IF fixed rs (s, frs) THEN
+         sub USING RIR(sp, ((((frs+63) OVER 64) *8) +8), sp)
+      ELSE
+         add USING RIR(tempreg1, 63, tempreg1);
+         sra USING RIR(tempreg1, 6, tempreg1);
+         sll USING RIR(tempreg1, 3, tempreg1);
+         add USING RIR(tempreg1, 8, tempreg1);
+         sub USING RRR(sp, tempreg1, sp)
+      FI;
+      {save pointer to resultspace *in a register NOT used in input pushing*}
+      add USING RIR(sp, ms_tos, tempreg2);
+
+      { Allow 3 C parameters to describe each AM location}
+      start new params ((UPB in param type * 3) +2);
+
+      {generate code to push the input parameters}
+      FOR j TO UPB in param type DO
+         ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+      {push the result & workspace pointers}
+      or USING RRR(tempreg2, g0, param reg);
+      pass new param;
+
+      or USING RRR(tempreg4, g0, param reg);
+      pass new param;
+
+      {call the biop}
+      ma mov ir (addr OF OOLROUTINE(biop), r15);
+      jmpl USING RRR(r15, r0, r15);
+      nop USING IR(0, g0);
+
+      {restore saved registers}
+      ld USING RIR(fp, -20, g3);
+      ld USING RIR(fp, -16, g2);
+      ld USING RIR(fp, -12, g1);
+
+      {get the size of the result while AM parameters still exist}
+      BOOL rs is known  = fixed rs (s, frs);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      {push bit-string}
+      IF rs is known THEN
+         s PUSHNEWSTACKLOCATION frs
+      ELSE
+         PUSHNEWUNKNOWNSTACKLOCATION s;
+         st USING (s SIZEOPERANDS tos)
+      FI;
+
+
+      remove parameters ((UPB in param type *3) +2);
+
+      {push query flag}
+      s PUSHNEWSTACKLOCATION 32;
+      ld USING RIR(sp, ms_tos, s RDEST tos);
+
+      {copy ((frs+31) OVER 32) longwords from top
+       of machine stack to 2nd AM stack location}
+
+      IF rs is known ANDTH frs <= 32 THEN
+          {small stack location}
+          ld USING RIR(sp, ms_tos+4, s RDEST tos1)
+      ELSE
+         {large or unknown stack location}
+         IF rs is known THEN
+            ma mov ir(((frs+31) OVER 32)*4, tempreg1)
+         ELSE
+            add USING RIR(tempreg1, 31, tempreg1);
+            sra USING RIR(tempreg1, 5, tempreg1);
+            sll USING RIR(tempreg1, 2, tempreg1)
+         FI;
+         add USING RIR(sp, ms_tos, tempreg3);
+         ld USING RRR(tempreg3, tempreg1, tempreg2);
+         MACHINEOFFSET loop = location;
+         subcc USING RIR(tempreg1, 4, tempreg1);
+         st USING RRR(s RDEST tos1, tempreg1, tempreg2);
+         b/ne_a USING loop;
+         ld USING RRR(tempreg3, tempreg1, tempreg2)
+      FI;
+
+      {restore the stack pointer}
+      ld USING RIR(fp, -8, sp)
+
+   END;
+
+
+{-----------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns two-valued  }
+{-----------------------------------------------------------------------------}
+PROC oolbiop tv = (REF STACKALLOCATOR s,
+                   SPACEPROC fixed ws,
+                   PROC VOID biop,
+                   []INT in param type)VOID:
+
+   BEGIN
+      INT fws;
+
+      {save stack pointer & imporant global registers relative to
+       the frame pointer. We cannot use fp -4 as this may be in use
+       by the code generator (This location is used as a scratch pad
+       for storing the dynamic memory pointer across a call)}
+
+      or USING RRR(sp, g0, tempreg1);
+
+      {We are going to use the location at sp - ms_tos as our
+       logical top of stack, so we add ms_tos to the sp to
+       ensure that there is enough space in the current stack frame.
+       We also need to ensure that the sp is doubleword aligned}
+      add USING RIR(sp, -ms_tos-(5*4), sp);
+      st USING RIR(fp, -8, tempreg1);
+      st USING RIR(fp, -12, g1);
+      st USING RIR(fp, -16, g2);
+      st USING RIR(fp, -20, g3);
+
+      {allocate the required workspace, ensuring that sp is doubleword aligned}
+      IF fixed ws (s, fws) THEN
+         sub USING RIR(sp, ((fws+7)OVER 8)* 8, sp)
+      ELSE
+         add USING RIR(tempreg1, 7, tempreg1);
+         sra USING RIR(tempreg1, 3, tempreg1);
+         sll USING RIR(tempreg1, 3, tempreg1);
+         sub USING RRR(sp, tempreg1, sp)
+      FI;
+      {save pointer to workspace *in a register which is NOT used
+       in result space calculations or input pushing*}
+      {save pointer to workspace}
+      add USING RIR(sp, ms_tos, tempreg4);
+
+
+      {allocate the required result space, leaving sp doubleword aligned}
+      sub USING RIR(sp, 8, sp);
+
+      {save pointer to resultspace *in a register NOT used in input pushing*}
+      add USING RIR(sp, ms_tos, tempreg2);
+
+      { Allow 3 C parameters to describe each AM location}
+      start new params ((UPB in param type *3) +2);
+
+      {generate code to push the input parameters}
+      FOR j TO UPB in param type DO
+         ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+      {push the result & workspace pointers}
+      or USING RRR(tempreg2, g0, param reg);
+      pass new param;
+
+      or USING RRR(tempreg4, g0, param reg);
+      pass new param;
+
+      {call the biop}
+      ma mov ir (addr OF OOLROUTINE(biop), r15);
+      jmpl USING RRR(r15, r0, r15);
+      nop USING IR(0, g0);
+
+
+      {restore saved registers}
+      ld USING RIR(fp, -20, g3);
+      ld USING RIR(fp, -16, g2);
+      ld USING RIR(fp, -12, g1);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      remove parameters ((UPB in param type *3) +2);
+
+      {push two valued}
+      s PUSHNEWSTACKLOCATION 32;
+      ld USING RIR(sp, ms_tos, s RDEST tos);
+
+      {restore the stack pointer}
+      ld USING RIR(fp, -8, sp)
+
+   END;
+{------------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns a structure  }
+{------------------------------------------------------------------------------}
+PROC oolbiop struct = (REF STACKALLOCATOR s,
+                       SPACEPROC fixed ws,
+                       PROC VOID biop,
+                       []INT in param type)VOID:
+
+   BEGIN
+      INT fws;
+
+      {Ensure that non of the items on the abstract machine stack are
+       dependant upon the memory we are going to write to}
+      FORCEINDEPMEM s;
+
+      {save stack pointer & imporant global registers relative to
+       the frame pointer. We cannot use fp -4 as this may be in use
+       by the code generator (This location is used as a scratch pad
+       for storing the dynamic memory pointer across a call)}
+
+      or USING RRR(sp, g0, tempreg1);
+
+      {We are going to use the location at sp - ms_tos as our
+       logical top of stack, so we add ms_tos to the sp to
+       ensure that there is enough space in the current stack frame.
+       We also need to ensure that the sp is doubleword aligned}
+      add USING RIR(sp, -ms_tos-(5*4), sp);
+      st USING RIR(fp, -8, tempreg1);
+      st USING RIR(fp, -12, g1);
+      st USING RIR(fp, -16, g2);
+      st USING RIR(fp, -20, g3);
+
+      {allocate the required workspace, ensuring that sp is doubleword aligned}
+      IF fixed ws (s, fws) THEN
+         sub USING RIR(sp, ((fws+7)OVER 8)* 8, sp)
+      ELSE
+         add USING RIR(tempreg1, 7, tempreg1);
+         sra USING RIR(tempreg1, 3, tempreg1);
+         sll USING RIR(tempreg1, 3, tempreg1);
+         sub USING RRR(sp, tempreg1, sp)
+      FI;
+      {save pointer to resultspace *in a register NOT used in input pushing*}
+      add USING RIR(sp, ms_tos, tempreg2);
+
+
+      { Allow 3 C parameters to describe each AM location}
+      start new params ((UPB in param type *3) +2);
+
+      {generate code to push the input parameters}
+      FOR j TO UPB in param type DO
+         ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+      {no result space on real stack, result pointer will appear
+       by virtue of input parameter, "r".}
+
+      {push the workspace pointer}
+      or USING RRR(tempreg2, g0, param reg);
+      pass new param;
+      {call the biop}
+
+      ma mov ir (addr OF OOLROUTINE(biop), r15);
+      jmpl USING RRR(r15, r0, r15);
+      nop USING IR(0, g0);
+
+      {restore saved registers}
+      ld USING RIR(fp, -20, g3);
+      ld USING RIR(fp, -16, g2);
+      ld USING RIR(fp, -12, g1);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      {restore stack pointer}
+      ld USING RIR(fp, -8, sp)
+
+   END;
+
+
+{------------------------------------------------------------------------------}
+{ A set of routines generate code for in-line biops                            }
+{------------------------------------------------------------------------------}
+PROC tvxtv and_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal logical AND upon two two-valued items. (guaranteed small) }
+   CASE ASSOCDYOP ams IN
+   (RRR rrr):
+      BEGIN
+         and USING RRR(rs1 OF rrr, rs2 OF rrr, tempreg1);
+         or USING rrr;
+         and USING RIR(rd OF rrr, 1, rd OF rrr);
+         or USING RRR(tempreg1, rd OF rrr, rd OF rrr);
+         POP ams
+      END,
+   (RIR rir):
+      BEGIN
+         and USING RIR(rs1 OF rir, imm OF rir, tempreg1);
+         or USING rir;
+         and USING RIR(rd OF rir, 1, rd OF rir);
+         or USING RRR(tempreg1, rd OF rir, rd OF rir);
+         POP ams
+      END
+   ESAC;
+
+PROC tvxtv or_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal logical OR upon two two-valued items. (guaranteed small) }
+   CASE ASSOCDYOP ams IN
+   (RRR rrr):
+      BEGIN
+         and USING RRR(rs1 OF rrr, rs2 OF rrr, tempreg1);
+         or USING rrr;
+         and USING RIR(rd OF rrr, 2, rd OF rrr);
+         or USING RRR(tempreg1, rd OF rrr, rd OF rrr);
+         POP ams
+      END,
+   (RIR rir):
+      BEGIN
+         and USING RIR(rs1 OF rir, imm OF rir, tempreg1);
+         or USING rir;
+         and USING RIR(rd OF rir, 2, rd OF rir);
+         or USING RRR(tempreg1, rd OF rir, rd OF rir);
+         POP ams
+      END
+   ESAC;
+
+
+PROC tvxtv not_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal ones complement upon a two-valued item. (guaranteed small) }
+   CASE MONOP ams IN
+   (RRR rrr):
+      BEGIN
+          or USING RIR(g0, 3, tempreg1);
+          sub USING RRR(tempreg1, rs2 OF rrr, tempreg1);
+          subcc USING rrr;
+          subx USING RRR(rd OF rrr, rd OF rrr, rd OF rrr);
+          and USING RRR(tempreg1, rd OF rrr, rd OF rrr)
+      END,
+   (RIR rir):
+      BEGIN
+          or USING RIR(g0, 3, tempreg1);
+          sub USING RIR(tempreg1, imm OF rir, tempreg1);
+          subcc USING rir;
+          subx USING RRR(rd OF rir, rd OF rir, rd OF rir);
+          and USING RRR(tempreg1, rd OF rir, rd OF rir)
+      END
+   ESAC;
+
+
+
+PROC eixei relation = (REF STACKALLOCATOR ams, BITS rel) VOID:
+{ 'rel' relation upon two ELLA integers items. (guaranteed small) }
+   BEGIN
+      STACKNUMBER q_x  = tos;
+      STACKNUMBER ei_x = tos+1;
+      STACKNUMBER q_y  = tos+2;
+      STACKNUMBER ei_y = tos+3;
+      ams TRANSMUTESMALL ei_y;
+      ams TRANSMUTESMALL q_y;
+      ams TRANSMUTESMALL ei_x;
+      ams TRANSMUTESMALL q_x;
+
+      and USING RRR(ams RSOURCE q_x, ams RSOURCE q_y, tempreg1);
+      sub USING RRR(g0, tempreg1, tempreg1);
+      {tempreg1 = if either query flag was 0 THEN 0 ELSE -1 FI}
+
+      subcc USING RRR(ams RSOURCE ei_x, ams RSOURCE ei_y, g0);
+      b/(rel OR n_a) USING (location+12);
+      or USING RIR(g0, 2, ams RDEST ei_y);
+      or USING RIR(g0, 1, ams RDEST ei_y);
+      {result is 1 (false) or 2 (true) }
+
+      and USING RRR(tempreg1, ams RDEST ei_y, ams RDEST ei_y);
+      {result is 1, 2 or  0 if either input was 0 }
+
+      POP ams; POP ams; POP ams
+   END;
+
+
+PROC eexee relation = (REF STACKALLOCATOR ams, BITS rel) VOID:
+{  'rel' relation upon two enumerated or char items. (guaranteed small) }
+   BEGIN
+      ams TRANSMUTESMALL tos;
+      ams TRANSMUTESMALL tos1;
+
+      {tempreg1 := IF oprnd[1] = 0 THEN 0 ELSE -1 FI; }
+      subcc USING RRR(g0, ams RSOURCE tos, tempreg1);
+      subx USING RRR(tempreg1, tempreg1, tempreg1);
+
+      {tempreg2 := IF oprnd[2] = 0 THEN 0 ELSE -1 FI; }
+      subcc USING RRR(g0, ams RSOURCE tos1, tempreg2);
+      subx USING RRR(tempreg2, tempreg2, tempreg2);
+
+      and USING RRR(tempreg1, tempreg2, tempreg1);
+
+      subcc USING RRR(ams RSOURCE tos, ams RSOURCE tos1, g0);
+      b/(rel OR n_a) USING (location+12);
+      or USING RIR(g0, 2, ams RDEST tos1);
+      or USING RIR(g0, 1, ams RDEST tos1);
+      {result is 1 (false) or 2 (true) }
+
+      and USING RRR(tempreg1, ams RDEST tos1, ams RDEST tos1);
+      {result is 1, 2 or  0 if either input was 0 }
+
+      POP ams
+   END;
+
+
+{------------------------------------------------------------------------------}
+{ A set of optimising biop routines                                            }
+{------------------------------------------------------------------------------}
+{ Each routine takes a procedure which determines whether to optimise,
+  an optimise action and a default action. }
+
+PROC opt biop bs x bs bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE location_stack OF s TYPEOF (tos + 3) IN
+         (SMALLSTACKLOCATION):
+            IF optimise (s) THEN
+              {query action}
+              and USING RRR(s RSOURCE tos, s RSOURCE (tos+2), s RDEST (tos+2));
+              optimise action (s);
+
+               POP s; POP s
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         IF optimise (s) THEN
+            s FORCELOAD tos;
+            { Query action is simply to return the same query value }
+
+            optimise action (s)
+         ELSE
+            default action (s)
+         FI
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs i bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs i }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE location_stack OF s STATEOF (tos + 2) IN
+         (CONST):
+            IF optimise (s) THEN
+               optimise action (s)
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs x bs tv = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE location_stack OF s TYPEOF (tos + 3) IN
+         (SMALLSTACKLOCATION):
+            IF optimise (s) THEN
+               optimise action (s)
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC always optimise = (REF STACKALLOCATOR s) BOOL: TRUE;
+
+{======================================================================}
+MODE BACTION
+{---------------------------------------}
+{ A routine to generate required code for BIOP }
+   = PROC (REF STACKALLOCATOR)VOID;
+
+   REF BACTION nilpaction = NIL;
+
+{ Short hands for often used identifiers }
+
+   MODE SA = STACKALLOCATOR;
+
+   STACKNUMBER
+      tos2 = tos+2,
+      tos3 = tos+3;
+
+{======================================================================}
+MODE BIOPACTION
+{---------------------------------------}
+{ A biop name and associated code generation routine }
+   = STRUCT (LABEL biopname, REF BACTION biop_action);
+
+{======================================================================}
+MODE BIOPACTIONLIST
+{---------------------------------------}
+{ A list of biops and associated actions }
+   = REF [] BIOPACTION;
+
+   PROC biopactionlist = BIOPACTIONLIST:
+   {---------------------------------------}
+      HEAP [77] BIOPACTION :=
+      (
+       (label("EQ|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, eq)
+       ),
+       (label("GT|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, g)
+       ),
+       (label("GE|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, ge)
+       ),
+       (label("LT|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, l)
+       ),
+       (label("LE|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, le)
+       ),
+       (label("EQ|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, eq)
+       ),
+       (label("GT|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, gu)
+       ),
+       (label("GE|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, geu)
+       ),
+       (label("LT|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, lu)
+       ),
+       (label("LE|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, leu)
+       ),
+       (label("TRANSFORM_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_us_1, (q, bs, i, i, r))
+       ),
+       (label("TRANSFORM_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_s_1, (q, bs, i, i, r))
+       ),
+       (label("TRANSFORM_US|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_us_2, (q, ei , i, r))
+       ),
+       (label("TRANSFORM_S|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_s_2, (q, ei , i, r))
+       ),
+       (label("AND|2"), HEAP BACTION := (REF SA ams)VOID:
+              tvxtv and_2 (ams)
+       ),
+       (label("OR|2"), HEAP BACTION := (REF SA ams)VOID:
+              tvxtv or_2 (ams)
+       ),
+       (label("NOT|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+              tvxtv not_2 (ams)
+       ),
+       (label("XOR|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, ne) { xor = ne }
+       ),
+       (label("SL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    or USING RRR(s RSOURCE tos1, g0, s RDEST tos2);
+                    location_stack OF s CHANGESIZEOF (tos2 GIVENN i);
+                    location_stack OF s CHANGESTATEOF (tos2 GIVEN inregister(FALSE));
+                    or USING RRR(s RSOURCE tos, g0, s RDEST tos1);
+                    location_stack OF s CHANGESIZEOF (tos1 GIVENN 32);
+                    location_stack OF s CHANGESTATEOF (tos1 GIVEN inregister(FALSE));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sl_1, (q, bs, i))
+                )
+       ),
+       (label("SR_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    or USING RRR(s RSOURCE tos1, g0, s RDEST tos2);
+                    srl USING RIR(s RDEST tos2,
+                          (i-(location_stack OF s SIZEOF tos1)), s RDEST tos2);
+                    location_stack OF s CHANGESIZEOF (tos2 GIVENN i);
+                    location_stack OF s CHANGESTATEOF (tos2 GIVEN inregister(FALSE));
+                    or USING RRR(s RSOURCE tos, g0, s RDEST tos1);
+                    location_stack OF s CHANGESIZEOF (tos1 GIVENN 32);
+                    location_stack OF s CHANGESTATEOF (tos1 GIVEN inregister(FALSE));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sr_us_1, (q, bs, i))
+                )
+       ),
+       (label("SR_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    or USING RRR(s RSOURCE tos1, g0, s RDEST tos2);
+                    sra USING RIR(s RDEST tos2,
+                          (i-(location_stack OF s SIZEOF tos1)), s RDEST tos2);
+                    location_stack OF s CHANGESIZEOF (tos2 GIVENN i);
+                    location_stack OF s CHANGESTATEOF (tos2 GIVEN inregister(FALSE));
+                    or USING RRR(s RSOURCE tos, g0, s RDEST tos1);
+                    location_stack OF s CHANGESIZEOF (tos1 GIVENN 32);
+                    location_stack OF s CHANGESTATEOF (tos1 GIVEN inregister(FALSE));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sr_s_1, (q, bs, i))
+                )
+       ),
+       (label("PLUS_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOU tos1; s STOU tos3;
+                    add USING RRR(s RSOURCE tos1,s RSOURCE tos3, s RDEST tos3);
+                    s UTOS (tos3 GIVENN i)),
+                (REF SA s) VOID:
+                    oolbiop bs (s, plus ws, plus rs, plus_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("MINUS_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOU tos1; s STOU tos3;
+                    sub USING RRR(s RSOURCE tos1,s RSOURCE tos3, s RDEST tos3);
+                    s UTOS (tos3 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, plus ws, plus rs, minus_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NEGATE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; negate rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; negate rs (s,i); s STOU tos1;
+                    sub USING RRR(g0, s RSOURCE tos1, s RDEST tos1);
+                    s ITOS (tos1 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs(ams, negate ws, negate rs,
+                     negate_us_1, (q, bs))
+                )
+       ),
+       (label("TIMES_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+                   oolbiop bs (ams, times ws, times rs,
+                         times_us_1, (q, bs, q, bs))
+       ),
+       (label("DIVIDE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, divide ws,
+                              divide_us_1, (q, bs, q, bs, r))
+       ),
+       (label("MOD_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, mod ws,
+                              mod_us_1, (q, bs, q, bs, r))
+       ),
+       (label("RANGE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             range_us_1, (q, bs, i, r))
+       ),
+       (label("PLUS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOI tos1; s STOI tos3;
+                    add USING RRR(s RSOURCE tos1, s RSOURCE tos3,s RDEST tos3);
+                    s ITOS (tos3 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, plus ws, plus rs,
+                      plus_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("MINUS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOI tos1; s STOI tos3;
+                    sub USING RRR(s RSOURCE tos1,s RSOURCE tos3, s RDEST tos3);
+                    s ITOS (tos3 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, plus ws, plus rs, minus_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NEGATE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; negate rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; negate rs (s,i); s STOI tos1;
+                    sub USING RRR(g0, s RSOURCE tos1, s RDEST tos1);
+                    s ITOS (tos1 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs(ams, negate ws, negate rs,
+                     negate_s_1, (q, bs))
+                )
+       ),
+       (label("ABS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; bs logical rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   (INT i; bs logical rs (s,i); s STOI tos1;
+                    subcc USING RRR(g0, s RSOURCE tos1, tempreg1);
+                    MACHINELABEL over;
+                    bd/neg_a USING over;
+                    or USING RRR(tempreg1, g0, s RDEST tos1);
+                    fix machine label (over);
+                    s UTOS (tos1 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, bs logical ws, bs logical rs,
+                      abs_s_1, (q, bs))
+                )
+       ),
+       (label("TIMES_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+                  oolbiop bs (ams, times ws, times rs,
+                              times_s_1, (q, bs, q, bs))
+       ),
+       (label("DIVIDE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, divide ws,
+                              divide_s_1, (q, bs, q, bs, r))
+       ),
+       (label("SQRT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop bs (ams, sqrt ws, sqrt rs,
+                              sqrt_us_1, (q, bs ))
+       ),
+       (label("MOD_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, mod ws,
+                              mod_s_1, (q, bs, q, bs, r))
+       ),
+       (label("RANGE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             range_s_1, (q, bs, i, r))
+       ),
+       (label("EQ_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, eq)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      eq_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, gu)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      gt_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, geu)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      ge_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, lu)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      lt_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, leu)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      le_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("EQ_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, eq)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      eq_s_1, (q, bs, q, bs))
+             )
+       ),
+       (label("GT_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, g)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      gt_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, ge)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      ge_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LT_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, l)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      lt_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, le)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      le_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("CONVERT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_1 ws,
+                             convert_us_1, (q, bs, i, r))
+       ),
+       (label("CONVERT_US|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_2 ws,
+                             convert_us_2, (q, ds, i, r))
+       ),
+       (label("AND|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (and USING RRR(s RSOURCE tos1, s RSOURCE tos3,s RDEST tos3)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (s, bsxbs logical ws, bsxbs logical rs,
+                      and_1, (q, bs, q, bs))
+                )
+       ),
+       (label("OR|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (or USING RRR(s RSOURCE tos1, s RSOURCE tos3,s RDEST tos3)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, bsxbs logical ws, bsxbs logical rs,
+                      or_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NOT|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; not rs (s,i); i <= 32),
+                (REF SA s) VOID:
+                   { the strange order is to ensure lsbs are all zero }
+                   (xnor USING RRR(g0, s RSOURCE tos1,s RDEST tos1);
+                    INT i; not rs (s,i); s STOU tos1;
+                    s UTOS (tos1 GIVENN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, not rs,
+                      not_1, (q, bs))
+                )
+       ),
+       (label("XOR|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (xor USING RRR(s RSOURCE tos1, s RSOURCE tos3, s RDEST tos3)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, bsxbs logical ws, bsxbs logical rs,
+                      xor_1, (q, bs, q, bs))
+                )
+       ),
+       (label("CONVERT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_real_1 ws,
+                             convert_real_1, (q, bs, q, bs, i, i, r))
+       ),
+       (label("CONVERT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_real_2 ws,
+                             convert_real_2, (q, ds, q, bs, i, i, r))
+       ),
+       (label("F_TO_R|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             f_to_r_1, (q, ds, r))
+       ),
+       (label("F_TO_R|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             f_to_r_2, (q, ds, r))
+       ),
+       (label("R_TO_F|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             r_to_f_1, (q, sr, i, r))
+       ),
+       (label("R_TO_F|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             r_to_f_2, (q, lr, i, r))
+       ),
+       (label("PLUS_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             plus_real_1, (q, sr, q, sr, r))
+       ),
+       (label("PLUS_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             plus_real_2, (q, lr, q, lr, r))
+       ),
+       (label("MINUS_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             minus_real_1, (q, sr, q, sr, r))
+       ),
+       (label("MINUS_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             minus_real_2, (q, lr, q, lr, r))
+       ),
+       (label("NEGATE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             negate_real_1, (q, sr, r))
+       ),
+       (label("NEGATE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             negate_real_2, (q, lr, r))
+       ),
+       (label("TIMES_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             times_real_1, (q, sr, q, sr, r))
+       ),
+       (label("TIMES_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             times_real_2, (q, lr, q, lr, r))
+       ),
+       (label("DIVIDE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             divide_real_1, (q, sr, q, sr, r))
+       ),
+       (label("DIVIDE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             divide_real_2, (q, lr, q, lr, r))
+       ),
+       (label("EQ_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             eq_real_1, (q, sr, q, sr))
+       ),
+       (label("EQ_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             eq_real_2, (q, lr, q, lr))
+       ),
+       (label("GT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             gt_real_1, (q, sr, q, sr))
+       ),
+       (label("GT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             gt_real_2, (q, lr, q, lr))
+       ),
+       (label("LT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             lt_real_1, (q, sr, q, sr))
+       ),
+       (label("LT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             lt_real_2, (q, lr, q, lr))
+       ),
+       (label("CHANGE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             change_real_1, (q, sr, r))
+       ),
+       (label("CHANGE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             change_real_2, (q, lr, r))
+       )
+      );
+
+   PROC generate biop = (BIOPACTIONLIST bal,
+                         LABEL l,
+                         REF STACKALLOCATOR ams) BOOL:
+   {---------------------------------------}
+   { invokes action procedure associated with label (returns true),
+     or return false }
+      BEGIN
+         BOOL found := FALSE;
+
+         FOR i TO UPB bal WHILE NOT found DO
+         IF tag OF biopname OF (bal[i]) = tag OF l THEN
+            found := TRUE;
+            (biop_action OF (bal[i]))(ams)
+         FI OD;
+         found
+      END;
+
+{---------------------------------------}
+BIOPACTIONLIST bal;
+
+{---------------------------------------}
+PROC kecodegenbiopif init = VOID:
+   bal := biopactionlist;
+
+{---------------------------------------}
+PROC generate call biop = (REF STACKALLOCATOR ams, LABEL l) BOOL:
+      generate biop (bal, l, ams)
+
+
+KEEP kecodegenbiopif init, generate call biop
+FINISH

@@ -1,0 +1,1073 @@
+DECS  kemassemsparc  CONTEXT VOID  USE  putstrings,  osinterface,  basics,
+      kesave:
+
+{ "  Id: kemassemsparc.sta,v 1.1 91/10/14 14:29:49 edcad Exp $ " }
+configinfo A68CONFIG "$Id: kemassemsparc.a68,v 34.2 1995/03/29 13:04:52 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+30:01:89  New module created for SPARC. MDR.
+03:05:89  Temporary definition of t_int_overflow removed. BGH
+19:05:89  Make absolute forward branches & calls allow for any
+              automatically inserted no-ops. MDR. R4B337.
+23:05:59  Fixed ma {add,mov} rir. R4B344. MDR.
+28:05:89  Made div & mul linkage relocatable. R4B345. MDR.
+30:05:89  Removed branches to mul & div. R4B348. MDR.
+05:06:89  Replaced mul & div call mechanism with absolute jumps.
+              R4B347. MDR.
+11:12:89  Corrected fix machine label error. R4B563. MDR.
+13:08:93  Updated for new Ctrans.  AAP
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{                            SPARC Machine Assembler                       }
+{--------------------------------------------------------------------------}
+{ Interesting features :-
+  Control transfer optimisations-
+
+  Backward branches are optimised by attempting to copy the instruction at
+  the target addess into the branch's delay slot, and adjusting the branch
+  offset accordingly.
+
+  Forward branches which use the labeling mechanism are optimised by
+  assuming that we will be able to fill the branch delay slot when we generate
+  the next instruction. The label fixing mechanism back-patches the branch
+  offset in the usual way, but adjusts the branch offset to branch over the
+  next instruction to be assembled, ie add 4 to the offset. The address of
+  the delay instruction for that branch is added to a 'delay' list.
+  The next instruction to be assembled is copied to all locations in the
+  delay list, and assembled at the current end of the code array as normal. If
+  this instruction is a control transfer however, a nop is assembled at the
+  current location and the control transfer directly afterwards. The delay
+  list is then disguarded.
+
+  Absolute forward control transfers have to be adjusted when the they are the
+  destination of another control transfer, ie they follow a label,
+  due to the nop being inserted as described above.
+
+  Two pseudo instruction types are provided to implement the above
+  optimisations, ie 'calld' and 'bd'. Call and branch instructions may be
+  assembled without this automatic optimisation using the 'call' and 'b'
+  instructions.
+
+   Examples of use
+   ---------------
+   kemassem                          SPARC assembler equivalent
+   ----------                        ---------------
+   addcc USING RRR(g1, g2, g3);  ==  addcc %g1, %g2, %g3
+   b/ne USING 8;                 ==  bne 0x8
+   b/ne_a USING 8;               ==  bne,a 0x8
+
+   ldd USING RIR(g1, 24, g3);    ==  ldd [%g1+24], %g3
+}
+
+
+{ Local declarations. }
+
+   FLTPROC  faultproc:= abort;
+
+   PROC display = (VECTOR [] CHAR message) VOID:
+        put(screen, (message, newline));
+
+   PROC  sim fault = (VECTOR [] CHAR message) VOID:
+   BEGIN
+      sys fault("******   SIMULATOR ERROR " + message + "   ******")
+   END;
+
+
+   OP ASSERT = (VECTOR [] CHAR description, BOOL assertion) VOID:
+   BEGIN
+      IF NOT assertion
+      THEN
+         sim fault ("ASSERT: " + description)
+      FI
+   END;
+
+
+{--------------------------------------------------------------------------}
+{ Code Area }
+
+   REF VECTOR [] CHAR  code:= HEAP VECTOR [0] CHAR;
+                 {{{  UPB = 0 is flag that virtual memory is not held  }}}
+
+   INT initsize = 65536;
+
+   PROC  get_vec_chars = (INT  size) REF VECTOR [] CHAR:
+   BEGIN
+      IF (size MOD 4) /= 0
+      THEN  sys fault("get_vec_chars:  NOT multiple of 4")
+      FI;
+      REF VECTOR [] CHAR array = { get_vm(size OVER 4, faultproc) }
+                                HEAP VECTOR [size] CHAR;
+      { RVITORVC } array
+   END;
+
+   PROC  free_vec_chars = (REF REF VECTOR [] CHAR  array) VOID:
+   BEGIN
+      array:= NIL  { free_vm( RRVCTORRVI array, faultproc) }
+   END;
+
+   PROC create code area = VOID:
+   BEGIN
+      IF UPB code > 0 THEN  free_vec_chars(code)  FI;
+      code := get_vec_chars(initsize)
+   END;
+
+
+   PROC extend code area = VOID:
+   BEGIN
+      INT  upb = UPB code,  new upb = upb * 2;
+      put(screen, ("Extending code area from ", upb, " to ", new upb, newline));
+      REF VECTOR [] CHAR new code = get_vec_chars(new upb);
+      new code [ : upb] := code;
+      free_vec_chars(code);
+      code := new code
+   END;
+
+   PROC set code access = VOID:
+   BEGIN
+      {
+         This procedure should grant execute access to the code array.  It
+         should use an operating system interface to do this but as the
+         operation is null in all cases met so far no-one has got round to
+         writing this interface
+      }
+      SKIP
+   END;
+
+   { Code area accessing }
+   { =================== }
+
+   INT location := 1;
+
+   PROC ma code ref = (INT location) REF CHAR:
+   BEGIN
+      code [location]
+   END;
+
+   PROC ma code size = INT:
+   BEGIN
+      location
+   END;
+
+   PROC assemble 8bits at = (BITS byte, INT location) VOID:
+   BEGIN
+      code [location]   := REPR ABS (byte        AND 16rff)
+   END;
+
+   PROC assemble 16bits at = (BITS word, INT location) VOID:
+   BEGIN
+      code [location]   := REPR ABS (word SHR 8  AND 16rff);
+      code [location+1] := REPR ABS (word        AND 16rff)
+   END;
+
+   PROC assemble 8bits = (BITS byte) VOID:
+   BEGIN
+      WHILE location > UPB code DO extend code area OD;
+      assemble 8bits at(byte, location);
+      location +:= 1
+   END;
+
+   PROC assemble 16bits = (BITS word) VOID:
+   BEGIN
+      WHILE location + 1 > UPB code DO extend code area OD;
+      assemble 16bits at(word, location);
+      location +:= 2
+   END;
+
+   PROC assemble 16bits array = ([]BITS array) VOID:
+   BEGIN
+      FOR i TO UPB array DO assemble 16bits(array[i]) OD
+   END;
+
+   PROC assemble 32bits = (BITS word) VOID:
+   BEGIN
+      assemble 16bits (word SHR 16 AND 16rffff);
+      assemble 16bits (word AND 16rffff)
+   END;
+
+   PROC assemble 32bits at = (BITS word, INT location) VOID:
+   BEGIN
+      assemble 16bits at (word SHR 16 AND 16rffff, location);
+      assemble 16bits at (word AND 16rffff, location + 2)
+   END;
+
+   PROC dissassemble 16bits at = (INT location) BITS:
+     ((BIN ABS code[location]) SHL 8) OR BIN ABS code[location+1];
+
+   PROC set code index = (REF INT index) VOID:
+   BEGIN
+      { Sets 'index' so that it can be used (eg in 'code ref') to refer
+        to the next code address to be used. }
+      index := location
+   END;
+
+   PROC list code = (RCH  out) VOID :
+      CO write code[1:location-1] in DEBUG format CO
+   BEGIN
+      INT bytes per line = 32,
+          nbytes = location - 1;
+      INT nlines = nbytes % bytes per line,
+          bytes in last = nbytes MOD bytes per line;
+      INT ptr := 1;
+
+      OP A = (REF CHAR c) REF VECTOR [] CHAR :
+      BEGIN
+         OP(REF CHAR)BITS ADDR = BIOP 99;
+         HEAP VECTOR [8] CHAR ad := hexchars(ADDR c);
+         ad
+      END;
+
+      OP B = (CHAR c) REF VECTOR [] CHAR :
+      BEGIN
+         HEAP VECTOR [2] CHAR b := hexchars(c);
+         b
+      END;
+
+      TO nlines
+      DO
+         put (out, ("!", A code[ptr], ":  "));
+         FOR k FROM ptr + bytes per line - 1 BY -1 TO ptr
+         DO
+            put (out, B code[k])
+         OD;
+         newline (out);
+         ptr +:= bytes per line
+      OD;
+      IF bytes in last > 0
+      THEN
+         put (out, ("!", A code[ptr], ":  "));
+         FOR k FROM ptr + bytes in last - 1 BY -1 TO ptr
+         DO
+            put (out, B code[k])
+         OD;
+         newline (out)
+      FI
+   END;
+
+{-------------------------------------------------------------------------}
+{ Machine Assembler }
+
+   MODE MACHINEOFFSET = INT;
+
+   MACHINEOFFSET nullmachineoffset = -1;
+
+   { `del list' is used to keep track of the set of delay instruction
+      locations which may be back-patched as a result of fixing a number
+      of forward branch labels }
+   [50]MACHINEOFFSET del list;
+   INT top del list := 0;
+
+   PROC ma initialise = (FLTPROC flt) VOID:
+   { Overall initialisation for machine assembler. }
+      BEGIN
+         faultproc := flt;
+         create code area;
+         location := 1
+      END;
+
+   PROC ma change flt = (FLTPROC flt) VOID:
+   { Change fault procedure. }
+      BEGIN
+         faultproc := flt
+      END;
+
+   PROC ma save state = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryout) VOID:
+   { Save state of code array }
+      BEGIN
+         { If the delay instruction list contains any back-patch offsets,
+           the branch offsets which were just back-patched will have been
+           adjusted by 1 instruction length, so we need to produce an
+           instruction for them to reference.}
+         IF top del list /= 0 THEN
+            assemble 32bits (16r01000000); {sethi 0, %g0 -- ie nop}
+            top del list :=0
+         FI;
+         write int (location, ferryout, faultproc);
+         write int (UPB code, ferryout, faultproc);
+         ferryout (code, faultproc)
+      END;
+
+   PROC ma restore state = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryin)
+                                                                           VOID:
+   { Restore state of code array }
+      BEGIN
+         IF UPB code > 0 THEN free_vec_chars(code) FI;
+         location := read int (ferryin, faultproc);
+         INT size = read int (ferryin, faultproc);
+         code := get_vec_chars (size);
+         ferryin (code, faultproc)
+      END;
+
+   PROC VOID ma executable = set code access;
+
+
+{ Limits for immediate operands }
+BITS
+     mask13 = 16r1fff,
+     mask22 = 16r3fffff,
+     mask30 = 16r3fffffff;
+INT
+   max imm13 = ABS 16rfff,
+   min imm13 = -1 - max imm13,
+   max imm22 = ABS 16r1fffff,
+   min imm22 = -1 - max imm22,
+   max imm30 = ABS 16r1fffffff,
+   min imm30 = -1 - max imm30;
+
+{
+   This mode is used for the labelling mechanism, it describes the location
+   which must be back-patched when the label is fixed.  'size' represents
+   the length (in bits) of the offset to be back-patched, it will have a
+   value of either 22 (for branches) or 30 (for calls).  The 'can optimise'
+   field is used to indicate that the machine assembler is free to fill in the
+   'delay' instruction which follows the call being back-patched.
+}
+   MODE MACHINELABEL = STRUCT (INT location, size, BOOL can optimise);
+   MACHINELABEL nullmachinelabel = (-1, -1, FALSE);
+
+   OP = = (MACHINELABEL l1, l2) BOOL:
+      (location OF l1 = location OF l2) AND (size OF l1 = size OF l2) AND
+      (can optimise OF l1 = can optimise OF l2);
+
+
+
+{
+   These modes describe the SPARC machine instruction operands.
+}
+   MODE R   = BITS,
+        I   = INT,
+        RR  = STRUCT (BITS rs1, rs2),
+        RI  = STRUCT (BITS rs1, INT imm),
+        IR  = STRUCT (INT imm, BITS rd),
+        RX  = UNION  (RR, RI),
+        RRR = STRUCT (BITS rs1, rs2, rd),
+        RIR = STRUCT (BITS rs1, INT imm, BITS rd),
+        RXR = UNION  (RRR, RIR);
+
+
+   { These modes are used to distinguish between different SPARC
+     instruction formats. MASKn is instruction format 'n' as described
+     in the SPARC architecture manual, chapter 4. Letters a-d are
+     instruction format subgroups defined here to simplify assembly.
+     The [2]CHAR field is used to distinguish between the different modes,
+     and is needed in order to allow structure identities to be written
+     later.
+   }
+
+   MODE MASK1A = STRUCT (BITS mask, [2]CHAR m1a),
+        MASK1B = STRUCT (BITS mask, [2]CHAR m1b),
+        MASK2A = STRUCT (BITS mask, [2]CHAR m2a),
+        MASK2B = STRUCT (BITS mask, [2]CHAR m2b),
+        MASK2C = STRUCT (BITS mask, [2]CHAR m2c),
+        MASK2D = STRUCT (BITS mask, [2]CHAR m2d),
+        MASK3A = STRUCT (BITS mask, [2]CHAR m3a),
+        MASK3B = STRUCT (BITS mask, [2]CHAR m3b),
+        MASK3C = STRUCT (BITS mask, [2]CHAR m3c),
+        MASK3D = STRUCT (BITS mask, [2]CHAR m3d),
+        MASK3E = STRUCT (BITS mask, [2]CHAR m3e);
+
+BITS {conditions}
+    n   = 16r0,
+    eq  = 16r1, z = eq,
+    le  = 16r2,
+    l   = 16r3,
+    leu = 16r4,
+    lu  = 16r5, cs = lu,
+    neg = 16r6,
+    vs  = 16r7,
+    a   = 16r8,
+    ne  = 16r9, nz = ne,
+    g   = 16ra,
+    ge  = 16rb,
+    gu  = 16rc,
+    geu = 16rd, cc = geu,
+    pos = 16re,
+    vc  = 16rf,
+
+    {conditions with annul bit set, for use in branch instructions only}
+    n_a   = 16r10,
+    eq_a  = 16r11, z_a = eq_a,
+    le_a  = 16r12,
+    l_a   = 16r13,
+    leu_a = 16r14,
+    lu_a  = 16r15, cs_a = lu_a,
+    neg_a = 16r16,
+    vs_a  = 16r17,
+    a_a   = 16r18,
+    ne_a  = 16r19, nz_a = ne_a,
+    g_a   = 16r1a,
+    ge_a  = 16r1b,
+    gu_a  = 16r1c,
+    geu_a = 16r1d, cc_a = geu_a,
+    pos_a = 16r1e,
+    vc_a  = 16r1f;
+
+   { Gives the inverse condition to that supplied. ie xor with 8}
+   PROC invcondition = (BITS c) BITS:
+         (c AND (NOT 16r8)) OR ((NOT c) AND 16r8);
+
+   PROC swapcondition = (BITS c) BITS:
+      IF   c = ne THEN ne
+      ELIF c = eq THEN eq
+      ELIF c = le THEN ge
+      ELIF c = l  THEN g
+      ELIF c = ge  THEN le
+      ELIF c = g  THEN l
+      ELSE simfault ("Inappropriate attempt to swap condition."); n
+      FI;
+
+   {Operations to construct instruction/condition pairs}
+   PRIO / = 3;
+   OP / = (MASK2C mask, BITS cond) STRUCT(MASK2C m, BITS cond):
+          (mask, cond);
+
+   OP / = (MASK2D mask, BITS cond) STRUCT(MASK2D m, BITS cond):
+          (mask, cond);
+
+   OP / = (MASK3B mask, BITS cond) STRUCT(MASK3B m, BITS cond):
+          (mask, cond);
+
+
+{
+   The following identities define the subset of the SPARC instruction set that
+   we are using.  This is the full set omitting:
+   -  privileged instructions
+}
+   MASK1A
+      {assemble call}
+      call      = (16r40000000, "1a");
+
+   MASK1B
+      {assemble call and delay instruction}
+      calld     = (16r40000000, "1b");
+
+   MASK2A
+      unimp     = (16r00000000, "2a");
+
+   MASK2B
+      sethi     = (16r01000000, "2b"),
+      nop       = (16r01000000, "2b"); { sethi 0, %g0 }
+
+   MASK2C
+      {Assemble conditional branch}
+      b         = (16r00800000, "2c"),
+      fb        = (16r01800000, "2c"),
+      cb        = (16r01c00000, "2c");
+
+    MASK2D
+      {Assemble conditional branch and delay instruction}
+      bd        = (16r00800000, "2d"),
+      fbd       = (16r01800000, "2d"),
+      cbd       = (16r01c00000, "2d");
+
+
+    MASK3A
+      add      = (16r80000000, "3a"),
+      and      = (16r80080000, "3a"),
+      or       = (16r80100000, "3a"),
+      xor      = (16r80180000, "3a"),
+      sub      = (16r80200000, "3a"),
+      andn     = (16r80280000, "3a"),
+      orn      = (16r80300000, "3a"),
+      xnor     = (16r80380000, "3a"),
+      addx     = (16r80400000, "3a"),
+      subx     = (16r80600000, "3a"),
+
+      addcc    = (16r80800000, "3a"),
+      andcc    = (16r80880000, "3a"),
+      orcc     = (16r80900000, "3a"),
+      xorcc    = (16r80980000, "3a"),
+      subcc    = (16r80a00000, "3a"),
+      andncc   = (16r80a80000, "3a"),
+      orncc    = (16r80b00000, "3a"),
+      xnorcc   = (16r80b80000, "3a"),
+      addxcc   = (16r80c00000, "3a"),
+      subxcc   = (16r80e00000, "3a"),
+
+      taddcc   = (16r81000000, "3a"),
+      tsubcc   = (16r81080000, "3a"),
+      taddcctv = (16r81100000, "3a"),
+      tsubcctv = (16r81180000, "3a"),
+      mulscc   = (16r81200000, "3a"),
+      sll      = (16r81280000, "3a"),
+      srl      = (16r81300000, "3a"),
+      sra      = (16r81380000, "3a"),
+      save     = (16r81e00000, "3a"),
+      restore  = (16r81e80000, "3a"),
+      ld       = (16rc0000000, "3a"),
+      ldub     = (16rc0080000, "3a"),
+      lduh     = (16rc0100000, "3a"),
+      ldd      = (16rc0180000, "3a"),
+      st       = (16rc0200000, "3a"),
+      stb      = (16rc0280000, "3a"),
+      sth      = (16rc0300000, "3a"),
+      std      = (16rc0380000, "3a"),
+      ldsb     = (16rc0480000, "3a"),
+      ldsh     = (16rc0500000, "3a"),
+      ldstub   = (16rc0680000, "3a"),
+      swap     = (16rc0780000, "3a"),
+
+      ldf      = (16rc1000000, "3a"),
+      ldfsr    = (16rc1080000, "3a"),
+      lddf     = (16rc1180000, "3a"),
+      stf      = (16rc1200000, "3a"),
+      stfsr    = (16rc1280000, "3a"),
+      stdf     = (16rc1380000, "3a"),
+      ldc      = (16rc1800000, "3a"),
+      ldcsr    = (16rc1880000, "3a"),
+      lddc     = (16rc1980000, "3a"),
+      stc      = (16rc1a00000, "3a"),
+      stcsr    = (16rc1a80000, "3a"),
+      stdc     = (16rc1b80000, "3a"),
+
+      fitos = (16r81a01880, "3a"),
+      fitod = (16r81a01900, "3a"),
+      fitox = (16r81a01980, "3a"),
+
+      fstoir = (16r81a01820, "3a"),
+      fdtoir =  (16r81a01840, "3a"),
+      fxtoir =  (16r81a01870, "3a"),
+
+      fstoi = (16r81a01a20, "3a"),
+      fdtoi = (16r81a01a40, "3a"),
+      fxtoi = (16r81a01a70, "3a"),
+
+      fstod = (16r81a01920, "3a"),
+      fstox = (16r81a019a0, "3a"),
+      fdtos = (16r81a018c0, "3a"),
+      fdtox = (16r81a019c0, "3a"),
+      fxtos = (16r81a018e0, "3a"),
+      fxtod = (16r81a01960, "3a"),
+
+      fmovs = (16r81a00020, "3a"),
+      fnegs = (16r81a000a0, "3a"),
+      fabss = (16r81a00120, "3a"),
+
+      fsqrts = (16r81a00520, "3a"),
+      fsqrtd = (16r81a00540, "3a"),
+      fsqrtx = (16r81a00560, "3a"),
+
+      fadds = (16r81a00820, "3a"),
+      faddd = (16r81a00840, "3a"),
+      faddx = (16r81a00860, "3a"),
+      fsubs = (16r81a008a0, "3a"),
+      fsubd = (16r81a008c0, "3a"),
+      fsubx = (16r81a008e0, "3a"),
+
+      fmuls = (16r81a00920, "3a"),
+      fmuld = (16r81a00940, "3a"),
+      fmulx = (16r81a00960, "3a"),
+      fdivs = (16r81a009a0, "3a"),
+      fdivd = (16r81a009c0, "3a"),
+      fdivx = (16r81a009e0, "3a"),
+
+      fcmps = (16ra1a00a20, "3a"),
+      fcmpd = (16ra1a00a40, "3a"),
+      fcmpx = (16ra1a00a60, "3a"),
+      fcmpes = (16ra1a00aa0, "3a"),
+      fcmped = (16ra1a00ac0, "3a"),
+      fcmpex = (16ra1a00ae0, "3a");
+
+   MASK3B
+      t        = (16r81d00000, "3b");
+
+   MASK3C
+      rdy      = (16r81400000, "3c");
+
+   MASK3D
+      wry      = (16r81800000, "3d"),
+      iflush   = (16r81d80000, "3d");
+
+   MASK3E
+      jmpl     = (16r81c00000, "3a");
+
+   INT t_int_overflow = 0;  { Sparc  only }
+
+
+
+   { This procedure returns the encoding of an instruction
+     at the branch target if it not a control transfer
+     instruction, else it returns a nop. ie to avoid
+     producing Delayed control transfer couples}
+   PROC delay instruction = (INT target) BITS:
+      IF target >= location OREL target <= 0 THEN
+         mask OF nop
+      ELSE
+         BITS target inst = dissassemble 16bits at (target);
+         BITS format2 = target inst AND 16rc1c0;
+         IF format2 = 16r0080 {bicc} OREL
+            format2 = 16r0180 {fbcc} OREL
+            format2 = 16r01c0 {cbcc} OREL
+            (target inst AND 16rc000) = 16r4000 {call} OREL
+            (target inst AND 16rc1f8) = 16r81c0 {jmpl}
+         THEN
+            mask OF nop
+         ELSE
+            (target inst SHL 16) OR dissassemble 16bits at (target+2)
+         FI
+      FI;
+
+
+  { Now here come the procedures used to encode the above instructions.
+    A 'USING' operator is defined in order to assemble each instruction format.
+  }
+
+  PRIO USING = 1;
+
+  {Handles: CALL}
+  OP USING = (MASK1A m, I o)VOID:
+   BEGIN
+     INT dest := o;
+     IF top del list /= 0 THEN
+        IF dest > location THEN dest +:=4 FI;
+        assemble 32bits (mask OF nop);
+        top del list :=0
+     FI;
+     assemble 32bits (mask OF m OR (BIN((dest - location)%4) AND mask30))
+   END;
+
+  OP USING = (MASK1A m, REF MACHINELABEL label)VOID:
+   BEGIN
+      size OF label := 30;
+      can optimise OF label := FALSE;
+      IF top del list /= 0 THEN
+         assemble 32bits (mask OF nop);
+         top del list :=0
+      FI;
+      location OF label := location;
+      assemble 32bits (mask OF m)
+   END;
+
+  {Handles: CALL & delay instruction}
+  OP USING = (MASK1B m, I o)VOID:
+   BEGIN
+     INT target := o;
+     IF top del list /= 0 THEN
+        IF target > location THEN target +:=4 FI;
+        assemble 32bits (mask OF nop);
+        top del list :=0
+     FI;
+     BITS del = delay instruction(target);
+     target +:= IF del = mask OF nop THEN 0 ELSE 4 FI;
+     target := (target - location) % 4;
+     BITS data = (BIN target AND mask30);
+     assemble 32bits (mask OF m OR data);
+     assemble 32bits (del)
+   END;
+
+  OP USING = (MASK1B m, REF MACHINELABEL label)VOID:
+   BEGIN
+      size OF label := 30;
+      can optimise OF label := TRUE;
+      IF top del list /= 0 THEN
+         assemble 32bits (mask OF nop);
+         top del list :=0
+      FI;
+      location OF label := location;
+      assemble 32bits (mask OF m);
+      assemble 32bits (mask OF nop)
+   END;
+
+  {Handles: UNIMP}
+  OP USING = (MASK2A m, I o)VOID:
+   BEGIN
+      BITS instr = mask OF m OR (BIN o AND mask22);
+      IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i])
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits(instr)
+   END;
+
+  {Handles: sethi}
+  OP USING = (MASK2B m, IR o)VOID:
+   BEGIN
+      BITS instr = mask OF m OR (BIN imm OF o AND mask22) OR
+                   (rd OF o SHL 25);
+       IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i] )
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits(instr)
+  END;
+
+  {Handles: Bicc FBcc CBcc}
+  OP USING = (STRUCT (MASK2C m, BITS cond)opcode, I o)VOID:
+   BEGIN
+     INT target := ( o - location)%4;
+     IF top del list /= 0 THEN
+       IF target > location THEN target +:=4 FI;
+       assemble 32bits (mask OF nop);
+       top del list :=0
+     FI;
+     "Branch target too far" ASSERT
+           min imm22 <= target AND target <= max imm22;
+     BITS data = (BIN target AND mask22) OR
+                 cond OF opcode SHL 25;
+     assemble 32bits (mask OF m OF opcode OR data)
+   END;
+
+  OP USING = (STRUCT (MASK2C m, BITS cond)opcode, REF MACHINELABEL label)VOID:
+   BEGIN
+     size OF label := 22;
+     can optimise OF label := FALSE;
+     IF top del list /= 0 THEN
+       assemble 32bits (mask OF nop);
+       top del list := 0
+     FI;
+     location OF label := location;
+     assemble 32bits (mask OF m OF opcode OR cond OF opcode SHL 25)
+   END;
+
+  {Handles: Bicc FBcc CBcc & delay instruction}
+  OP USING = (STRUCT (MASK2D m, BITS cond)opcode, I o)VOID:
+   BEGIN
+     INT target := o;
+     IF top del list /= 0 THEN
+       IF target > location THEN target +:=4 FI;
+       assemble 32bits (mask OF nop);
+       top del list := 0
+     FI;
+     BITS del = delay instruction(target);
+     target +:= IF del = mask OF nop THEN 0 ELSE 4 FI;
+     target := (target - location) % 4;
+     "Branch target too far" ASSERT
+           min imm22 <= target AND target <= max imm22;
+     BITS data = (BIN target AND mask22) OR
+                 (cond OF opcode SHL 25);
+     assemble 32bits (mask OF m OF opcode OR data);
+     assemble 32bits (del)
+   END;
+
+  OP USING = (STRUCT (MASK2D m, BITS cond)opcode, REF MACHINELABEL label)VOID:
+   BEGIN
+     size OF label := 22;
+     can optimise OF label := TRUE;
+     IF top del list /= 0 THEN
+       assemble 32bits (mask OF nop);
+       top del list := 0
+     FI;
+     location OF label := location;
+     assemble 32bits (mask OF m OF opcode OR cond OF opcode SHL 25);
+     assemble 32bits (mask OF nop)
+   END;
+
+  {handles most instructions}
+  OP USING = (MASK3A m, RXR oprnd)VOID:
+   BEGIN
+      BITS data =
+         CASE oprnd IN
+         (RRR ops): rd OF ops SHL 25  OR
+                    rs1 OF ops SHL 14 OR
+                    rs2 OF ops,
+         (RIR ops): rd OF ops SHL 25  OR
+                    rs1 OF ops SHL 14 OR
+                    (BIN imm OF ops AND mask13) OR 16r2000
+         ESAC;
+
+      BITS instr = mask OF m OR data;
+      IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i])
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits (instr)
+   END;
+
+  {Handles: ticc}
+  OP USING = (STRUCT (MASK3B m, BITS cond)opcode, RX oprnd)VOID:
+   BEGIN
+      BITS data =
+         CASE oprnd IN
+         (RR ops): rs1 OF ops SHL 14 OR rs2 OF ops,
+         (RI ops): rs1 OF ops SHL 14 OR
+                   (BIN imm OF ops AND mask13) OR 16r2000
+         ESAC;
+      BITS cond = cond OF opcode SHL 25;
+      BITS instr = mask OF m OF opcode OR cond OR data;
+      IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i] )
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits (instr)
+   END;
+
+
+  {Handles: rdy}
+  OP USING = (MASK3C m, R o)VOID:
+   BEGIN
+      BITS instr = mask OF m OR o SHL 25;
+      IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i])
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits (instr)
+   END;
+
+  {Handles: wry iflush}
+  OP USING = (MASK3D m, RX oprnd)VOID:
+   BEGIN
+      BITS data =
+         CASE oprnd IN
+           (RR ops): rs1 OF ops SHL 14 OR
+                     rs2 OF ops,
+           (RI ops): rs1 OF ops SHL 14 OR
+                     (BIN imm OF ops AND mask13) OR 16r2000
+         ESAC;
+      BITS instr = mask OF m OR data;
+      IF top del list /= 0 THEN
+        FOR i TO top del list DO
+          assemble 32bits at(instr, del list [i])
+        OD;
+        top del list := 0
+      FI;
+      assemble 32bits (instr)
+   END;
+
+
+  {handles jmpl}
+  OP USING = (MASK3E m, RXR oprnd)VOID:
+   BEGIN
+      BITS data =
+         CASE oprnd IN
+         (RRR ops): rd OF ops SHL 25  OR
+                    rs1 OF ops SHL 14 OR
+                    rs2 OF ops,
+         (RIR ops): rd OF ops SHL 25  OR
+                    rs1 OF ops SHL 14 OR
+                    (BIN imm OF ops AND mask13) OR 16r2000
+         ESAC;
+
+      BITS instr = mask OF m OR data;
+      IF top del list /= 0 THEN
+        assemble 32bits (mask OF nop);
+        top del list := 0
+      FI;
+      assemble 32bits (instr)
+   END;
+   { SPARC Machine Registers }
+
+   BITS
+        r0 = 16r0,       g0 = r0,
+        r1 = 16r1,       g1 = r1,
+        r2 = 16r2,       g2 = r2,
+        r3 = 16r3,       g3 = r3,
+        r4 = 16r4,       g4 = r4,
+        r5 = 16r5,       g5 = r5,
+        r6 = 16r6,       g6 = r6,
+        r7 = 16r7,       g7 = r7,
+        r8 = 16r8,       o0 = r8,
+        r9 = 16r9,       o1 = r9,
+        r10 = 16ra,      o2 = r10,
+        r11 = 16rb,      o3 = r11,
+        r12 = 16rc,      o4 = r12,
+        r13 = 16rd,      o5 = r13,
+        r14 = 16re,      o6 = r14,     sp = o6,
+        r15 = 16rf,      o7 = r15,
+        r16 = 16r10,     l0 = r16,
+        r17 = 16r11,     l1 = r17,
+        r18 = 16r12,     l2 = r18,
+        r19 = 16r13,     l3 = r19,
+        r20 = 16r14,     l4 = r20,
+        r21 = 16r15,     l5 = r21,
+        r22 = 16r16,     l6 = r22,
+        r23 = 16r17,     l7 = r23,
+        r24 = 16r18,     i0 = r24,
+        r25 = 16r19,     i1 = r25,
+        r26 = 16r1a,     i2 = r26,
+        r27 = 16r1b,     i3 = r27,
+        r28 = 16r1c,     i4 = r28,
+        r29 = 16r1d,     i5 = r29,
+        r30 = 16r1e,     i6 = r30,     fp = i6,
+        r31 = 16r1f,     i7 = r31;
+
+
+
+
+
+   PROC fix machine label = (MACHINELABEL label) VOID:
+      { Fills the word at the location specified by the label with the
+        relative offset of the current location.
+      }
+   BEGIN
+      INT offset := (location  - location OF label)%4;
+      IF can optimise OF label ANDTH top del list < UPB del list THEN
+         top del list +:=1;
+         del list [top del list] := location OF label +4;
+         offset +:= 1
+       FI;
+      BITS instr := dissassemble 16bits at (location OF label);
+      IF size OF label = 22 THEN
+         "Offset too big for Control transfer" ASSERT
+          min imm22*4 <= offset AND offset <= max imm22*4;
+          assemble 32bits at ((instr SHL 16) OR (mask22 AND BIN offset),
+              location OF label)
+      ELSE
+           assemble 32bits at((instr SHL 16) OR (mask30 AND BIN offset),
+              location OF label)
+      FI
+   END;
+
+   { Useful Macros }
+   PROC ma ret  = VOID:
+       jmpl USING RIR(i7, 8, g0);
+
+   PROC ma retl = VOID:
+       jmpl USING RIR(o7, 8, g0);
+
+   PROC ma add rir = (R rs, I i, R temp, R rd)VOID:
+    BEGIN
+       IF i > max imm13 OREL i < min imm13 THEN
+          INT hi = ABS (BIN i SHR 10);
+          R intermed = IF rs = rd THEN temp ELSE rd FI;
+          sethi USING IR(hi, intermed);
+          add USING RIR(intermed, ABS (BIN i AND 16r3ff), intermed);
+          add USING RRR(rs, intermed, rd)
+       ELSE
+          add USING RIR(rs, ABS (BIN i AND mask13), rd)
+       FI
+    END;
+
+
+
+   PROC ma mov ir = (I i, R rd)VOID:
+    BEGIN
+       IF i > max imm13 OREL i < min imm13 THEN
+          INT hi = ABS (BIN i SHR 10);
+          sethi USING IR(hi, rd);
+          add USING RIR(rd, ABS (BIN i AND 16r3ff), rd)
+       ELSE
+          or USING RIR(g0, ABS (BIN i AND mask13), rd)
+       FI
+    END;
+
+    {operator to return address of out of line routine as an INT, env is 0}
+    OP (PROC VOID)STRUCT(MACHINEOFFSET addr, env) OOLROUTINE = BIOP 99;
+
+    {operator to return address of a character in the code array}
+    OP (REF CHAR) MACHINEOFFSET ADDR = BIOP 99;
+
+    PROC VOID div = ALIEN "sparc_32bit_div" "extern void sparc_32bit_div();";
+    PROC VOID mul = ALIEN "sparc_32bit_mul" "extern void sparc_32bit_mul();";
+
+
+    PROC ma div = VOID:
+    BEGIN
+       ma mov ir (addr OF OOLROUTINE(div), r15);
+       jmpl USING RRR(r15, g0, r15)
+    END;
+
+    PROC ma mul = VOID:
+    BEGIN
+       ma mov ir (addr OF OOLROUTINE(mul), r15);
+       jmpl USING RRR(r15, g0, r15)
+    END;
+
+   { Routine to put values into in-line code stream: }
+   PROC ma put char = (CHAR c) VOID: assemble 8bits (BIN ABS c);
+
+
+   SKIP
+
+KEEP
+   simfault,
+   get_vec_chars,
+   free_vec_chars,
+   ASSERT (VECTOR [] CHAR, BOOL),
+   location,
+   macoderef,
+   macodesize,
+   MACHINEOFFSET,
+   nullmachineoffset,
+   mainitialise,
+   machangeflt,
+   masavestate,
+   marestorestate,
+   maexecutable,
+   MACHINELABEL,
+   nullmachinelabel,
+   = (MACHINELABEL, MACHINELABEL),
+   max imm13, min imm13, max imm22, min imm22, max imm30, min imm30,
+   R, I, RR, RI, IR, RX, RRR, RIR, RXR,
+   call, calld, unimp, sethi, nop, b, fb, cb, bd, fbd, cbd, add, and, or, xor,
+   sub, andn, orn, xnor, addx, subx, addcc, andcc, orcc, xorcc, subcc,
+   andncc, orncc, xnorcc, addxcc, subxcc, taddcc, tsubcc, taddcctv,
+   tsubcctv, mulscc, sll, srl, sra, rdy, wry, jmpl, t, iflush, save,
+   restore, ld, ldub, lduh, ldd, st, stb, sth, std, ldsb, ldsh, ldstub,
+   swap, ldf, ldfsr, lddf, stf, stfsr, stdf, ldc, ldcsr, lddc, stc,
+   stcsr, stdc, fitos, fitod, fitox, fstoir, fdtoir, fxtoir, fstoi, fdtoi,
+   fxtoi, fstod, fstox, fdtos, fdtox, fxtos, fxtod, fmovs, fnegs, fabss,
+   fsqrts, fsqrtd, fsqrtx, fadds, faddd, faddx, fsubs, fsubd, fsubx, fmuls,
+   fmuld, fmulx, fdivs, fdivd, fdivx, fcmps, fcmpd, fcmpx, fcmpes, fcmped,
+   fcmpex,
+   n, eq, z, le, l, leu, lu, cs, neg, vs, a, ne, nz, g, ge, gu, geu,
+   cc, pos, vc,
+   n_a, eq_a, z_a, le_a, l_a, leu_a, lu_a, cs_a, neg_a, vs_a, a_a, ne_a, nz_a,
+   g_a, ge_a, gu_a, geu_a, cc_a, pos_a, vc_a,
+   invcondition,
+   swapcondition,
+   r0, g0, r1, g1, r2, g2, r3, g3, r4, g4, r5, g5, r6, g6, r7, g7, r8, o0, r9,
+   o1, r10, o2, r11, o3, r12, o4, r13, o5, r14, o6, r15, o7, r16, l0, r17, l1,
+   r18, l2, r19, l3, r20, l4, r21, l5, r22, l6, r23, l7, r24, i0, r25, i1, r26,
+   i2, r27, i3, r28, i4, r29, i5, r30, i6, r31, i7, sp, fp,
+   USING(MASK1A, I),  USING(MASK1B, I), USING(MASK2A, I), USING(MASK2B, IR),
+   USING(STRUCT (MASK2C m, BITS cond), I),
+   USING(STRUCT (MASK2D m, BITS cond), I),  USING(MASK3A, RXR),
+   USING(STRUCT (MASK3B m, BITS cond), RX), USING(MASK3C,R), USING(MASK3D, RX),
+   USING(MASK3E, RXR),
+   USING(MASK1A, REF MACHINELABEL),  USING(MASK1B, REF MACHINELABEL),
+   USING(STRUCT (MASK2C m, BITS cond), REF MACHINELABEL),
+   USING(STRUCT (MASK2D m, BITS cond), REF MACHINELABEL),
+   /(MASK2C, BITS), /(MASK2D, BITS), /(MASK3B, BITS),
+   fix machine label,
+   ma ret,
+   ma retl,
+   ma add rir,
+   ma mov ir,
+   ma div,
+   ma mul,
+   ma put char,
+   t_int_overflow
+   FINISH

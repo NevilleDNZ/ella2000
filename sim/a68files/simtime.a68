@@ -1,0 +1,92 @@
+DECS simtime CONTEXT VOID USE putstrings:
+
+{ " Id: simtime.sta,v 2.1 91/02/22 18:37:15 edcad Exp$" }
+configinfo A68CONFIG "$Id: simtime.a68,v 34.2 1995/03/29 13:05:04 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+31:05:88  Module created for release 4.  BJE
+04:11:88  Set time mode added with call to epi_set_mode - episupportint
+             added to USE list. BGH
+
+15:12:89  Added 'scale time' variable for time scaling support. MHC
+13:08:93  episupportint removed.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module introduces the global variables that holds the simulation time
+   and time mode.  These are commonly used variables which must therefore be
+   held in a leaf of the Algol 68 compilation tree, separate from the past mode
+   variables which need to be nearer the root, even though they are logically
+   related.
+}
+
+{
+  The simulator shell's time
+}
+INT active time;
+
+{
+   The time mode and its possible values
+}
+INT time mode;
+
+INT
+   present = 1,
+   past = 2;
+
+{
+   Record a change in the time mode and prompt
+   EPI to take note of the change.
+}
+PROC set time mode = (INT new mode) VOID:
+BEGIN
+   time mode := new mode;
+   SKIP { epi_set_mode }                        { references flag 'time mode' }
+END;
+
+
+{ This variable holds the value to which time should be scaled }
+{ It is initially set to 1 ie no scaling in effect.            }
+
+INT scale time := 1;
+
+
+SKIP
+
+KEEP
+   active time, time mode, present, past, set time mode, scale time
+
+FINISH

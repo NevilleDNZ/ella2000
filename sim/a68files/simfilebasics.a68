@@ -1,0 +1,982 @@
+DECS simfilebasics CONTEXT VOID USE putstrings, messageproc, osinterface,
+     simmonmode, simtable, kernel, basics, databasebuffers:
+
+{ " Id: simfilebasics.sta,v 2.1 91/02/22 18:36:56 edcad Exp$" }
+configinfo A68CONFIG "$Id: simfilebasics.a68,v 34.2 1995/03/29 13:04:59 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+15:07:88  Module created for release 4.  BJE,
+09:09:88  Changes to [read|write] monitor list to track adjustments to
+             monitor modes.
+14:09:88  Fault handling in 'increase_simulator_file' upgraded for EPI
+11:11:88  Only one block of an ADAM bucket held in memory at a time to
+             avoid unlimited heap usage.  BJE.
+02:02:89  'read charvec' result handled differently.  Arch design CR 33.
+17:02:89  `increase_simulator_file' kept for fix to R4B601.  BJE.
+17:03:89  R4B241  Make read vec char non-recursive.  SPT.
+10:04:89  WORDS removed, and MONITOR changed, for monitoring speedup.
+             R4B134.  PAR.
+11:09:89  CR 636. Basic routines now calls of KEEPSAKEBUFFERS - shelled where
+             necessary.  sysfault moved to osinterface. EVW
+13:12:89  Added support for MNODEs to describe Probe functions. MDR.
+12:01:90  Calls of translatemsg replaced by flt_msg.  DCT
+20:02:91  No longer needs su_keepsake.  DCT
+21:11:91  Module keepsakebuffers renamed databasebuffers; read discptrs
+             added for simhistory.  DCT
+16:10:92  SVOID/SVVOID added. JIT
+16:06:93  Updated to new OSIF Level 2 - messageproc changes.  DCT
+13:08:93  final reference to epi removed.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.016 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains procedures for inputting and outputting simulator modes
+   to and from the simulator file.  It is used for both the history and status
+   partitions.  It is analogous to module LIBINTERFACE, which performs a
+   similar (perhaps slightly larger) function for the library file.  A lot of
+   the code in this module has been cribbed from LIBINTERFACE.  Perhaps at some
+   point the library and simulator file will be merged and this module will be
+   merged with LIBINTERFACE
+}
+
+{
+   0 BASICS
+     ======
+
+   At the lowest level we provide buffered IO for five data types: CHAR, CHARS
+   (VECTOR [] CHAR), INT, ID (REF VECTOR [] CHAR) and BOOL
+
+   The difference between an ID and some CHARS is that the former has its
+   length written to file and is hence retrievable as a single entity whereas
+   the latter does not and the data is stored as a sequence of characters
+   merging in with the those on either side.
+
+   A CHAR here represents an arbitrary byte --- it is not restricted to the
+   ASCII character set.
+
+   There is also a routine to write disc pointers without the risk of
+   running out of file space
+}
+
+{
+   'SBUFFER' associates a data buffer with an KEEPSAKE block and is passed from
+   procedure to procedure to keep track of buffered IO.
+
+   A 'SBUFFER' may be used for reading or writing but not both together
+}
+MODE SBUFFER = BUFFER;
+
+{
+   0.1 Basic Reading
+       -------------
+
+   There are no user errors on reading; errors are always system faults.
+}
+
+
+PROC  read discptrs = ( REF DISCFILE  df,  REF VECTOR [] DISCPTR  buffer,
+                        DISCPTR  dp ) VOID:
+      myreaddiscptrs(df, buffer, dp, global_msg);
+
+
+{
+   Public routine
+
+   Create a buffer and read a KEEPSAKE block in.
+}
+PROC start read = (REF DISCFILE df, DISCPTR dp) SBUFFER: read buffer(df, dp);
+
+{
+   Public routine.
+
+   Mark a buffer as invalid
+}
+{ PROC end read = (SBUFFER buffer) VOID: }
+
+{
+   Public routines for input of basic data items.
+}
+{ PROC read char = (SBUFFER buffer) CHAR: }
+
+PROC read charvec = (SBUFFER buffer, REF VECTOR [] CHAR result) VOID:
+   read chars(buffer, result);
+
+PROC read int = (SBUFFER buffer) INT: in2(buffer);
+
+PROC read id = (SBUFFER buffer) ID: inid2(buffer);
+
+{ PROC read bool = (SBUFFER buffer) BOOL: }
+
+{
+   0.2 Basic Writing
+       -------------
+
+   Output data is partially buffered in a buffer whose size is fixed by
+   the argument to 'start write'
+
+   The simulator file is automatically extended if we run out of space.
+}
+
+{
+   Private routines for automatic file extensions
+}
+
+PROC  flt_msg = (MSGNO  no,  VECSTR  params,  PROC (STR) VOID  flt) VOID:
+   IF cli_msg(no)  { cli_msg = flt, otherwise handle with global_msg }
+   THEN  flt(text OF translate_msg(no, params))
+   ELSE  global_msg(no, params)
+   FI;
+PROC increase_simulator_file = (REF DISCFILE  df, FLTPROC flt) VOID:
+   increase_library(df, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+{
+   Write some disc pointers, extending the file as necessary
+}
+PROC simwritediscptrs = (REF DISCFILE df, VECTOR [] DISCPTR buffer,
+                         FLTPROC flt) DISCPTR:
+   mywritediscptrs ( df, buffer,
+                     (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt) );
+
+{
+   Public routine
+
+   Create a buffer and set it up for writing.
+}
+
+{ PROC start write = (REF DISCFILE df, UNION (INT, RVC) discbuff) SBUFFER: }
+
+
+{
+   Public routine.
+
+   Complete writing to this block and return an updated DISCPTR
+}
+
+PROC end_write = (SBUFFER buffer, MESSAGEPROC msg) DISCPTR:
+   end write(buffer, msg);
+   { renamed to allow same name to be used in this module }
+
+PROC end write = (SBUFFER buffer, FLTPROC flt) DISCPTR:
+   end_write(buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+{
+   Public routines for output of basic data items.
+}
+PROC write char = (CHAR c, SBUFFER buffer, FLTPROC flt) VOID:
+   outchar(c, buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+PROC write charvec = (VECTOR [] CHAR str, SBUFFER buffer, FLTPROC flt) VOID:
+   outchars(str, buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+PROC write int = (INT i, SBUFFER buffer, FLTPROC flt) VOID:
+   outint2(i, buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+PROC write id = (ID id, SBUFFER buffer, FLTPROC flt) VOID:
+   outid2(id, buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+PROC write bool = (BOOL flag, SBUFFER buffer, FLTPROC flt) VOID:
+   outbool(flag, buffer, (MSGNO no, VECSTR str) VOID: flt_msg(no, str, flt));
+
+{
+   Public Routine.
+
+   The number of characters written using this buffer
+}
+{ PROC chars written = (SBUFFER buffer) INT: }
+
+
+
+{
+   1 STRUCTURED DATA
+     ===============
+
+   The remaining procedures read and write compound ELLA modes.
+
+   I show the coding format in a pseudo BNF in which the productions are
+   shown in the form:
+
+   lhs      :- rhs
+
+   The basic elements of the right hand side are sytax elements like "id"
+   or named syntax element like
+
+   foo
+      id
+
+   which means an "id" named "foo".  Alternatives are shown as mutiple
+   productions. Iteration is shown by recursion or by the notation:
+
+     b
+   a
+
+   meaning a repeated b times;
+}
+
+{
+   1.1 Kernel Modes
+       ------------
+}
+
+{
+   MODE
+      WORD    = REF VECTOR [] CHAR;
+
+   word        :- id
+}
+
+PROC (SBUFFER) WORD read word = read id;
+
+PROC (WORD, SBUFFER, FLTPROC) VOID write word = write id;
+
+
+{
+   MODE
+      STYPE,
+      SVOID   = STRUCT (INT svoid),
+      SNULL   = STRUCT (INT snull),
+      SINT    = STRUCT (ID id, INT lwb, upb),
+      SCHAR   = STRUCT (ID id, REF VECTOR [] CHAR char),
+      SSTRING = STRUCT (INT no, SCHAR t),
+      SENUM   = STRUCT (ID id, STYPE t, REF SENUM rest),
+      SFN     = STRUCT (STYPE from, to),
+      SST     = STRUCT (STYPE t, REF SST rest),
+      SROW    = STRUCT (INT no, STYPE type),
+      SPRIM   = UNION  (REF SENUM, REF SINT, REF SCHAR),
+      STYPE   = UNION  (SPRIM, REF SROW, REF SSTRING,
+                        REF SFN, REF SST, SVOID, SNULL);
+
+   stype          :- 1 snull
+                     2 sint
+                     3 schar
+                     4 sstring
+                     5 senum
+                     6 sfn
+                     7 sst
+                     8 svoid
+                     9 srow
+
+   sint           :- id int int
+   schar          :- id id
+   sstring        :- int schar
+                             n
+   senum          :- n    alt
+                      int
+   sfn            :- stype stype
+                               n
+   sst            :- n    stype
+                      int
+   srow           :- int stype
+   alt            :- id stype
+}
+INT
+   cnull = 1,     cint = 2,      cchar = 3,     cstring = 4,   cenum = 5,
+   cfn = 6,       cst = 7,       crow = 9,      cvoid = 8;
+
+PROC (SBUFFER) STYPE read stype;
+
+PROC read sint = (SBUFFER buffer) SINT:
+BEGIN
+   SINT ans;
+   id OF ans := read id (buffer);
+   lwb OF ans := read int (buffer);
+   upb OF ans := read int (buffer);
+   ans
+END;
+
+PROC read schar = (SBUFFER buffer) SCHAR:
+BEGIN
+   SCHAR ans;
+   id OF ans := read id (buffer);
+   char OF ans := read id (buffer);
+   ans
+END;
+
+PROC read sstring = (SBUFFER buffer) SSTRING:
+BEGIN
+   SSTRING ans;
+   no OF ans := read int (buffer);
+   t OF ans := read schar (buffer);
+   ans
+END;
+
+PROC read senum = (SBUFFER buffer) REF SENUM:
+BEGIN
+   REF SENUM ans := nil senum;
+   REF REF SENUM last := ans;
+   TO read int (buffer) DO
+      HEAP SENUM alt;
+      id OF alt := read id (buffer);
+      t OF alt := read stype (buffer);
+      rest OF alt := nil senum;
+      REF REF SENUM (last) := alt;
+      last := rest OF last
+   OD;
+   ans
+END;
+
+PROC read sfn = (SBUFFER buffer) SFN:
+BEGIN
+   SFN ans;
+   from OF ans := read stype (buffer);
+   to OF ans := read stype (buffer);
+   ans
+END;
+
+PROC read sst = (SBUFFER buffer) REF SST:
+BEGIN
+   REF SST ans := nil sst;
+   REF REF SST last := ans;
+   TO read int (buffer) DO
+      REF REF SST (last) := HEAP SST := (read stype (buffer), nil sst);
+      last := rest OF last
+   OD;
+   ans
+END;
+
+PROC read srow = (SBUFFER buffer) SROW:
+BEGIN
+   SROW ans;
+   no OF ans := read int (buffer);
+   type OF ans := read stype (buffer);
+   ans
+END;
+
+read stype := (SBUFFER buffer) STYPE:
+CASE read int (buffer) IN
+   null stype,
+   HEAP SINT := read sint (buffer),
+   HEAP SCHAR := read schar (buffer),
+   HEAP SSTRING := read sstring (buffer),
+   read senum (buffer),
+   HEAP SFN := read sfn (buffer),
+   read sst (buffer),
+   void stype,
+   HEAP SROW := read srow (buffer)
+OUT sys fault ("invalid stype"); null stype
+ESAC;
+
+PROC (STYPE, SBUFFER, FLTPROC) VOID write stype;
+
+PROC write sint = (SINT s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write id (id OF s, buffer, flt);
+   write int (lwb OF s, buffer, flt);
+   write int (upb OF s, buffer, flt)
+END;
+
+PROC write schar = (SCHAR s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write id (id OF s, buffer, flt);
+   write id (char OF s, buffer, flt)
+END;
+
+PROC write sstring = (SSTRING s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write int (no OF s, buffer, flt);
+   write schar (t OF s, buffer, flt)
+END;
+
+PROC write senum = (REF SENUM s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   REF SENUM ptr := s;
+   INT n := 0;
+   WHILE ptr ISNT nil senum DO n +:= 1; ptr := rest OF ptr OD;
+   write int (n, buffer, flt);
+   ptr := s;
+   WHILE ptr ISNT nil senum DO
+      write id (id OF ptr, buffer, flt);
+      write stype (t OF ptr, buffer, flt);
+      ptr := rest OF ptr
+   OD
+END;
+
+PROC write sfn = (SFN s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write stype (from OF s, buffer, flt);
+   write stype (to OF s, buffer, flt)
+END;
+
+PROC write sst = (REF SST s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   REF SST ptr := s;
+   INT n := 0;
+   WHILE ptr ISNT nil sst DO n +:= 1; ptr := rest OF ptr OD;
+   write int (n, buffer, flt);
+   ptr := s;
+   WHILE ptr ISNT nil sst DO
+      write stype (t OF ptr, buffer, flt);
+      ptr := rest OF ptr
+   OD
+END;
+
+PROC write srow = (SROW s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write int (no OF s, buffer, flt);
+   write stype (type OF s, buffer, flt)
+END;
+
+write stype := (STYPE stype, SBUFFER buffer, FLTPROC flt) VOID:
+CASE stype IN
+   (SVOID s)    :write int (cvoid, buffer, flt),
+   (SNULL s)    :write int (cnull, buffer, flt),
+   (REF SINT s) :(write int(cint, buffer, flt); write sint(s, buffer, flt)),
+   (REF SCHAR s):(write int(cchar, buffer, flt); write schar(s, buffer, flt)),
+   (REF SSTRING s)
+              :(write int(cstring, buffer, flt); write sstring(s, buffer, flt)),
+   (REF SENUM s):(write int(cenum, buffer, flt); write senum(s, buffer, flt)),
+   (REF SFN s)  :(write int(cfn, buffer, flt); write sfn(s, buffer, flt)),
+   (REF SST s)  :(write int(cst, buffer, flt); write sst(s, buffer, flt)),
+   (REF SROW s) :(write int(crow, buffer, flt); write srow(s, buffer, flt))
+ESAC;
+
+{
+   MODE
+      SVALUE,
+      SVVOID  = STRUCT (INT svvoid),
+      SVNULL  = STRUCT (INT svnull),
+      SQUERY  = STRUCT (STYPE type),
+      SVINT   = STRUCT (REF SINT type, INT value),
+      SVCHAR  = STRUCT (REF SCHAR type, CHAR value),
+      SVSTR   = STRUCT (REF SSTRING type, REF VECTOR [] CHAR value),
+      SVENUM  = STRUCT (SENUM type, INT tag, SVALUE assoc),
+      SVST    = STRUCT (SVALUE head, REF SVST tail),
+      SVFN    = STRUCT (SVALUE from, to),
+      SVALUE  = UNION  (REF SQUERY, REF SVINT, REF SVCHAR,
+                        REF SVSTR, REF SVENUM, REF SVST, REF SVFN, SVNULL);
+
+      svalue      :- 0 stype               // query
+                     1                     // null
+                     2 sint int
+                     3 schar char
+                     4 sstring id
+                     5 senum int svalue
+                     6 svalue svalue
+                                 int
+                     7 n   svalue
+                        int
+                     8                   // void
+}
+INT cquery = 0;
+
+PROC (SBUFFER) SVALUE read svalue;
+
+PROC read svint = (SBUFFER buffer) SVINT:
+BEGIN
+   SVINT ans;
+   type OF ans := HEAP SINT := read sint (buffer);
+   value OF ans := read int (buffer);
+   ans
+END;
+
+PROC read svchar = (SBUFFER buffer) SVCHAR:
+BEGIN
+   SVCHAR ans;
+   type OF ans := HEAP SCHAR := read schar (buffer);
+   value OF ans := read char (buffer);
+   ans
+END;
+
+PROC read svstr = (SBUFFER buffer) SVSTR:
+BEGIN
+   SVSTR ans;
+   type OF ans := HEAP SSTRING := read sstring (buffer);
+   value OF ans := read id (buffer);
+   ans
+END;
+
+PROC read svenum = (SBUFFER buffer) SVENUM:
+BEGIN
+   SVENUM ans;
+   type OF ans := read senum (buffer);
+   tag OF ans := read int (buffer);
+   assoc OF ans := read svalue (buffer);
+   ans
+END;
+
+PROC read svfn = (SBUFFER buffer) SVFN:
+BEGIN
+   SVFN ans;
+   from OF ans := read svalue (buffer);
+   to OF ans := read svalue (buffer);
+   ans
+END;
+
+PROC read svst = (SBUFFER buffer) REF SVST:
+BEGIN
+   REF SVST ans := nil svst;
+   REF REF SVST last := ans;
+   TO read int (buffer) DO
+      REF REF SVST (last) := HEAP SVST := (read svalue (buffer), nil svst);
+      last := tail OF last
+   OD;
+   ans
+END;
+
+read svalue := (SBUFFER buffer) SVALUE:
+CASE read int (buffer) + 1 IN
+   (HEAP SQUERY ans; type OF ans := read stype (buffer); ans),
+   null svalue,
+   HEAP SVINT := read svint (buffer),
+   HEAP SVCHAR := read svchar (buffer),
+   HEAP SVSTR := read svstr (buffer),
+   HEAP SVENUM := read svenum (buffer),
+   HEAP SVFN := read svfn (buffer),
+   read svst (buffer),
+   void svalue
+OUT sys fault ("invalid svalue"); null svalue
+ESAC;
+
+PROC (SVALUE, SBUFFER, FLTPROC) VOID write svalue;
+
+PROC write svint = (SVINT s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write sint (type OF s, buffer, flt);
+   write int (value OF s, buffer, flt)
+END;
+
+PROC write svchar = (SVCHAR s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write schar (type OF s, buffer, flt);
+   write char (value OF s, buffer, flt)
+END;
+
+PROC write svstr = (SVSTR s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write sstring (type OF s, buffer, flt);
+   write id (value OF s, buffer, flt)
+END;
+
+PROC write svenum = (REF SVENUM s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write senum (type OF s, buffer, flt);
+   write int (tag OF s, buffer, flt);
+   write svalue (assoc OF s, buffer, flt)
+END;
+
+PROC write svfn = (SVFN s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write svalue (from OF s, buffer, flt);
+   write svalue (to OF s, buffer, flt)
+END;
+
+PROC write svst = (REF SVST s, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   REF SVST ptr := s;
+   INT n := 0;
+   WHILE ptr ISNT nil svst DO n +:= 1; ptr := tail OF ptr OD;
+   write int (n, buffer, flt);
+   ptr := s;
+   WHILE ptr ISNT nil svst DO
+      write svalue (head OF ptr, buffer, flt);
+      ptr := tail OF ptr
+   OD
+END;
+
+write svalue := (SVALUE svalue, SBUFFER buffer, FLTPROC flt) VOID:
+CASE svalue IN
+   (REF SQUERY s):
+      (write int(cquery, buffer, flt); write stype(type OF s, buffer, flt)),
+   (SVNULL s)     :write int (cnull, buffer, flt),
+   (REF SVINT s) :(write int(cint, buffer, flt); write svint(s, buffer, flt)),
+   (REF SVCHAR s):(write int(cchar, buffer, flt); write svchar(s, buffer, flt)),
+   (REF SVSTR s) :
+      (write int(cstring, buffer, flt); write svstr(s, buffer, flt)),
+   (REF SVENUM s):(write int(cenum, buffer, flt); write svenum(s, buffer, flt)),
+   (REF SVFN s)  :(write int(cfn, buffer, flt); write svfn(s, buffer, flt)),
+   (REF SVST s)  :(write int(cst, buffer, flt); write svst(s, buffer, flt)),
+   (SVVOID s)    :write int (cvoid, buffer, flt)
+ESAC;
+
+{
+   MODE
+      BLOCK = STRUCT (INT inst offset, offset, size);
+      WIRE    = STRUCT (STYPE type, REF VECTOR [] BLOCK blocks),
+      WIRE    = STRUCT (SVALUE type, INT offset, size),
+      LINE    = STRUCT (REF WIRE wire, INT instance),
+      BOX     = STRUCT (INT fn, instance),
+      NODE    = UNION  (BOX, LINE);
+
+   block          :- int int int
+                                      n
+   wire           :- svalue n    block
+                             int
+   line           :- wire int
+   box            :- int int
+   node           :- 1 box
+                     2 line
+}
+
+PROC write wire = (WIRE wire, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write stype (type OF wire, buffer, flt);
+   REF VECTOR [] BLOCK blocks = blocks OF wire;
+   INT upb = UPB blocks;
+   write int (upb, buffer, flt);
+   FOR i TO upb DO
+      write int (inst offset OF blocks[i], buffer, flt);
+      write int (offset OF blocks[i], buffer, flt);
+      write int (size OF blocks[i], buffer, flt)
+   OD
+END;
+
+PROC read wire = (SBUFFER buffer) WIRE:
+BEGIN
+   WIRE ans;
+   type OF ans := read stype (buffer);
+   INT upb = read int (buffer);
+   HEAP VECTOR [upb] BLOCK blocks;
+   blocks OF ans := blocks;
+   FOR i TO upb DO
+      inst offset OF blocks[i] := read int (buffer);
+      offset OF blocks[i] := read int (buffer);
+      size OF blocks[i] := read int (buffer)
+   OD;
+   ans
+END;
+
+PROC write line = (LINE line, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write wire (wire OF line, buffer, flt);
+   write int (instance OF line, buffer, flt)
+END;
+
+PROC read line = (SBUFFER buffer) LINE:
+BEGIN
+   LINE ans;
+   wire OF ans := HEAP WIRE := read wire (buffer);
+   instance OF ans := read int (buffer);
+   ans
+END;
+
+PROC write box = (BOX box, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write int (fn OF box, buffer, flt);
+   write int (instance OF box, buffer, flt)
+END;
+
+PROC read box = (SBUFFER buffer) BOX:
+BEGIN
+   BOX ans;
+   fn OF ans := read int (buffer);
+   instance OF ans := read int (buffer);
+   ans
+END;
+
+INT cbox = 1,  cline = 2;
+
+PROC write node = (NODE node, SBUFFER buffer, FLTPROC flt) VOID:
+CASE node IN
+   (BOX box)  : (write int (cbox, buffer, flt); write box (box, buffer, flt)),
+   (LINE line): (write int (cline, buffer, flt); write line (line, buffer, flt))
+ESAC;
+
+PROC read node = (SBUFFER buffer) NODE:
+CASE read int (buffer) IN
+   {cbox} read box (buffer),
+   {cline} read line (buffer)
+OUT sys fault ("invalid node"); BOX (0,0)
+ESAC;
+
+PROC write mnode = (MNODE mnode, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write node (node OF mnode, buffer, flt);
+   write int (circuit OF mnode, buffer, flt);
+   write int (base OF mnode, buffer, flt)
+END;
+
+PROC read mnode = (SBUFFER buffer) MNODE:
+BEGIN
+   MNODE ans;
+   node OF ans := read node (buffer);
+   circuit OF ans := read int (buffer);
+   base OF ans := read int (buffer);
+   ans
+END;
+
+{
+   1.2 Shell Modes
+       -----------
+}
+
+{
+   MODE OPERATOR = CHAR,
+        BIND     = STRUCT (ID uname, lname, REF MNODE node),
+        PATH     = STRUCT (INT repeat, ID name, ID aliasname, OPERATOR op,
+                           REF BIND bind, REF PATH rest);
+
+  This mode is used to form linked lists.  The '* path' procedures handle
+  one element of a list (ie they ignore the 'rest' field.  The '* pathlist'
+  procedures deal with a whole list.
+
+  bind            :- FALSE
+                     TRUE id id node
+
+  path            :- int id id char bind
+
+                              n
+  pathlist        :- n    path
+                      int
+}
+
+PROC write path = (PATH path, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   write int (repeat OF path, buffer, flt);
+   write id (name OF path, buffer, flt);
+   write id (aliasname OF path, buffer, flt);
+   write char (op OF path, buffer, flt);
+   IF bind OF path IS nil bind THEN
+      write bool (FALSE, buffer, flt)
+   ELSE
+      write bool (TRUE, buffer, flt);
+      write id (uname OF bind OF path, buffer, flt);
+      write id (lname OF bind OF path, buffer, flt);
+      write mnode (node OF bind OF path, buffer, flt)
+   FI
+END;
+
+PROC read path = (SBUFFER buffer) PATH:
+BEGIN
+   PATH ans;
+   repeat OF ans := read int (buffer);
+   name OF ans := read id (buffer);
+   aliasname OF ans := read id (buffer);
+   op OF ans := read char (buffer);
+   IF read bool (buffer) THEN
+      bind OF ans := HEAP BIND;
+      uname OF bind OF ans := read id (buffer);
+      lname OF bind OF ans := read id (buffer);
+      node OF bind OF ans := HEAP MNODE := read mnode (buffer)
+   ELSE
+      bind OF ans := nil bind
+   FI;
+   rest OF ans := nil path;
+   ans
+END;
+
+PROC read pathlist = (SBUFFER buffer) REF PATH:
+BEGIN
+   REF PATH ans := nil path;
+   REF REF PATH last := ans;
+   TO read int (buffer) DO
+      REF REF PATH (last) := HEAP PATH := read path (buffer);
+      last := rest OF last
+   OD;
+   ans
+END;
+
+PROC write pathlist = (REF PATH list, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   REF PATH ptr := list;
+   INT n := 0;
+   WHILE ptr ISNT nil path DO n +:= 1; ptr := rest OF ptr OD;
+   write int (n, buffer, flt);
+   ptr := list;
+   WHILE ptr ISNT nil path DO
+      write path (ptr, buffer, flt);
+      ptr := rest OF ptr
+   OD
+END;
+
+PROC read simtable = (SBUFFER buffer)VOID:
+BEGIN
+   PROC pathlist = REF PATH: read pathlist(buffer);
+   PROC id = ID: read id(buffer);
+   PROC int = INT: read int(buffer);
+   PROC svalue = SVALUE: read svalue(buffer);
+   simtable restore state(pathlist, id, int, svalue)
+END;
+
+PROC write simtable = (SBUFFER buffer, FLTPROC flt)VOID:
+BEGIN
+   PROC pathlist = (REF PATH p)VOID: write pathlist(p, buffer, flt);
+   PROC id = (ID i)VOID: write id(i, buffer, flt);
+   PROC int = (INT i)VOID: write int(i, buffer, flt);
+   PROC svalue = (SVALUE sv)VOID: write svalue(sv, buffer, flt);
+   simtable save state(pathlist, id, int, svalue)
+END;
+
+{
+   MODE MONITOR = STRUCT (
+      ID id,
+         full id,
+      INT action,
+          condition,
+      REF VECTOR [] INT columns,
+                        sizes,
+      LINE location,
+      INT keep number,
+      WORD lastvalues,
+           testvalues,
+           workspace,
+      REF SVALUE decoded
+   );
+
+   MODE MONITORLIST = STRUCT (
+      MONITOR     monitor,
+      INT         handle,
+      REF MONITOR rest
+   );
+
+   The 'columns' and 'sizes' fields of MONITOR are not saved.  They
+   are set to NIL when read in which will cause the output procedures to
+   recalculate them.
+
+   The 'handle' field of 'MONiTORLIST' is not saved; a new handle is created
+   when they are read in.
+
+   svalueopt      :- FALSE
+                     TRUE svalue
+
+   monitor        :- id id int int mnode int word word int svalueopt
+
+                                 n
+   monitorlist    :- n    monitor
+                      int
+}
+
+PROC write monitor = (MONITOR monitor, SBUFFER buffer, FLTPROC flt)
+VOID:
+BEGIN
+   write id (id OF monitor, buffer, flt);
+   write id (full id OF monitor, buffer, flt);
+   write int (action OF monitor, buffer, flt);
+   write int (condition OF monitor, buffer, flt);
+   write mnode (location OF monitor, buffer, flt);
+   write int (keepnumber OF monitor, buffer, flt);
+   IF lastvalues OF monitor IS nil word THEN
+      write bool (FALSE, buffer, flt)
+   ELSE
+      write bool (TRUE, buffer, flt);
+      write word (lastvalues OF monitor, buffer, flt)
+   FI;
+   IF testvalues OF monitor IS nil word THEN
+      write bool (FALSE, buffer, flt)
+   ELSE
+      write bool (TRUE, buffer, flt);
+      write word (testvalues OF monitor, buffer, flt)
+   FI;
+   write int (UPB workspace OF monitor, buffer, flt);
+   IF decoded OF monitor IS REF SVALUE (NIL) THEN
+      write bool (FALSE, buffer, flt)
+   ELSE
+      write bool (TRUE, buffer, flt);
+      write svalue (decoded OF monitor, buffer, flt)
+   FI;
+   write int (flag address OF monitor, buffer, flt)
+END;
+
+PROC read monitor = (SBUFFER buffer) MONITOR:
+BEGIN
+   MONITOR ans;
+   id OF ans := read id (buffer);
+   full id OF ans := read id (buffer);
+   action OF ans := read int (buffer);
+   condition OF ans := read int (buffer);
+   columns OF ans := NIL;
+   sizes OF ans := NIL;
+   location OF ans := read mnode (buffer);
+   keep number OF ans := read int (buffer);
+   IF read bool (buffer) THEN
+      lastvalues OF ans := read word (buffer);
+      IF UPB lastvalues OF ans = 0 THEN lastvalues OF ans := null word FI
+   ELSE
+      lastvalues OF ans := nil word
+   FI;
+   IF read bool (buffer) THEN
+      testvalues OF ans := read word (buffer);
+      IF UPB testvalues OF ans = 0 THEN testvalues OF ans := null word FI
+   ELSE
+      testvalues OF ans := nil word
+   FI;
+   INT size = read int (buffer);
+   workspace OF ans := HEAP VECTOR [size] CHAR;
+   IF read bool (buffer) THEN
+      decoded OF ans := HEAP SVALUE := read svalue (buffer)
+   ELSE
+      decoded OF ans := NIL
+   FI;
+   flag address OF ans := read int (buffer);
+   ans
+END;
+
+PROC read monitorlist = (SBUFFER buffer) REF MONITORLIST:
+BEGIN
+   REF MONITORLIST ans := nil monitorlist;
+   REF REF MONITORLIST last := ans;
+   TO read int (buffer) DO
+      REF REF MONITORLIST (last) := HEAP MONITORLIST :=
+        (read monitor (buffer), new handle, nil monitorlist);
+      last := rest OF last
+   OD;
+   ans
+END;
+
+PROC write monitorlist = (REF MONITORLIST list, SBUFFER buffer, FLTPROC flt) VOID:
+BEGIN
+   REF MONITORLIST ptr := list;
+   INT n := 0;
+   WHILE ptr ISNT nil monitorlist DO n +:= 1; ptr := rest OF ptr OD;
+   write int (n, buffer, flt);
+   ptr := list;
+   WHILE ptr ISNT nil monitorlist DO
+      write monitor (monitor OF ptr, buffer, flt);
+      ptr := rest OF ptr
+   OD
+END;
+
+SKIP
+
+KEEP
+   { from databasebuffers }
+   DISCFILE,  DISCPTR,  block_size,
+   { 0 BASICS }
+   SBUFFER, isnilptr,  nilptr,
+   { 0.1 Basic Reading }
+   read discptrs, start read, end read, read char, read charvec, read int,
+   read id,
+   { 0.2 Basic Writing }
+   increase_simulator_file,
+   simwritediscptrs, start write, end write, write char, write charvec,
+   write int, write id, chars written,
+   { 1 STRUCTURED DATA }
+   { 1.1 Kernel Modes }
+   read word, write word, read stype, write stype,
+   read svalue, write svalue, read wire, write wire, read line, write line,
+   read box, write box, read node, write node, read mnode, write mnode,
+   {1.2 Shell Modes }
+   read pathlist, write pathlist, read monitorlist, write monitorlist,
+   read simtable, write simtable
+
+FINISH

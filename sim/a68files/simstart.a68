@@ -1,0 +1,359 @@
+DECS simstart CONTEXT VOID USE putstrings, simmonitor, simtable, simnode,
+     simpast, simrun, { simsave, } simtime, kernel, kealientoolkit,
+     basics, osinterface:
+
+{ " Id: simstart.sta,v 2.3 91/10/17 10:42:26 miker Exp$" }
+configinfo A68CONFIG "$Id: simstart.a68,v 34.2 1995/03/29 13:05:03 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:05:88  Created. BJE.
+29:08:88  Changed to track Arch Des CR 28 and to adjust diagnostic
+             output
+13:10:88  Adjustment to 'initialise shell with fn' to track changes to
+             `open simulator file'
+04:11:88  Calls to 'set time mode' used to record changes in the time
+             mode. BGH
+11:11:88  Ensure that EPI is notified of save library implicit in
+             simulator start up BJE.
+11:11:88  `initialise shell' acquires `fn' argument for Sys Spec CR 13.  BJE
+07:12:88  `initialise common' raises EPI_M_SIMULATED_NODE message.
+             EPI CR 81.  BJE.
+25:01:89  `initialise common' no longer raises EPI_M_SIMULATED_NODE message.
+             R4B048.  AAP.
+26:01:89  `initialise shell with fn' now raises EPI_M_SIMULATED_NODE message.
+             R4B068.  AAP.
+05:02:90  'deinitialise shell' calls 'start monitors' (a misnomer, now).  PAR.
+10:04:90  timing added for VMS.  AAP
+
+21:12:89  Changes for timescaling support.                        MHC
+               - SHELLs active and saved now include scale time values.
+               - 'reinitialise shell' restores scale time value according
+                 to past or present mode.
+               - 'initialise shell with fn' resets scale time to 1
+               - 'initialise shell' sets scale time to 1
+
+13:03:90  Hierarchic Timescaling:  (Supersedes previous change)  MHC
+               - PROC initialise shell and PROC initialise shell with fn
+                 look up scaletime value from symbol table and assign it
+                 to 'scale time'.
+               - Simulator issues "scale time set to ..." message
+17:12:90  Assclosure added to use list for CLOSURESEEDS. JIT
+31:01:91  Merge in testpoint change.  DCT
+01:02:91  Alien code interface disabled for VAX.  DCT
+
+03:10:91  I00295: Moved "startmonitors" call to ensure monitors are removed
+             before "select function" moves any input pointers. MDR.
+
+17:10:91 I00250: Call "simtable init" to set up internal node names
+            during continuesimulation. MDR.
+
+10:06:93 Interface changed for separate simulator image.  simsave left out
+            as not working for ELLA2000.  DCT
+
+13:08:93 epi commented out.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.020 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the entry and exit sequences for the simulator.
+}
+
+{ GLOBAL DATA }
+{ =========== }
+
+{
+   'diag_level' also keeps its value from one simulator invocation to the next
+   It controls diagnostics that are not delivered to the customer.  A value of
+   zero produces no diagnostics and the command that changes the level from this
+   is hidden from the user and protected by password
+}
+INT diag_level := 0;
+
+PROC null instrument = (REF VECTOR[] CHAR msg) VOID: SKIP;
+
+PROC real instrument = (REF VECTOR[] CHAR msg) VOID:
+put (out, ("> ", msg, newline));
+
+
+{ LOCAL PROCEDURES }
+{ ================ }
+
+{
+   A lot of initialisation is common to both entry routes into the simulator
+   and the "simulatefn" command
+}
+PROC initialise common = (NODE node, FLTPROC flt) VOID:
+BEGIN
+   ID fn = CASE node IN (BOX b): lookup userid (fn OF b) ESAC;
+   put(out, (newline, "FN  ", fn, newline));
+   HEAP BIND bind := (fn, nilid, HEAP MNODE := (HEAP NODE := node, 0, 0));
+   active time := 0;
+   printed time := -1;
+   set time mode(present);
+   print style := freeform;
+   printed time mode := present;
+   printed time style := freeform;
+   {
+      actually it doesn't matter what 'printed time *' get set to, with
+      'printed time' set to -1, the current values do no affect the operation
+      of 'pttime' which immediately sets them again
+   }
+   simtable init;
+   HEAP PATH simfn path := (1, fn, nilid, go in, bind, nilpath);
+   HEAP PATH mon path := simfn path;
+   simtable replace binding(monitoring pointer name, any, mon path);
+   simtable replace binding(simulated function name, any, simfn path)
+END;
+
+{ PUBLIC PROCEDURES }
+{ ==================}
+
+{{{  simsave left out.  14:06:93  DCT
+{
+   Here is the sequence required to write the status file.
+}
+PROC write status file = (FLTPROC flt) VOID:
+BEGIN
+   SHELL active =
+      (
+         active time,
+         print style,
+         time mode,
+         scale time,
+         monitoring separator,
+         testpoints,
+         saved monitoring pointer
+      );
+   SHELL saved =
+      IF time mode = present THEN null shell
+      ELSE
+         (
+            saved active time,
+            saved print style,
+            present,
+            saved scale time,
+            saved monitoring separator,
+            saved testpoints,
+            saved monitoring pointer
+         )
+      FI;
+   start write status file (active, saved, flt);
+   INT time;
+   ID fn;
+   save state (time, fn, write symbol data, write instance data, flt);
+   end write status file (time, fn, flt)
+END;
+}}}
+
+{
+  Here is the deinitialisation sequence for exit from the simulator.
+}
+PROC deinitialise shell = (FLTPROC flt) VOID:
+BEGIN
+{{{  simsave left out  10:06:93  DCT
+   IF save simulator file THEN
+      write status file (flt);
+      FILENAME simulator filename = close simulator file (flt);
+      put (out, (
+           "Simulation has been saved as ",
+            shortname OF simulator filename,
+            newline
+      ))
+   ELSE
+      close simulator file (flt)
+   FI;
+}}}
+   simtable discard;
+   start monitors (flt);
+   terminate kernel (flt)
+END;
+
+{
+  Here is the initialisation sequence for entry into the simulator via the
+  "simulate" command
+}
+PROC initialise shell = (FILE  simfile, FLTPROC flt) VOID:
+BEGIN
+   PROC (REF VECTOR [] CHAR) VOID instrument =
+      IF diag_level = 0 THEN null instrument
+      ELSE real instrument
+      FI;
+
+   { Initialise the Alien Code toolkit support routines }
+   aci_initialise_procs;
+
+   NODE node = initialise kernel (simfile, diag_level, instrument, flt);
+   { Lookup scale time value from symbol table }
+
+   scale time := CASE node IN
+                   (BOX box): lookup scaletime (fn OF box)
+                 OUT
+                   flt ("Simstart: NODE did not have mode BOX");
+                   1
+                 ESAC;
+
+    { Inform user if scale time has been set to more than unity }
+
+    IF (scale time > 1) THEN
+      put (out, (newline,
+                 "Simulator scaletime has been set to ",
+                 intchars (scale time),
+                 newline
+                )
+          )
+    FI;
+
+
+
+   { Initialise kernel calls as assembly which performs an implicit save
+     library, so ... }
+   { epi_send_message(m_epi_m_lib_changed, FALSE); }
+   monitors pending := FALSE;
+   start monitors (flt);
+   initialise common (node, flt)
+END;
+
+{
+   Here is the reinitialisation sequence carried out when the "simulatefn"
+   command is called
+}
+PROC initialise shell with fn = (ID fn, FLTPROC flt) VOID:
+BEGIN
+   monitors pending := FALSE;
+   start monitors (flt);
+
+   {
+      Must call this before doing anything irreversible in case function cannot
+      be selected
+   }
+   NODE node = select function (fn, flt);
+   { Lookup scale time value from symbol table }
+
+   scale time := CASE node IN
+                   (BOX box): lookup scaletime (fn OF box)
+                 OUT
+                   flt ("Simstart: NODE did not have mode BOX");
+                   1
+                 ESAC;
+
+
+    { Inform user if scale time has been set to more than unity }
+
+    IF (scale time > 1) THEN
+      put (out, (newline,
+                 "Simulator scaletime has been set to ",
+                 intchars (scale time),
+                 newline
+                )
+          )
+    FI;
+
+{{{ simsave left out  10:06:93  DCT
+   BOOL ssf = save simulator file;
+   save simulator file := FALSE;
+   close simulator file (flt);
+   ID dummy;
+   open simulator file (nil id, TRUE, dummy, flt);
+   save simulator file := ssf;
+}}}
+   initialise common (node, flt);
+   REF PATH simfn;
+   simtable lookup path(simulated function name, any, simfn);
+   { epi_send_message(m_epi_m_simulated_node,sim_epi_node(simfn)) } SKIP
+END;
+
+
+{{{ continue simulation left out  10:06:93  DCT
+
+{
+  Here is the initialisation sequence for re-entry into the simulator via the
+  "continuesimulation" command
+}
+PROC reinitialise shell = (FLTPROC flt) VOID:
+BEGIN
+   SHELL active, saved;
+   INT time;
+   ID fn;
+   simtable init;
+   start read status file (active, saved, time, fn, flt);
+   PROC (REF VECTOR [] CHAR) VOID instrument =
+      IF diag_level = 0 THEN null instrument
+      ELSE real instrument
+      FI;
+
+   { Initialise the Alien Code toolkit support routines }
+   aci_initialise_procs;
+   NODE node = restore state (diag_level, time, fn, read symbol data,
+                              read instance data, instrument, flt);
+   end read status file (flt);
+   HEAP BIND bind := (fn, nilid, HEAP MNODE := (node, 0, 0));
+   HEAP PATH simfn path := (1, fn, nilid, go in, bind, nilpath);
+   simtable replace binding(simulated function name, any, simfn path);
+
+   monitors pending := FALSE;
+   active time := time OF active;
+   scale time := scaletime OF active;
+   print style := style OF active;
+   set time mode(mode OF active);
+   monitoring separator := monitoring separator OF active;
+   testpoints  := testpoints OF active;
+   IF time mode = past THEN
+      saved active time := time OF saved;
+      saved print style := style OF saved;
+      saved scale time  := scaletime OF saved;
+      saved monitoring separator := monitoring separator OF saved;
+      saved testpoints  := testpoints OF saved;
+      saved monitoring pointer := pointer OF saved
+   FI;
+   put(out, (newline, "FN  ", fn, newline));
+   printed time := -1;
+   printed time mode := time mode;
+   printed time style := print style
+   {  see the comment in 'initialise common'; it applies here too }
+END;
+
+}}}
+
+SKIP
+
+KEEP
+   { GLOBAL DATA }
+   diag_level,
+
+   { PUBLIC PROCEDURES }
+   { write status file, } deinitialise shell,
+   initialise shell, initialise shell with fn  {{{, reinitialise shell }}}
+
+FINISH
