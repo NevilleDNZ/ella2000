@@ -1,0 +1,155 @@
+PROGRAM  ellasim  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+         testmode,  basics,  commandsyntax,  commandreader,  command,
+         kernelreader,  commandcaller,  ioprocs,  globalcommands,  simversion,
+         printissue,  simreader,  simstart,  simcmd,  simprompt
+BEGIN
+
+configinfo A68CONFIG "$Id: ellasim.a68,v 34.2 1995/03/29 13:04:28 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:06:93  Program module for the simulator - derived from ella.sta.  DCT
+13:08:93  Extra parameter needed for prompt_args.  DCT
+07:09:93  ellasysdir assigned in lowercase should be upper.  DJS
+28:09:93  Remove module environ, put title print etc in this module.  DJS
+29:09:93  New argument parsing procedures in osinterface.  DCT
+13:10:93  private OF env no longer set TRUE.  DCT
+20:10:93  Spelling.  DCT
+28:10:93  Startup changed.  DCT
+03:11:93  -d hidden from user.  DCT
+29:11:93  version renamed simversion.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  32.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ Main body of ELLASIM - initialise and build command tables }
+
+STR  ellasysdir = "ELLASYSDIR";
+COMMANDENV  env;   { holds information about the current command context }
+PROC get_prompt = RVC: prompt OF current_context OF stack OF env;
+
+initialise_osinterface(simversion, TRUE { trap user interrupts });
+initialise_ioprocs(get_prompt);
+
+{ Get and check the arguments (based on the version in ella.sta) }
+
+BOOL  silent, testmode;
+RVC  ass_fname:= nullstr,  in_fname:= nullstr;
+
+PROC  reset = VOID:
+BEGIN
+   diag_level:= 0;
+   ass_fname:= in_fname:= nullstr;
+   silent:= testmode:= FALSE
+END;
+
+PROC  check_arg = (STR  arg,  PROC STR  next) BOOL: { OK }
+   IF arg = "-d"
+   THEN  BOOL  failed:= FALSE;
+         diag_level:= chars to int(next, failed);
+         IF failed THEN  put(err, ("integer expected after -d", newline))  FI;
+         NOT failed
+   ELIF arg = "-t" THEN  testmode:= TRUE
+   ELIF arg = "-s" THEN  silent:= TRUE
+   ELIF arg = "-i"
+   THEN  filename_arg(next, "Input", infile_type, in_fname, TRUE)
+   ELIF UPB arg >= 1  ANDTH  arg[1] = "-"
+   THEN  put(err, ("Unexpected option """, arg, """", newline));  FALSE
+   ELIF UPB ass_fname > 0
+   THEN  put(err, ("Extra argument """, arg, """", newline));  FALSE
+   ELSE  filename_arg(arg, "Open interface", assfile_type, ass_fname, TRUE)
+FI;
+
+
+PROC  no_more = (BOOL  ok) BOOL: { OK }
+   IF ok  ANDTH  UPB ass_fname > 0
+   THEN  TRUE { arguments successfully parsed }
+   ELSE  put(screen, ( newline, "   <file> = open interface file from ELLA",
+                       newline, "-i <file> = start reading input commands "
+                       "from <file>", lines(2) ));
+         FALSE
+   FI;
+
+
+parse_arguments( "Give ELLA open interface file name ([-i <file>] <file>): ",
+                 reset, check_arg, no_more );
+
+print_title(silent);
+set_testmode(testmode);
+
+IF diag_level > 0 THEN  put(screen, ( newline, "Simulator diagnostic level = ",
+                                      diag_level, newline ))
+FI;
+
+{ Set up input if required }
+
+IF UPB in_fname > 0 THEN  io_input(in_fname, global_msg)  FI;
+
+
+{ Build simulator commands }
+
+FILE  file = open_file(ass_fname, read_access, global_msg);
+
+SIMPLE  start_up:=
+   ( MAKERVC "ELLASIM", nullstr, no parameters, normal access, continue,
+     MAKERVC "Enters the ELLA Simulator",
+     (VALUES names, MESSAGEPROC msg) VOID:
+        sim_startup(file, (STR  s) VOID:  msg(user, s))
+   );
+
+
+COMMANDVEC  simcommands = make_sim_commands,
+            globals = make_globalcommands( ellasysdir, source_type,
+                                           print_issue, REF COMMANDENV: env );
+
+{ Make globals available to diagnostic command contexts }
+
+add_globals_to_compounds(globals, globals);
+
+REF COMPOUND  sim_command = make_compound( start_up, facility,
+                                           sim prompt:= HEAP RVC,
+                                           simcommands, globals, nullcommand );
+
+{ Initialise command environment }
+
+env:= initialise_commands( report_error, set_default_msg, global_msg,
+                           call_command,
+                           add_simulator_readers(make_kernel_readers),
+                           sim_command, no_parameters );
+
+interpret_commands(env);
+
+put(screen, (newline, "The ELLA Simulator has finished", newline))
+
+END  FINISH
