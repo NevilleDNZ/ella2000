@@ -1,0 +1,1404 @@
+DECS keambiop CONTEXT VOID USE  putstrings, modeprocs, assmodes, basics,
+     kesymbols, keambasics, keamstandard, kebasics:
+
+{ " Id: keambiop.sta,v 2.1 91/02/22 18:34:03 edcad Exp$" }
+configinfo A68CONFIG "$Id: keambiop.a68,v 34.2 1995/03/29 13:04:33 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+28:09:88  Module implementing the bodies of BIOPs.
+17:11:88  Corrected AM stack states for am (B)store calls. Bug 25. MDR.
+25:11:88  Correction to `APPEND' Bug 26.  MDR.
+11:01:89  Corrections to 'push inputs'. Bug 27. MDR.
+24:01:89  Fixes to banish Bug 27. SPT.
+20:02:89  BIOPs complete with in-line optimisation.  R4B043.  SPT.
+10:11:89  CR 638. MACPARAM mode altered. EVW
+10:01:90  Real convertion BIOPs added -- F_TO_R and R_TO_F.  PAR.
+15:10:93  tcc had a hernier trying to generate -g for bioptable.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+   PROC max = (INT i1, i2) INT:
+
+      IF i1 > i2 THEN i1 ELSE i2 FI;
+
+   OP APPEND = (REF REF VECTOR [] INT i1, REF VECTOR [] INT i2) VOID:
+
+      IF i2 ISNT NIL THEN
+         IF i1 ISNT REF VECTOR [] INT (NIL) THEN
+            HEAP VECTOR [UPB i1 + UPB i2] INT result;
+            result [:UPB i1] := i1;
+            result [UPB i1 + 1:] := i2;
+            i1 := result
+         ELSE
+            i1 := HEAP VECTOR [UPB i2] INT := i2
+         FI
+      FI;
+
+   OP NUMERATION = (STYPE st) INT:
+   { The number of components of an enumerated type or a character,
+     or a structure. }
+
+      CASE st IN
+      (REF SCHAR ss):
+         UPB char OF ss,
+      (REF SENUM ss):
+           IF rest OF ss ISNT nilsenum THEN
+              1 + NUMERATION rest OF ss
+           ELSE
+              1
+           FI,
+      (REF SST ss):
+           IF rest OF ss ISNT nilsst THEN
+              1 + NUMERATION rest OF ss
+           ELSE
+              1
+           FI
+      ESAC;
+
+   OP NOTASSOCIATED = (SENUM ss) BOOL:
+   { Returns true if the enumerated type has not associated types. }
+
+      IF NOT (t OF ss = null stype) THEN
+         FALSE
+      ELSE
+         IF rest OF ss ISNT nil senum THEN NOTASSOCIATED rest OF ss ELSE TRUE FI
+      FI;
+
+{===========================================================================}
+MODE TYPESORT =
+{--------------------------------------------}
+{ The sort of ELLA type we might expect at an input or at the output. }
+
+   INT;
+
+INT bs =1, tv =2, ch =3, ee =4, ei =5, ds =6, sr =7, lr =8, struct = 10,
+    cs = 11 { General character string };
+
+   PROC macparams match = (REF VECTOR [] MACPARAM params, INT number) BOOL:
+   {--------------------------------------------}
+
+      IF params IS nilmacparams THEN
+         number = 0
+      ELSE
+         UPB params = number ANDTH
+            BEGIN
+               BOOL result := TRUE;
+               FOR i TO number DO
+                  CASE param OF params[i] IN
+                  (FORMULATAG): SKIP
+                  OUT result := FALSE
+                  ESAC
+               OD;
+               result
+            END
+      FI;
+
+   PROC macparams limits vector = (REF VECTOR [] MACPARAM params) VECTOR[]INT:
+   {--------------------------------------------}
+   { A vector containing the integer values of each of the parameters. }
+   { No type tags are expected. }
+
+      IF params ISNT nilmacparams THEN
+         VECTOR [UPB params] INT result;
+         FOR i TO UPB params DO
+            CASE param OF params[i] IN
+            (FORMULATAG f):
+               result[i] := int(tag OF f)
+            ESAC
+         OD;
+         result
+      ELSE
+         ()
+      FI;
+
+   PROC push macparams = (REF VECTOR [] MACPARAM params) INT:
+   {--------------------------------------------}
+   { Push the values of any macro parameters onto the stack. }
+   { No type tags are expected. }
+
+      BEGIN
+         INT stack size := 0;
+         IF params ISNT nilmacparams THEN
+            FOR i FROM UPB params BY -1 TO 1 DO
+               CASE param OF params [i] IN
+               (FORMULATAG f):
+                  BEGIN
+                     am pushint (int (tag OF f));
+                     stack size PLUSAB 1
+                  END
+               ESAC
+            OD
+         FI;
+         stack size
+      END;
+
+{===========================================================================}
+MODE LIMITCHECK =
+{--------------------------------------------}
+{ Function checking limit information about inputs and output and
+  macro parameters.  All information is presented simultaneously, so any
+  relationships at all may be checked.
+  It is assumed that the types and parameters themselves have been fully
+  validated. }
+
+   PROC (VECTOR [] INT, VECTOR [] INT, VECTOR [] INT) BOOL;
+
+{===========================================================================}
+MODE OUTPUT =
+{--------------------------------------------}
+{ Object describing the output of a function. }
+
+   STRUCT (TYPESORT output_type_sort,
+      BOOL limit_save, { Whether the limits of the type must be on the stack. }
+      REF [] OUTPUT struct_components); { Components of a structure. }
+
+   PROC output match = (OUTPUT output, STYPE output type) BOOL:
+   {--------------------------------------------}
+   { See if the output type matches the output type sorts. }
+
+      CASE output type IN
+      (REF SENUM st):
+         output_type_sort OF output = ee
+         OREL ((output_type_sort OF output = tv) ANDTH (NUMERATION st = 2)
+            ANDTH (NOTASSOCIATED st)),
+      (REF SINT):
+         output_type_sort OF output = ei,
+      (REF SCHAR st):
+         output_type_sort OF output = ch
+         OREL ((output_type_sort OF output = tv) ANDTH (NUMERATION st = 2)),
+      (REF SSTRING st):
+         (output_type_sort OF output = bs) ANDTH (NUMERATION t OF st = 2)
+         OREL ((output_type_sort OF output = ds) ANDTH(NUMERATION t OF st = 10))
+         OREL (output_type_sort OF output = cs)
+         OREL ((output_type_sort OF output = lr) ANDTH (NUMERATION t OF st = 2)
+            ANDTH (no OF st = 64))
+         OREL ((output_type_sort OF output = sr) ANDTH (NUMERATION t OF st = 2)
+            ANDTH (no OF st = 32)),
+      (REF SROW st):
+         (output_type_sort OF output = struct) AND
+         (no OF st = UPB struct_components OF output) ANDTH
+         BEGIN
+            BOOL match := TRUE;
+            FOR i TO UPB struct_components OF output WHILE match DO
+               match := output match ((struct_components OF output) [i],
+                  type OF st)
+            OD;
+            match
+         END,
+      (REF SST st):
+         (output_type_sort OF output = struct) AND
+         (NUMERATION st = UPB struct_components OF output) ANDTH
+         BEGIN
+            BOOL match := TRUE;
+            REF SST ott := st;
+            FOR i TO UPB struct_components OF output WHILE match DO
+               match := output match ((struct_components OF output) [i],
+                  t OF ott);
+               ott := rest OF ott
+            OD;
+            match
+         END
+      OUT
+         FALSE
+      ESAC;
+
+
+   PROC push current output = (INT output type, INT output offset,
+      INT cp offset) INT:
+   {--------------------------------------------}
+   { Push the value of the output as single string on the top of the stack.
+     Locates the callinstptr via supplied offset. }
+
+      BEGIN
+         { ()  }
+         am push int (0);
+            { (0) }
+         am local (cp offset + 1);
+            { (cp: 0) }
+         am push int (output offset);
+            { (oo: cp: 0) }
+         am add;
+            { (cp+oo: 0 ) }
+         am bstring (lookup type size (output type) * bits per byte,
+                     lookup type size (output type) * bits per byte, indirect);
+            { (*(cp+oo)) }
+         1  { Increase in size of stack. }
+      END;
+
+   PROC output limits vector = (STYPE output type) REF VECTOR [] INT:
+   {--------------------------------------------}
+   { Return a vector of limit information relating to the output.
+     Only details which are "useful" are included.  It is assumed
+     the output types have been fully validated. }
+
+      CASE output type IN
+      (REF SENUM ss): NIL,
+      (REF SINT ss): HEAP VECTOR [2] INT := (lwb OF ss, upb OF ss),
+      (REF SCHAR ss): NIL,
+      (REF SROW st):
+         BEGIN
+            REF VECTOR [] INT row := NIL;
+            FOR i TO no OF st DO
+               row APPEND output limits vector (type OF st)
+            OD;
+            row
+         END,
+      (REF SSTRING st): HEAP VECTOR [1] INT := (no OF st),
+      (REF SST st):
+         BEGIN
+            REF VECTOR [] INT row := NIL;
+            row APPEND output limits vector (t OF st);
+            IF rest OF st ISNT nil sst THEN
+               row APPEND output limits vector (rest OF st)
+            FI;
+            row
+         END
+      ESAC;
+
+   PROC push output limits = (OUTPUT output, STYPE output type) INT:
+   {--------------------------------------------}
+   { Push any limits etc of the output which are required. }
+   { It is assumed the output types have been validated. }
+   { Unfortunately, it is necessary to push the ouputs in reverse order. }
+
+      BEGIN
+         INT stack size := 0;
+         CASE output type IN
+         (REF SINT st):
+            IF limit_save OF output THEN
+               am push int (upb OF st);
+               am push int (lwb OF st);
+               stack size PLUSAB 2
+            FI,
+         (REF SST st):
+            BEGIN
+               REF SST ott := st;
+               VECTOR [UPB struct_components OF output] STYPE
+                  extracted types;
+               FOR i TO UPB struct_components OF output DO
+                  extracted types [i] := t OF ott;
+                  ott := rest OF ott
+               OD;
+               { We now have a vector of the contained types! }
+               FOR i FROM UPB struct_components OF output BY -1 TO 1 DO
+                  stack size PLUSAB push output limits (
+                     (struct_components OF output) [i], extracted types [i])
+               OD
+            END,
+         (REF SROW st):
+            FOR i FROM no OF st BY -1 TO 1 DO
+               stack size PLUSAB push output limits (
+                  (struct_components OF output) [i], type OF st)
+            OD,
+         (REF SSTRING st):
+            IF limit_save OF output THEN
+               am push int (no OF st);
+               stack size PLUSAB 1
+            FI
+         OUT
+            { The limits of REF SENUM, REF SCHAR are never required }
+            SKIP
+         ESAC;
+         stack size
+      END;
+
+   PROC store output = (OUTPUT output, INT output type,
+      INT output offset, INT cp offset) VOID:
+   {--------------------------------------------}
+   { Store the output item, which will be top of the abstract machine stack. }
+   { Finds the callinstpointer at supplied offset plus the op items which
+     it determines must be on the stack. }
+
+      IF output_type_sort OF output = bs
+         THEN
+         { (q: val) }
+         am local (cp offset + 2);
+         { (cp: q: val) }
+         am pushint (output offset);
+         { (os: cp: q: val) }
+         am add;
+         { (cp+os: q: val) }
+         am local (1);
+         { (q: cp+os: q: val) }
+         am store (ws, indirect);
+         am drop (1);
+         { (val) }
+         am local (cp offset + 1);
+         { (cp: val) }
+         am pushint (output offset + ws);
+         am add;
+         { (cp+os+ws: val) }
+         am local (1);
+         am bstore ( CASE lookup type (output type) IN (REF SSTRING st):
+            no OF st ESAC,
+            indirect);
+         am drop (1)
+         { () }
+      ELIF output_type_sort OF output = tv THEN
+         { (tv) }
+         am local (cp offset + 1);
+         { (cp: tv) }
+         am pushint (output offset);
+         { (os: cp: tv) }
+         am add;
+         { (cp+os: tv) }
+         am local (1);
+         am store (lookup type size(output type), indirect);
+         am drop (1)
+         { () }
+      FI;
+
+
+{===========================================================================}
+MODE INPUT =
+{--------------------------------------------}
+{ Object describing the input of a function. }
+
+   TYPESORT;
+
+   PROC input match = (INPUT input, INT input type) BOOL:
+   {--------------------------------------------}
+   { See if the input type matches the input type sort. }
+
+      CASE lookup type (input type) IN
+      (REF SENUM st):
+         input = ee
+         OREL ((input = tv) ANDTH (NUMERATION st = 2)
+            ANDTH (NOTASSOCIATED st)),
+      (REF SINT):
+         input = ei,
+      (REF SCHAR st):
+         input = ch
+         OREL ((input = tv) ANDTH (NUMERATION st = 2)),
+      (REF SSTRING st):
+         (input = bs) ANDTH (NUMERATION t OF st = 2)
+         OREL ((input = ds) ANDTH (NUMERATION t OF st = 10))
+         OREL (input = cs)
+         OREL ((input = lr) ANDTH (NUMERATION t OF st = 2)
+            ANDTH (no OF st = 64))
+         OREL ((input = sr) ANDTH (NUMERATION t OF st = 2)
+            ANDTH (no OF st = 32))
+      OUT
+         FALSE
+      ESAC;
+
+   PROC input limits vector = (VECTOR [] INT input types) VECTOR [] INT:
+   {--------------------------------------------}
+   { Return a vector of limit information relating to the input.
+     Only details which are "useful" are included. }
+
+      BEGIN
+         REF VECTOR [] INT result := NIL;
+         FOR i TO UPB input types DO
+            result APPEND
+               CASE lookup type (input types [i]) IN
+               (REF SENUM st): NIL,
+               (REF SINT st):  HEAP VECTOR [2] INT := (lwb OF st, upb OF st),
+               (REF SCHAR st): NIL,
+               (REF SSTRING st): HEAP VECTOR [1] INT := (no OF st)
+               ESAC
+         OD;
+         result
+      END;
+
+   PROC push inputs = ([] INPUT inputs, VECTOR [] INT input types,
+      INT cp offset) INT:
+   {--------------------------------------------}
+   { Push the signal values of the inputs onto the stack. }
+   { Finds the callinst pointer at the supplied offset. }
+   { It is assumed the input types have been validated. }
+
+      BEGIN
+         INT stack size := 0;
+         FOR i FROM UPB inputs BY -1 TO 1 DO
+            CASE lookup type (input types [i]) IN
+            (UNION (REF SENUM, REF SCHAR)):
+               BEGIN { Pick up a single word of input. }
+                  am local (stack size + cp offset);
+                     { (cp) }
+                  am pushint (i * ws + size unit);
+                     { (i*ws+sizeunit: cp) }
+                  am add;
+                     { (cp+i*ws+sizeunit) }
+                  am global (ws, indirect);
+                     { (*(cp+i*ws+sizeunit)) }
+                  am global (ws, indirect);
+                     { (*(*(cp+i*ws+sizeunit))) }
+                  stack size PLUSAB 1
+               END,
+            (REF SINT st):
+               BEGIN { Pick up query flag and word of input. }
+                  am local (stack size + cp offset);
+                     { (cp) }
+                  am pushint (i * ws + size unit);
+                     { (i*ws+sizeunit: cp) }
+                  am add;
+                     { (cp+i*ws+sizeunit) }
+                  am global (ws, indirect);
+                     { (*(cp+i*ws+sizeunit)) }
+                  am pushint (ws);
+                     { (ws: *(cp+i*ws+sizeunit))}
+                  am add;
+                     { (*(cp+i*ws+sizeunit)+ws) }
+                  am global (ws, indirect);
+                     { (*(*(cp+i*ws+sizeunit)+ws)) }
+                  am local (stack size + cp offset + 1);
+                     { (cp: **) }
+                  am pushint (i * ws + size unit);
+                     { (i*ws+sizeunit: cp: **) }
+                  am add;
+                     { (cp+i*ws+sizeunit: **) }
+                  am global (ws, indirect);
+                     { (*(cp+i*ws+sizeunit): **) }
+                  am global (ws, indirect);
+                     { (**(cp+i*ws+sizeunit): **) }
+                  stack size PLUSAB 2
+               END,
+            (REF SSTRING st):
+               BEGIN { Pick up query flag and string. }
+                  am pushint (0);
+                     { (0: cp) }
+                  am local (stack size + cp offset +1);
+                     { (cp: 0: cp) }
+                  am pushint (i * ws + size unit);
+                     { (i*ws+sizeunit: cp: 0 :cp) }
+                  am add;
+                     { (cp+i*ws+sizeunit: 0: cp) }
+                  am global (ws, indirect);
+                     { (*(cp+i*ws+sizeunit): 0 : cp) }
+                  am pushint (ws);
+                     { (ws: *(cp+i*ws+sizeunit): 0: cp)}
+                  am add;
+                     { (*(cp+i*ws+sizeunit)+ws: 0 :cp) }
+                  IF NUMERATION (t OF st) = 2 THEN
+                     { Bit string, one bit per character }
+                     am bstring (no OF st, no OF st, indirect)
+                  ELSE
+                     { General character string, one byte per character }
+                     am bstring (no OF st * bits per byte,
+                                 no OF st * bits per byte, indirect)
+                  FI;
+                     { (*(*(cp+i*ws+sizeunit)+ws): cp) }
+                  am local (stack size + cp offset + 1);
+                     { (cp: **) }
+                  am pushint (i * ws + size unit);
+                     { (i*ws+sizeunit: cp: **) }
+                  am add;
+                     { (cp+i*ws+sizeunit: **) }
+                  am global (ws, indirect);
+                     { (*(cp+i*ws+sizeunit): **) }
+                  am global (ws, indirect);
+                     { (**(cp+i*ws+sizeunit): **) }
+                  stack size PLUSAB 2
+               END
+            ESAC
+         OD;
+         stack size
+      END;
+
+MODE MBIOP =
+{--------------------------------------------}
+{ Object describing a BIOP as arriving at the code generator. }
+
+   STRUCT (LABEL biop_name,
+      REF VECTOR [] INPUT inputs,
+      INT no_of_macparams,
+      OUTPUT output,
+      BOOL pointer,
+      LIMITCHECK limit_check);
+
+   PROC biop body translate =
+   {--------------------------------------------}
+      (MBIOP b, ALIENCODE body, FNDEC declaration,
+      VECTOR [] INT input types, INT output type,
+      ENVIRON environ, CLOSURE closure,
+      FLTPROC flt, INT output offset) VOID:
+
+      BEGIN
+         { We assume this BIOP has the correct input types. }
+         { Check the macro parameters. }
+         IF mac params match (macparams OF body, no_of_macparams OF b) THEN
+            IF output match (output OF b, lookup type (output type)) THEN
+               IF (limit_check OF b)
+                  (
+                     input limits vector (input types),
+                        macparams limits vector (macparams OF body),
+                        output limits vector (lookup type (output type))
+                  )
+                  THEN
+                  INT existing op size =
+                     push current output(output type, output offset, 0);
+                     { (op: cp) }
+                  INT op pointer size =
+                     IF pointer OF b THEN
+                        am local (existing op size);
+                        { (cp: op: cp) }
+                        am pushint (output offset);
+                        { (opoffset: cp: op: cp) }
+                        am add;
+                        { (opoffset+cp: op: cp) }
+                        1
+                     ELSE
+                        0
+                     FI;
+                  { (opoffset+cp?: op: cp) }
+                  INT op limits size =
+                     push output limits (output OF b,
+                        lookup type (output type));
+                     { (oplimits: opoffset+cp?: op: cp) }
+                  INT mac size = push macparams (macparams OF body);
+                     { (macs: oplimits: opoffset+cp?: op: cp) }
+                  INT ip size = push inputs (inputs OF b, input types,
+                     mac size + op limits size + op pointer size
+                     + existing op size);
+                     { (ips: macs: oplimits: opoffset+cp?: op: cp) }
+                  am call (ip size + mac size + op limits size
+                        + op pointer size,
+                     biop_name OF b);
+                     { ( ops'?: op: cp) }
+                  IF NOT pointer OF b THEN
+                     store output (output OF b, output type,
+                        output offset, existing op size)
+                     { (op: cp) }
+                  FI;
+                  push current output (output type, output offset,
+                     existing op size);
+                     { (op': op: cp) }
+                  am neq;
+                     { (op'!=op: cp) }
+                  am jump no (0, old result label);
+                     { (cp) }
+                  am local (0);
+                     { (cp: cp) }
+                  am pushint (0);
+                     { (0: cp: cp:) }
+                  am store (size unit, indirect);
+                     { (cp) }
+                  am label (1, old result label)
+                     { (cp) }
+               ELSE
+                  flt ("Output size incorrect for BIOP " + name OF body + " in "
+                     + fnname OF declaration)
+               FI
+            ELSE
+               flt ("Invalid outputs from BIOP " + name OF body + " in "
+                  + fnname OF declaration)
+            FI
+         ELSE
+            flt ("Invalid macro parameters to BIOP " + name OF body + " in "
+               + fnname OF declaration)
+         FI
+      END;
+
+{===========================================================================}
+MODE OVERLOADEDBIOP =
+{--------------------------------------------}
+{ Object describing a number of BIOPs with the same name. }
+
+   STRUCT (ID overloaded_biop_name, REF VECTOR [] MBIOP biops);
+
+   PROC overloaded biop lookup =
+   {--------------------------------------------}
+      (OVERLOADEDBIOP b, VECTOR [] INT input types, REF MBIOP biop) BOOL:
+
+      BEGIN
+         BOOL found := FALSE;
+         FOR i TO UPB biops OF b WHILE NOT found DO
+            IF UPB input types = UPB inputs OF (biops OF b) [i] THEN
+               found := TRUE; { Posit }
+               FOR j TO UPB input types WHILE found DO
+                  IF NOT input match ((inputs OF (biops OF b) [i]) [j],
+                        input types [j]) THEN
+                     found := FALSE
+                  FI
+               OD;
+               IF found THEN
+                  biop := (biops OF b) [i]
+               FI
+            FI
+         OD;
+         found
+      END;
+
+   PROC overloaded biop translate =
+   {--------------------------------------------}
+      (OVERLOADEDBIOP b, ALIENCODE body, FNDEC declaration,
+      VECTOR [] INT input types, INT output type,
+      ENVIRON environ, CLOSURE closure,
+      FLTPROC flt, INT output offset) VOID:
+
+      BEGIN
+         { (cp) }
+         { Find the biop which matches the inputs. }
+         MBIOP biop;
+         IF overloaded biop lookup (b, input types, biop) THEN
+            biop body translate (biop, body, declaration, input types,
+               output type, environ, closure, flt, output offset)
+         ELSE
+            flt ("Input types not valid for BIOP " + name OF body +
+               " in " + fnname OF declaration)
+         FI
+         { (cp) }
+      END;
+
+{===========================================================================}
+MODE BIOPTABLE = REF VECTOR [] OVERLOADEDBIOP;
+{--------------------------------------------}
+
+   MODE V = VECTOR [0] INT;
+
+
+   PROC  make_1 = OVERLOADEDBIOP:
+          (MAKEID "AND", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("AND|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:(i[1]=i[2])AND(i[1]=o[1])),
+              (label("AND|2"), HEAP VECTOR [2] INPUT := (tv,tv), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_2 = OVERLOADEDBIOP:
+          (MAKEID "OR", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("OR|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:(i[1]=i[2])AND(i[1]=o[1])),
+              (label("OR|2"), HEAP VECTOR [2] INPUT := (tv,tv), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_3 = OVERLOADEDBIOP:
+          (MAKEID "NOT", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("NOT|1"), HEAP VECTOR [1] INPUT := bs, 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i, V m, V o)BOOL:i[1]=o[1]),
+              (label("NOT|2"), HEAP VECTOR [1] INPUT := tv, 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_4 = OVERLOADEDBIOP:
+          (MAKEID "XOR", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("XOR|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:(i[1]=i[2])AND(i[1]=o[1])),
+              (label("XOR|2"), HEAP VECTOR [2] INPUT := (tv,tv), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_5 = OVERLOADEDBIOP:
+          (MAKEID "SL", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("SL|1"), HEAP VECTOR [1] INPUT := bs, 1,
+                 (bs, FALSE, NIL),
+                 FALSE, (V i, V m, V o)BOOL:o[1]=i[1]+m[1])
+             )
+          );
+
+   PROC  make_6 = OVERLOADEDBIOP:
+          (MAKEID "SR_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("SR_US|1"), HEAP VECTOR [1] INPUT := bs, 1,
+                 (bs, FALSE, NIL),
+                 FALSE, (V i, V m, V o)BOOL:o[1]=i[1]+m[1])
+             )
+          );
+
+   PROC  make_7 = OVERLOADEDBIOP:
+          (MAKEID "SR_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("SR_S|1"), HEAP VECTOR [1] INPUT := bs, 1,
+                 (bs, FALSE, NIL),
+                 FALSE, (V i, V m, V o)BOOL:o[1]=i[1]+m[1])
+             )
+          );
+
+   PROC  make_8 = OVERLOADEDBIOP:
+          (MAKEID "EQ", HEAP VECTOR [3] MBIOP :=
+             (
+              (label("EQ|3"), HEAP VECTOR [2] INPUT := (ch,ch), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("EQ|2"), HEAP VECTOR [2] INPUT := (ei,ei), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("EQ|3"), HEAP VECTOR [2] INPUT := (ee,ee), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_9 = OVERLOADEDBIOP:
+          (MAKEID "GT", HEAP VECTOR [3] MBIOP :=
+             (
+              (label("GT|3"), HEAP VECTOR [2] INPUT := (ch,ch), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("GT|2"), HEAP VECTOR [2] INPUT := (ei,ei), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("GT|3"), HEAP VECTOR [2] INPUT := (ee,ee), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_10 = OVERLOADEDBIOP:
+          (MAKEID "GE", HEAP VECTOR [3] MBIOP :=
+             (
+              (label("GE|3"), HEAP VECTOR [2] INPUT := (ch,ch), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("GE|2"), HEAP VECTOR [2] INPUT := (ei,ei), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("GE|3"), HEAP VECTOR [2] INPUT := (ee,ee), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_11 = OVERLOADEDBIOP:
+          (MAKEID "LT", HEAP VECTOR [3] MBIOP :=
+             (
+              (label("LT|3"), HEAP VECTOR [2] INPUT := (ch,ch), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("LT|2"), HEAP VECTOR [2] INPUT := (ei,ei), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("LT|3"), HEAP VECTOR [2] INPUT := (ee,ee), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_12 = OVERLOADEDBIOP:
+          (MAKEID "LE", HEAP VECTOR [3] MBIOP :=
+             (
+              (label("LE|3"), HEAP VECTOR [2] INPUT := (ch,ch), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("LE|2"), HEAP VECTOR [2] INPUT := (ei,ei), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE),
+              (label("LE|3"), HEAP VECTOR [2] INPUT := (ee,ee), 0,
+                 (tv, FALSE, NIL), FALSE, (V i,V m,V o)BOOL:TRUE)
+             )
+          );
+
+   PROC  make_13 = OVERLOADEDBIOP:
+          (MAKEID "TRANSFORM_S", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("TRANSFORM_S|1"), HEAP VECTOR [1] INPUT := bs, 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (ei, TRUE, NIL))
+                 ),
+                 TRUE, (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("TRANSFORM_S|2"), HEAP VECTOR [1] INPUT := ei, 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (bs, TRUE, NIL))
+                 ),
+                 TRUE, (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_14 = OVERLOADEDBIOP:
+          (MAKEID "TRANSFORM_US", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("TRANSFORM_US|1"), HEAP VECTOR [1] INPUT := bs, 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (ei, TRUE, NIL))
+                 ),
+                 TRUE, (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("TRANSFORM_US|2"), HEAP VECTOR [1] INPUT := ei, 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (bs, TRUE, NIL))
+                 ),
+                 TRUE, (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_15 = OVERLOADEDBIOP:
+          (MAKEID "PLUS_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("PLUS_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=max(i[1],i[2])+1
+              )
+             )
+          );
+
+   PROC  make_16 = OVERLOADEDBIOP:
+          (MAKEID "PLUS_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("PLUS_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=max(i[1],i[2])+1
+              )
+             )
+          );
+
+   PROC  make_17 = OVERLOADEDBIOP:
+          (MAKEID "MINUS_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("MINUS_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=max(i[1],i[2])+1
+              )
+             )
+          );
+
+   PROC  make_18 = OVERLOADEDBIOP:
+          (MAKEID "MINUS_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("MINUS_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=max(i[1],i[2])+1
+              )
+             )
+          );
+
+   PROC  make_19 = OVERLOADEDBIOP:
+          (MAKEID "TIMES_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("TIMES_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]+i[2]
+              )
+             )
+          );
+
+   PROC  make_20 = OVERLOADEDBIOP:
+          (MAKEID "TIMES_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("TIMES_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]+i[2]
+              )
+             )
+          );
+
+   PROC  make_21 = OVERLOADEDBIOP:
+          (MAKEID "NEGATE_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("NEGATE_S|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]+1
+              )
+             )
+          );
+
+   PROC  make_22 = OVERLOADEDBIOP:
+          (MAKEID "NEGATE_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("NEGATE_US|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]+1
+              )
+             )
+          );
+
+   PROC  make_23 = OVERLOADEDBIOP:
+          (MAKEID "ABS_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("ABS_S|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]
+              )
+             )
+          );
+
+   PROC  make_24 = OVERLOADEDBIOP:
+          (MAKEID "SQRT_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("SQRT_US|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (bs, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:o[1]=(i[1]+1) OVER 2
+              )
+             )
+          );
+
+   PROC  make_25 = OVERLOADEDBIOP:
+          (MAKEID "DIVIDE_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("DIVIDE_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [3] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, FALSE, NIL),(bs, FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]ANDo[2]=i[2]
+              )
+             )
+          );
+
+   PROC  make_26 = OVERLOADEDBIOP:
+          (MAKEID "DIVIDE_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("DIVIDE_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [3] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, FALSE, NIL),(bs, FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:o[1]=i[1]ANDo[2]=i[2]
+              )
+             )
+          );
+
+   PROC  make_27 = OVERLOADEDBIOP:
+          (MAKEID "MOD_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("MOD_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:o[1]=i[2]
+              )
+             )
+          );
+
+   PROC  make_28 = OVERLOADEDBIOP:
+          (MAKEID "MOD_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("MOD_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:o[1]=i[2]
+              )
+             )
+          );
+
+   PROC  make_29 = OVERLOADEDBIOP:
+          (MAKEID "RANGE_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("RANGE_S|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, TRUE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_30 = OVERLOADEDBIOP:
+          (MAKEID "RANGE_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("RANGE_US|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),(bs, TRUE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_31 = OVERLOADEDBIOP:
+          (MAKEID "EQ_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("EQ_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_32 = OVERLOADEDBIOP:
+          (MAKEID "GT_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("GT_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_33 = OVERLOADEDBIOP:
+          (MAKEID "GE_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("GE_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_34 = OVERLOADEDBIOP:
+          (MAKEID "LT_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("LT_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_35 = OVERLOADEDBIOP:
+          (MAKEID "LE_US", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("LE_US|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_36 = OVERLOADEDBIOP:
+          (MAKEID "EQ_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("EQ_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_37 = OVERLOADEDBIOP:
+          (MAKEID "GT_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("GT_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_38 = OVERLOADEDBIOP:
+          (MAKEID "GE_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("GE_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_39 = OVERLOADEDBIOP:
+          (MAKEID "LT_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("LT_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_40 = OVERLOADEDBIOP:
+          (MAKEID "LE_S", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("LE_S|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (tv, FALSE, NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_41 = OVERLOADEDBIOP:
+          (MAKEID "CONVERT_US", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("CONVERT_US|1"), HEAP VECTOR [1] INPUT := (bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (ds, TRUE, NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("CONVERT_US|2"), HEAP VECTOR [1] INPUT := (ds), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL), (bs, TRUE, NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_42 = OVERLOADEDBIOP:
+          (MAKEID "CONVERT_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("CONVERT_REAL|1"), HEAP VECTOR [2] INPUT := (bs,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),
+                    (struct, FALSE, HEAP VECTOR [3] OUTPUT :=
+                    ((tv, FALSE, NIL), (ds, TRUE, NIL),(bs, TRUE, NIL))))),
+                       TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("CONVERT_REAL|2"), HEAP VECTOR [2] INPUT := (ds,bs), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                    ((tv, FALSE, NIL),
+                    (struct, FALSE, HEAP VECTOR [3] OUTPUT :=
+                    ((tv, FALSE, NIL), (bs, TRUE, NIL),(bs, TRUE, NIL))))),
+                       TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_43 = OVERLOADEDBIOP:
+          (MAKEID "F_TO_R1", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("F_TO_R|1"), HEAP VECTOR [1] INPUT := cs, 0,
+                 (sr, FALSE, NIL), TRUE,
+                 (V i, V m, V o) BOOL: TRUE
+              )
+             )
+          );
+
+   PROC  make_44 = OVERLOADEDBIOP:
+          (MAKEID "F_TO_R2", HEAP VECTOR [1] MBIOP :=
+             MBIOP (
+              (label("F_TO_R|2"), HEAP VECTOR [1] INPUT := cs, 0,
+                 (lr, FALSE, NIL), TRUE,
+                 (V i, V m, V o) BOOL: TRUE
+              )
+             )
+          );
+
+   PROC  make_45 = OVERLOADEDBIOP:
+          (MAKEID "R_TO_F", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("R_TO_F|1"), HEAP VECTOR [1] INPUT := sr, 0,
+                 (cs, TRUE, NIL), TRUE,
+                 (V i, V m, V o) BOOL: TRUE
+              ),
+              (label("R_TO_F|2"), HEAP VECTOR [1] INPUT := lr, 0,
+                 (cs, TRUE, NIL), TRUE,
+                 (V i, V m, V o) BOOL: TRUE
+              )
+             )
+          );
+
+   PROC  make_46 = OVERLOADEDBIOP:
+          (MAKEID "PLUS_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("PLUS_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("PLUS_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_47 = OVERLOADEDBIOP:
+          (MAKEID "MINUS_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("MINUS_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("MINUS_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_48 = OVERLOADEDBIOP:
+          (MAKEID "TIMES_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("TIMES_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("TIMES_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_49 = OVERLOADEDBIOP:
+          (MAKEID "DIVIDE_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("DIVIDE_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("DIVIDE_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_50 = OVERLOADEDBIOP:
+          (MAKEID "NEGATE_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("NEGATE_REAL|1"), HEAP VECTOR [1] INPUT := (sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("NEGATE_REAL|2"), HEAP VECTOR [1] INPUT := (lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_51 = OVERLOADEDBIOP:
+          (MAKEID "EQ_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("EQ_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("EQ_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_52 = OVERLOADEDBIOP:
+          (MAKEID "GT_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("GT_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("GT_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_53 = OVERLOADEDBIOP:
+          (MAKEID "LT_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("LT_REAL|1"), HEAP VECTOR [2] INPUT := (sr,sr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("LT_REAL|2"), HEAP VECTOR [2] INPUT := (lr,lr), 0,
+                 (tv,FALSE,NIL), FALSE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+   PROC  make_54 = OVERLOADEDBIOP:
+          (MAKEID "CHANGE_REAL", HEAP VECTOR [2] MBIOP :=
+             (
+              (label("CHANGE_REAL|1"), HEAP VECTOR [1] INPUT := (sr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(lr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              ),
+              (label("CHANGE_REAL|2"), HEAP VECTOR [1] INPUT := (lr), 0,
+                 (struct, FALSE, HEAP VECTOR [2] OUTPUT :=
+                 ((tv,FALSE,NIL),(sr,FALSE,NIL))), TRUE,
+                    (V i,V m,V o)BOOL:TRUE
+              )
+             )
+          );
+
+
+VECTOR [54] OVERLOADEDBIOP  thebioptable;
+
+PROC initialise biop = VOID:
+{--------------------------------------------}
+   thebioptable :=
+   ( make_1,  make_2,  make_3,  make_4,  make_5,  make_6,  make_7,  make_8,
+     make_9,  make_10, make_11, make_12, make_13, make_14, make_15, make_16,
+     make_17, make_18, make_19, make_20, make_21, make_22, make_23, make_24,
+     make_25, make_26, make_27, make_28, make_29, make_30, make_31, make_32,
+     make_33, make_34, make_35, make_36, make_37, make_38, make_39, make_40,
+     make_41, make_42, make_43, make_44, make_45, make_46, make_47, make_48,
+     make_49, make_50, make_51, make_52, make_53, make_54 );
+
+   PROC biop table lookup =
+   {--------------------------------------------}
+      (BIOPTABLE table, ID name, REF OVERLOADEDBIOP o) BOOL:
+
+      BEGIN
+         BOOL found := FALSE;
+         FOR i TO UPB table WHILE NOT found DO
+            IF overloaded_biop_name OF (table [i]) = name THEN
+               found := TRUE;
+               o := table [i]
+            FI
+         OD;
+         found
+      END;
+
+   PROC biop table translate =
+   {--------------------------------------------}
+      (BIOPTABLE table, ALIENCODE body, FNDEC declaration,
+      VECTOR [] INT input types, INT output type,
+      ENVIRON environ, CLOSURE closure,
+      FLTPROC flt, INT output offset) VOID:
+
+      BEGIN
+         { (cp) }
+         { Locate the overloaded BIOP. }
+         OVERLOADEDBIOP biop;
+         IF biop table lookup (table, name OF body, biop) THEN
+            overloaded biop translate (biop, body, declaration, input types,
+               output type, environ, closure, flt, output offset)
+         ELSE
+            flt ("BIOP name " + name OF body + " not recognised in "
+               + fnname OF declaration)
+         FI
+         { (cp) }
+      END;
+
+PROC translate biop =
+{--------------------------------------------}
+   (ALIENCODE body, ID name, FNDEC declaration,
+   VECTOR [] INT input types, INT output type,
+   ENVIRON environ, CLOSURE closure,
+   FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+
+BEGIN
+   INT output offset = size unit
+         + ws                       { for input count }
+         + UPB input types * ws;    { the inputs }
+
+   translate start function (name);
+      { (cp) }
+   biop table translate (the biop table, body, declaration, input types,
+      output type, environ, closure, flt, output offset);
+      { (cp) }
+   INT fixed part size = output offset + lookup type size (output type);
+   translate end function (fixed part size, 1);
+
+   (fixed part size, output offset, combinatorial)
+END
+
+KEEP
+    initialise biop,
+    translate biop
+FINISH
