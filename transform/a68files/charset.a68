@@ -1,0 +1,237 @@
+DECS charset CONTEXT VOID  USE  putstrings,  basics, osinterface:
+
+{ " Id: charset.sta,v 1.1 91/10/14 14:26:07 edcad Exp $" }
+configinfo A68CONFIG "$Id: charset.a68,v 34.2 1995/03/29 13:02:50 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+14:03:84  Replaces  :ellasystem.ellacs
+             1906:  TRANSTOR,    convert -> graphic    use  STRCOMPILE  before
+             placing in  ellaalbum  to avoid the LOWER overhead of the strings
+21:08:84  module renamed
+05:02:85  Addition of REFORM, ELSEOF, FOR, and !!
+10:06:85  Tidy up of the use of capital letters in error messages.
+02:09:85  IDs have been extended.
+22:11:85  1906 removed
+13:01:86  One error message changed: CO023
+26:02:86  One error message changed: Release 2 Bug #006
+20:03:86  Compiler now tolereant of non-ASCII input (Bug 121)
+23:04:86  Bug 166.  << and >> removed from symbol list.   em(8) added.
+23:04:86  Bug 167: "You can't use a visible space in a symbolic name ",
+20:03:86  CR 205.  @ now an ELLA symbol rather then an ops symbol. EVW
+06:10:86  commented out error messages 62.  EVW
+             CR 180.  replaced 47,56,93,98,115 and 130 by new error messages
+15:10:86  Updated for new os interface
+27:01:87  CR 205.  replaced 36, 62 by new error messages.  EVW
+21:05:87  CR 133.  SQRT, ABS, MOD added,  em(137) added.  MGH
+02:06:87  CR 160.  constants with no alternatives, em(138) added.  EVW
+18:08:87  CR 133.  Output of ARITH error message added.  EVW
+28:08:87  CR 227.  \ now an illegal character.  EVW
+23:10:87  CR 553.  ? now a legal character.  MGH
+06:10:87  CR 437.  em(107) changed, em(94) amd em(79) commented out. EVW
+09:11:87  Attributes disabled for Release 3 by commenting out @ symbol.  JER
+30:11:87  CR 180.  Sequences - STATE, INIT added.  EVW
+18:01:88  R3B147.  em(79) reused for OUTPUT error message.  EVW
+18:01:88  CR 180.  Sequences - PVAR, ::= added.  EVW
+11:02:88  Change em(76) .5 -> .6  EVW
+09:09:88  BIOPs, ELLA characters, strings, implicit macros and consts.  EVW
+04:10:88  CODE, SPACE and KEEP removed.  EVW
+14:11:88  Better error message for STRINGs.  MGH
+01:12:88  Alter ARITH output error message.  MGH
+06:01:89  @ enabled for Release4.  EVW
+26:01:89  R4B079.  Character subrange error message added. MGH
+02.06.89  R4B362.  Removed line prefixed by *1. BGH
+01:08:89  Multiple "LET" declaration error messages added. MGH
+13:12:89  ALIEN added. JIT
+03:01:90  SAMPLE added. JIT
+04:01:90  SAMPLE error messages added. JIT
+19:01:90  FASTER and SLOWER added. JIT
+22:01:90  Error messages for timescaling added. JIT
+29:03:90  Macros can now have function parameters. JIT
+06:06:90  Osinterface added for kernel.  DCT
+27:06:90  Error messages for Fntypes, Multiple joins/makes, named outputs MGH
+16:07:90  Macros can now have macro parameters. JIT
+26:02:91  Error message and messages removed. JIT
+24:04:91  REPLACE added. JIT
+19:03:92  ATTR added. JIT
+24:03:92  FNSET removed. JIT
+12:06:92  Backslash (tok=92) becomes allowable character for portname. MGH
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.048 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT  hash = 32,
+     maxabschar = 255;
+
+MODE  CHARSET = STRUCT (INT type, value);
+
+PROC  make charset = REF [] CHARSET:
+BEGIN
+   REF [] CHARSET  charset = HEAP [0:maxabschar] CHARSET;
+   VECTOR [] CHAR  bold   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                   ids    = "abcdefghijklmnopqrstuvwxyz",
+                   digits = "0123456789",
+                   ops    = "^";        {{{  cf SWURCC no "$"  }}}
+
+   FOR i FROM 0 TO maxabschar DO  charset[i]:= (1, 100)  OD;
+
+   FOR i TO 26 DO  charset[ABS bold[i]]:= (6, i+9 {-(ABS bold[i] + 1)} );
+                   charset[ABS ids[i]] := (3, i+9)
+               OD;
+   charset[ABS "_"]:= (9, 36);
+   FOR i TO 10 DO  charset[ABS digits[i]]:= (4, i-1)  OD;
+   FOR i TO UPB ops DO  charset[ABS ops[i]]:= (20, 900)  OD;
+
+   charset[ABS " "]:= ( 2, 37);   charset[ABS "-"]:= (22,902);
+   charset[ABS "#"]:= (20, 60);   charset[ABS """"]:= ( 5,103);
+   charset[ABS "{"]:= (20,123);   charset[ABS "}"]:= (20,124);
+   charset[ABS "/"]:= (22,111);   charset[ABS ","]:= (20,112);
+   charset[ABS ":"]:= (22,113);   charset[ABS "("]:= (20,114);
+   charset[ABS ")"]:= (20,115);   charset[ABS "|"]:= (22,116); {{ ! illegal }}
+   charset[ABS "."]:= (22,120);   charset[ABS "["]:= (20,121);
+   charset[ABS "]"]:= (20,122);   charset[ABS "&"]:= (20,125);
+   charset[ABS "*"]:= (22,801);   charset[ABS "%"]:= (20,802);
+   charset[ABS "="]:= (22, 52);   charset[ABS "<"]:= (22,807);
+   charset[ABS ">"]:= (22,808);   charset[ABS "+"]:= (22,901);
+   charset[9 { tab}]:= (2, 37);   charset[ABS "?"]:= (20,181);
+   charset[ABS "@"]:= (20, 108);
+   charset[ABS ";"]:= (20, 177);
+   charset[ABS "'"]:= (10, 184);
+   charset[ABS "\"]:= (20, 192);
+
+   {{{  Illegal printable characters:  "~"  "$"  }}}
+   charset[ABS "~"] := (1,101);
+   charset[ABS "$"] := (1,101);   charset[ABS "!"] := (1,101);
+   charset[ABS "`"] := (1,101);
+
+   charset
+END;
+
+
+
+MODE  SYMBOL     = STRUCT (ID  symbol,  INT  length, value);
+
+PROC  makehash = REF VECTOR [] REF VECTOR [] SYMBOL:
+BEGIN
+   MODE  SYMB = STRUCT (ID  symbol,  INT  value);
+
+   VECTOR [] SYMB  symbol list =
+   ( (MAKEID "||", 170),      (MAKEID ">=", 806),      (MAKEID "->", 119),
+     (MAKEID "..", 117),      (MAKEID "/=", 804),      (MAKEID "//", 118),
+     (MAKEID "<=", 805),      (MAKEID ":=", 109),      (MAKEID "::=",174),
+     (MAKEID "AND", 509),     (MAKEID "ARITH", 150),   (MAKEID "BEGIN", 139),
+     (MAKEID "CASE", 134),    (MAKEID "COM",  67),
+     (MAKEID "CONC", 151),    (MAKEID "DELAY", 143),   (MAKEID "ELSE", 136),
+     (MAKEID "ELSEOF", 169),  (MAKEID "END", 140),     (MAKEID "ESAC", 137),
+     (MAKEID "FAULT", 163),   (MAKEID "FI", 161),      (MAKEID "FINISH", 141),
+     (MAKEID "FN", 131),      (MAKEID "IAND", 514),
+     (MAKEID "IDELAY", 142),  (MAKEID "IDIV", 802),    (MAKEID "IF", 159),
+     (MAKEID "IMPORT", 165),  (MAKEID "IMPORTS", 166), (MAKEID "INOT", 403),
+     (MAKEID "INT", 148),     (MAKEID "IO", 152),      (MAKEID "IOR", 515),
+     (MAKEID "JOIN", 138),    (MAKEID "LET", 132),
+     (MAKEID "MAC", 128),     (MAKEID "MAKE", 133),    (MAKEID "MOC",  68),
+     (MAKEID "MODULE", 129),  (MAKEID "NEW", 149),     (MAKEID "NOT", 401),
+*0   (MAKEID "MODULE", 100),  (MAKEID "NEW", 149),     (MAKEID "NOT", 401),
+     (MAKEID "OF", 135),      (MAKEID "OR", 510),      (MAKEID "OUTPUT", 126),
+     (MAKEID "PRINT", 162),   (MAKEID "RAM", 164),     (MAKEID "RENAMED", 167),
+     (MAKEID "REFORM", 168),  (MAKEID "SL", 512),
+     (MAKEID "SR", 513),      (MAKEID "THEN", 160),    (MAKEID "TYPE", 130),
+     (MAKEID "FOR", 171),     (MAKEID "VAR", 173),     (MAKEID "INIT", 178),
+     (MAKEID "SEQ", 175),     (MAKEID "STATE", 176),   (MAKEID "PVAR", 182),
+     (MAKEID "SQRT", 404),    (MAKEID "ABS", 405),     (MAKEID "MOD", 816),
+     (MAKEID "BIOP", 183),    (MAKEID "STRING", 185),  (MAKEID "CONST", 127),
+     (MAKEID "ALIEN", 186),   (MAKEID "SAMPLE", 187),  (MAKEID "FASTER", 188),
+     (MAKEID "SLOWER", 189),  (MAKEID "REPLACE", 190), (MAKEID "ATTR", 191)
+   );
+
+   INT  t;
+   INT  nsymbols = UPB symbol list;
+   REF VECTOR [] REF VECTOR [] SYMBOL  table =
+          HEAP VECTOR [hash] REF VECTOR [] SYMBOL;
+   VECTOR [hash] INT  entries;
+   FOR i TO hash DO  entries[i]:= 0  OD;
+   FOR i TO nsymbols
+   DO  entries[(ABS (symbol OF symbol list[i])[1] MOD hash) + 1]  PLUSAB  1  OD;
+   FOR i TO hash
+   DO  table[i]:= HEAP VECTOR [entries[i]] SYMBOL;
+       entries[i]:= 0
+   OD;
+   FOR i TO nsymbols
+   DO  table[t:= (ABS (symbol OF symbol list[i])[1] MOD hash) + 1]
+            [entries[t] PLUSAB 1]:= (symbol OF symbol list[i],
+                                     UPB  symbol OF symbol list[i],
+                                     value OF symbol list[i])
+   OD;
+   table
+END;
+
+REF VECTOR [] REF VECTOR [] SYMBOL  table;
+
+PROC  lookup = (REF VECTOR [] CHAR  word,  BOOL  boldorstorp) INT:
+BEGIN
+   INT  i, j, length,  index:= (ABS word[1] MOD hash) + 1;
+   REF SYMBOL  symbol;
+   REF VECTOR [] SYMBOL  list;
+   ID  sym;
+   INT  ans:= 105;
+   INT  upb = UPB word;
+   IF upb <= 8  ANDTH  (length:= UPB table[index]) > 0
+   THEN  list:= table[index];
+         i:= 1;
+         WHILE
+            i <= length ANDTH
+            IF upb = length OF (symbol:= list[i])
+            THEN  sym:= symbol OF symbol;
+                  j:= 1;
+                  WHILE j <= upb ANDTH word[j] = sym[j] DO  j PLUSAB 1  OD;
+                  j /= (upb + 1)
+            ELSE  TRUE
+            FI
+        DO  i PLUSAB 1  OD;
+        IF i <= length THEN  ans:= value OF list[i]  FI
+   FI;
+   ans
+END;
+
+
+PROC  make lookup = PROC (REF VECTOR [] CHAR, BOOL) INT:
+BEGIN
+   table:= makehash;
+   lookup
+END
+
+KEEP  CHARSET,  make charset,  make lookup
+
+FINISH
