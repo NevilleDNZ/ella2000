@@ -1,0 +1,86 @@
+DECS simpast CONTEXT VOID USE putstrings, simmonmode, simtable:
+
+{ " Id: simpast.sta,v 2.1 91/02/22 18:37:05 edcad Exp$" }
+configinfo A68CONFIG "$Id: simpast.a68,v 34.2 1995/03/29 13:05:01 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+04:07:88  Module created for release 4.  BJE
+09:09:88  Reflects changed mode of testpoints
+20:03:89  USEs simmonmode instead of simmonitor to avoid circular
+             dependency.  R4B172.  AAP
+08:01:90  Changes for Probe Functions. MDR.
+21:12:89  Added variable 'saved scale time' for timescaling support.  MHC
+             KEEP list includes this too.
+18:12:90  Added monitoring page width and separator vars. MDR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module introduces the global variables that hold copies of the present
+   mode globals that must be maintained in past mode
+}
+
+{
+   These variables hold copies of present mode status variables for the period
+   during which the simulator is in past mode so that they can be restored on
+   returning to present mode.  A uniform naming scheme is adopted ---
+   'saved foo' saves the value of 'foo'.
+
+   Note that the values of these variables are *undefined* if the time mode is
+   'present'
+}
+
+INT saved print style; { copy of 'print style' in SIMMONITOR.STA }
+
+INT saved monitoring page width;
+CHAR saved monitoring separator;
+
+REF MONITORLIST saved testpoints; { copy of 'testpoints' in SIMMONITOR.STA }
+
+INT saved active time; { copy of 'active time' in SIMTIME.STA }
+
+REF PATH saved monitoring pointer; { copy of 'm. pointer' in SIMNODE.STA }
+
+INT saved scale time; {copy of 'scale time' in SIMTIME.STA }
+
+SKIP
+
+KEEP
+   saved print style, saved monitoring page width, saved monitoring separator,
+   saved testpoints,
+   saved active time, saved monitoring pointer,
+   saved scale time
+
+FINISH
