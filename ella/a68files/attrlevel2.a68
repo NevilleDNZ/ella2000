@@ -1,0 +1,277 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRLEVEL2.STA }
+{ *4     9-APR-1989 13:18:26 ELLADEV "Updated provisional with fixes for R4B257. BGH" }
+{ *3    17-MAR-1989 15:54:56 ELLADEV "Updated provisional with fixes for R4B143. BGH" }
+{ *2    21-JAN-1989 11:07:34 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *1    11-NOV-1988 15:50:33 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRLEVEL2.STA }
+
+DECS  attrlevel2 CONTEXT VOID  USE putstrings, messageproc, basics,
+      databasebuffers, libmodes, attrmodes, attrlevel1:
+
+{                    " Id: attrlevel2.sta,v 1.1 91/10/14 14:25:58 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrlevel2.a68,v 34.2 1995/03/29 13:03:17 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+13:03:89    R4B143. dependencies in ordering of procedure
+                            arguments evaluation removed.  TK
+06:04:89    R4B257. An old version of writing integers to ADAM
+                            was inadvertently still being used.  TK
+29:07:89    CR 642. FLTPROC relaced by MESSAGEPROC.  EVW
+27:10:89    CR 636. Adam replaced by su_keepsake and adambuffers
+                            replaced by keepsakebuffers. JIT
+17:07:90    LIBINTERFACE replcaed by LIBMODES. EVW
+19:11:90    Declaration attributes merged onto update 26. JIT
+20:02:91    KEEPSAKE only accessed through KEEPSAKEBUFFERS now.  DCT
+20:11:91    Module keepsakebuffers renamed databasebuffers.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  28.008 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ Convenient mode for holding attribute information.}
+
+MODE INFO = UNION (REF DATALIST, REF NODEDATA);
+
+{ Conversion procs from buffers to attribute modes and vice versa.}
+
+PROC outnode = (NODE node, BUFFER buffer, MESSAGEPROC flt) VOID:
+BEGIN
+   CASE node IN
+   (DECNODE decnode) (outchar("D", buffer, flt);
+                      outid2(decname OF decnode, buffer, flt);
+                      outint2(level OF decnode, buffer, flt))
+  ,(INSTNODE inode)   (outchar("I", buffer, flt);
+                      outid2(decname OF decnode OF inode, buffer, flt);
+                      outint2(level OF decnode OF inode, buffer, flt);
+                      outid2(instname OF inode, buffer, flt))
+   ESAC
+END;
+
+PROC innode = (BUFFER buffer) NODE:
+BEGIN
+   IF read char(buffer) = "D"
+   THEN ID name = inid2(buffer);
+        INT level = in2(buffer);
+        DECNODE (name, level)
+   ELSE ID name = inid2(buffer);
+        INT level = in2(buffer);
+        ID instname = inid2(buffer);
+        INSTNODE ((name,level), instname)
+   FI
+END;
+
+PROC outnodelist = (REF NODELIST nodelist, BUFFER buffer, MESSAGEPROC flt) VOID:
+BEGIN
+   INT nlist := 0;
+   REF NODELIST ndlist := nodelist;
+   WHILE ndlist ISNT nilnodelist
+   DO nlist PLUSAB 1; ndlist := rest OF ndlist OD;
+
+   outint2(nlist, buffer, flt);
+   ndlist := nodelist;
+   WHILE ndlist ISNT nilnodelist
+   DO outnode(node OF ndlist, buffer, flt); ndlist := rest OF ndlist OD
+END;
+
+PROC innodelist = (BUFFER buffer) REF NODELIST:
+BEGIN
+   PROC append = (REF REF NODELIST nodelist, NODE node) VOID:
+   BEGIN
+      REF REF NODELIST nl := nodelist;
+      WHILE nl ISNT nilnodelist DO nl := rest OF nl OD;
+      REF REF NODELIST (nl) := HEAP NODELIST := (node, nilnodelist)
+   END;
+
+   INT nlist = in2(buffer);
+   REF NODELIST nodelist := nilnodelist;
+   FOR i TO nlist DO append(nodelist, innode(buffer)) OD;
+   nodelist
+END;
+
+PROC outnodeset = (NODESET nodeset, BUFFER buffer, MESSAGEPROC flt) VOID:
+BEGIN
+   CASE nodeset IN
+   (REF NODELIST nodelist) (outchar("N", buffer, flt);
+                            outnodelist(nodelist, buffer, flt))
+  ,(IMPNODE impnode) (outchar("I", buffer, flt);
+                      outid2(region OF impnode, buffer, flt);
+                      outnodelist(nodes OF impnode, buffer, flt))
+   ESAC
+END;
+
+PROC innodeset = (BUFFER buffer) NODESET:
+BEGIN
+   IF read char(buffer) = "N"
+   THEN REF NODELIST (innodelist(buffer))
+   ELSE ID region = inid2(buffer);
+        IMPNODE (region, innodelist(buffer))
+   FI
+END;
+
+PROC outdatalist = (REF DATALIST datalist, BUFFER buffer, MESSAGEPROC flt) VOID:
+BEGIN
+   INT nlist := 0;
+   REF DATALIST dlist := datalist;
+   WHILE dlist ISNT nildatalist
+   DO nlist PLUSAB 1; dlist := rest OF dlist OD;
+
+   outint2(nlist, buffer, flt);
+   dlist := datalist;
+   WHILE dlist ISNT nildatalist
+   DO outid2(data OF dlist, buffer, flt); dlist := rest OF dlist OD
+END;
+
+PROC appenddlist = (REF REF DATALIST datalist, RVC data) VOID:
+BEGIN
+   REF REF DATALIST dl := datalist;
+   WHILE dl ISNT nildatalist DO dl := rest OF dl OD;
+   REF REF DATALIST (dl) := HEAP DATALIST := (data, nildatalist)
+END;
+
+PROC indatalist = (BUFFER buffer) REF DATALIST:
+BEGIN
+   INT nlist = in2(buffer);
+   REF DATALIST datalist := nildatalist;
+   FOR i TO nlist DO appenddlist(datalist, inid2(buffer)) OD;
+   datalist
+END;
+
+PROC outnodedata = (REF NODEDATA nodedata, BUFFER buffer, MESSAGEPROC flt) VOID:
+BEGIN
+   REF NODEDATA ndata := nodedata;
+   INT numnodes := 0;
+   WHILE ndata ISNT nilnodedata
+   DO numnodes PLUSAB 1; ndata := rest OF ndata OD;
+
+   outint2(numnodes, buffer, flt);
+   ndata := nodedata;
+   WHILE ndata ISNT nilnodedata
+   DO outnodeset(nodeset OF ndata, buffer, flt);
+      outdatalist(datalist OF ndata, buffer, flt);
+      ndata := rest OF ndata
+   OD
+END;
+
+PROC appendnodedata = (REF REF NODEDATA nodedata, NODESET nodeset,
+               REF DATALIST datalist) VOID:
+BEGIN
+   REF REF NODEDATA nd := nodedata;
+   WHILE nd ISNT nilnodedata DO nd := rest OF nd OD;
+   REF REF NODEDATA (nd) := HEAP NODEDATA := (nodeset, datalist, nilnodedata)
+END;
+
+PROC innodedata = (BUFFER buffer) REF NODEDATA:
+BEGIN
+   INT nlist = in2(buffer);
+   REF NODEDATA nodedata := nilnodedata;
+   FOR i TO nlist
+   DO NODESET nodeset = innodeset(buffer);
+      REF DATALIST datalist = indatalist(buffer);
+      appendnodedata(nodedata, nodeset, datalist)
+   OD;
+   nodedata
+END;
+
+{                      ***************************                       }
+
+{ OPERATIONS ON THE ATTRIBUTE LIBRARY }
+
+{ This operation obtains level 2 information for a given class and context }
+
+PROC get_info = (ID ctn,        {context name - nullid if library info required}
+                 INT key,       {key of required class}
+                 BOOL isdata,   {TRUE if DATALIST required}
+                 MESSAGEPROC flt) INFO:
+BEGIN
+   INFO info;
+   DISCPTR ptr := read_class(ctn, key, flt);
+   IF isnilptr(discfile, ptr)
+   THEN info := IF isdata THEN nildatalist ELSE nilnodedata FI
+   ELSE REF VECTOR[]DISCPTR dps :=
+                         HEAP VECTOR[ndiscptrs(discfile,ptr,flt)]DISCPTR;
+        myreaddiscptrs(discfile,dps,ptr,flt);
+        IF isdata
+        THEN info := IF isnilptr(discfile, dps[1])
+                     THEN nildatalist
+                     ELSE indatalist(read buffer(discfile,dps[1]))
+                     FI
+        ELSE info := IF isnilptr(discfile, dps[2])
+                     THEN nilnodedata
+                     ELSE innodedata(read buffer(discfile,dps[2]))
+                     FI
+        FI
+   FI;
+   info
+END;
+
+{ This operation writes level 2 information for a given class and context }
+
+PROC put_info = (ID ctn,        {context name - nullid if library info written}
+                 INT key,       {key of required class}
+                 INFO info,     {information to be written to the library}
+                 MESSAGEPROC flt) VOID:
+BEGIN
+   VECTOR[block_size]CHAR infobuff;
+   BUFFER buffer = start write(discfile,infobuff);
+   CASE info IN
+   (REF DATALIST datalist)
+      IF datalist ISNT nildatalist THEN outdatalist(datalist,buffer,flt) FI
+  ,(REF NODEDATA nodedata)
+      IF nodedata ISNT nilnodedata THEN outnodedata(nodedata,buffer,flt) FI
+   ESAC;
+
+   REF VECTOR[]DISCPTR dps := HEAP VECTOR[2]DISCPTR;
+   DISCPTR ptr := read_class(ctn, key, flt);
+   IF isnilptr(discfile, ptr)
+   THEN dps := HEAP VECTOR[2]DISCPTR := (nilptr,nilptr)
+   ELSE myreaddiscptrs(discfile,dps,ptr,flt)
+   FI;
+   IF index OF buffer > 0
+   THEN CASE info IN
+        (REF DATALIST) dps[1] := end write(buffer,flt)
+       ,(REF NODEDATA) dps[2] := end write(buffer,flt)
+        ESAC
+   FI;
+   IF isnilptr(discfile, dps[1]) ANDTH isnilptr(discfile, dps[2])
+   THEN write_class(ctn, nilptr, key, flt)
+   ELSE write_class(ctn, mywritediscptrs(discfile,dps,flt), key, flt)
+   FI
+END;
+
+{                          ***********************                    }
+
+SKIP
+
+KEEP get_info, put_info, appenddlist, appendnodedata
+FINISH
