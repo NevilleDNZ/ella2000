@@ -1,0 +1,1189 @@
+DECS  libprocs  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      testmode,  basics,  databasebuffers,  libmodes,  libinterface,
+      attrlevel1,  attrdecls:
+
+{ " Id: libprocs.sta,v 1.1 91/10/14 14:30:26 edcad Exp $" }
+configinfo A68CONFIG "$Id: libprocs.a68,v 34.2 1995/03/29 13:03:29 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+19:04:84  Largely machine independent procedures used by the library program.
+30:07:84  Merger of VAX and FLEX (initial) versions and update for 1906
+07:09:84  Source_text added to library for FLEX
+05:02:85  "flt" made consistant  -  "exportall" added
+02:09:85  libinterface formed from part of libprocs.  Various changes
+             so as to provide new library commands.
+23:10:85  PROC set time date moved from libupd
+04:11:85  new set of context handling procedures based on simple and
+             compound contexts.
+08:11:85  changes made due to new library structure.
+26:11:85  Updated for Perq FLEX,  source-text storage in library reinstated.
+             1906 removed
+26:02:86  Messages in "export" now prefix FN or MAC To function or
+             macro name (Release 2 Bug 007)
+28:02:86  Slight change to messages in "ptlibinfo" (Bugs 050,051)
+17:03:86  Bug 007.  Also imported messages
+05:05:86  PROC ordercontexts altered ctno on contexts list so order wrong for
+             assembly, so PROC close called after ordercontexts in ptcontexts.
+27:06:86  Bug 209 fixed.
+29:06:86  CR 252.  Changes made to handle attributes.  EVW.
+01:07:86  empty context check replaced by call of PROC no_text
+21:10:86  Updated for new osinterface.  "create library" added.  DCT
+04:11:86  Updated for <CTRL / C> interrupt  DCT
+27:01:87  CR 205.  FNSET [n] - added PROC integer to skip over n.  EVW
+18:05:87  CR 255.  Discriminate assembly - USES, KEPT, integer, inkepts and
+                      inspecs moved to LIBINTERFACE.  EVW
+02:09:87  CR244 - use shortened filenames on VMS.  JER
+21:08:87  CR 291.  Change in spec of IMPORT cancels IMPORTS statement.  EVW
+28:08:87  Source file name storage redesigned  CR124/146  DCT
+01:09:87  Automatic increase library added for finish CR162.  DCT
+23:09:87  CR 035.  Context updated message for IMPORTS statements.  EVW
+
+23:09:87  CR 427.  Change order of procedure calls in increaselibrary.  DCT
+06:10:87  CR 436.  Replace FN by MAC with same name and viceversa.  EVW
+                      Remove references to "forgotten"
+27:10:87  R3B008.  "close" removed from PROC ptcontexts.  Closure order
+                      corrected at assembly time.  EVW
+29:10:87  CR 244.  Correction to use shortname on UNIX as well.  JER
+13:11:87  Possibility of unknown date catered for in info_chars  R3B071.  DCT
+02:02:88  Alter handling of closure EVW
+11:05:88  CR 596  Modules renamed  JER
+27:05:88  IR3041.  Dont copy all imports details when new imports region. EVW
+04:07:88  Modified for use with EPI: lib_free, lib_overhead, lib_size created
+             and added to KEEP list. Calls to epi_notify and epi_send_message
+             added. inuses added to KEEP list. Extra parameter to checkclosure,
+             checkimports and loadable to control o/p of epi messages BGH
+20:07:88  PROC merge imports added.  EVW
+13:09:88  Use changed field names of CTNAME. Some procedures moved to
+             libinterface. BGH (EVW)
+04:10:88  CR 155.  Space recovered and libchanged not altered if compilation
+                      fails in mergecompiled. EVW
+14:03:89  CR 642.  Updated to kernel interface. EVW
+23:10:89  CR 656.  Adam replaced by su_keepsake. JIT
+18:06:90  get_filename replaced by file_name to avoid clash in KI.  DCT
+23:11:90  Declaration attributes merged onto update 26. JIT/DCT
+23:11:90  Suppress printing of library version numbers in testmode.  DJS
+28:11:90  compact_library added;  increase_library altered.  DCT
+10:01:90  debug compact_library.  R6B4:  export of non-FN/MAC prevented.  DCT
+11:01:91  can_read_file replaced by find_file.  DCT
+17:01:91  libmessages renumbered before EPI is updated.  DCT
+31:01:91  FI missing in compact_library (UNIX).  DCT
+20:02:91  KEEPSAKE now accessed through KEEPSAKEBUFFERS only.  DCT
+12:03:91  A CONTXT parameter added to sortdecls. JIT
+15:10:91  Increase_library minimum size limit reduced to 1 byte.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+24:02:93  OSIF Level 1 - KEEPSAKE interface changed.  DCT
+23:06:93  library name shortened for new library in create_library.  DCT
+23:09:93  find_file replaced by get_file_details.  DCT
+11:10:93  R6B183: layout of printdecl altered. EVW
+27:10:93  R6B197: disabled compactlibrary.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.056 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+HEAP VECTOR [0] DISCPTR nodps;
+
+PROC checkregionselected = (CREGION cr, MESSAGEPROC msg) VOID:
+BEGIN
+   IF region OF cr IS nilregion
+   THEN  msg({"No imports region has been selected in context *"}
+              lib_msg(17), name OF context OF cr)
+   FI
+END;
+
+PROC checksimple = (REF CONTXT ct,  MESSAGEPROC msg) VOID:
+BEGIN
+   IF name OF region OF regions OF ct /= nullid
+   THEN msg(lib_msg(20) {"* is not a simple context"}, name OF ct)
+   FI
+END;
+
+PROC checkcompound = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   IF name OF region OF regions OF ct = nullid
+   THEN msg(lib_msg(21) {"* is not a compound context"}, name OF ct)
+   FI
+END;
+
+PROC checklastimports = (REF CONTXT c) BOOL:
+BEGIN
+   (regions OF c ISNT nilregions) ANDTH (rest OF regions OF c IS nilregions)
+END;
+
+
+
+PROC setcurrentct = (CTNAME ctn, MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTXT ct = check_context(context OF ctn, msg);
+   CREGION cr = get_region(ct, import OF ctn);
+   IF (region OF cr IS nilregion) ANDTH import OF ctn /= nullid
+   THEN  msg({"I can't find an imports region called /* in context *"}
+             lib_msg(16), (import OF ctn, context OF ctn))
+   ELSE  change currentct(makeprompt(cr))
+   FI
+END;
+
+
+
+{{ **** Procedures on LIBRARY **** }}
+
+PROC clearlib = (MESSAGEPROC msg) VOID:
+BEGIN
+   rootptrs OF library := (nilptr, nilptr, nilptr, nilptr, nilptr, nilptr);
+   classes OF library:= nilclasses;
+   set time date(timecleared OF library, datecleared OF library);
+   HEAP REGIONS reg := ((import OF defaultct, 0, nilimports), nilregions);
+   contexts OF library:= HEAP CONTEXTS:=
+       ( ( context OF defaultct,
+           nilptr,  { introduce_decl_class will create val OF ct (below) }
+           FALSE, TRUE, nodecls, nildeclattributes, reg ), nilcontexts );
+   change currentct(defaultct);
+   introduce_decl_class("_body", "_RSREbody", body_life, msg);
+   introduce_decl_class("_info", "_RSREinfo", body_life, msg);
+   introduce_decl_class("_spacemap", "_RSREspacemap", body_life, msg);
+   introduce_class("_textattributes", "_RSREtextattributes", msg);
+   body_key := login_class("_body", "_RSREbody", msg);
+   info_key := login_class("_info", "_RSREinfo", msg);
+   spacemap_key := login_class("_spacemap", "_RSREspacemap", msg);
+   setlibchanged(msg)
+END;
+
+
+{{ **** USER procedures on LIBRARY **** }}
+
+PROC printsizes = (MESSAGEPROC msg) VOID:
+   msg(output, oneline(("Library size = ", lib_size, " bytes")));
+{  KEEPSAKE not working properly.  27:10:93  DCT
+   msg( lib_msg(29) {"Library size = * bytes,  free = * bytes"},
+        (intchars(lib_size),  intchars(lib_free)) );
+}
+
+
+PROC clear_library = (MESSAGEPROC msg) VOID:
+BEGIN
+   clearlib(msg);
+   msg(lib_msg(35), nullmsg {"Library has been cleared"})
+END;
+
+PROC increase_library = (INT size, MESSAGEPROC msg) VOID:
+BEGIN
+msg(user, """increaselibrary"" is not currently available");
+   INT filesize = discfile_size(database OF discfile);
+   INT  units = (size + increase_increment - 1) % increase_increment;
+   IF size < 1
+   THEN  msg( lib_msg(37), intchars(increase_increment)
+              {"The minimum increase is * bytes"} )
+   FI;
+   IF NOT can_increase(database OF discfile, units)
+   THEN msg(lib_msg(38), nullmsg {"This would make the library too large"})
+   FI;
+   increase(database OF discfile, units, msg);
+   msg( lib_msg(39) {"The library has been increased by * bytes"},
+        intchars(discfile_size(database OF discfile) - filesize) );
+   libchanged OF library := TRUE;
+   save_library(msg);
+   printsizes(msg)
+END;
+
+PROC  compact_library = (STR  new_fname,  MESSAGEPROC  msg) VOID:
+BEGIN  { Parameter should have been parsed against the old library name }
+msg(user, """compactlibrary"" is not currently available");
+
+   { VMS will create a new file of the same name with a version number one
+     higher - UNIX will try to overwrite an existing file if a new name is
+     not supplied - check and fail before closing the old library.
+   }
+
+*5 IF get_file_details(new_fname, msg) ISNT nil_file_details
+*5 THEN  msg( lib_msg(45), new_fname
+*5            {"File ""*"" already exists - you should supply a new name"} )
+*5 FI;
+
+   { Force a non-compacting garbage collection to ensure that the free space
+     size is maximised before estimating the minimum file size needed for
+     compaction.
+   }
+
+   IF NOT save_library(msg)  THEN  reopen_library(msg)  FI;
+
+   { Now create the new library }
+
+   INT  min_size = discfile_size(database OF discfile OF library) -
+                      size_of_free_space(database OF discfile OF library),
+        new_size = IF min_size < increase_increment
+                   THEN  increase_increment
+                   ELSE  ( (min_size + increase_increment - 1) %
+                           increase_increment ) * increase_increment
+                   FI;
+
+   FILE  new_file = create_db_file(new_fname, new_size, msg);
+
+   STR  old_name = file_name(file OF library),
+        new_name = file_name(new_file);
+
+   { Now close the old library }
+
+   finish_library(msg);
+
+   { Re-open the old library for KEEPSAKE }
+
+   FILE  old_file = open_file(old_name, update_access, msg);
+
+   { Be prepared to re-open the old library if compaction fails }
+
+   PROC  new_msg = (MSGNO  msgno,  VECSTR  params) VOID:
+   BEGIN
+      IF error_msg(msgno)
+      THEN  { Must re-open the old library if the compaction fails }
+            close_file(old_file, msg);
+            open_library(old_name, null updater, msg)
+      FI;
+      msg(msgno, params)
+   END;
+
+   { Now compact (files are closed by KEEPSAKE and the new substituted) }
+
+   compacting_garbage_collect(old_file, new_file, new_msg);
+
+   { Now open the new library }
+
+   open_library(new_name, null updater, msg);
+
+   msg( lib_msg(46), testmode_fname(new_name)
+        { "New library file, *, created" } );
+   printsizes(msg);
+   msg( lib_msg(47), testmode_fname(old_name)
+        { "The old library file, *, may now be deleted" } )
+END;
+
+PROC regress_library = (MESSAGEPROC msg) VOID:
+BEGIN
+   IF libchanged OF library
+   THEN  read rootptrs(FALSE, msg);
+         msg( lib_msg(40) {"Gone back to version *"},
+              version_str(version OF library) );
+         resetlibchanged(msg)
+   ELSE  msg(lib_msg(41) {"Nothing has changed since version *"},
+              version_str(version OF library))
+   FI
+END;
+
+PROC save_libchanges = (MESSAGEPROC msg) VOID:
+BEGIN
+   IF NOT save_library(msg)
+   THEN msg(lib_msg(42), nullmsg {"There are no changes to save"})
+   FI
+END;
+
+
+PROC create_library = (STR  db_name, MESSAGEPROC msg) VOID:
+BEGIN
+   FILENAME  libname = parse_filename(db_name, library_type, msg);
+   FILE  new_libfile =
+       create_db_file(filename OF libname, increase_increment, msg);
+   database OF discfile:= HEAP DATABASE:= initialise_db(new_libfile, TRUE);
+   FILE file = database_file(database OF discfile);
+   file OF library := file;
+   name OF library := name OF libname;
+   version OF library := 0;
+   clearlib(msg);
+   savelib(FALSE, msg);
+   libchanged OF library := FALSE;
+   msg(lib_msg(25), "F" {"Change state of library is now *"} );
+   msg( lib_msg(43), {"File ""*"" created as a new ELLA library"}
+        name OF library )
+END;
+
+
+
+
+{{{ **** Private Procedures on IMPORTS and BINDINGS **** }}}
+
+PROC newimport = (REF CONTXT ct, ID toname, INT sort) VOID:
+BEGIN
+   { New import called `toname` is added to all import regions in `ct` }
+   REF REF IMPORTS i;
+   REF REGIONS r := regions OF ct;
+   WHILE r ISNT nilregions
+   DO  i:= imports OF region OF r;
+       WHILE i ISNT nilimports DO  i:= rest OF i  OD;
+       (REF REF IMPORTS (i)) := HEAP IMPORTS:=
+          ( ((nullid, nullid), nullid, toname, sort, nilptr), nilimports);
+      r := rest OF r
+   OD
+END;
+
+PROC removeimport = (REF CONTXT ct, ID declname) VOID:
+BEGIN
+   { Import called `declname` is removed from all import regions in `ct` }
+   REF REF IMPORTS i;
+   REF REGIONS r := regions OF ct;
+   WHILE r ISNT nilregions
+   DO  i:= imports OF region OF r;
+       WHILE  rename OF binding OF i /= declname  DO  i:= rest OF i  OD;
+       (REF REF IMPORTS (i)):= rest OF i;
+       r := rest OF r
+   OD
+END;
+
+PROC cancelimport = (REF CONTXT ct, ID declname) VOID:
+BEGIN
+   { 'declname' is marked as cancelled - see also PROC outputcancelled }
+   REF REGIONS r := regions OF ct;
+   WHILE r ISNT nilregions
+   DO  REF BINDING b = get_binding((ct, region OF r), declname);
+       name OF b := MAKEID "_cancel";
+       ctn OF b := (nullid, nullid);
+       r := rest OF r
+   OD
+END;
+
+PROC outputcancelled = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   { Reports which imports have been cancelled and sets nameOFbinding to nullid}
+   REF REF IMPORTS i;  BOOL first;
+   REF REGIONS r := regions OF ct;
+   CTNAME ctn;
+   WHILE r ISNT nilregions
+   DO  i := imports OF region OF r;
+       first := TRUE;
+       WHILE i ISNT nilimports
+       DO IF name OF binding OF i = "_cancel"
+          THEN name OF binding OF i:= nullid;
+               IF first
+               THEN first:= FALSE;
+                    ctn := (name OF ct, name OF region OF r);
+                    msg(lib_msg(23) {"Context *"}, CTOS ctn);
+                    IF name OF region OF r = nullid
+                    THEN msg(lib_msg(50), nullmsg {"You need to reimport  "})
+                    ELSE msg(lib_msg(51)
+                          {"You need to reimport into the imports region /* :"},
+                           name OF region OF r)
+                    FI
+               ELSE msg(lib_msg(1), nullmsg {",   "})
+               FI;
+               msg(lib_msg(52) {"* *"},
+                   (sort_id(sort OF binding OF i), rename OF binding OF i))
+           FI;
+           i := rest OF i
+       OD;
+       msg(lib_msg(2), nullmsg {newline});
+       r := rest OF r
+   OD
+END;
+
+
+PROC copyimports = (REF IMPORTS i, BOOL copy) REF IMPORTS:
+BEGIN
+   { TRUE -> copy IMPORTS,  FALSE -> create empty name, ctn and info fields }
+   IF i IS nilimports
+   THEN  i
+   ELSE  REF IMPORTS rest := copyimports(rest OF i, copy);
+         HEAP IMPORTS :=
+           IF copy  {{??refs correct}}
+           THEN (binding OF i, rest)
+           ELSE ( ((nullid,nullid), nullid, rename OF binding OF i,
+                   sort OF binding OF i, nilptr), rest)
+           FI
+   FI
+END;
+
+
+
+PROC isimported = (ID declname, CTNAME ctn, MESSAGEPROC msg) BOOL:
+BEGIN {{?? have another look }}
+   { Is `declname' in `ctn' imported by some other context, or if `declname' }
+   { is nullid is any declaration in `ctn' imported by some other context    }
+   REF CONTEXTS c := contexts OF library;
+   REF REGIONS r;  REF IMPORTS ips;
+   CTNAME ctname;
+   BOOL imported := FALSE;      { final status and controls heading o/p }
+   WHILE c ISNT nilcontexts
+   DO  r := regions OF context OF c;
+       WHILE r ISNT nilregions
+       DO  ips:= imports OF region OF r;
+           BOOL continue := TRUE,
+                first_in_context := TRUE;
+           WHILE (ips ISNT nilimports) ANDTH continue
+           DO REF BINDING b = binding OF ips;
+              IF (name OF b = declname
+                   ANDTH context OF ctn OF b = context OF ctn)
+                 OREL (declname = nullid ANDTH ctn OF b = ctn)
+              THEN  IF NOT imported
+                    THEN IF declname = nullid
+                         THEN msg(lib_msg(53) {"Context * is imported by:"},
+                                  CTOS ctn)
+                         ELSE msg(lib_msg(54) {"* * is imported by:"},
+                                  (sort_id(sort OF b), declname))
+                         FI;
+                         imported := TRUE
+                    FI;
+                    { Output text for first matching import in this context }
+                    IF first_in_context
+                    THEN  ctname := (name OF context OF c, name OF region OF r);
+                          msg(lib_msg(55) {"    *"}, CTOS ctname);
+                          first_in_context := FALSE
+                    FI;
+                    msg(lib_msg(56) {"* *"}, (sort_id(sort OF b), rename OF b));
+                    { If looking for particular import, stop after first match }
+                    IF declname /= nullid THEN continue := FALSE FI
+              FI;
+              ips := rest OF ips
+           OD;
+           r := rest OF r
+       OD;
+       c := rest OF c
+   OD;
+   (imported | msg(lib_msg(2), nullmsg {newline}) );
+   imported
+END;
+
+
+
+
+
+
+{{ **** Procedures for incremental compilation **** }}
+
+
+PROC closurecontains = (CTNAME ctna, ctnb) BOOL:
+BEGIN                                           {{{ ctna contains ctnb }}}
+   CREGION cr = get_region(get_context(context OF ctna), import OF ctna);
+   REF IMPORTS  i:= get_imports(cr);
+   BOOL  ans:= FALSE;
+   WHILE  NOT ans  ANDTH  (i ISNT nilimports)
+   DO  IF ctna = ctnb   OREL  name OF binding OF i /= nullid  ANDTH
+                              closurecontains(ctn OF binding OF i, ctnb)
+       THEN  ans:= TRUE
+       ELSE  i:= rest OF i
+       FI
+   OD;
+   ans
+END;
+
+
+PROC inimports = (CREGION cr, DISCPTR impdp, info, MESSAGEPROC msg) BOOL:
+BEGIN
+   { Checks that new IMPORTS statements are legal, ie no circular closures }
+   { Alters the BINDINGs in the currentct                                  }
+   checkregionselected(cr, msg);
+   BOOL change := FALSE;
+   ID  ida, idb;     CTNAME  ctn;
+   REF IMPORTS ips;
+   IF NOT isnilptr(discfile, impdp)
+   THEN  BUFFER buffer := read buffer(discfile, impdp);
+         WHILE index OF buffer < UPB rvc OF current OF buffer
+         DO  ida:= inid2(buffer);   idb:= inid2(buffer);
+             ctn:= (inid2(buffer), inid2(buffer));
+             ips := get_imports(cr);
+             WHILE rename OF binding OF ips /= ida  DO ips := rest OF ips OD;
+             REF BINDING  b = binding OF ips;
+             IF (name OF b /= idb  OREL  NOT (ctn OF b = ctn))  ANDTH
+                 closurecontains(ctn, CTN cr)
+             THEN  msg(lib_msg(60), (idb, CTOS ctn, CTOS cr))
+                       {"You can't import * from context * into context *"}
+                       {"since this would make the closure circular"}
+             ELIF context OF ctn = name OF context OF cr
+               THEN  msg(lib_msg(61) {"You can't import * from * into the"
+                                      "imports region /* of the same context"},
+                         (idb, CTOS ctn, name OF region OF cr))
+               ELSE  name OF b := idb;  ctn OF b := ctn;
+                     info OF b := info;
+                     change := TRUE
+             FI
+         OD
+   FI;
+   change
+END;
+
+PROC incompiled = ( DISCPTR dp, REF DISCPTR imports,
+                    REF REF VECTOR [] DISCPTR info, bodies, spacemaps,
+                    MESSAGEPROC  msg ) REF VECTOR [] DECL:
+BEGIN
+   { Result from the compiler is held as follows :-                           }
+   {    ( ptr to spec OF decl, ptr to body OF decl, ptr to spacemap OF decl)  }
+   {                                                 * number of declarations }
+   {    pointer to name of source file                                        }
+   {    pointer to imports data                                               }
+   {                                                                          }
+   VECTOR [ndiscptrs(discfile, dp, msg)] DISCPTR  dps;
+   myreaddiscptrs(discfile, dps, dp, msg);
+   INT upb = (UPB dps-2) % 3;
+   HEAP VECTOR [upb] DECL decls;
+   imports:= dps[UPB dps];
+
+   FOR i TO UPB decls
+   DO  HEAP VECTOR [nchars(discfile, dps[3*i-2], msg)] CHAR  c;
+       myreadchars(discfile, c, dps[3*i-2], msg);
+       il OF decls[i]:= c;
+       export OF decls[i]:= FALSE
+   OD;
+   indecls(decls);   { fills in other fields of decls }
+
+   info := HEAP VECTOR [upb] DISCPTR;
+   DISCPTR infodp = dps[UPB dps - 1];   { All from same source }
+   FORALL i IN info DO i := infodp OD;
+   bodies := HEAP VECTOR [upb] DISCPTR;
+   FOR i TO upb DO  bodies[i]:= dps[3*i-1]  OD;
+   spacemaps := HEAP VECTOR [upb] DISCPTR;
+   FOR i TO upb DO  spacemaps[i]:= dps[3*i]  OD;
+
+   IF upb = 0
+   THEN info := HEAP VECTOR [1] DISCPTR;
+        info[1] := infodp
+   FI;
+   decls
+END;
+
+
+
+PROC inuses = (ID id, REF USES u) BOOL:
+BEGIN
+   IF u IS niluses
+   THEN  FALSE
+   ELSE  name OF u = id  OREL  inuses(id, rest OF u)
+   FI
+END;
+
+PROC usesindecls = (DECL d, REF VECTOR [] DECL decls) BOOL:
+BEGIN
+   REF USES  u:= uses OF d;
+   BOOL used := TRUE;
+   WHILE used  ANDTH  (u ISNT niluses)
+   DO  IF finddecl(name OF u, decls) = 0
+       THEN  used := FALSE
+       ELSE  u:= rest OF u
+       FI
+   OD;
+   used
+END;
+
+
+{{{  Procedure for displaying source file information }}}
+
+PROC  info_chars = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   REF SOURCE s = get_decl_source(ct, declno);
+   RVC  date = IF date OF s = 0
+               THEN  MAKERVC "- not known"
+               ELSE  date_time(date OF s)
+               FI;
+   msg(lib_msg(62) {"      from *"}, name OF s);
+   msg(lib_msg(63) {"  written *"}, date)
+END;
+
+
+PROC printdecl = (REF CONTXT ct, INT declno, BOOL uses, usedby,
+                                             MESSAGEPROC msg) VOID:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   DECL decl = (decls)[declno];
+   REF USES  u;   INT j;
+   msg(lib_msg(64) {"   * *(*)"},
+       (sort_id(sort OF decl), name OF decl, version_str(version OF decl)) );
+   info_chars(ct, declno, msg);
+   BOOL first:= TRUE;
+   IF uses
+   THEN  msg(lib_msg(65), nullmsg {"      uses:    "});
+         u:= uses OF decl;
+         WHILE u ISNT niluses
+         DO  ( first | first:= FALSE | msg(lib_msg(1), nullmsg {",   "}) );
+             msg(lib_msg(66) {"* *"}, (sort_id(sort OF u), name OF u));
+             j:= get_decl(ct, name OF u, msg);
+             IF version OF decls[j] /= version OF u
+             THEN  msg(lib_msg(67) {"(*, old specification)"},
+                       version_str(version OF u))
+             FI;
+             u:= rest OF u
+         OD;
+         msg(lib_msg(2), nullmsg {newline})
+   FI;
+   first:= TRUE;
+   IF usedby
+   THEN  msg(lib_msg(23), {"Context *"} name OF ct);
+         msg(lib_msg(68), nullmsg {"      used by: "});
+         j:= get_decl(ct, name OF decl, msg);
+         FOR i TO UPB decls
+         DO  IF i/=j  ANDTH inuses(name OF decl, uses OF decls[i])
+             THEN  ( first | first:= FALSE | msg(lib_msg(1),nullmsg{",   "}));
+                   msg( lib_msg(24) {"Version *"},
+                        version_str(version OF decls[i]) );
+                   msg(lib_msg(69) {"* *"},
+                       (sort_id(sort OF decls[i]), name OF decls[i]) )
+             FI
+         OD;
+         msg(lib_msg(2), nullmsg {newline})
+   FI
+END;
+
+PROC sortdecls = (REF CONTXT ct, REF VECTOR [] DECL decls, REF BOOL sorted,
+                  MESSAGEPROC msg) REF VECTOR [] INT:
+BEGIN
+   VECTOR [UPB decls] DECL  from, to;
+   HEAP VECTOR [UPB decls] INT table;
+   from:= decls;
+   BOOL goback := FALSE;      INT t:= 0, f:= 0;
+   WHILE (f PLUSAB 1) <= UPB from
+   DO  IF sort OF from[f] /= -1
+       THEN  IF usesindecls(from[f], ( t = 0 | nodecls | to[:t] ))
+             THEN  to[t PLUSAB 1] := from[f];
+                   table[f] := t;
+                   sort OF from[f] := -1;
+                   IF goback THEN goback:= FALSE; f := 0 FI
+             ELSE  goback:= TRUE
+             FI
+       FI
+   OD;
+   IF goback
+   THEN  {HEAP CONTXT tempct:= (nullid, nilptr, FALSE, FALSE, decls,
+                               nildeclattributes, nilregions);}
+         msg(lib_msg(70), nullmsg {"The following contain a circularity:"});
+         FOR f TO UPB from
+         DO  IF sort OF from[f] /= -1
+             THEN  printdecl(ct, f, TRUE, FALSE, msg)
+             FI
+         OD
+   ELSE  decls:= to
+   FI;
+   sorted := NOT goback;
+   table
+END;
+
+
+PROC mergedecls = ( REF CONTXT ct, REF VECTOR [] DECL from, REF BOOL ok,
+                    REF REF VECTOR [] INT table, MESSAGEPROC msg
+                  ) REF VECTOR [] DECL:
+BEGIN
+   REF VECTOR [] DECL to = get_decls(ct, msg);
+   IF UPB from = 0
+   THEN  ok := TRUE; to
+   ELIF UPB to = 0
+   THEN  HEAP VECTOR [UPB from] DECL ans := from;
+         FORALL f IN from, a IN ans
+         DO  IF import OF f
+             THEN  newimport(ct, name OF f, sort OF f)
+             FI;
+             status OF a := ABS new_mask
+         OD;
+         ok := TRUE; ans
+   ELSE  HEAP VECTOR [UPB from + UPB to] DECL ans;
+         INT d,  ansend:= UPB to;
+         BITS bstatus;  BOOL specchanged;
+         ans[1:UPB to]:= to;
+         FORALL f IN from
+         DO  IF (d:= get_decl(ct, name OF f, msg)) /= 0
+             THEN  bstatus := 16r0;
+                   specchanged := (version OF ans[d] /= version OF f);
+                   IF import OF ans[d]  ANDTH  NOT import OF f
+                   THEN  removeimport(ct, name OF f);
+                         bstatus := imports_mask
+                   ELIF NOT import OF ans[d]  ANDTH  import OF f
+                   THEN  newimport(ct, name OF f, sort OF f);
+                         bstatus := imports_mask
+                   ELIF import OF ans[d] ANDTH import OF f ANDTH specchanged
+                   THEN cancelimport(ct, name OF f)
+                   FI;
+                   ans[d]:= f;
+                   IF export OF to[d] THEN export OF ans[d]:= TRUE FI;
+                   IF specchanged THEN bstatus := bstatus OR spec_mask FI;
+                   status OF ans[d] := ABS (bstatus OR body_mask)
+             ELSE  IF import OF f
+                   THEN newimport(ct, name OF f, sort OF f)
+                   FI;
+                   ans[ansend PLUSAB 1]:= f;
+                   status OF ans[ansend]:= ABS new_mask
+             FI
+         OD;
+         table := sortdecls(ct, ans[1:ansend], ok, msg);
+         IF ok THEN ans[1:ansend] ELSE SKIP FI
+   FI
+END;
+
+
+PROC updatedecls = (REF CONTXT ct, REF VECTOR [] DECL decls, MESSAGEPROC msg)
+                                                                          VOID:
+BEGIN
+   changed OF ct := TRUE;
+   decls OF ct := decls;
+   loadable OF ct :=
+      IF UPB decls = 0 THEN FALSE ELSE loadable(ct, decls, 1, msg) FI;
+   setlibchanged(msg)
+END;
+
+
+
+PROC  merge_compiled = (CREGION cr, DISCPTR ptrlastcomp, MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTXT ct = context OF cr;
+   IF isnilptr(discfile, ptrlastcomp)
+   THEN  reopen_library(msg);
+         msg(lib_msg(71), nullmsg {"Failed to compile"})
+   ELSE  DISCPTR  imports;
+         REF VECTOR [] DISCPTR info,  bodies, spacemaps;
+         REF VECTOR [] INT table;
+         REF VECTOR [] DECL compiled =
+              incompiled(ptrlastcomp, imports, info, bodies, spacemaps, msg);
+         IF UPB compiled > 0
+         THEN  BOOL merged := FALSE;
+               REF VECTOR [] DECL decls :=
+                              mergedecls(ct, compiled, merged, table, msg);
+               IF merged
+               THEN
+                 inimports(cr, imports, info[1], msg);
+                 updatedecls(ct, decls, msg);
+
+                 VECTOR [UPB compiled] INT declnos;
+                 FORALL decl IN compiled, declno IN declnos
+                   DO  declno := check_decl(ct, name OF decl, msg) OD;
+                 INT vnno = version OF library; {{??+1}}
+                 update_declattributes(ct, table, msg);
+                 merge_declattribute(ct, body_key, declnos, vnno, bodies, msg);
+                 merge_declattribute(ct, info_key, declnos, vnno, info, msg);
+                 merge_declattribute(ct, spacemap_key, declnos, vnno,
+                                     spacemaps, msg);
+
+                 msg(lib_msg(23), {"Context *"} name OF ct);
+                 msg(lib_msg(72), nullmsg);{"Current context has been updated"}
+                 IF NOT loadable OF ct THEN  loadable(ct, decls, 2, msg)  FI;
+                 outputcancelled(ct, msg)
+              ELSE  reopen_library(msg);
+                    msg(lib_msg(73), nullmsg {"Compilation has been ignored"})
+              FI
+        ELSE  IF inimports(cr, imports, info[1], msg)
+              THEN setlibchanged(msg);
+                   msg(lib_msg(74),nullmsg){"Current context has been updated"}
+              ELSE reopen_library(msg)
+              FI
+        FI
+   FI
+END;
+
+
+PROC merge_imports = (CREGION cr, DISCPTR ptrlastcomp,  MESSAGEPROC msg) VOID:
+BEGIN
+   IF NOT isnilptr(discfile, ptrlastcomp)
+   THEN  VECTOR [2] DISCPTR info_imports;
+         myreaddiscptrs(discfile, info_imports, ptrlastcomp, msg);
+         IF inimports(cr, info_imports[2]{imports}, info_imports[1] {info}, msg)
+         THEN setlibchanged(msg);
+              msg(lib_msg(74), nullmsg {"Current context has been updated"})
+         FI
+   ELSE  msg(lib_msg(71), nullmsg {"Failed to compile"})
+   FI
+END;
+
+
+{{ ************** USER procedures on CONTEXTs *********************** }}
+
+PROC make_context = (CTNAME newctname, MESSAGEPROC msg) VOID:
+BEGIN
+   IF get_context(context OF newctname) ISNT nilcontxt
+   THEN  msg(lib_msg(79) {"* is already a context"}, context OF newctname)
+   ELSE  HEAP REGIONS newregion :=
+              ((import OF newctname, 0, nilimports), nilregions);
+         CONTXT newct = (context OF newctname, newcontextptr(msg), FALSE, TRUE,
+                         nodecls, nildeclattributes, newregion);
+         contexts OF library := HEAP CONTEXTS := (newct, contexts OF library);
+         msg(lib_msg(80) {"* is now a context"}, context OF newctname);
+         setlibchanged(msg)
+   FI
+END;
+
+
+PROC copyregions = (REF REGIONS r) REF REGIONS:
+BEGIN
+   IF r IS nilregions
+   THEN  r
+   ELSE  REF REGIONS rest := copyregions(rest OF r);
+         REGION newregion =
+            (name OF region OF r, 0, copyimports(imports OF region OF r, TRUE));
+         HEAP REGIONS := (newregion, rest)
+   FI
+END;
+
+PROC containsexports = (REF CONTXT ct, MESSAGEPROC msg) BOOL:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   BOOL  ans:= FALSE;
+   FORALL d IN decls WHILE NOT ans
+   DO  IF export OF d  THEN  ans:= TRUE  FI  OD;
+   ans
+END;
+
+
+PROC copy_context = (REF CONTXT ct, ID newctname, MESSAGEPROC msg) VOID:
+BEGIN
+   IF get_context(newctname) ISNT nilcontxt
+   THEN  msg(lib_msg(79) {"* is already a context"}, newctname)
+   ELSE  save_library(msg);  {{?? or just write away declarations - putdecls}}
+         CONTXT newct = (newctname, val OF ct, loadable OF ct, TRUE, nildecls,
+                         nildeclattributes, copyregions(regions OF ct));
+         contexts OF library := HEAP CONTEXTS := (newct, contexts OF library);
+         msg(lib_msg(80) {"* is now a context"}, newctname);
+         setlibchanged(msg)
+   FI
+END;
+
+
+PROC clear_context = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   IF containsexports(ct, msg)
+   THEN  msg(lib_msg(81), name OF ct)
+             {"You can't clear context * since it contains exports"}
+   ELSE  updatedecls(ct, nodecls, msg);
+         clear_declattributes(ct, msg);
+         REF REGIONS r := regions OF ct;
+         WHILE r ISNT nilregions
+         DO  imports OF region OF r := nilimports;
+             r := rest OF r
+         OD;
+         msg(lib_msg(82) {"Context * has been cleared"}, name OF ct)
+   FI
+END;
+
+PROC erase_context = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   IF name OF ct = context OF defaultct
+   THEN msg(lib_msg(83) {"* is a special context which can't be erased"},
+            name OF ct)
+   ELIF containsexports(ct, msg)
+   THEN msg(lib_msg(84) {"You can't erase * since it contains exports"},
+            name OF ct)
+   ELSE REF REF CONTEXTS c := contexts OF library;
+        WHILE NOT (name OF context OF c = name OF ct)  DO  c := rest OF c  OD;
+        (REF REF CONTEXTS (c)):= rest OF c;
+        msg(lib_msg(85) {"* is no longer a context"}, name OF ct);
+        setlibchanged(msg)
+   FI
+END;
+
+{ ******************* Procedures on REGIONS ********************** }
+
+PROC clear_imports = (CREGION cr, MESSAGEPROC msg) VOID:
+BEGIN
+   checkregionselected(cr, msg);
+   REF BINDING b;
+   REF IMPORTS is := get_imports(cr);
+   IF is IS nilimports
+   THEN msg(lib_msg(90) {"* doesn't contain any imports"}, CTOS(cr))
+   ELSE msg(lib_msg(91) {"In context *:"}, CTOS(cr));
+        BOOL changed := FALSE;
+        WHILE is ISNT nilimports
+        DO  b := binding OF is;
+            IF name OF b /= nullid
+            THEN  name OF binding OF is:= nullid;
+                  ctn OF binding OF is:= (nullid, nullid);
+                  changed := TRUE;
+                  msg(lib_msg(92) {"* * is no longer imported"},
+                      (sort_id(sort OF b), rename OF b))
+           FI;
+           is:= rest OF is
+        OD;
+        IF changed THEN setlibchanged(msg) FI;
+        msg(lib_msg(93) {"All imports of * have been cleared"}, CTOS(cr))
+   FI
+END;
+
+
+{{{ ******************  USER procedures on REGIONs ******************** }}}
+
+PROC erase_region = (CREGION cr, MESSAGEPROC msg) VOID:
+BEGIN
+   checkregionselected(cr, msg);
+   checkcompound(context OF cr, msg);
+   IF checklastimports(context OF cr)
+   THEN  msg(lib_msg(94), nullmsg{"You must have at least one imports region"})
+   ELIF isimported(nullid, CTN(cr), msg)
+   THEN  msg(lib_msg(95) {"You can't erase * since it is still needed"},
+             CTOS(cr))
+   ELSE  REF REF REGIONS rs := regions OF context OF cr;
+         WHILE NOT (name OF region OF rs = name OF region OF cr)
+           DO  rs := rest OF rs  OD;
+         (REF REF REGIONS (rs)):= rest OF rs;
+         msg(lib_msg(96) {"/* is no longer an imports region"},
+             name OF region OF cr);
+         setlibchanged(msg)
+   FI
+END;
+
+PROC make_region = (REF CONTXT ct, ID newimpname, MESSAGEPROC msg) VOID:
+BEGIN
+   checkcompound(ct, msg);
+   IF region OF get_region(ct, newimpname) ISNT nilregion
+   THEN  msg(lib_msg(97) {"/* is already an imports region in context *"},
+             (newimpname, name OF ct))
+   ELSE  REGION newregion = (newimpname, 0,
+                    copyimports(imports OF region OF regions OF ct, FALSE));
+         regions OF ct := HEAP REGIONS := (newregion, regions OF ct);
+         msg(lib_msg(23) {"Context *"}, name OF ct);
+         msg(lib_msg(98) {"/* is now an imports region"}, newimpname);
+         setlibchanged(msg)
+   FI
+END;
+
+
+PROC copy_region = (CREGION cr, ID newname, MESSAGEPROC msg) VOID:
+BEGIN
+   checkregionselected(cr, msg);
+   checkcompound(context OF cr, msg);
+   IF region OF get_region(context OF cr, newname) ISNT nilregion
+   THEN  msg(lib_msg(97) {"/* is already an imports region in context *"},
+             (newname, name OF context OF cr))
+   ELSE  REGION newregion =
+             (newname, 0, copyimports(imports OF region OF cr, TRUE));
+         regions OF context OF cr := HEAP REGIONS :=
+                              (newregion, regions OF context OF cr);
+         msg(lib_msg(23) {"Context *"}, CTOS cr);
+         msg(lib_msg(98) {"/* is now an imports region"}, newname);
+         setlibchanged(msg)
+   FI
+END;
+
+PROC name_region = (REF CONTXT ct, ID newname, MESSAGEPROC msg) VOID:
+BEGIN
+   checksimple(ct, msg);
+   IF isimported(nullid, (name OF ct, nullid), msg)
+   THEN msg(lib_msg(99) {"You can't convert context *"}, name OF ct)
+   ELSE  name OF region OF regions OF ct := newname;
+         msg(lib_msg(100), (name OF ct, newname));
+             {"Context * is now a compound context with imports region /*"}
+         setlibchanged(msg)
+   FI
+END;
+
+PROC dont_name_region = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   checkcompound(ct, msg);
+   IF NOT checklastimports(ct)
+   THEN  msg(lib_msg(101) {"Context * has more than one imports region"},
+             name OF ct)
+   FI;
+   IF isimported(nullid, (name OF ct, name OF region OF regions OF ct), msg)
+   THEN  msg(lib_msg(99) {"You can't convert context *"}, name OF ct)
+   ELSE  name OF region OF regions OF ct := nullid;
+         msg(lib_msg(102) {"Context * is now a simple context"}, name OF ct);
+         setlibchanged(msg)
+   FI
+END;
+
+
+
+{{ **** Procedures on DECLs **** }}
+
+
+PROC dontexport = (REF CONTXT ct, INT declno, MESSAGEPROC msg) BOOL:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   REF DECL decl = decls[declno];
+   BOOL  ans:= FALSE;
+   IF NOT export OF decl
+   THEN  msg(lib_msg(111) {"* * isn't an export"},
+             (sort_id(sort OF decl), name OF decl))
+   ELIF isimported(name OF decl, (name OF ct,nullid), msg)
+   THEN  msg(lib_msg(113), {"* * is still needed"}
+             (sort_id(sort OF decl), name OF decl))
+   ELSE  export OF decl := FALSE;      ans:= TRUE
+   FI;
+   ans
+END;
+
+
+{{ ************ User Procedures on DECLs ************************* }}
+
+PROC dont_import = (CREGION cr, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   checkregionselected(cr, msg);
+   ID declname = name OF (get_decls(context OF cr, msg))[declno];
+   REF BINDING b = check_binding(cr, declname, msg);
+   IF name OF b = nullid
+   THEN  msg(lib_msg(106) {"* hasn't been imported"}, declname)
+   ELSE  name OF b := nullid;
+         ctn OF b := (nullid, nullid);
+         msg(lib_msg(107) {"* is no longer imported"}, declname);
+         setlibchanged(msg)
+   FI
+END;
+
+PROC erase = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   HEAP VECTOR [UPB decls-1] DECL  new;
+   INT sort = sort OF decls[declno];
+   ID  name = name OF decls[declno];
+   IF export OF decls[declno]
+   THEN msg(lib_msg(108) {"* * is exported"}, (sort_id(sort), name))
+   FI;
+   FOR i TO UPB decls
+   DO  IF i /= declno  ANDTH  inuses(name, uses OF decls[i])
+       THEN  printdecl(ct, declno, FALSE, TRUE, msg);
+             msg(lib_msg(109) {"* * is still needed"}, (sort_id(sort), name))
+       FI
+   OD;
+   IF import OF decls[declno] THEN  removeimport(ct, name)  FI;
+   IF declno > 1 THEN  new[1:declno-1]:= decls[1:declno-1]  FI;
+   IF declno < UPB decls THEN  new[declno: ]:= decls[declno+1: ]  FI;
+   updatedecls(ct, new, msg);
+   erase_declattributes(ct, declno, msg);
+   msg(lib_msg(110) {"* * has been erased"}, (sort_id(sort), name))
+END;
+
+
+PROC export = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   INT sort = sort OF decls[declno];
+   ID name = name OF decls[declno];
+   IF export OF decls[declno]
+   THEN  msg(lib_msg(115) {"* * is already exported"}, (sort_id(sort), name))
+   ELIF sort /= kfn  ANDTH  sort /= kmac
+   THEN  msg( lib_msg(116) {"* can't be exported as it is *"},
+              ( name, IF sort = kint THEN  "an INT"
+                                     ELSE  oneline(("a ", sort_id(sort)))
+                     FI
+            ) )
+   ELSE  export OF decls[declno]:= TRUE;
+         updatedecls(ct, decls, msg);
+         msg(lib_msg(117) {"* * is now exported"}, (sort_id(sort), name))
+   FI
+END;
+
+PROC exportall = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   REF VECTOR [] DECL  decls = get_decls(ct, msg);
+   BOOL  changed:= FALSE, something to export:= FALSE;
+   VECTOR [UPB decls] BOOL  state;
+   FORALL d IN decls, s IN state
+   DO  IF sort OF d = kfn  OREL  sort OF d = kmac
+       THEN  something to export:= TRUE;
+             s := export OF d;
+             IF NOT s THEN export OF d := TRUE;  changed := TRUE FI
+       ELSE  s := FALSE
+       FI
+   OD;
+   IF changed
+   THEN  updatedecls(ct, decls, msg);
+         msg(lib_msg(118) {"In context *:"}, name OF ct);
+         FORALL dc IN decls, st IN state
+         DO  IF sort OF dc = kfn  OREL  sort OF dc = kmac
+             THEN IF st
+                  THEN  msg(lib_msg(119) {"   * * was already exported"},
+                            (sort_id(sort OF dc), name OF dc))
+                  ELSE  msg(lib_msg(120) {"   * * has been exported"},
+                            (sort_id(sort OF dc), name OF dc))
+                  FI
+             FI
+         OD
+   ELSE  msg(lib_msg(121) {"There is nothing*to export from *"},
+             (IF something to export THEN  " further "  ELSE  " "  FI,
+              name OF ct))
+   FI
+END;
+
+
+PROC dont_export = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   IF dontexport(ct, declno, msg)
+   THEN msg(lib_msg(124) {"* * is no longer exported"},
+             (sort_id(sort OF decls[declno]), name OF decls[declno]));
+        updatedecls(ct, decls, msg)
+   FI
+END;
+
+PROC clear_exports = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   IF NOT containsexports(ct, msg)
+   THEN  msg(lib_msg(122) {"* doesn't contain any exports"}, name OF ct)
+   ELSE  BOOL change:= FALSE;
+         REF VECTOR [] DECL decls = get_decls(ct, msg);
+         msg(lib_msg(123) {"In context *:"}, name OF ct);
+         FOR declno TO UPB decls
+         DO  IF export OF decls[declno] ANDTH dontexport(ct, declno, msg)
+             THEN msg(lib_msg(124) {"* * is no longer exported"},
+                      (sort_id(sort OF decls[declno]), name OF decls[declno]));
+                  change:= TRUE
+             FI
+         OD;
+         {{{ assumes dontexport doesnt do a call of fault }}}
+         IF change
+         THEN  updatedecls(ct, decls, msg);
+               msg( lib_msg(125), name OF ct
+                    {"All exports of * have been cleared"} )
+         FI
+   FI
+END;
+
+
+
+
+PROC ordercontexts = INT:
+BEGIN               {{{ N.B. This procedure alters ctno values in contexts }}}
+   {{ Places context/regions in alphabetial order }}
+   REF CONTEXTS c;  REF REGIONS r;
+   INT  no:= 0;
+   zero_ctnos;
+   REF CONTXT ct = context OF contexts OF library;
+   CREGION first := (ct, region OF regions OF ct);
+   WHILE
+      c:= contexts OF library;
+      WHILE c ISNT nilcontexts
+      DO  r := regions OF context OF c;
+          WHILE r ISNT nilregions
+          DO  IF ctno OF region OF r = 0  ANDTH
+                 ( ctno OF region OF first /= 0  OREL
+                   name OF context OF c < name OF context OF first  OREL
+                   name OF context OF c = name OF context OF first  ANDTH
+                   name OF region OF r < name OF region OF first )
+              THEN  first:= (context OF c, region OF r)
+              FI;
+              r := rest OF r
+          OD;
+          c := rest OF c
+      OD;
+      ctno OF region OF first = 0
+   DO  ctno OF region OF first:= no PLUSAB 1  OD;
+   no
+END
+
+
+KEEP  setcurrentct,  printsizes,
+      dont_import,  clear_imports,  erase_region,  make_region,  copy_region,
+      name_region,  dont_name_region,
+      clear_library,  increase_library,  compact_library,  regress_library,
+      save_libchanges,  create_library,
+      erase,  export,  exportall,  dont_export,  clear_exports,
+      make_context,  copy_context,  clear_context,  erase_context,
+      merge_compiled,  merge_imports,
+      info_chars,  ordercontexts,  printdecl
+FINISH

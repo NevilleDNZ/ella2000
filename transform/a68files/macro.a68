@@ -1,0 +1,4846 @@
+DECS  macro CONTEXT VOID  USE  putstrings,  basics, messageproc, osinterface,
+      assmodes, closureprocs, modeprocs, transformprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: macro.a68,v 34.2 1995/03/29 13:02:58 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:05:88   Macro transformation.  EVW
+13:10:88   Porting changes.  PROC shorten and test no longer used. EVW
+18:10:88   Hashing added to macro optimisation.  EVW
+20:10:88   STRINGs in REFORM treated as primitives.  EVW
+31:10:88   Macclosureno included in declaration FNUSAGE, Unused Fns now
+              flag "envfnchanged".
+              Bug in first environ use of Macro already used in closure. EVW
+01:11:88   LONG INTs removed from MOD.  EVW
+04:11:88   CR 107  FAULT not stop assembly immediately.  EVW
+              CR 565  Assembler trace same for fault.  EVW
+13:12:88   PROC add_innerfn now handle recursive macros correctly.  EVW
+13:12:88   Nametypes field now trimmed with maxnameno.  EVW
+13:12:88   PROC macparams_hash and macspecs_hash now handle maxint.  EVW
+16:12:88   No need to translate typenos in PROC type_sort.  EVW
+20:12:88   Copy MAC, UREPL, SEQREPL and REPLJOIN contents for Release 4.  EVW
+20:12:88   Remove unnecessary call of make_newtproc and ucond_expand.  EVW
+03:01:89   PROC find_outfnno must not check againt 1st entry in ENVIRON. EVW
+13:01:89   PROC check types needs ENVIRON etc: for both parameters, since
+              they can be from different OUTERFN.  EVW
+26:01:89   R4B064.  Always deliver test OF fcheck from fcheck_evaluate. EVW
+31:01:89   R4B058.  Failure message added if errors found.  EVW
+06:02:89   R4B094.  Macro type params now expand assoc and non-new types. EVW
+09:02:89   R4B108.  Correct bug in cbasic etc introduced for Release 4
+                       copying.  EVW
+10:02:89   R4B123.  Typing error in CRANGE of PROC checkdisjoint.  EVW
+21:02:89   R4B076.  Marker placed in joinlist at start of useries_expand. EVW
+07:03:89   R4B198.  BOOL copy added to fndec_expand. EVW
+09:03:89   R4B215.  Check disjointness between CASSOC and CBASIC.  EVW
+20:03:89   R4B233.  Depth needed to position declarations correctly.  EVW
+31:07:89   CR 642.  Kernel Interface changes. EVW
+06:09:89   R4B466.  ENVIRON vectors now trimmed correctly.  EVW
+20:09:89   R4B467.  findnewtypeno + findnewfnno uses closureno not name. EVW
+21:09:89   R4B415.  Wrong instance number for FN inside inner MAC. EVW
+23:10:89   R4B509.  scope of VECTOR mactypedecls corrected. EVW
+30:10:89   CR 638.  Addition of CONST macro parameters. EVW
+              linesafterfault reset each call of expand. EVW
+17:12:89   CR ???.  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+08:01:90   Error messages must take newclose else identifyfn may fail. EVW
+16:01:90   correction to over generation of HEAP for OUTERFNS. initialistion
+              of hashtable now ok for repeated calls of transformation. EVW
+26:03:90   FN macro parameters expansion. EVW
+03:05:90   CR 643. Updated for new fntype work.  JOIN checks changed. EVW
+19:06:90   R4B599.  Correction to macro optimisation of TYPE aliases. EVW
+31:07:90   Correction to type_sort for TSTR of global/local types. EVW
+06:08:90   joincheck changed from VECTOR to list. EVW
+22:10:90   Temporary changes to prevent a crash and provide a message if
+              macro called on a macro with a MAC parameter. JIT
+29:11:90   Temporary section added to put FN parameters of macros onto new
+              usage list on a second call of 'macro'. See TEMP SECTION JIT
+13:12:90   Message given if a macro instance without macparams is found.
+              However, crash now allowed as it may not be a MAC param of a
+              macro and so must be allowed to continue. JIT
+16:01:91   Temporary change of 22:10:90 removed. JIT
+16:01:91   R6B11:  INT USAGE not removed from outer types.  DCT
+18:01:91   R6B8/12:  Input type of INSTANCE must be added to ENVIRON. EVW
+26:02:91   R6B21:  Add const_check to CNAME in UNIT.
+                      Alter message in const_check.  EVW
+26:02:91   R6B19:  Corrections to PROC coerce_joinup. EVW
+07:03:91   MAC parameters of macros. EVW
+09:04:91   R6B24:  Avoid consequential errors with JOINUPs. EVW
+16:05:91   R6B18:  Transforms now called on macparam field of MACSPEC. EVW
+21:05:91   R6B38:  Hashing now handles MACs with no parameters. EVW
+10:06:91   R6B42:  Correction to CQUERY matching in checkconsts. EVW
+31:07:91   R6B63:  Reform_check needs to `NOT' checkequals result. MGH
+15:08:91   Updated to version 7 of assemble modes. EVW
+23:09:91   R6B72:  IR288. correction for STRING[]TYPE in checkconsts. EVW
+21:10:91   R6B84:(IR292)  Correction to reset_scope. EVW
+18:10:91   New mode CLOSURE.  DCT
+19:12:91   BODYDATA removed, MACSPEC altered. EVW
+23:01:92   Correction to PROC needs_expanded. EVW
+05:02:92   R6B98: Correction to PROC type_expand - change ignored. EVW
+03:03:92   Attribute declarations added. EVW
+17:03:92   Multiple strings added to CQUOTE. EVW
+27:04:92   R6B102: correction to needs_expanding - check nametypes table. EVW
+27:04:92   R6B103: specification of FN instances now updated correctly. EVW
+12:05:92   Move check_types to modeprocs. new spec fo fndec_tfn. DJS
+08:06:92   R6B106: bug in merge environs - only merge upto envfnno etc:. EVW
+02:07:92   R6B105: Correction to @ on FN names and indirect uses of @. EVW
+28:07:92   Changes made for CONST / UNIT mode change. JIT
+30:07:92   Global chooser_const added so that unit_expand does not cause
+              error message in const_check. JIT
+05:11:92   Updated for 'chars' mode changes. JIT
+08:12:92   Changes made in unit_expand for [3]U equivalent to [INT i=1..3]U.
+                                                                            JIT
+27:01:93   R6B140: need to mark off join for fnbody with non-OUTPUT unit. EVW
+27:01:93   R6B141: coerce_joinup now handles [](fntype, non-fntype). EVW
+02:02:93   R6B125: macparam_sort works on newclosure. EVW
+02:02:93   R6B143: macparam_sort check localdec is a real dec not macpar.EVW
+16:02:93   R6B144: cprimrange now handled correctly in unit_expand. EVW
+16:02:93   R6B145: now handles portnames. EVW
+25:02:93   FLTPROC not defined - replaced by PROC (STR) VOID.  DCT
+26:03:93   Change IS/ISNT nullid tests to UPB tests.  DJS
+12:03:93   Correction to parameter of instance_no_expand for FN pars to mac
+12:05:93   Changes to handling of replicators. EVW
+20:05:93   R6B158: correction to is_ctypeorquery. EVW
+15:06:93   SEQROW added. EVW
+05:07:93   Optimisations - expand not needed for FARITH, ints vector > 0
+              after transformation with INT macro params. EVW
+05:07:93   JOINCHOICES removed - CASE cannot have fntypes in arms. EVW
+08:07:93   R6B160: Fix to macspec_macparam for 2nd trans on MAC MAC pars. EVW
+07:09:93   R6B177: joinup needs to be nulled after constant units. EVW
+13:09:93   R6B178: need to know if spec of macro has changed so as to put
+                      correct spec in inst calling env - hold in hashlist.EVW
+14:10:93           extend use of force for handling mac specs updating. EVW
+14:10:93   R6B190: add repldecs to FNDECENV. EVW
+18:10:93   R6B193: sort out passing macro templates. EVW
+27:10:93   R6B201: updated params field wrongly passed outof outer_expand.EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.091 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+BOOL chooser_const := FALSE;
+
+PROC nilampar = (ATTRNAME am) ATTR: attrnull;
+PROC nilfmpar = (FNAME fm) FORMULA: fnull;
+PROC niltmpar = (TNAME tm) TYPE: tnull;
+PROC nilcmpar = (CNAME cm) UNIT: unull;
+PROC nilfnmpar = (FNNAME fn) INSTANCE: (0, NIL, attrnull);
+
+PROC skeleton_fndec = (INT sort, BOOL macro, ID name, FNBODY body) REF FNDEC:
+  HEAP FNDEC := (sort, macro, name,
+                 IF macro THEN nullmacspecs ELSE nilmacspecs FI, attrnull,
+                 nilnames, nilnames, nullnametypes, body, nilusage
+                );
+
+
+
+{{ Monitor list used to hold information about current FNDEC, so trace or
+   failure printing has correct information to hand }}
+
+MODE MONITORLIST =
+    STRUCT (BOOL mac, ID fnname, REF VECTOR [] MACPARAM params, INT depth,
+             REF MONITORLIST rest);
+REF MONITORLIST nilmonitor = NIL;
+
+{{ Diagnostic is a REF mode since trace and monitors can be altered.
+   Trace used both by trace command and tracing after failure }}
+
+MODE DIAG = STRUCT (BOOL trace, REF MONITORLIST monitors, PROC (STR) VOID flt),
+     DIAGNOSTIC = REF DIAG;
+
+
+MODE CLOSED = STRUCT (REF FNDEC fdec, REF ENVIRON env);
+
+
+{ ----------------------------------------------------------------------- }
+    {{ Procedures for printing FORMULAs, TYPEs and CONSTs }}
+    {{ -------------------------------------------------- }}
+
+VECTOR [70] CHAR m;  INT mind := 0;
+
+PROC start_printing = VOID:  (mind := 0);
+PROC end_printing = VOID:  put(out, (m[1:mind], newline));
+
+
+PROC findname = (INT typeno, altno, CLOSED close) ID:
+BEGIN
+   REF TYPEDEC tdec = (types OF env OF close)[typeno];
+   IF altno = -1
+   THEN  typename OF tdec
+   ELSE  CASE body OF tdec IN
+         (REF VECTOR [] ALTERNATIVE nn) altname OF nn[altno],
+         (REF NEWINTS ni)               tagname OF ni,
+         (REF NEWCHARS nc)              tagname OF nc
+         OUT sys fault("findname");  nullid
+         ESAC
+   FI
+END;
+
+
+PROC find_newchars = (INT typeno, CLOSED close) REF VECTOR [] CHAR:
+BEGIN
+   REF TYPEDEC tdec = (types OF env OF close)[typeno];
+   CASE body OF tdec IN
+   (REF NEWCHARS nc) chars OF nc
+   OUT NIL
+   ESAC
+END;
+
+MODE REPLICATOR = STRUCT (ID id, INT intno, RANGE range);
+
+PROC get_replicator = (FORMULA f, REF ENVIRON env) REPLICATOR:
+   CASE f IN
+   (REF FNAME fn) ( REF INTDEC idec = (ints OF env)[intno OF fn];
+                    CASE value OF idec IN
+                    (RANGE rg) (intname OF idec, intno OF fn, rg)
+                    OUT sys fault("get_repl-1"); SKIP
+                    ESAC
+                   )
+   OUT sys fault("get_repl-2"); SKIP
+   ESAC;
+
+PROC print_char = (CHAR c)VOID:
+(  IF (mind PLUSAB 1)>70
+   THEN mind:= 1;
+        put(out, (m, newline))
+   FI;
+   m[mind]:= c
+);
+
+PROC print_chars = (VECTOR [] CHAR c)VOID:
+(  FOR i TO UPB c DO print_char(c[i]) OD  );
+
+PROC print_id = (ID id)VOID:
+(  FOR i TO UPB id DO print_char(id[i]) OD );
+
+PROC print_ids = (REF IDS ids) VOID:
+(  REF IDS i := ids;
+   WHILE i ISNT nilids
+   DO print_id(id OF ids);
+      IF rest OF i ISNT nilids THEN print_chars(", ") FI;
+      i := rest OF i
+   OD
+);
+
+PROC print_strings = (REF IDS ids) VOID:
+( REF IDS strings := ids;
+  WHILE strings ISNT nilids
+  DO  print_chars(" """); print_id(id OF strings); print_chars("""");
+      strings := rest OF strings
+  OD
+);
+
+PROC print_attr = (ATTR a, CLOSED close) VOID:
+   CASE a IN
+   (REF ATTRNAME an)
+      ( REF ATTRDEC adec = (attrs OF env OF close)[attrno OF an];
+        print_id(attrname OF adec)
+      ),
+   (REF ATTRDATA ad)
+      ( print_id(classname OF ad);
+        IF UPB classname OF ad > 0 THEN print_chars(":") FI;
+        print_strings(strings OF ad)
+      ),
+   (REF ATTRSTR as)
+      ( REF ATTRSTR ast := as;
+        print_chars("(");  print_attr(elem OF ast, close);
+        WHILE (ast:= rest OF ast) ISNT nilattrstr
+          DO print_chars(","); print_attr(elem OF ast, close) OD;
+        print_chars(")")
+      ),
+   (REF ATTRBRACKET ab)
+      ( print_chars("("); print_attr(attr OF ab, close); print_chars(")")  )
+   OUT put(out, "?")
+   ESAC;
+
+
+PROC print_formula = (FORMULA f) VOID:
+   CASE f IN
+   (REF FINT j)
+      IF UPB text OF j = 0
+      THEN print_chars(intchars(int OF j))
+      ELSE print_id(text OF j)
+      FI,
+   (REF FCHECK fck) print_formula(test OF fck),
+   (REF FDOP fdop)
+      ( print_formula(left OF fdop);
+        print_chars((sort OF fdop|"+","-","*","%","=","/=","<=",">=","<",">",
+                               "AND","OR"," ","SL","SR","IAND","IOR","MOD"));
+        print_formula(right OF fdop)
+      ),
+   (REF FMOP fmop)
+      ( print_chars((sort OF fmop|"+","-","NOT"," ","INOT","SQRT","ABS"));
+        print_formula(right OF fmop)
+      ),
+   (REF FCOND fcon)
+      ( print_chars("IF "); print_formula(cond OF fcon);
+        print_chars(" THEN "); print_formula(true OF fcon);
+        print_chars(" ELSE "); print_formula(false OF fcon);
+        print_chars(" FI ")
+      ),
+   (REF FBRACKET fb)
+      ( print_char("("); print_formula(formula OF fb); print_char(")") ),
+   (REF FMACPAR fm)
+      ( print_chars("INT "); print_chars(intchars(macparno OF fm)) )
+{{?? should add repl and arith names }}
+   OUT put(out, "?")
+   ESAC;
+
+PROC print_type = (TYPE t, CLOSED close) VOID:
+BEGIN
+   PROC print_brackettype = (TYPE ty, CLOSED close) VOID:
+   (  BOOL is_tfn = CASE ty IN (REF TFN) TRUE OUT FALSE ESAC;
+      IF is_tfn THEN print_char("(") FI;
+      print_type(ty, close);
+      IF is_tfn THEN print_char(")") FI
+   );
+
+   REF TSTR st;
+   CASE t IN
+   (REF TNAME tn) print_id(findname(typeno OF tn, -1, close)),
+   (REF TSTR tstr)
+      ( print_chars("(");
+        st:= tstr;  print_type(elem OF tstr, close);
+        WHILE (st:= rest OF st) ISNT niltstr
+          DO print_chars(","); print_type(elem OF st, close) OD;
+        print_chars(")")
+      ),
+   (REF TFN tfn)
+      ( print_brackettype(from OF tfn, close); print_chars("->");
+        print_brackettype(to OF tfn, close)
+      ),
+   (REF TROW tr)
+      ( print_chars("["); print_formula(size OF tr); print_chars("]");
+        print_brackettype(elem OF tr, close)
+      ),
+   (REF TBRACKET tb)
+      ( print_chars("("); print_type(type OF tb, close); print_chars(")")  ),
+   (REF TSTRING ts)
+      ( print_chars("STRING["); print_formula(size OF ts); print_chars("]");
+        print_type(char OF ts, close)
+      ),
+   (REF TVOID tv)  print_chars("()"),
+   (REF TMACPAR tm)
+      ( print_chars("TYPE "); print_chars(intchars(macparno OF tm)) )
+   OUT  print_chars("?")
+   ESAC
+END;
+
+PROC print_const = (UNIT const, CLOSED close) VOID:
+BEGIN
+  REF USTR cstr;  REF UALTS calt;
+
+  CASE const IN
+  (REF CNAME cn)
+       ( print_id(constname OF (consts OF env OF close)[constno OF cn]) ),
+  (REF CTYPE ct)
+       ( print_type(type OF ct, close) ),
+  (REF CRANGE cr)
+       ( print_id(findname(typeno OF cr, 1, close));
+         print_chars("/("); print_formula(lwb OF range OF cr);
+         print_chars(".."); print_formula(upb OF range OF cr);
+         print_char(")")
+       ),
+  (REF CINT ci)
+       ( print_id(findname(typeno OF ci, 1, close));
+         print_char("/"); print_formula(index OF ci)
+       ),
+  (REF CPRIM cp)
+       ( print_id(findname(typeno OF cp, primno OF cp, close));
+         REF TYPEDEC tdec = (types OF env OF close)[typeno OF cp];
+         CASE body OF tdec IN
+         (REF NEWCHARS nc)
+           ( print_char("'");
+             print_char((chars OF nc)[primno OF cp])
+           )
+         OUT SKIP
+         ESAC
+       ),
+  (REF UASSOC ca)
+       ( print_id(findname(typeno OF ca, altno OF ca, close));
+         print_char("&"); print_const(assoc OF ca, close)
+       ),
+  (REF UROW cr)
+       ( print_char("["); print_formula(size OF cr); print_char("]");
+         print_const(elem OF cr, close)
+       ),
+  (REF UREPL crp)
+       ( REPLICATOR repl = get_replicator(repl OF crp, env OF close);
+         print_chars("[ INT "); print_id(id OF repl); print_chars(" = ");
+         print_formula(lwb OF range OF repl);  print_chars(" .. ");
+         print_formula(upb OF range OF repl);  print_chars(" ]");
+         print_const(body OF crp, close)
+       ),
+  (REF USTR cs)
+       ( cstr := cs;
+         print_char("("); print_const(elem OF cstr, close);
+         WHILE (cstr := rest OF cstr) ISNT nilustr
+           DO print_char(","); print_const(elem OF cstr, close) OD;
+         print_char(")")
+       ),
+  (REF UALTS cat)
+       ( calt := cat;
+         print_char("("); print_const(alt OF calt, close);
+         WHILE (calt := rest OF calt) ISNT nilualts
+           DO print_char("|"); print_const(alt OF calt, close) OD;
+         print_char(")")
+       ),
+  (REF CQUERY cq)   ( print_char("?"); print_type(querytype OF cq, close) ),
+  (REF UBRACKET cb)
+       ( print_char("("); print_const(unit OF cb, close); print_char(")") ),
+  (REF CPRIMRANGE cpr)
+       ( print_id(findname(typeno OF cpr, 1, close));
+         REF VECTOR []CHAR chars = find_newchars(typeno OF cpr, close);
+         print_chars("('");
+         print_char(chars[firstno OF cpr]);
+         print_chars("..'");
+         print_char(chars[lastno OF cpr]);
+         print_char(")")
+       ),
+  (REF CQUOTE cqt)
+       ( INT typeno = typeno OF cqt;
+         print_id(findname(typeno, 1, close));
+         REF VECTOR [] CHAR cqchars = find_newchars(typeno, close);
+         print_chars("""");
+         FORALL primno IN string OF cqt
+         DO print_char(cqchars[primno]) OD;
+         print_chars("""")
+       ),
+  (REF USTRING cg)
+       ( print_chars("STRING[");  print_formula(size OF cg);  print_char("]");
+         print_const(char OF cg, close)
+       ),
+  (REF UINDEX ui)
+      ( print_const(unit OF ui, close); print_char("[");
+        print_formula(index OF ui); print_char("]")
+      ),
+  (REF UTRIM ut)
+      ( print_const(unit OF ut, close); print_char("[");
+        print_formula(lwb OF range OF ut); print_chars("..");
+        print_formula(upb OF range OF ut); print_char("]")
+      ),
+  (REF UCOND ucon)
+      ( print_chars("IF "); print_formula(cond OF ucon);
+        print_chars(" THEN "); print_const(true OF ucon, close);
+        print_chars(" ELSE "); print_const(false OF ucon, close);
+        print_chars(" FI ")
+      ),
+  (REF UCONC ucc)
+      ( print_char("("); print_const(left OF ucc, close);
+        print_chars(" CONC ");
+        print_const(right OF ucc, close); print_char(")")
+      ),
+  (REF UATTR ua)
+      ( print_const(unit OF ua, close) ),
+  (REF CVOID) print_chars("()")
+  OUT print_char("?")
+  ESAC
+END;
+
+PROC get_formula = (FORMULARANGE fr) FORMULA:
+   CASE fr IN
+   (FORMULA f) f
+   OUT sys fault("get_formula"); SKIP
+   ESAC;
+
+PROC macspec_macparam = (DECLARATION spec, CLOSED close) MACPARAM:
+   CASE spec IN
+   (ATTRNAME an) ( REF ATTRDEC adec = (attrs OF env OF close)[attrno OF an];
+                   (explicitmacpar, MAKEATTRTAG (value OF adec))
+                 ),
+   (FNAME fn) ( REF INTDEC idec = (ints OF env OF close)[intno OF fn];
+                (explicitmacpar, MAKEFORMULATAG get_formula(value OF idec))
+              ),
+   (TNAME tn) ( REF TYPEDEC tdec = (types OF env OF close)[typeno OF tn];
+                CASE body OF tdec IN
+                (REF TYPETAG tg) (explicitmacpar, tg)
+                OUT sysfault("macspec_macparam - type"); SKIP
+                ESAC
+              ),
+   (CNAME cn) ( REF CONSTDEC cdec = (consts OF env OF close)[constno OF cn];
+                (explicitmacpar, MAKEUNITTAG (value OF cdec))
+              ),
+   (FNNAME fnn)( REF FNDEC fdec = (fns OF env OF close)[fnno OF fnn];
+                 CASE fnbody OF fdec IN
+                 (REF UNITTAG ut)
+                    CASE tag OF ut IN
+                    (REF USERIES us)
+                       CASE step OF body OF us IN
+                       (FNNAME inst)
+                         (explicitmacpar, INSTANCE(fnno OF inst, NIL, attrnull))
+                       OUT sysfault("maspec_macparam - fn3"); SKIP
+                       ESAC,
+                    (REF UMINST um) (explicitmacpar, inst OF um)
+                    OUT sysfault("maspec_macparam - fn1"); SKIP
+                    ESAC
+                 OUT sysfault("maspec_macparam - fn2"); SKIP
+                 ESAC
+               )
+   ESAC;
+
+{ -------------------------------------------------------------------------- }
+       {{  non-locals and procedures for error messages  }}
+       {{  --------------------------------------------  }}
+
+BOOL current clean := FALSE;    {{{ has no errors or bodies / macro calls }}}
+BOOL failure := FALSE;
+INT  lines after fault:= 0;
+
+PROC setup_reporting = VOID:
+(  current clean := FALSE;  failure := FALSE;
+   lines after fault := 0
+);
+
+PROC  check line no = (DIAGNOSTIC diag) VOID:
+BEGIN   {{{ abort tracing approx 100 lines after an error }}}
+   IF failure
+   THEN  IF (lines after fault PLUSAB 1) > 100
+         THEN (flt OF diag)("Aborted - too much tracing after an error")
+         FI
+   FI
+END;
+
+PROC print_macparams = (REF VECTOR [] MACPARAM pars, CLOSED close) VOID:
+BEGIN
+   BOOL first := TRUE;
+   IF (pars ISNT nilmacparams) ANDTH UPB pars > 0
+   THEN  print_chars(" { ");
+         FORALL p IN pars
+         DO IF first THEN first := FALSE ELSE print_chars(", ") FI;
+            CASE (param OF p) IN
+            (ATTRTAG atag)    print_attr(tag OF atag, close),
+            (FORMULATAG ftag) print_formula(tag OF ftag),
+            (TYPETAG ttag)    print_type(tag OF ttag, close),
+            (UNITTAG ctag)    print_const(tag OF ctag, close),
+            (INSTANCE inst)
+               ( ID fnname = fnname OF (fns OF env OF close)[fnno OF inst];
+                 print_id(fnname);
+                 print_macparams(macparams OF inst, close);
+                 CASE attr OF inst IN
+                 (REF ATTRNULL) SKIP
+                 OUT print_chars(" @");
+                     print_attr(attr OF inst, close)
+                 ESAC
+               )
+            ESAC
+         OD;
+         print_chars(" }")
+   FI
+END;
+
+PROC  identify fn = (BOOL expanded, CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   start_printing;
+   REF REF MONITORLIST mlist = monitors OF diag;
+   TO (depth OF mlist - 1) MOD 20  DO  print_chars("  ")  OD;
+   IF mac OF mlist THEN print_chars("MAC  ") ELSE print_chars("FN  ") FI;
+   print_id(fnname OF mlist);
+   print_macparams(params OF mlist, close);
+   IF expanded THEN print_chars("   already expanded") FI;
+   check line no(diag);
+   end_printing
+END;
+
+PROC set monitor = (REF FNDEC fdec, DIAGNOSTIC diag) VOID:
+BEGIN
+   INT depth = IF monitors OF diag IS nilmonitor
+               THEN 1
+               ELSE depth OF monitors OF diag + 1
+               FI;
+   monitors OF diag := HEAP MONITORLIST :=
+       (macro OF fdec, fnname OF fdec, NIL, depth, monitors OF diag);
+   current clean := TRUE
+END;
+
+PROC  reset monitor = (DIAGNOSTIC diag) VOID:
+BEGIN
+   INT depth = depth OF monitors OF diag;
+   monitors OF diag := rest OF monitors OF diag;
+   IF NOT current clean  ANDTH  trace OF diag
+   THEN  TO (depth - 1) MOD 20  DO  put(out, "  ")  OD;
+         check line no(diag);
+         put(out, ("End", newline))
+   FI;
+   current clean := FALSE
+END;
+
+
+PROC monitor fn = (REF VECTOR [] MACSPEC specs, CLOSED close, DIAGNOSTIC diag)
+                                                                          VOID:
+BEGIN
+   IF specs ISNT nilmacspecs
+   THEN HEAP VECTOR [UPB specs] MACPARAM params;
+        FORALL s IN specs, p IN params
+           DO p := macspec_macparam(spec OF s, close) OD;
+        params OF monitors OF diag := params
+   ELSE params OF monitors OF diag := nilmacparams
+   FI;
+   IF trace OF diag
+   THEN  identify fn(FALSE, close, diag)
+   FI
+END;
+
+PROC monitor instance = (ID macname, REF VECTOR [] MACPARAM params,
+                         CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   IF trace OF diag
+   THEN  INT depth = depth OF monitors OF diag + 1;
+         monitors OF diag := HEAP MONITORLIST :=
+            (TRUE, macname, params, depth, monitors OF diag);
+         identify fn(TRUE, close, diag);
+         current clean := FALSE;
+         monitors OF diag := rest OF monitors OF diag
+   FI
+END;
+
+
+PROC  set failure = (CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   IF NOT trace OF diag
+   THEN  identify fn(FALSE, close, diag)
+   FI;
+   current clean:= FALSE;
+   trace OF diag:= TRUE;
+   failure:= TRUE
+END;
+
+
+
+
+TYPE  fp1, fp2;  ID  fp3, fp4;
+INT   fp0, fp5, fp6, fpcolon;   UNIT  fpopen, fpclose;
+REF IDS  fpids;
+
+PROC faultp = (VECTOR [] CHAR message, CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   set failure(close, diag);
+   CHAR c;  BOOL dot:= FALSE;
+   start_printing;
+   FOR i TO UPB message
+   DO
+      c:= message[i];
+      IF dot THEN
+         IF   c ="." THEN print_char(c) ELSE dot:= FALSE FI;
+         IF   c ="0" THEN print_formula(MAKEFINT(fp0))
+         ELIF c ="1" THEN print_type(fp1, close)
+         ELIF c ="2" THEN print_type(fp2, close)
+         ELIF c ="3" THEN print_id(fp3)
+         ELIF c ="4" THEN print_id(fp4)
+         ELIF c ="5" THEN print_formula(MAKEFINT(fp5))
+         ELIF c ="6" THEN print_formula(MAKEFINT(fp6))
+         ELIF c =":" THEN print_formula(MAKEFINT(fpcolon))
+         ELIF c ="<" THEN print_const(fpopen, close)
+         ELIF c =">" THEN print_const(fpclose, close)
+         ELIF c ="{" THEN print_ids(fpids)
+         FI
+      ELIF NOT dot ANDTH c ="." THEN dot:= TRUE
+      ELSE print_char(c); dot:= FALSE
+      FI
+   OD;
+   end_printing
+END;
+
+
+
+{ -------------------------------------------------------------------------- }
+       {{  Checking procedures for REPLICATORS, and MACROS  }}
+       {{  -----------------------------------------------  }}
+
+MODE JOINUP,
+      JOINED = STRUCT (INT sort, INT nameno),
+      JOINIO = STRUCT (REF JOINUP sink, source),
+     JOINROW = STRUCT (REF VECTOR [] REF JOINUP row),
+      JOINUP = UNION (JOINED, JOINROW, JOINIO);
+
+{INT sort of JOINUP}
+  INT joined = 1, notjoined = 2, joinfault = 3, nochecks = 4;
+  JOINED nulljoined = (nochecks, 0);
+  HEAP JOINUP nulljoinup := nulljoined;
+
+OP MAKEJOINROW = (REF VECTOR [] REF JOINUP row) REF JOINUP:
+   ( JOINROW jr;  row OF jr := row;  HEAP JOINUP := jr );
+
+MODE JOINLIST = STRUCT (INT nameno, REF JOINUP joinup, REF JOINLIST rest);
+REF JOINLIST niljoinlist = NIL;
+
+PROC has_joinio = (REF JOINUP joinup) BOOL:
+   CASE joinup IN
+   (JOINED jd)  FALSE,
+   (JOINIO jio) TRUE,
+   (JOINROW jr) ( BOOL has_jio := FALSE;
+                  FORALL r IN row OF jr WHILE NOT has_jio
+                    DO  has_jio := has_joinio(r)  OD;
+                  has_jio
+                )
+   OUT FALSE
+   ESAC;
+
+PROC coerce_joinup = (REF REF JOINUP joinup, BOOL source) VOID:
+BEGIN
+   {{ This procedure does the coercion of rows and structures           }}
+   {{ i.e            [5](a -> b) goes to  [5]a -> [5]b                  }}
+   {{ and  (a->b, c->(d->e), f)  goes to  (a, c, ()) -> (b, (d->e), f)  }}
+
+   PROC coerce = (JOINROW jr) JOINIO:
+   ( HEAP VECTOR [UPB row OF jr] REF JOINUP sinkrow, sourcerow;
+     FORALL r IN row OF jr, si IN sinkrow, so IN sourcerow
+     DO JOINIO jio =
+          CASE r IN
+          (JOINIO ji)  ji,
+          (JOINROW rj) coerce(rj)
+          OUT IF source THEN (nulljoinup, r) ELSE (r, nulljoinup) FI
+          ESAC;
+        si := sink OF jio;  so := source OF jio
+     OD;
+     (MAKEJOINROW sinkrow, MAKEJOINROW sourcerow)
+   );
+
+   IF has_joinio(joinup)
+   THEN CASE joinup IN
+        (JOINROW jr)  joinup := HEAP JOINUP := coerce(jr)
+        OUT SKIP
+        ESAC
+   FI
+END;
+
+
+PROC type_joinup = (TYPE ty, INT nameno,BOOL issource, CLOSED close) REF JOINUP:
+BEGIN
+   CASE ty IN
+   (REF TNAME tn)
+      ( REF TYPEDEC tdec = (types OF env OF close)[typeno OF tn];
+        CASE body OF tdec IN
+        (REF TYPETAG ttag)  type_joinup(tag OF ttag, nameno, issource, close)
+        OUT JOINED joined =
+              IF issource THEN nulljoined ELSE (notjoined, nameno) FI;
+            HEAP JOINUP := joined
+        ESAC
+      ),
+   (REF TFN tf)
+      ( REF JOINUP from = type_joinup(from OF tf, nameno, NOT issource, close),
+                   to = type_joinup(to OF tf, nameno, issource, close);
+        JOINIO jio = (from, to);
+        HEAP JOINUP := jio
+      ),
+   (REF TROW tr)
+      ( INT rowsize = int(size OF tr);
+        IF rowsize < 1
+        THEN  HEAP JOINUP := nulljoinup  { to avoid consequential errors }
+        ELSE  HEAP VECTOR [rowsize] REF JOINUP row;
+              FORALL r IN row
+                DO r := type_joinup(elem OF tr, nameno, issource, close) OD;
+              MAKEJOINROW row
+        FI
+      ),
+   (REF TSTR ts)
+      ( REF TSTR tst := ts;
+        INT size = int(tstr_size(ts));
+        HEAP VECTOR [size] REF JOINUP strrow;
+        FOR index WHILE tst ISNT niltstr
+        DO  strrow[index] := type_joinup(elem OF tst, nameno, issource, close);
+            tst := rest OF tst
+        OD;
+        MAKEJOINROW strrow
+      ),
+   (REF TBRACKET tb)  type_joinup(type OF tb, nameno, issource, close)
+   OUT {TSTRING, TVOID, TNULL, TMACPAR}
+       nulljoinup
+   ESAC
+END;
+
+
+PROC find_joinup = (INT nameno, REF JOINLIST joinlist) REF JOINUP:
+BEGIN
+   REF JOINLIST jlist := joinlist;
+   BOOL found := FALSE;
+   WHILE NOT found ANDTH (jlist ISNT niljoinlist)
+   DO  IF nameno OF jlist = nameno
+       THEN found := TRUE
+       ELSE jlist := rest OF jlist
+       FI
+   OD;
+   IF found THEN joinup OF jlist ELSE nulljoinup FI
+END;
+
+PROC joinup_trim = (REF REF JOINUP joinup, BOOL index, INT lwb, upb) VOID:
+BEGIN
+   CASE joinup IN
+   (JOINED jd)
+      IF NOT (sort OF jd = nochecks) THEN sys fault("joinup_trim: joined") FI,
+   (JOINIO ji)  sys fault("joinup_trim: io"),
+   (JOINROW jr)
+      ( REF VECTOR [] REF JOINUP row = row OF jr;
+        joinup :=
+          IF lwb < 1 OREL upb > UPB row
+          THEN nulljoinup { to avoid consequential errors }
+          ELSE IF index THEN row[lwb] ELSE MAKEJOINROW row[lwb:upb] FI
+          FI
+      )
+   ESAC
+END;
+
+PROC uconc_joinup = (INT sort, REF JOINUP ljoinup, REF REF JOINUP joinup)
+                                                                       VOID:
+BEGIN
+   BOOL no_checks :=  TRUE;
+   JOINROW ljoinrow, rjoinrow;
+   INT lsize =
+        IF sort = flattenboth OREL sort = flattenleft
+        THEN  CASE ljoinup IN
+              (JOINROW jl) ( ljoinrow := jl; UPB (row OF jl) ),
+              (JOINED il)
+                 ( no_checks := no_checks ANDTH (sort OF il = nochecks); 1)
+              OUT 1
+              ESAC
+        ELSE  1
+        FI;
+   INT rsize =
+        IF sort = flattenboth OREL sort  = flattenright
+        THEN  CASE joinup IN
+              (JOINROW jr) ( rjoinrow := jr; UPB (row OF jr) ),
+              (JOINED ir)
+                 ( no_checks := no_checks ANDTH (sort OF ir = nochecks); 1)
+              OUT 1
+              ESAC
+        ELSE  1
+        FI;
+
+   joinup :=
+        IF no_checks
+        THEN nulljoinup
+        ELSE HEAP VECTOR [lsize + rsize] REF JOINUP newrow;
+             IF sort  = flattenboth OREL sort  = flattenleft
+             THEN FORALL ln IN newrow[1:lsize], lo IN (row OF ljoinrow)
+                    DO ln := lo OD
+             ELSE newrow[1] := ljoinup
+             FI;
+             IF sort  = flattenboth OREL sort  = flattenright
+             THEN FORALL rn IN newrow[lsize+1:UPB newrow],
+                         ro IN (row OF rjoinrow) DO rn := ro OD
+             ELSE newrow[UPB newrow] := joinup
+             FI;
+             MAKEJOINROW newrow
+      FI
+END;
+
+PROC join_setup = (INT nameno, TYPE t, BOOL issource, CLOSED close,
+                                            REF JOINLIST old) REF JOINLIST:
+BEGIN
+   REF INTS checks :=
+      CASE fnbody OF fdec OF close IN
+      (REF BODYCHECK bc) joincheck OF bc
+      OUT nilints
+      ESAC;
+   BOOL checked := TRUE;
+   WHILE (checks ISNT nilints) ANDTH checked
+   DO  IF int OF checks = nameno THEN checked := FALSE FI;
+       checks := rest OF checks
+   OD;
+
+   IF checked
+   THEN old
+   ELSE HEAP JOINLIST := (nameno, type_joinup(t, nameno, issource, close), old)
+   FI
+END;
+
+PROC mark_join = (REF REF JOINUP joinup, CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   REF VECTOR [] NAMETYPE nt = nametypes OF fdec OF close;
+   REF IDS names := nilids;
+
+   PROC mark_off = (REF JOINUP j, CLOSED close, DIAGNOSTIC diag) BOOL{OK}:
+     CASE j IN
+     (JOINED jd)
+       IF sort OF jd = joined
+       THEN names := HEAP IDS := (name OF nt[nameno OF jd], names);  FALSE
+       ELIF sort OF jd = notjoined
+       THEN JOINED jed = (joined, nameno OF jd);  j := jed;  TRUE
+       ELSE TRUE
+       FI,
+     (JOINROW jr)
+       ( BOOL ok := TRUE;
+         FORALL r IN row OF jr
+         DO IF NOT mark_off(r, close, diag) THEN ok := FALSE FI OD;
+         ok
+       ),
+     (JOINIO jio)
+       ( mark_off(source OF jio, close, diag) AND
+         mark_off(sink OF jio, close, diag)
+       )
+    OUT TRUE
+    ESAC;
+
+   IF NOT mark_off(joinup, close, diag)
+   THEN fpids := names;
+        faultp("You have already joined to part of .{", close, diag)
+   FI;
+   joinup := nulljoinup
+END;
+
+PROC check_if_joined = (REF JOINUP j) BOOL:
+BEGIN
+   CASE j IN
+   (JOINED jd)
+      NOT (sort OF jd = notjoined),
+   (JOINROW jr)
+      ( BOOL joined := TRUE;
+        FORALL r IN row OF jr WHILE joined
+          DO IF NOT check_if_joined(r) THEN joined := FALSE FI OD;
+        joined
+      ),
+   (JOINIO ji)
+      check_if_joined(source OF ji) ANDTH check_if_joined(sink OF ji)
+   OUT FALSE
+   ESAC
+END;
+
+
+PROC join_completeness = (REF JOINLIST jlist, CLOSED close, DIAGNOSTIC diag)
+                                                           REF JOINLIST:
+BEGIN
+   REF JOINLIST joinlist := jlist;
+   WHILE (joinlist ISNT niljoinlist) ANDTH (nameno OF joinlist /= -1)
+   DO fp3 := name OF (nametypes OF fdec OF close)[nameno OF joinlist];
+      BOOL joined = check_if_joined(joinup OF joinlist);
+      IF NOT joined
+      THEN  faultp("An input to .3 needs to be joined to", close, diag)
+      FI;
+      joinlist := rest OF joinlist
+   OD;
+   IF joinlist IS niljoinlist THEN niljoinlist ELSE rest OF joinlist FI
+END;
+
+
+{ ---------------------------------------------------------------------- }
+         {{ Equality and Disjointness Procedures }}
+         {{ ------------------------------------ }}
+
+{ There is so much in common between checking for disjointness and equality
+  that the two have been merged in the same procedures.  Macro parameters
+  have been evaluated by now, so a definite TRUE/FALSE answer can be given }
+
+PROC equal_ids = (REF IDS a, b) BOOL:
+BEGIN
+   BOOL equal := TRUE;
+   REF IDS as := a, bs := b;
+   WHILE ((as ISNT nilids) ANDTH (bs ISNT nilids)) ANDTH equal
+   DO  IF (id OF as = id OF bs)
+       THEN as := rest OF as; bs := rest OF bs
+       ELSE equal := FALSE
+       FI
+   OD;
+   equal ANDTH (as IS nilids) ANDTH (bs IS nilids)
+END;
+
+PROC checkconsts = (UNIT a, b, BOOL disjoint) BOOL:
+BEGIN
+   {{ This procedure assumes that the UNITs have been simplified    }}
+   {{ This procedure assumes that the UNITs belong to the same type }}
+   {{ It only considers the alternatives within that type            }}
+
+   {{ TRUE answer indicates inputs are disjoint (BOOL disjoint = TRUE) }}
+   {{ or NOT equal (BOOL disjoint = FALSE)                             }}
+
+   PROC is_ctypeorquery = (UNIT c) INT:
+   (  INT ctypeorquery;
+      CASE c IN
+      (REF CTYPE)    1,
+      (REF CQUERY)   2,
+      (REF USTR cst)
+         ( ctypeorquery := is_ctypeorquery(elem OF cst);
+           REF USTR cs := cst;
+           WHILE (cs ISNT nilustr) ANDTH ctypeorquery > 0
+           DO  IF is_ctypeorquery (elem OF cs) /= ctypeorquery
+               THEN ctypeorquery := 0
+               FI;
+               cs := rest OF cs
+           OD;
+           ctypeorquery
+         ),
+      (REF UROW cr)      is_ctypeorquery (elem OF cr),
+      (REF USTRING cg)   is_ctypeorquery (char OF cg),
+      (REF UATTR ua)     is_ctypeorquery (unit OF ua)
+      OUT 0
+      ESAC
+   );
+
+   PROC checkprimrange = (INT first1, last1, first2, last2) BOOL:
+   ( IF disjoint
+     THEN  (first1 > last2) OREL (last1 < first2)
+     ELSE  (first1 /= first2) OREL (last1 /= last2)
+     FI
+   );
+
+   PROC equal_ints = (REF VECTOR [] INT a, b) BOOL:
+   ( BOOL equal := (UPB a = UPB b);
+     FOR i TO UPB a WHILE equal
+     DO IF a[i] /= b[i] THEN equal := FALSE FI OD;
+     equal
+   );
+
+   PROC checkualts = (UNIT a, b) BOOL:
+      CASE a IN
+      (REF UALTS ca)
+        CASE b IN
+        (REF UALTS bca)
+          IF disjoint
+          THEN (checkconsts(alt OF ca, b, disjoint)
+               ANDTH IF (rest OF ca) IS nilualts
+                     THEN TRUE
+                     ELSE checkconsts(rest OF ca, b, disjoint)
+                     FI)
+          ELIF checkconsts(alt OF ca, alt OF bca, disjoint)
+          THEN TRUE
+          ELIF rest OF ca IS nilualts
+          THEN rest OF bca ISNT nilualts
+          ELIF rest OF bca IS nilualts
+          THEN TRUE
+          ELSE checkualts(rest OF ca, rest OF bca)
+          FI
+        OUT IF disjoint THEN checkualts(b, a) ELSE TRUE FI
+        ESAC
+      OUT IF disjoint
+          THEN CASE b IN
+               (REF UALTS bca)
+                  (checkconsts(a, alt OF bca, disjoint)
+                  ANDTH IF (rest OF bca) IS nilualts
+                        THEN TRUE
+                        ELSE checkconsts(a, rest OF bca, disjoint)
+                        FI)
+               OUT TRUE
+               ESAC
+           ELSE TRUE
+           FI
+       ESAC;
+
+       CASE a IN
+       (REF CRANGE cr)
+          CASE b IN
+          (REF CRANGE bcr)
+             ( INT lwb = int(lwb OF range OF cr);
+               INT upb = int(upb OF range OF cr);
+               INT blwb = int(lwb OF range OF bcr);
+               INT bupb = int(upb OF range OF bcr);
+               IF disjoint
+               THEN (lwb > bupb) OREL (upb < blwb)
+               ELSE (lwb /= blwb) OREL (upb /= bupb)
+               FI
+             ),
+          (REF CINT bci)
+             ( INT index = int(index OF bci);
+               INT lwb = int(lwb OF range OF cr);
+               INT upb = int(upb OF range OF cr);
+               IF disjoint
+               THEN (index < lwb) OREL (index > upb)
+               ELSE TRUE
+               FI
+             )
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF CINT ci)
+          CASE b IN
+          (REF CINT bci)   (int(index OF ci) /= int(index OF bci))
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF CPRIM p)
+          CASE b IN
+          (REF CPRIM bp)  (primno OF p /= primno OF bp)
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF UASSOC ca)
+          CASE b IN
+          (REF UASSOC bca)
+             IF altno OF ca =  altno OF bca
+             THEN checkconsts(assoc OF ca, assoc OF bca, disjoint)
+             ELSE TRUE
+             FI,
+          (REF CPRIM bcb)  TRUE
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF UROW cr)
+          CASE b IN
+          (REF UROW bcr) checkconsts(elem OF cr, elem OF bcr, disjoint)
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF USTR cs)
+          CASE b IN
+          (REF UROW bcr)
+            ( checkconsts(elem OF cs, elem OF bcr, disjoint)
+              OREL IF (rest OF cs) IS nilustr
+                   THEN FALSE
+                   ELSE checkconsts(rest OF cs, bcr, disjoint)
+                   FI
+            ),
+          (REF USTR bcs)
+            ( checkconsts(elem OF cs, elem OF bcs, disjoint)
+              OREL IF rest OF cs IS nilustr
+                   THEN FALSE
+                   ELSE checkconsts(rest OF cs, rest OF bcs, disjoint)
+                   FI
+            )
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF UALTS ca)    checkualts(a, b),
+       (REF CTYPE ct)
+          IF disjoint THEN FALSE ELSE NOT (is_ctypeorquery(b) = 1) FI,
+       (REF CQUERY cq)
+          IF disjoint THEN sys fault("disjoint cquery"); FALSE
+          ELSE  NOT (is_ctypeorquery(b) = 2)
+          FI,
+       (REF CPRIMRANGE cra)
+          CASE b IN
+          (REF CPRIMRANGE crb) checkprimrange(firstno OF cra, lastno OF cra,
+                                              firstno OF crb, lastno OF crb),
+          (REF CPRIM cpb) checkprimrange(firstno OF cra, lastno OF cra,
+                                         primno OF cpb, primno OF cpb)
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+      (REF CQUOTE cqa)
+          CASE b IN
+          (REF CQUOTE cqb)  NOT equal_ints(string OF cqa, string OF cqb),
+          (REF USTRING csb) (BOOL equal := TRUE, with_type := FALSE;
+                             INT c;
+                             CASE char OF csb IN
+                             (REF CPRIM cp)  c := primno OF cp,
+                             (REF CTYPE ct)  with_type := TRUE {STRING[]type}
+                             OUT equal := FALSE {STRING [] ?type}
+                             ESAC;
+                             IF with_type
+                             THEN IF disjoint THEN FALSE ELSE TRUE FI
+                             ELSE REF VECTOR [] INT string = string OF cqa;
+                                  FOR i TO UPB string WHILE equal
+                                  DO IF c /= string[i] THEN equal := FALSE FI
+                                  OD;
+                                  NOT equal
+                             FI
+                            )
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+      (REF USTRING csa)
+          CASE b IN
+          (REF USTRING csb) checkconsts(char OF csa, char OF csb, disjoint)
+          OUT checkconsts(b, a, disjoint)
+          ESAC,
+       (REF CVOID)
+          CASE b IN (REF CVOID) FALSE OUT  checkconsts(b, a, disjoint) ESAC,
+       (REF UATTR ua)  checkconsts(unit OF ua, b, disjoint),
+       (REF UNULL cn)  TRUE  { only present if fault occured }
+       OUT ( sys fault("checkconsts"); TRUE )
+       ESAC
+END;
+
+
+PROC equal_attrnames = (REF ATTRDEC at, bt, CLOSED closea, closeb) BOOL:
+BEGIN
+   {{ TRUE - definitely equal,  FALSE - dont know }}
+   IF sort OF at = sort OF bt
+   THEN  IF sort OF at = outerdec
+         THEN closureno OF usage OF at = closureno OF usage OF bt
+         ELSE attrname OF at = attrname OF bt
+         FI
+   ELSE FALSE
+   FI
+END;
+
+
+PROC equal_attr = (ATTR a, b, CLOSED closea, closeb) BOOL:
+   CASE a IN
+   (REF ATTRNAME an)
+      ( REF ATTRDEC atd = (attrs OF env OF closea)[attrno OF an];
+        CASE b IN
+        (REF ATTRNAME bn)
+           ( REF ATTRDEC btd = (attrs OF env OF closeb)[attrno OF bn];
+             IF equal_attrnames(atd, btd, closea, closeb)
+             THEN TRUE
+             ELSE equal_attr(value OF atd, value OF btd, closea, closeb)
+             FI
+           ),
+        (REF ATTRBRACKET bb) equal_attr(a, attr OF bb, closea, closeb)
+        OUT equal_attr(value OF atd, b, closea, closeb)
+        ESAC
+      ),
+   (REF ATTRSTR as)
+      CASE b IN
+      (REF ATTRSTR bs)
+           equal_attr(elem OF as, elem OF bs, closea, closeb)
+                  ANDTH
+           IF rest OF as IS nilattrstr
+           THEN (rest OF bs IS nilattrstr)
+           ELIF rest OF bs ISNT nilattrstr
+           THEN equal_attr(rest OF as, rest OF bs, closea, closeb)
+           ELSE FALSE
+           FI,
+      (REF ATTRNAME)  equal_attr(b, a, closeb, closea)
+      OUT FALSE
+      ESAC,
+   (REF ATTRDATA ad)
+      CASE b IN
+      (REF ATTRDATA bd) (classname OF ad = classname OF bd)
+                         ANDTH equal_ids(strings OF ad, strings OF bd),
+      (REF ATTRNAME)  equal_attr(b, a, closeb, closea)
+      OUT FALSE
+      ESAC,
+   (REF ATTRBRACKET ab)
+      equal_attr(attr OF ab, b, closea, closeb),
+   (REF ATTRNULL)
+      CASE b IN (REF ATTRNULL) TRUE OUT FALSE ESAC
+   OUT sysfault("equal_attr"); SKIP
+   ESAC;
+
+PROC equal_instances = (INSTANCE ai, bi, CLOSED closea, closeb) BOOL:
+BEGIN
+   REF FNDEC fa = (fns OF env OF closea)[fnno OF ai],
+             fb = (fns OF env OF closeb)[fnno OF bi];
+   BOOL equal =
+     IF sort OF fa = sort OF fb
+     THEN  IF sort OF fa = outerdec
+           THEN closureno OF usage OF fa = closureno OF usage OF fb
+           ELSE fnname OF fa = fnname OF fb
+           FI
+     ELSE  FALSE
+     FI;
+   equal ANDTH equal_attr(attr OF ai, attr OF bi, closea, closeb)
+END;
+
+PROC check types = (TYPE a, b, CLOSED closea, closeb) BOOL:
+BEGIN
+REF ENVIRON enva = env OF closea,
+            envb = env OF closeb;
+
+    check_types( simplify_type( a, enva ),
+                 simplify_type( b, envb ),
+                 enva, envb, FALSE )
+END;
+
+
+
+
+INT always = 0, chooser = 1, value = 2, illegal = 3;
+
+PROC const_sort = (UNIT c) INT:
+{{ assume UNIT has been simplified }}
+   CASE c IN
+   (REF CTYPE)            chooser,
+   (REF CRANGE)           chooser,
+   (REF UASSOC ca)        const_sort(assoc OF ca),
+   (REF UROW cr)          const_sort(elem OF cr),
+   (REF USTR cs)          ( INT sort := always;
+                            REF USTR cst := cs;
+                            WHILE cst ISNT nilustr
+                            DO INT elem = const_sort(elem OF cst);
+                               IF sort = always
+                               THEN sort := elem
+                               ELIF (elem /= always) ANDTH (elem /= sort)
+                               THEN sort := illegal
+                               FI;
+                               cst := rest OF cst
+                            OD;
+                            sort
+                          ),
+   (REF UALTS)            chooser,
+   (REF CQUERY)           value,
+   (REF CPRIMRANGE crg)   chooser,
+   (REF USTRING csg)      const_sort(char OF csg),
+   (REF UATTR ua)         const_sort(unit OF ua)
+   OUT always
+   ESAC;
+
+
+PROC const_check = (INT standard, UNIT const, CLOSED close, DIAGNOSTIC diag)
+                                                                       BOOL:
+BEGIN
+   INT sort = const_sort(const);
+   IF sort /= always ANDTH sort /= standard ANDTH
+      IF chooser_const THEN sort /= chooser ELSE TRUE FI
+   THEN  fpopen := const;
+         IF standard = value
+         THEN faultp(".<  You can only use this constant in a CASE chooser",
+                     close, diag)
+         ELSE faultp(".<  You can't have ?type here", close, diag)
+         FI;
+         FALSE
+   ELSE TRUE
+   FI
+END;
+
+PROC choosers_check = (TYPE iptype, UNIT test, REF USTR choosers,
+                       CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   TYPE ctype = unit_type(test, fdec OF close, env OF close);
+   IF NOT check types(ctype, iptype, close, close)
+   THEN  fp1 := ctype;  fp2 := iptype;
+         faultp("The test should be of type .2 not .1", close, diag)
+   ELSE  REF USTR old := choosers;
+         WHILE old ISNT nilustr
+         DO  IF NOT checkconsts (test, elem OF old, TRUE)
+             THEN  fpopen := test;  fpclose := elem OF old;
+                   faultp("You can't have .< overlapping with .>", close, diag)
+             FI;
+             old := rest OF old
+        OD
+   FI
+END;
+
+
+PROC primtype = (TYPE t, CLOSED close) REF TYPEDEC:
+   CASE t IN
+   (REF TNAME tn)
+      (REF TYPEDEC tdec = (types OF env OF close)[typeno OF tn];
+       CASE body OF tdec IN
+       (REF TYPETAG ttag)  primtype(tag OF ttag, close)
+       OUT tdec
+       ESAC
+      ),
+   (REF TBRACKET tb)  primtype(type OF tb, close)
+   OUT sys fault("primtype"); SKIP
+   ESAC;
+
+PROC reformindex = (TYPE ty, REF INT n, REF TYPE primtype, CLOSED close) VOID:
+BEGIN
+  IF n > 0
+  THEN CASE ty IN
+       (REF TNAME tn)
+         (REF TYPEDEC tdec = (types OF env OF close)[typeno OF tn];
+          CASE body OF tdec IN
+          (REF TYPETAG ttag)  reformindex(tag OF ttag, n, primtype, close)
+          OUT IF n = 1
+              THEN primtype := tn; n := 0
+              ELSE n MINUSAB 1
+              FI
+          ESAC
+         ),
+       (REF TSTR ts)
+         (REF TSTR s := ts;
+          reformindex(elem OF ts, n, primtype, close);
+          WHILE ( s := rest OF s) ISNT niltstr
+            DO reformindex(elem OF s, n, primtype, close) OD
+         ),
+       (REF TROW tr)
+         (INT oldval = n;
+          reformindex(elem OF tr, n, primtype, close);
+          INT noelems = (oldval - n);
+          INT rowsize = noelems * (int(size OF tr) - 1);
+          IF n > rowsize OREL rowsize = 0
+          THEN n MINUSAB rowsize
+          ELIF n = 0
+          THEN n := 0
+          ELSE n := n MOD noelems;
+               IF n = 0 THEN n := noelems FI;
+               reformindex(elem OF tr, n, primtype, close)
+          FI
+         ),
+      (REF TFN tf)
+         (IF n = 1
+          THEN primtype := tf;  n := 0
+          ELSE n MINUSAB 1
+          FI
+         ),
+      (REF TSTRING tg)
+         (IF n = 1
+          THEN primtype := tg;  n := 0
+          ELSE n MINUSAB 1
+          FI
+         ),
+         {{ TSTRING is not flattened in REFORM }}
+{{       (INT oldval = n;
+          reformindex(char OF tg, n, primtype, close);
+          INT noelems = (oldval - n);
+          INT rowsize = noelems * (int(size OF tg) - 1);
+          IF n > rowsize OREL rowsize = 0
+          THEN n MINUSAB rowsize
+          ELIF n = 0
+          THEN n := 0
+          ELSE n := n MOD noelems;
+               IF n = 0 THEN n := noelems FI;
+               reformindex(char OF tg, n, primtype, close)
+          FI
+         ),
+}}
+       (REF TBRACKET tb) reformindex(type OF tb, n, primtype, close)
+       OUT sys fault("illegal call of reformindex")
+       ESAC
+   FI
+END;
+
+
+PROC reform_check = (REF REFORM ref, CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   TYPE primtype1, primtype2;
+   INT n1 := 0, n2 := 0;
+   TFN tfn = fndec_tfn(fdec OF close);
+   TYPE type1 = from OF tfn,  type2 = to OF tfn;
+   FOR i WHILE n1 = 0 AND n2 = 0
+   DO primtype1 := tnull;  primtype2 := tnull;
+      n1 := i; n2 := i;
+      reformindex(type1, n1, primtype1, close);
+      reformindex(type2, n2, primtype2, close);
+      IF NOT check types(primtype1, primtype2, close, close)
+      THEN n1 := 1;  fp1 := type1;  fp2 := type2;
+           faultp("You can't REFORM .1 to .2", close, diag)
+      FI
+   OD
+END;
+
+
+PROC timescale_check = (REF TIMESCALE ts, BOOL check, CLOSED close,
+                                                      DIAGNOSTIC diag) VOID:
+BEGIN
+   IF const_check(value, init OF ts, close, diag) ANDTH check
+   THEN  REF FNDEC fdec = (fns OF env OF close)[fnno OF inst OF ts];
+         REF TFN inst = fndec_tfn(fdec);
+         TYPE spec = fndec_tfn(fdec OF close);
+         IF NOT check types(inst, spec, close, close)
+         THEN  fp2 := inst;  fp1 := spec;
+               fp3 := fnname OF fdec OF close;
+               faultp(
+"Specification and body of .3 must have the same type, but you have .1 and .2",
+                      close, diag)
+         ELSE  TYPE ctype = unit_type(init OF ts, fdec OF close, env OF close);
+               TYPE type = IF faster OF ts THEN to OF inst ELSE from OF inst FI;
+               IF NOT check types(ctype, type, close, close)
+               THEN  fp2 := type;  fp1 := ctype;
+                     faultp("Timescaling initialisation should be .2, not .1",
+                            close,diag)
+              FI
+         FI
+   FI
+END;
+
+
+PROC sample_check = (REF SAMPLE sp, BOOL check, CLOSED close,
+                                                DIAGNOSTIC diag) VOID:
+BEGIN
+   IF const_check(value, init OF sp, close, diag) ANDTH check
+   THEN  TFN tfn = fndec_tfn(fdec OF close);
+         fp2 := to OF tfn;
+         IF NOT check types(from OF tfn, to OF tfn, close, close)
+         THEN  fp1 := from OF tfn;
+               faultp(
+  "parameter and result of sample must have the same type, but you have  " +
+  ".1 and .2", close, diag)
+         ELSE  TYPE ctype = unit_type(init OF sp, fdec OF close, env OF close);
+               IF NOT check types(ctype, to OF tfn, close, close)
+               THEN  fp1 := ctype;
+                     faultp("Sample initialisation should be .2 not .1",
+                            close, diag)
+               FI
+         FI
+   FI
+END;
+
+
+PROC delay_check = (INT sort, UNIT init, ambig, CLOSED close, DIAGNOSTIC diag)
+                                                                          VOID:
+BEGIN
+   TFN tfn = fndec_tfn(fdec OF close);
+   fp2 := to OF tfn;
+   IF NOT check types(from OF tfn, to OF tfn, close, close)
+   THEN  fp1 := from OF tfn;
+         faultp(
+"parameter and result of delay must have the same type, but you have .1 and .2",
+                close, diag)
+   FI;
+   TYPE ctype := unit_type(init, fdec OF close, env OF close);
+   IF NOT check types(ctype, to OF tfn, close, close)
+   THEN  fp1 := ctype;
+         faultp("Delay initialisation should be .2 not .1", close, diag)
+   FI;
+   IF (sort = const2int)  OREL  (sort = const2int2)
+   THEN  ctype := unit_type(ambig, fdec OF close, env OF close);
+         IF NOT check types(ctype, to OF tfn, close, close)
+         THEN  fp1 := ctype;
+               faultp("Delay ambiguity value should be .2 not .1", close, diag)
+         FI
+   FI
+END;
+
+PROC adelay_check = (REF ADELAY ad, BOOL check, CLOSED close,
+                                                DIAGNOSTIC diag) VOID:
+BEGIN
+   BOOL ok := const_check(value, init OF ad, close, diag);
+   IF ok ANDTH ((sort OF ad = const2int)  OREL  (sort OF ad = const2int2))
+   THEN  ok := const_check(value, ambig OF ad, close, diag)
+   FI;
+   IF ok ANDTH check
+   THEN  delay_check(sort OF ad, init OF ad, ambig OF ad, close, diag)
+   FI
+END;
+
+PROC idelay_check = (REF IDELAY id, BOOL check, CLOSED close,
+                                                DIAGNOSTIC diag) VOID:
+BEGIN
+   IF const_check(value, init OF id, close, diag) ANDTH check
+   THEN  delay_check(constint, init OF id, unull, close, diag)
+   FI
+END;
+
+
+PROC ram_check = (REF RAM ram, BOOL check, CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   IF const_check(value, init OF ram, close, diag) ANDTH check
+   THEN  TFN tfn = fndec_tfn(fdec OF close);
+         fp2 := to OF tfn;
+         IF NOT check types(from OF tfn, to OF tfn, close, close)
+         THEN  fp1 := from OF tfn;
+               faultp(
+ "parameter and result of ram must have the same type, but you have .1 and .2",
+                      close, diag)
+         FI;
+         TYPE ctype = unit_type(init OF ram, fdec OF close, env OF close);
+         IF NOT check types(ctype, to OF tfn, close, close)
+         THEN  fp1 := ctype;
+               faultp("Ram initialisation should be .2 not .1", close, diag)
+          FI
+   FI
+END;
+
+
+
+
+{{ Procedures to simplify FORMULA }}
+{{ ------------------------------ }}
+
+PROC  overflow sqrt = (CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   set failure(close, diag);
+   put(out, ("Expression gave square root of negative number during assembly"
+             ,newline))
+END;
+
+PROC  overflow fail = (CLOSED close, DIAGNOSTIC diag) VOID:
+BEGIN
+   set failure(close, diag);
+   put(out, ("Expression caused arithmetic overflow during assembly",
+             newline))
+END;
+
+
+PROC fmop_simplify = (REF FMOP fmop, TRANSFORMPROCS tprocs,
+                      CLOSED close, DIAGNOSTIC diag) FORMULAC:
+BEGIN
+   BOOL overflowed := FALSE, sqrt_fail := FALSE;
+   FORMULAC right = (formula OF tprocs)(right OF fmop, tprocs);
+   CASE f OF right IN
+   (REF FINT ri) ( INT r = int OF ri;
+                   INT ans = CASE sort OF fmop IN
+                          r,
+                          IF r = minint THEN overflowed := TRUE; maxint
+                          ELSE -r
+                          FI,
+                          ABS (r = 0),   0,   ABS NOT BIN r,
+                          IF r >= 0
+                            THEN ENTIER (sqrt(r))
+                            ELSE sqrt_fail := TRUE;  -1
+                          FI,
+                          IF r = minint THEN overflowed := TRUE; maxint
+                          ELSE ABS r
+                          FI
+                        ESAC;
+                  IF overflowed THEN overflow fail(close, diag) FI;
+                  IF sqrt_fail THEN overflow sqrt(close, diag) FI;
+                  (MAKEFINT(ans), TRUE)
+                )
+   OUT IF c OF right
+       THEN  (HEAP FMOP := (sort OF fmop, f OF right), TRUE)
+       ELSE  (fmop, FALSE)
+       FI
+   ESAC
+END;
+
+
+PROC fdop_simplify = (REF FDOP fdop, TRANSFORMPROCS tprocs,
+                      CLOSED close, DIAGNOSTIC diag) FORMULAC:
+BEGIN
+   FORMULAC newformula = (formula OF nulltprocs)(fdop, tprocs);
+   REF FDOP newdop =
+       CASE f OF newformula IN (REF FDOP fd) fd OUT sys fault("fdop"); NIL ESAC;
+   CASE left OF newdop IN (REF FINT li)
+      CASE right OF newdop IN (REF FINT ri)
+         ( INT l = int OF li, r = int OF ri;
+           BOOL overflowed := FALSE;
+           INT ans =
+           BEGIN
+*3            CASE  UNITE
+                 CASE sort OF fdop IN
+                    ( IF SIGN l = SIGN r
+                      THEN add with overflow check(l,r,overflowed)
+                      ELSE l + r
+                      FI
+                    ),
+                    ( IF SIGN l + SIGN r = 0
+                      THEN subtract with overflow check(l,r,overflowed)
+                      ELSE l - r
+                      FI
+                    ),
+                    (
+                      multiply with overflow check(l,r,overflowed)
+                    ),
+                    IF r = 0
+                    THEN overflowed := TRUE;  maxint
+                    ELSE l OVER r
+                    FI,
+                    ABS (l = r),      ABS (l /= r),     ABS (l <= r),
+                    ABS (l >= r),     ABS (l < r),
+                    ABS (l > r),      ABS (BIN l AND BIN r),
+                    ABS (BIN l OR BIN r),      SKIP,
+                    ABS (BIN l SHL r),         ABS (BIN l SHR r),
+                    ABS (BIN l AND BIN r),     ABS (BIN l OR BIN r),
+                    IF r = 0
+                    THEN overflowed := TRUE; maxint
+                    ELIF r = minint
+                      THEN IF l<0 THEN -(minint-l) ELSE l FI
+                      ELSE l MOD r
+                    FI
+                 OUT sys fault("dynformula"); 0
+                 ESAC
+*3                     IN
+*3               (INT  ans)     ans ,
+*3               (FAILURE  f) ( test_fail(f);
+*3                              overflow fail(close, diag);
+*3                              0   {{{ consequential errors ?  }}}
+*3                            )
+*3               ESAC
+           END;
+           IF overflowed THEN overflow fail(close, diag) FI;
+           (MAKEFINT(ans), TRUE)
+        )
+        OUT newformula
+        ESAC
+     OUT newformula
+     ESAC
+END;
+
+PROC fcond_simplify = (REF FCOND fcond, TRANSFORMPROCS tprocs) FORMULAC:
+BEGIN
+   FORMULAC cond = (formula OF tprocs)(cond OF fcond, tprocs);
+   CASE f OF cond IN
+   (REF FINT b)
+       IF (int OF b) /= 0  { IF THEN ELSE FI - not in ARITH }
+       THEN (f OF ((formula OF tprocs)(true OF fcond, tprocs)), TRUE)
+       ELSE (f OF ((formula OF tprocs)(false OF fcond, tprocs)), TRUE)
+       FI
+   OUT  FORMULAC truec = (formula OF tprocs)(true OF fcond, tprocs),
+                 falsec = (formula OF tprocs)(false OF fcond, tprocs);
+        IF c OF cond  OREL  c OF truec  OREL  c OF falsec
+        THEN  (HEAP FCOND:= (f OF cond, f OF truec, f OF falsec), TRUE)
+        ELSE  (fcond, FALSE)
+        FI
+   ESAC
+END;
+
+
+
+
+PROC icheck = (INT check, val, standard, CLOSED close, DIAGNOSTIC diag) BOOL:
+BEGIN
+   INT  test = check MOD 8;
+   BOOL ok = CASE test IN  val =  standard ,  CO ...type check... CO
+                           val <= standard ,
+                           val >= standard ,
+                           val  =  standard ,
+                           val /=  standard
+                       OUT   ( sys fault("icheck");  TRUE )
+             ESAC;
+   IF NOT ok
+   THEN  set failure(close, diag);
+         IF test = 1    CO  ...equality test...  CO
+         THEN  put(out, ("Wrong type:  [", standard, "] needed here - not [",
+                          val, "]", newline))
+         ELSE  put(out, ("Out of range:  ", val, " ? - this should be ",
+                       ( test - 1 | "no more than " , "at least " , "equal to ",
+                                  "not equal to " | "?? " ), standard, newline))
+         FI
+   FI;
+   ok
+END;
+
+
+PROC fcheck_evaluate = (REF FCHECK fck, TRANSFORMPROCS tprocs,
+                        CLOSED close, DIAGNOSTIC diag) FORMULAC:
+BEGIN  {{ removes fcheck }}
+   FORMULA test = f OF ((formula OF tprocs)(test OF fck, tprocs));
+   CASE test IN
+   (REF FNULL) (fnull, TRUE)
+   OUT INT itest = int(test);
+       FORMULA standard = f OF ((formula OF tprocs)(standard OF fck, tprocs));
+       CASE standard IN
+       (REF FNULL) (fnull, TRUE)
+       OUT  INT istandard = int(standard);
+            icheck(sort OF fck, itest, istandard, close, diag);
+            (MAKEFINT(itest), TRUE)
+       ESAC
+   ESAC
+END;
+
+
+PROC wanted = (ID name, REF IDS not_wanted) BOOL:
+(  REF IDS nots := not_wanted;
+   WHILE (nots ISNT nilids) ANDTH (name /= id OF nots)
+    DO nots := rest OF nots  OD;
+   nots IS nilids
+);
+
+PROC append_attrs = (ATTR a, b) ATTR:
+(  CASE b IN
+   (REF ATTRNULL) a
+   OUT CASE a IN
+       (REF ATTRNULL) b,
+       (REF ATTRSTR as)
+          ( REF ATTRSTR alist := as;
+            REF ATTRSTR newlist := nilattrstr;
+            REF REF ATTRSTR ptr := newlist;
+            WHILE alist ISNT nilattrstr
+            DO REF REF ATTRSTR (ptr) := HEAP ATTRSTR
+                                     := (elem OF alist, nilattrstr);
+               alist := rest OF alist;  ptr := rest OF ptr
+           OD;
+           CASE b IN
+           (REF ATTRSTR bb) REF REF ATTRSTR (ptr) := bb
+           OUT  REF REF ATTRSTR (ptr) := HEAP ATTRSTR := (b, nilattrstr)
+           ESAC;
+           newlist
+         )
+       OUT {ATTRNAME + ATTRDATA}
+          CASE b IN
+          (REF ATTRSTR bs) HEAP ATTRSTR := (a, bs)
+          OUT HEAP ATTRSTR := (a, HEAP ATTRSTR := (b, nilattrstr))
+          ESAC
+       ESAC
+   ESAC
+);
+
+
+PROC printitems_print = (REF PRINTITEMS pi, TRANSFORMPROCS tprocs,
+                                                     DIAGNOSTIC diag) VOID:
+BEGIN
+   {{ For PRINT statements DIAGNOSTIC = (FALSE, FALSE, monitors, sys fault) }}
+   IF pi IS nilprintitems
+   THEN  check line no(diag)
+   ELSE  CASE item OF pi IN
+         (ID id)    print_id(id),
+         (REF FORMULATAG ft)
+             ( FORMULAC ftc = (formula OF tprocs)(tag OF ft, tprocs);
+               print_formula(f OF ftc)
+             )
+         ESAC;
+         printitems_print(rest OF pi, tprocs, diag)
+   FI
+END;
+
+
+
+PROC macparams_hash = (REF VECTOR [] MACPARAM params) INT:
+BEGIN
+   INT hash := 0;
+   IF params ISNT nilmacparams
+   THEN  FORALL p IN params
+         DO CASE param OF p IN
+            (FORMULATAG fg) hash PLUSAB (int(tag OF fg) MOD 10)
+            OUT SKIP
+            ESAC
+         OD
+   FI;
+   (hash MOD 10) + 1
+END;
+
+
+{ -------------------------------------------------------------------------- }
+
+{{   Internally used Modes       }}
+
+{{ Hash list used to optimise searching of macro instantiations with same
+   INT parameters }}
+MODE HASHLIST = STRUCT (REF VECTOR [] MACPARAM params, INT index,
+                        BOOL specchanged, REF HASHLIST rest);
+REF HASHLIST nilhashlist = NIL;
+REF VECTOR [] REF HASHLIST nilvechashlist = NIL;
+
+
+{{  USELIST carries information about local declarations  }}
+MODE USELIST = STRUCT (INT newdecno, depth, BOOL declared, REF USELIST rest);
+REF USELIST niluselist = NIL;
+
+{{  DECSLIST carries information for correct placing of MAC decls  }}
+MODE DECSLIST = STRUCT (REF USELIST uselist, REF DECSLIST rest);
+REF DECSLIST nildecslist = NIL;
+
+MODE MACPARINFO,
+
+{{ FNDECENV holds information needed for the expansion of a FNDEC }}
+  FNDECENV =
+     STRUCT (REF ENVIRON old,
+             PROC (ATTRNAME) ATTR subs_ampar,
+             PROC (FNAME) FORMULA subs_fmpar,
+             PROC (TNAME) TYPE subs_tmpar,
+             PROC (CNAME) UNIT subs_cmpar,
+             PROC (FNNAME) INSTANCE subs_fnmpar,
+             REF VECTOR [] INT repldecs,
+             REF VECTOR [] REF MACPARINFO mptable,
+             REF VECTOR [] REF USELIST newenvattrnos, newenvtypenos, newenvfnnos
+            ),
+
+MACPARINFO = STRUCT (INT fnno, REF FNDEC fdec, REF FNDECENV info),
+MACPARINFOS = STRUCT (REF MACPARINFO minfo, REF MACPARINFOS rest);
+
+REF MACPARINFOS nilmacparinfos = NIL;
+
+
+REF ENVIRON nilenviron = NIL;
+
+PROC expand = (CLOSURE oldclosure, REF IDS not_wanted, BOOL trace,
+{-----------}                                         MESSAGEPROC msg) CLOSUREC:
+BEGIN
+
+
+{{ Does the unit contain declaration of possible monitoring points }}
+INT s_const = 1, s_unit = 2, s_monitor = 3;
+INT status := s_const;
+
+TRANSFORMPROCS status_procs =  make_newtprocs(nulltprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+      (  CASE unit IN
+         (UNION (REF UCASE, REF UMINST, REF UDINST, REF USERIES, REF USEQUENCE,
+                 REF UDYINDEX, REF UREPLACE))
+             status := s_monitor,
+         (UNION (REF UNAME, REF UFN, REF UEXTRACT, REF UPORTNAME))
+             status := s_unit
+         OUT (unit OF nulltprocs)(unit, tprocs)
+         ESAC;
+         (unit, FALSE)
+      )
+   ));
+
+PROC contains_diagnostics = (UNIT u) BOOL:
+( status := s_const;
+  (unit OF status_procs)(u, status_procs);
+  status = s_monitor
+);
+
+PROC only_const = (UNIT u) BOOL:
+( status := s_const;
+  (unit OF status_procs)(u, status_procs);
+  status = s_const
+);
+
+
+PROC needs_expanding = (OUTER o) BOOL:
+BEGIN
+   BOOL expand := FALSE;
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs,
+        ( (ATTR a, TRANSFORMPROCS tp) ATTRC:
+            ( CASE a IN
+              (REF ATTRBRACKET ab) expand := TRUE
+              OUT (ATTRC ac = (attr OF nulltprocs)(a, tp); SKIP)
+              ESAC;
+              (a, FALSE)
+            ),
+         (FORMULA f, TRANSFORMPROCS tp) FORMULAC:
+             ( CASE f IN (REF FINT) SKIP,
+                         (REF FARITH) SKIP,
+                         (REF FNULL) SKIP
+               OUT expand := TRUE
+               ESAC;
+               (f, FALSE)
+             ),
+         (TYPE t, TRANSFORMPROCS tp) TYPEC:
+            ( CASE t IN
+              (REF TBRACKET tb) expand := TRUE
+              OUT (TYPEC tc = (type OF nulltprocs)(t, tp); SKIP)
+              ESAC;
+              (t, FALSE)
+            ),
+         (UNIT u, TRANSFORMPROCS tp) UNITC:
+            ( CASE u IN
+              ( UNION ( REF UCOND, REF UCHECK, REF UBRACKET ))  expand := TRUE,
+              (REF UROW ur)
+                   IF contains_diagnostics(elem OF ur) THEN expand := TRUE FI,
+              (REF UCONC ucc)
+                  IF only_const(left OF ucc) ANDTH only_const(right OF ucc)
+                  THEN expand := TRUE
+                  FI,
+              (REF UINDEX ui)
+                 IF only_const(unit OF ui) THEN expand := TRUE FI,
+              (REF UTRIM ut)
+                 IF only_const(unit OF ut) THEN expand := TRUE FI
+              OUT SKIP
+              ESAC;
+              IF NOT expand THEN UNITC uc= (unit OF nulltprocs)(u, tp); SKIP FI;
+              (u, FALSE)
+            ),
+         (REF PRINT p, TRANSFORMPROCS tp) PRINTC:
+            ( expand := TRUE;  (p, FALSE) ),
+         (REF FAULT f, TRANSFORMPROCS tp) FAULTC:
+            ( expand := TRUE;  (f, FALSE) )
+        ));
+
+   FORALL a IN attrs OF environ OF o  WHILE NOT expand
+     DO ATTRDECC adc = (attrdec OF nulltprocs)(a, newtprocs);
+        IF c OF adc THEN expand := TRUE FI
+     OD;
+
+   FORALL i IN ints OF environ OF o  WHILE NOT expand
+     DO expand := (sort OF i = outerdec) OREL (sort OF i = localdec) OD;
+
+   FORALL t IN types OF environ OF o  WHILE NOT expand
+     DO TYPEDECC tdc = (typedec OF nulltprocs)(t, newtprocs);
+        IF c OF tdc THEN expand := TRUE FI
+     OD;
+
+   FORALL c IN consts OF environ OF o  WHILE NOT expand
+     DO expand := (sort OF c = outerdec) OREL (sort OF c = localdec) OD;
+
+   FORALL f IN fns OF environ OF o  WHILE NOT expand
+     DO  IF macro OF f ANDTH
+            NOT ((sort OF f = macpardec) OREL
+                 ( (sort OF f = localdec) ANDTH
+                    CASE fnbody OF f IN (REF BODYNULL) TRUE OUT FALSE ESAC
+                 ))  { ignores expanded MAC parameters }
+         THEN expand := TRUE
+         ELSE FORALL n IN nametypes OF f WHILE NOT expand
+              DO  TYPEC tc = (type OF newtprocs)(type OF n, newtprocs);
+                  IF c OF tc THEN expand := TRUE FI
+              OD;
+              IF NOT expand
+              THEN FNBODYC fc = (fnbody OF nulltprocs)(fnbody OF f, newtprocs);
+                   IF c OF fc THEN expand := TRUE FI
+              FI
+         FI
+     OD;
+
+   expand
+END;
+
+
+   PROC flt = (VECTOR [] CHAR s) VOID: msg(user, s);
+
+   setup_reporting;
+
+   HEAP CLOSURE newclosure := oldclosure;
+   REF REF OUTERS newptr := outers OF newclosure;
+   BOOL closurechanged := FALSE;
+
+   PROC  update_closure = VOID:
+   ( IF NOT closurechanged
+     THEN closurechanged := TRUE;
+          newclosure := copy_closure(newclosure, msg);
+          { Now refind the current place in the outers list }
+          INT  place = closureno OF outer OF newptr;
+          newptr:= outers OF newclosure;
+          WHILE closureno OF outer OF newptr /= place
+          DO  newptr:= rest OF newptr  OD
+     FI
+   );
+
+
+   INT num = maxclosureno(oldclosure);
+   VECTOR [num] REF VECTOR [] REF HASHLIST hashtable;
+   FORALL h IN hashtable DO h := nilvechashlist OD;
+
+
+   {{ List of expand INT and CONST declarations }}
+   REF OUTERS ints_consts := nilouters;
+
+   PROC find_int_const = (INT closureno, REF OUTERS o) OUTER:
+   (  OUTER result;
+      REF OUTERS os := o;
+      BOOL found := FALSE;
+      WHILE NOT found ANDTH (os ISNT nilouters)
+      DO REF ENVIRON env = environ OF outer OF os;
+         INT closno = closureno OF outer OF os;
+         IF closureno = closno THEN found := TRUE; result := outer OF os FI;
+        os := rest OF os
+     OD;
+     result
+   );
+
+
+   PROC fname_evaluate = (FNAME fn, TRANSFORMPROCS tprocs, CLOSED old,
+                          REF VECTOR [] INT repldecs,
+                          PROC (FNAME) FORMULA subs_fmpar) FORMULAC:
+   ( REF INTDEC idec = (ints OF env OF old)[intno OF fn];
+     IF sort OF idec = macpardec
+     THEN FORMULA fm = subs_fmpar(fn);
+          (fm, TRUE)
+     ELIF sort OF idec = localdec
+     THEN CASE value OF idec IN
+          (RANGE rg) (MAKEFINT(repldecs[intno OF fn]), TRUE),
+          (FORMULA f)
+            ( FORMULAC fc = (formula OF tprocs)(f, tprocs);
+              (f OF fc, TRUE)
+            )
+          ESAC
+     ELSE OUTER oi = find_int_const(closureno OF usage OF idec, ints_consts);
+          FORMULA of = get_formula(value OF (ints OF environ OF oi)[1]);
+          FORMULAC oc = (formula OF tprocs)(of, tprocs);
+          (f OF oc, TRUE)
+     FI
+   );
+
+   PROC urepl_expand = (REF UREPL urepl, TRANSFORMPROCS tprocs, REF ENVIRON env,
+                        REF VECTOR[] INT repldecs, REF REF JOINUP joinup) UNITC:
+   BEGIN
+      REF USTR newbody := nilustr;
+      REF REF USTR nextelem := newbody;
+      REPLICATOR repl = get_replicator(repl OF urepl, env);
+      RANGEC rc = (range OF tprocs)(range OF repl, tprocs);
+      INT lwb = int(lwb OF r OF rc),
+          upb = int(upb OF r OF rc);
+      HEAP VECTOR [upb - lwb + 1] REF JOINUP row;
+
+      FOR i  FROM lwb TO upb
+      DO  repldecs[intno OF repl] := i;
+          UNITC body = (unit OF tprocs)(body OF urepl, tprocs);
+          row[i-lwb+1] := joinup;
+          joinup := nulljoinup;
+          REF REF USTR (nextelem) := HEAP USTR := (u OF body, nilustr);
+          nextelem := rest OF nextelem
+      OD;
+      joinup := MAKEJOINROW row;
+      ( IF lwb = upb
+        THEN HEAP UROW := (MAKEFINT(1), elem OF newbody)
+        ELSE newbody
+        FI, TRUE )
+   END;
+
+   PROC ucond_expand = (REF UCOND uc, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      FORMULAC cond = (formula OF tprocs)(cond OF uc, tprocs);
+      UNIT u = IF int(f OF cond) /= 0
+               THEN u OF (unit OF tprocs)(true OF uc, tprocs)
+               ELSE u OF (unit OF tprocs)(false OF uc, tprocs)
+               FI;
+     (u, TRUE)
+   END;
+
+   PROC make_multiple = (UNIT u, CLOSED close) UNIT:
+   BEGIN
+     PROC move = (TYPE ty, UNIT old, BOOL query) UNIT:
+        CASE ty IN
+        (REF TNAME tn)
+           (  REF TYPEDEC tdec = (types OF env OF close)[typeno OF tn];
+              CASE body OF tdec IN
+              (REF TYPETAG ttag)  move(tag OF ttag, old, query)
+              OUT old
+              ESAC
+           ),
+        (REF TSTR ts)
+           ( REF TSTR tst := ts;
+             REF USTR new := nilustr;
+             REF REF USTR next := new;
+             WHILE tst ISNT niltstr
+             DO  REF REF USTR (next) := HEAP USTR :=
+                  (( query | MAKECQUERY(elem OF tst) | MAKECTYPE(elem OF tst)),
+                     nilustr);
+                 tst := rest OF tst;
+                 next := rest OF next
+             OD;
+             new
+           ),
+         (REF TROW tr)
+            HEAP UROW := (size OF tr,
+                 ( query | MAKECQUERY(elem OF tr) | MAKECTYPE(elem OF tr) ) ),
+         (REF TSTRING tg)
+            HEAP USTRING := (size OF tg,
+                 ( query | MAKECQUERY(char OF tg) | MAKECTYPE(char OF tg) ) )
+         OUT old
+         ESAC;
+
+     CASE u IN
+     (REF CQUERY cq) move(querytype OF cq, u, TRUE),
+     (REF CTYPE ct)  move(type OF ct, u, FALSE),
+     (REF UATTR ua)  unit OF ua
+     OUT u
+     ESAC
+   END;
+
+
+   PROC trim_ustr = (REF USTR us, INT lwb, size) REF USTR:
+      IF (us IS nilustr) OREL size <= 0 OREL lwb <=0
+      THEN nilustr
+      ELIF lwb > 1
+      THEN trim_ustr(rest OF us, lwb-1, size)
+      ELSE HEAP USTR := (elem OF us, trim_ustr(rest OF us, lwb, size-1))
+      FI;
+
+
+   PROC uindex_expand = (REF UINDEX ui, TRANSFORMPROCS tprocs, CLOSED close,
+                                        REF REF JOINUP joinup) UNITC:
+   BEGIN
+      UNITC uic = (unit OF nulltprocs)(ui, tprocs);
+      REF UINDEX uid =
+         CASE u OF uic IN (REF UINDEX u) u OUT SKIP ESAC;
+      INT index = int(index OF uid);
+      joinup_trim(joinup, TRUE, index, index);
+      IF only_const(unit OF uid)
+      THEN CASE make_multiple(unit OF uid, close) IN
+           (REF USTR us)     ( REF USTR uss = trim_ustr(us, index, 1);
+                               (elem OF uss, TRUE)
+                             ),
+           (REF UROW ur)     (elem OF ur, TRUE),
+           (REF USTRING ug)  (char OF ug, TRUE),
+           (REF CQUOTE cq)   (HEAP CPRIM :=
+                                (typeno OF cq, (string OF cq)[index]), TRUE)
+           OUT uic
+           ESAC
+      ELSE uic
+      FI
+   END;
+
+
+   PROC utrim_expand = (REF UTRIM ut, TRANSFORMPROCS tprocs, CLOSED close,
+                                      REF REF JOINUP joinup) UNITC:
+   BEGIN
+      UNITC utc = (unit OF nulltprocs)(ut, tprocs);
+      REF UTRIM utr =
+         CASE u OF utc IN (REF UTRIM u) u OUT SKIP ESAC;
+      INT lwb = int(lwb OF range OF utr),
+          upb = int(upb OF range OF utr),
+          size = upb - lwb + 1;
+      joinup_trim(joinup, FALSE, lwb, upb);
+      IF only_const(unit OF utr)
+      THEN CASE make_multiple(unit OF utr, close) IN
+           (REF USTR us)     ( trim_ustr(us, lwb, size), TRUE ),
+           (REF UROW ur)     ( HEAP UROW := (MAKEFINT size, elem OF ur), TRUE ),
+           (REF USTRING ug)  ( HEAP USTRING := (MAKEFINT size, char OF ug),
+                                 TRUE ),
+           (REF CQUOTE cq)   ( HEAP CQUOTE :=
+                                (typeno OF cq, (string OF cq)[lwb:upb]), TRUE)
+           OUT utc
+           ESAC
+      ELSE utc
+      FI
+   END;
+
+   PROC ustr_conc = (INT sort, UNIT left, right, CLOSED close) UNITC:
+   (  REF USTR new := nilustr;
+      REF REF USTR next := new;
+      BOOL flatten := ( sort = flattenleft OREL sort = flattenboth );
+      UNIT u := left;
+      TO 2
+      DO IF flatten
+         THEN u := make_multiple(u, close);
+              CASE u IN
+              (REF UROW ur)
+                TO int(size OF ur)
+                DO REF REF USTR(next) := HEAP USTR := (elem OF ur, nilustr);
+                   next := rest OF next
+                OD,
+              (REF USTR us)
+                ( REF USTR uss := us;
+                  WHILE uss ISNT nilustr
+                  DO REF REF USTR(next) := HEAP USTR := (elem OF uss, nilustr);
+                     uss := rest OF uss;
+                     next := rest OF next
+                  OD
+                )
+              OUT sys fault("ustr_conc")
+              ESAC
+         ELSE REF REF USTR (next) := HEAP USTR := (u, nilustr);
+              next := rest OF next
+         FI;
+         flatten := ( sort = flattenright OREL sort = flattenboth );
+         u := right
+      OD;
+      (new, TRUE)
+   );
+
+   PROC string_match = (UNIT left, right) BOOL:
+      CASE left IN
+      (REF CPRIM)  CASE right IN (REF CPRIM) TRUE OUT FALSE ESAC,
+      (REF CTYPE)  CASE right IN (REF CTYPE) TRUE OUT FALSE ESAC,
+      (REF CQUERY) CASE right IN (REF CQUERY) TRUE OUT FALSE ESAC
+      OUT FALSE
+      ESAC;
+
+   PROC string_conc = (INT sort, UNIT l, r, CLOSED close, DIAGNOSTIC diag)UNITC:
+   (  UNIT left := l, right := r;
+      UNIT primleft, primright;
+      INT ind := 0;
+      BOOL flatten := (sort = flattenleft OREL sort = flattenboth);
+      IF flatten THEN left := make_multiple(left, close) FI;
+      UNIT u := left;
+      FOR i TO 2
+      DO  UNIT prim =
+            IF flatten
+            THEN CASE u IN
+                 (REF USTRING us) ( ind PLUSAB int(size OF us); char OF us ),
+                 (REF CQUOTE cq)
+                   ( ind PLUSAB UPB string OF cq;
+                     HEAP CPRIM:= (typeno OF cq, 0)
+                   )
+                 OUT sys fault("string_conc - 1"); unull
+                 ESAC
+            ELSE ind PLUSAB 1; u
+            FI;
+          IF i = 1 THEN primleft := prim ELSE primright := prim FI;
+          flatten := (sort = flattenright OREL sort = flattenboth);
+          IF flatten THEN right := make_multiple(right, close) FI;
+          u := right
+      OD;
+      IF NOT string_match(primleft, primright)
+      THEN fpopen := left;  fpclose := right;
+           faultp(".< and .> can't be concatenated", close, diag);
+           (unull, FALSE)
+      ELSE
+        CASE primleft IN
+        (REF CPRIM cp)
+         ( HEAP VECTOR [ind] INT chars; { used for c"...." }
+           u := left;
+           flatten := (sort = flattenleft OREL sort = flattenboth);
+           ind := 0;
+           TO 2
+           DO IF flatten
+              THEN CASE u IN
+                   (REF USTRING uu)
+                       CASE char OF uu IN
+                       (REF CPRIM cp)
+                          FORALL c IN
+                               chars[ind + 1 : ind PLUSAB int(size OF uu)]
+                          DO c := primno OF cp OD
+                       OUT sys fault("string_conc - 2")
+                       ESAC,
+                    (REF CQUOTE cc) chars[ind + 1: ind PLUSAB UPB string OF cc]
+                                      := string OF cc
+                    OUT sys fault("string_conc - 3")
+                    ESAC
+              ELSE CASE u IN
+                   (REF CPRIM p) chars[ind PLUSAB 1] := primno OF p
+                   OUT sys fault("string_conc - 4")
+                   ESAC
+              FI;
+              flatten := (sort = flattenright OREL sort = flattenboth);
+              u := right
+          OD;
+          ( HEAP CQUOTE := (typeno OF cp, chars), TRUE )
+         )
+        OUT ( HEAP USTRING:= (MAKEFINT(ind), primleft), TRUE )
+        ESAC
+     FI
+  );
+
+   PROC uconc_expand = (REF UCONC uc, TRANSFORMPROCS tprocs, CLOSED close,
+                        DIAGNOSTIC diag, REF REF JOINUP joinup) UNITC:
+   BEGIN
+      UNITC luc = (unit OF tprocs)(left OF uc, tprocs);
+      REF JOINUP ljoinup := joinup;
+      joinup := nulljoinup;
+      UNITC ruc = (unit OF tprocs)(right OF uc, tprocs);
+      IF only_const(uc)
+      THEN joinup := nulljoinup;
+           IF string OF uc
+           THEN string_conc(sort OF uc, u OF luc, u OF ruc, close, diag)
+           ELSE ustr_conc(sort OF uc, u OF luc, u OF ruc, close)
+           FI
+      ELSE uconc_joinup(sort OF uc, ljoinup, joinup);
+           IF c OF luc  OREL  c OF ruc
+           THEN ( HEAP UCONC:=(string OF uc, sort OF uc, u OF luc, u OF ruc),
+                  TRUE )
+           ELSE  ( uc, FALSE)
+           FI
+      FI
+   END;
+
+
+   PROC add_outerfn = (INT oldclosureno, OUTERC ofnc,
+                       REF VECTOR [] MACPARAM params, BOOL specchanged) INT:
+   BEGIN
+      update_closure;
+      insert_outer(o OF ofnc, newptr, newclosure, msg);
+      newptr := rest OF newptr; { skip over new item }
+
+      INT hash = macparams_hash(params);
+      IF hashtable[oldclosureno] IS nilvechashlist
+      THEN hashtable[oldclosureno] := HEAP VECTOR [10] REF HASHLIST;
+           FORALL h IN hashtable[oldclosureno] DO h := nilhashlist OD
+      FI;
+      INT newclosureno = closureno OF o OF ofnc;
+      hashtable[oldclosureno][hash] := HEAP HASHLIST :=
+             (params, newclosureno, specchanged, hashtable[oldclosureno][hash]);
+      newclosureno
+   END;
+
+PROC outerfn_expand =
+{-------------------}
+   ( OUTER ofn,  TRANSFORMPROCS tprocs,  MACPARAMSC params,
+     REF MACPARINFOS mstable, REF ENVIRON paramenv,
+     REF BOOL iochange, REF MONITORLIST monitors) OUTERC:
+BEGIN
+   REF ENVIRON oenv = environ OF ofn;
+   VECTOR [UPB ints OF oenv] INT rdecs;
+   FORALL r IN rdecs DO r := -9999 OD;
+
+   REF VECTOR [] REF DECSLIST macattrdecls :=
+       HEAP VECTOR [UPB attrs OF oenv] REF DECSLIST;
+   FORALL elem IN macattrdecls DO elem := nildecslist OD;
+
+   REF VECTOR [] REF DECSLIST mactypedecls :=
+       HEAP VECTOR [UPB types OF oenv] REF DECSLIST;
+   FORALL elem IN mactypedecls DO elem := nildecslist OD;
+
+   REF VECTOR [] REF DECSLIST macfndecls :=
+       HEAP VECTOR [UPB fns OF oenv] REF DECSLIST;
+   FORALL elem IN macfndecls DO elem := nildecslist OD;
+
+   { this table is used for macro optimisation }
+   REF VECTOR [] REF VECTOR [] MACPARAM macpartable
+         := HEAP VECTOR [UPB fns OF oenv] REF VECTOR [] MACPARAM;
+   FORALL mp IN macpartable DO mp := nilmacparams OD;
+
+
+   { macpar tables used in expansion of macro parameters }
+   HEAP VECTOR [UPB fns OF oenv] REF MACPARINFO mptable;
+
+   BOOL envattrchanged := FALSE;
+   REF REF VECTOR [] REF ATTRDEC envattrs := attrs OF oenv;
+   INT envattrno := 0;
+
+   BOOL envintchanged := FALSE;
+   REF REF VECTOR [] REF INTDEC envints := ints OF oenv;
+   INT envintno := 0;
+
+   BOOL envconstchanged := FALSE;
+   REF REF VECTOR [] REF CONSTDEC envconsts := consts OF oenv;
+   INT envconstno := 0;
+
+   BOOL envtypechanged := FALSE;
+   REF REF VECTOR [] REF TYPEDEC envtypes := types OF oenv;
+   INT envtypeno := 0;
+
+   BOOL envfnchanged := FALSE;
+   REF REF VECTOR [] REF FNDEC envfns := fns OF oenv;
+   INT envfnno := 1;
+   { 1st element of fns in environ is the outerfn it-self }
+
+   HEAP ENVIRON newenv := (envattrs, envints, envtypes, envconsts, envfns);
+
+{{ Parameters to fndec_expand :
+   - params if present are expressed in terms of the calling environ of FNDEC.
+   - penv is present if params need translating (outer level macro instantiated
+     with outer level types)
+   - substition tables used to translate nested macro parameters
+   - newenvtypenos and newenvfnnos are the translation tables from numbering
+     before transformation to that being created
+   - iochange records whether spec has changed - used to update FNDEC of inst
+     (translation tables and original env held in FNDECENV)
+}}
+
+PROC fndec_expand =
+{-----------------}
+  ( REF FNDEC fdec, TRANSFORMPROCS tprocs, MACPARAMSC params,
+    REF MACPARINFOS mstable, REF ENVIRON penv, REF FNDECENV info,
+    REF BOOL iochange, REF MONITORLIST monitors
+  ) FNDECC:
+BEGIN
+   REF ENVIRON oldenv = old OF info;
+   REF ENVIRON paramenv := penv;
+   REF VECTOR [] INT repldecs := repldecs OF info;
+
+   REF VECTOR []REF USELIST newenvattrnos = newenvattrnos OF info,
+                            newenvtypenos = newenvtypenos OF info,
+                            newenvfnnos = newenvfnnos OF info;
+
+   VECTOR [UPB ints OF oldenv] INT newenvintnos;
+   FORALL int IN newenvintnos DO int := 0 OD;
+   VECTOR [UPB consts OF oldenv] INT newenvconstnos;
+   FORALL const IN newenvconstnos DO const := 0 OD;
+
+   REF VECTOR [] REF MACPARINFO mptable := mptable OF info;
+   REF MACPARINFOS inst_mstable := nilmacparinfos;
+
+
+   BOOL is_fnbody := TRUE;  { used to get scope of names in joinlist correct }
+   REF JOINUP joinup := nulljoinup;
+   REF JOINLIST joinlist := niljoinlist;
+
+
+   VECTOR [UPB nametypes OF fdec] INT newnamenos;
+   FORALL elem IN newnamenos DO elem := -1 OD;
+
+   BOOL nametypechange := FALSE, was_macro := macro OF fdec;
+   INT nametypeno := 0;
+
+   HEAP FNDEC newfdec := fdec;
+   IF was_macro THEN macro OF newfdec := FALSE;  was_macro := TRUE FI;
+
+   CLOSED newclose = (newfdec, newenv),
+          oldclose = (fdec, oldenv);
+
+   DIAGNOSTIC diag = HEAP DIAG := (trace, monitors, flt);
+
+    PROC translate_envno = (INT oldno, REF VECTOR[] REF USELIST newenvnos) INT:
+    (  REF USELIST envnos := newenvnos[oldno];
+       IF envnos IS niluselist
+       THEN 0
+       ELSE newdecno OF envnos
+       FI
+    );
+
+
+   PROC subs_ampar = (ATTRNAME an) ATTR:
+   ( INT newattrno = translate_envno(attrno OF an, newenvattrnos);
+     IF newattrno /= 0
+     THEN REF ATTRDEC adec = (attrs OF newenv)[newattrno];
+          value OF adec
+     ELSE (subs_ampar OF info)(an)
+     FI
+   );
+
+   PROC subs_fmpar = (FNAME fn) FORMULA:
+   ( INT newintno = newenvintnos[intno OF fn];
+     IF newintno /= 0
+     THEN REF INTDEC idec = (ints OF newenv)[newintno];
+          get_formula(value OF idec)
+     ELSE (subs_fmpar OF info)(fn)
+     FI
+   );
+
+   PROC subs_tmpar = (TNAME tn) TYPE:
+   ( INT newtypeno = translate_envno(typeno OF tn, newenvtypenos);
+     IF newtypeno /= 0
+     THEN REF TYPEDEC tdec = (types OF newenv)[newtypeno];
+          CASE body OF tdec IN
+          (REF TYPETAG tg) tag OF tg
+          OUT sys fault("subs_tmpar"); SKIP
+          ESAC
+     ELSE (subs_tmpar OF info)(tn)
+     FI
+   );
+
+   PROC subs_cmpar = (CNAME cn) UNIT:
+   ( INT newconstno = newenvconstnos[constno OF cn];
+     IF newconstno /= 0
+     THEN REF CONSTDEC cdec = (consts OF newenv)[newconstno];
+          value OF cdec
+     ELSE (subs_cmpar OF info)(cn)
+     FI
+   );
+
+   PROC subs_fnmpar = (FNNAME fn) INSTANCE:
+   ( INT newfnno = translate_envno(fnno OF fn, newenvfnnos);
+     IF newfnno /= 0
+     THEN REF FNDEC fdec = (fns OF newenv)[newfnno];
+          CASE fnbody OF fdec IN
+          (REF UNITTAG ut)
+             CASE tag OF ut IN
+             (REF UMINST um) inst OF um
+             OUT sysfault("subs_fnmpar - fn1"); SKIP
+             ESAC
+          OUT sysfault("subs_fnmpar - fn2"); SKIP
+          ESAC
+     ELSE (subs_fnmpar OF info)(fn)
+     FI
+   );
+
+   PROC add_nametype = (INT oldindex, ID name, TYPEC tc, ATTRC ac) INT:
+   BEGIN
+      nametypeno PLUSAB 1;
+      REF REF VECTOR [] NAMETYPE nametypes = nametypes OF newfdec;
+      INT max = UPB nametypes;
+      IF NOT nametypechange ANDTH
+            (c OF tc OREL c OF ac OREL (nametypeno /= oldindex))
+      THEN  nametypechange := TRUE;
+            nametypes := HEAP VECTOR [max] NAMETYPE := nametypes
+      FI;
+      IF nametypeno > max
+      THEN  HEAP VECTOR [max + 10] NAMETYPE newtypes;
+            newtypes[:max] := nametypes;
+            nametypes := newtypes
+      FI;
+      IF nametypechange
+      THEN nametypes[nametypeno] := (name, t OF tc, a OF ac)
+      FI;
+      IF oldindex > 0
+      THEN newnamenos[oldindex] := nametypeno
+      FI;
+      nametypeno
+   END;
+
+
+   {{  Procedures for optimised expansion of macro instances }}
+   {{  ----------------------------------------------------- }}
+
+   PROC equal_macparams =
+         (REF VECTOR [] MACPARAM specs, params, CLOSED sclose, pclose ) BOOL:
+   BEGIN
+      {{ Specs expressed in terms of sclose, params in terms of pclose }}
+      ((specs IS nilmacparams) ANDTH (params IS nilmacparams))
+      OREL
+      (BOOL equal := (UPB specs = UPB params);
+       IF equal THEN
+        FORALL spec IN specs, p IN params WHILE equal
+        DO equal :=
+             CASE param OF spec IN
+             (ATTRTAG as)
+                CASE param OF p IN
+                (ATTRTAG ap) equal_attr(tag OF as, tag OF ap, sclose, pclose)
+                OUT FALSE
+                ESAC,
+             (FORMULATAG fs)
+                CASE param OF p IN
+                (FORMULATAG fp) int(tag OF fs) = int(tag OF fp)
+                OUT FALSE
+                ESAC,
+             (TYPETAG ts)
+                CASE param OF p IN
+                (TYPETAG tp)
+                    check types(tag OF ts, tag OF tp, sclose, pclose)
+                OUT FALSE
+                ESAC,
+             (UNITTAG cs)
+                CASE param OF p IN
+                (UNITTAG cp)
+                  ( TYPE stype = unit_type(tag OF cs, fdec OF sclose,
+                                           env OF sclose);
+                    TYPE ptype = unit_type(tag OF cp, fdec OF pclose,
+                                           env OF pclose);
+                    check types(stype, ptype, sclose, pclose)
+                       ANDTH
+                    NOT checkconsts(tag OF cs, tag OF cp, FALSE)
+                  )
+                OUT FALSE
+                ESAC,
+             (INSTANCE is)
+                CASE param OF p IN
+                (INSTANCE ip) equal_instances(is, ip, sclose, pclose)
+                OUT FALSE
+                ESAC
+             OUT sys fault("equal_macparams"); SKIP
+             ESAC
+        OD
+       FI;
+       equal
+      )
+   END;
+
+   PROC find_closureno = (INT oldclosureno, REF VECTOR[]MACPARAM params,
+                          REF BOOL specchanged) INT:
+   BEGIN
+      INT newclosureno := -1;
+      IF hashtable[oldclosureno] ISNT nilvechashlist
+      THEN INT hash = macparams_hash(params);
+           REF HASHLIST hlist := hashtable[oldclosureno][hash];
+           WHILE (hlist ISNT nilhashlist) ANDTH newclosureno < 0
+           DO  OUTER ofn = outerOF find_outers(index OF hlist, newclosure, msg);
+               REF FNDEC fdec = get_outerfn(ofn);
+               CLOSED sclose = (fdec, environ OF ofn);
+               IF equal_macparams(params OF hlist, params, sclose, newclose)
+               THEN specchanged := specchanged OF hlist;
+                    newclosureno := index OF hlist
+               FI;
+               hlist := rest OF hlist
+           OD
+      FI;
+      newclosureno
+   END;
+
+   PROC fndec_fnno = (REF VECTOR [] MACPARAM params, INT oldfnno, depth) INT:
+   BEGIN
+      {{ Finds whether 'oldfnno' has already been been instantiated in
+         current OUTERFN with parameters 'params' at 'depth' }}
+      INT fnno := -1;
+      REF USELIST instances := newenvfnnos[oldfnno];
+      WHILE (instances ISNT niluselist) ANDTH fnno < 0
+      DO  REF FNDEC fdec = (fns OF newenv)[newdecno OF instances];
+          REF VECTOR [] MACPARAM specpars = macpartable[newdecno OF instances];
+          IF sort OF fdec = localdec ANDTH
+             depth = depth OF instances ANDTH
+             equal_macparams(specpars, params, newclose, newclose)
+          THEN  fnno := newdecno OF instances
+          FI;
+          instances := rest OF instances
+      OD;
+      fnno
+   END;
+
+   PROC fnusage_fnno = (INT oldfnno, newclosureno) INT:
+   BEGIN
+   {{ Finds whether instantiation of outermac has occured in current OUTERFN }}
+      INT fnno := -1;
+      REF USELIST instances := newenvfnnos[oldfnno];
+      WHILE (instances ISNT niluselist) ANDTH fnno < 0
+      DO  REF FNDEC fdec = (fns OF newenv)[newdecno OF instances];
+          IF sort OF fdec = outerdec ANDTH
+             (closureno OF usage OF fdec = newclosureno)
+          THEN fnno := newdecno OF instances
+          FI;
+          instances := rest OF instances
+      OD;
+      fnno
+   END;
+
+
+   { ------------------------------------------------------------------------ }
+   {{ Procedures for rebuilding ATTR, TYPE and FN environ vectors.  Also for
+      maintaining the translation tables newenvattrnos, newenvtypenos and
+      newenvfnnos }}
+
+
+   PROC add_envint = (INT oldintno, REF INTDEC idec) INT:
+   BEGIN
+      envintno PLUSAB 1;
+      REF REF VECTOR [] REF INTDEC ints = ints OF newenv;
+      INT max = UPB ints;
+      IF NOT envintchanged
+      THEN  envintchanged := TRUE;
+            ints := HEAP VECTOR [max] REF INTDEC := ints
+      FI;
+      IF envintno > max
+      THEN  HEAP VECTOR [max + 10] REF INTDEC newints;
+            newints[:max] := ints;
+            FORALL i IN newints[max+1:] DO i := nilintdec OD;
+            ints := newints
+      FI;
+      newenvintnos[oldintno] := envintno;
+      ints[envintno] := idec;
+      envintno
+   END;
+
+   PROC add_envconst = (INT oldconstno, REF CONSTDEC cdec) INT:
+   BEGIN
+      envconstno PLUSAB 1;
+      REF REF VECTOR [] REF CONSTDEC consts = consts OF newenv;
+      INT max = UPB consts;
+      IF NOT envconstchanged
+      THEN  envconstchanged := TRUE;
+            consts := HEAP VECTOR [max] REF CONSTDEC := consts
+      FI;
+      IF envconstno > max
+      THEN  HEAP VECTOR [max + 10] REF CONSTDEC newconsts;
+            newconsts[:max] := consts;
+            FORALL i IN newconsts[max+1:] DO i := nilconstdec OD;
+            consts := newconsts
+      FI;
+      newenvconstnos[oldconstno] := envconstno;
+      consts[envconstno] := cdec;
+      envconstno
+   END;
+
+
+   PROC reset scope = (INT depth) VOID:
+   BEGIN
+      {{ ATTRs, TYPEs and FNs removed from translataion tables so that they
+         can not be used out of scope.  }}
+      FORALL attrs IN newenvattrnos
+      DO  REF REF USELIST aptr := attrs;
+          WHILE aptr ISNT niluselist
+          DO  IF depth OF aptr = depth
+              THEN  REF REF USELIST (aptr) := rest OF aptr
+              ELSE  aptr := rest OF aptr
+              FI
+          OD
+      OD;
+      FORALL types IN newenvtypenos
+      DO  REF REF USELIST tptr := types;
+          WHILE tptr ISNT niluselist
+          DO  IF depth OF tptr = depth
+              THEN  REF REF USELIST (tptr) := rest OF tptr
+              ELSE  tptr := rest OF tptr
+              FI
+          OD
+      OD;
+      FORALL fns IN newenvfnnos
+      DO  REF REF USELIST fptr := fns;
+          WHILE fptr ISNT niluselist
+          DO IF depth OF fptr = depth
+             THEN  REF REF USELIST (fptr) := rest OF fptr
+             ELSE  fptr := rest OF fptr
+             FI
+          OD
+      OD
+   END;
+
+   PROC increase_decstable =  (REF REF VECTOR [] REF DECSLIST table) VOID:
+   BEGIN
+      INT max = UPB table;
+      HEAP VECTOR [max + 10] REF DECSLIST newdecls;
+      newdecls[:max] := table;
+      table := newdecls;
+      FORALL elem IN table[max+1:] DO elem := nildecslist OD
+   END;
+
+   PROC merge_env = (PROC(INT,REF ENVIRON)INT find_no, INT upb,
+                              REF ENVIRON newenv) REF VECTOR [] REF USELIST:
+   BEGIN
+      HEAP VECTOR [upb] REF USELIST envnos;
+      FOR i TO UPB envnos
+      DO  INT envno = find_no(i, newenv);
+          envnos[i] := IF envno = 0
+                       THEN niluselist
+                       ELSE HEAP USELIST := (envno, 0, TRUE, niluselist)
+                       FI
+      OD;
+      envnos
+   END;
+
+
+   PROC add_envfn = (INT oldfnno, depth, REF FNDEC fn, BOOL declared, changed)
+                                                                        INT:
+   BEGIN
+      envfnno PLUSAB 1;
+      REF REF VECTOR [] REF FNDEC fns = fns OF newenv;
+      INT max = UPB fns;
+      IF NOT envfnchanged ANDTH (envfnno /= oldfnno  OREL changed)
+      THEN  envfnchanged := TRUE;
+            fns := HEAP VECTOR [max] REF FNDEC := fns
+      FI;
+      IF envfnno > max
+      THEN  HEAP VECTOR [max + 10] REF FNDEC newfns;
+            newfns[:max] := fns;
+            FORALL f IN newfns[max+1:] DO f := nilfndec OD;
+            fns := newfns;
+            increase_decstable(macfndecls);
+            HEAP VECTOR [max + 10] REF VECTOR [] MACPARAM newmacpar;
+            newmacpar[:max] := macpartable;
+            macpartable := newmacpar
+      FI;
+      IF oldfnno > 0
+      THEN newenvfnnos[oldfnno] := HEAP USELIST :=
+                 (envfnno, depth, declared, newenvfnnos[oldfnno])
+      FI;
+      IF envfnchanged THEN fns[envfnno] := fn FI;
+      envfnno
+   END;
+
+
+   PROC merge_envfns = (REF ENVIRON newenv, macenv) REF VECTOR [] REF USELIST:
+   BEGIN
+      { newenv is the environ so far for the current OUTERFN.  macenv is the
+        environ of an outer MAC about to be instantiated as an internal FN }
+      PROC find_no = (INT i, REF ENVIRON env) INT:
+      (  REF FNDEC envfn = (fns OF macenv)[i];
+         IF sort OF envfn = outerdec
+         THEN findnewfnno(usage OF envfn, (fns OF env)[:envfnno])
+         ELSE 0
+         FI
+      );
+      merge_env(find_no, UPB fns OF macenv, newenv)
+   END;
+
+
+
+   PROC add_envtype = (INT oldtypeno, depth, TYPEDECC tc) INT:
+   BEGIN
+      REF TYPEDEC tdec = t OF tc;
+      envtypeno PLUSAB 1;
+      REF REF VECTOR [] REF TYPEDEC types = types OF newenv;
+      INT max = UPB types;
+      IF NOT envtypechanged ANDTH (envtypeno /= oldtypeno  OREL c OF tc)
+      THEN  envtypechanged := TRUE;
+            types := HEAP VECTOR [max] REF TYPEDEC := types
+      FI;
+      IF envtypeno > max
+      THEN  HEAP VECTOR [max + 10] REF TYPEDEC newtypes;
+            newtypes[:max] := types;
+            FORALL t IN newtypes[max+1:] DO t := niltypedec OD;
+            types := newtypes;
+            increase_decstable(mactypedecls)
+      FI;
+      INT tdepth = IF (tdec ISNT niltypedec) ANDTH (sort OF tdec = localdec)
+                   THEN depth
+                   ELSE 0
+                   FI;
+      IF oldtypeno > 0
+      THEN newenvtypenos[oldtypeno] := HEAP USELIST :=
+              (envtypeno, tdepth, TRUE, newenvtypenos[oldtypeno])
+      FI;
+      IF envtypechanged THEN types[envtypeno] := tdec FI;
+      envtypeno
+   END;
+
+   PROC merge_envtypes = (REF ENVIRON newenv, macenv) REF VECTOR [] REF USELIST:
+   BEGIN
+      { newenv is the environ so far for the current OUTERFN.  macenv is the
+        environ of an outer MAC about to be instantiated as a internal FN. }
+      PROC find_no = (INT i, REF ENVIRON env) INT:
+      (  REF TYPEDEC envtype = (types OF macenv)[i];
+         IF sort OF envtype = outerdec
+         THEN findnewtypeno(usage OF envtype, (types OF env)[:envtypeno])
+         ELSE 0
+         FI
+      );
+      merge_env(find_no, UPB types OF macenv, newenv)
+   END;
+
+
+   PROC add_envattr = (INT oldattrno, depth, ATTRDECC ac) INT:
+   BEGIN
+      REF ATTRDEC adec = a OF ac;
+      envattrno PLUSAB 1;
+      REF REF VECTOR [] REF ATTRDEC attrs = attrs OF newenv;
+      INT max = UPB attrs;
+      IF NOT envattrchanged ANDTH (envattrno /= oldattrno  OREL c OF ac)
+      THEN  envattrchanged := TRUE;
+            attrs := HEAP VECTOR [max] REF ATTRDEC := attrs
+      FI;
+      IF envattrno > max
+      THEN  HEAP VECTOR [max + 10] REF ATTRDEC newattrs;
+            newattrs[:max] := attrs;
+            FORALL a IN newattrs[max+1:] DO a := nilattrdec OD;
+            attrs := newattrs;
+            increase_decstable(macattrdecls)
+      FI;
+      INT adepth = IF (adec ISNT nilattrdec) ANDTH (sort OF adec = localdec)
+                   THEN depth
+                   ELSE 0
+                   FI;
+      IF oldattrno > 0
+      THEN newenvattrnos[oldattrno] := HEAP USELIST :=
+              (envattrno, adepth, TRUE, newenvattrnos[oldattrno])
+      FI;
+      IF envattrchanged THEN attrs[envattrno] := adec FI;
+      envattrno
+   END;
+
+   PROC merge_envattrs = (REF ENVIRON newenv, macenv) REF VECTOR [] REF USELIST:
+   BEGIN
+      { newenv is the environ so far for the current OUTERFN.  macenv is the
+        environ of an outer MAC about to be instantiated as a internal FN. }
+      PROC find_no = (INT i, REF ENVIRON env) INT:
+      (  REF ATTRDEC envattr = (attrs OF macenv)[i];
+         IF sort OF envattr = outerdec
+         THEN findnewattrno(usage OF envattr, (attrs OF env)[:envattrno])
+         ELSE 0
+         FI
+      );
+      merge_env(find_no, UPB attrs OF macenv, newenv)
+   END;
+
+
+   { ---------------------------------------------------------------------- }
+   {{ Next set of procedures are used to update the TYPE numbering system.
+      PROC type_expand adds to the ENVIRON types when they are first used.
+      This includes not only the type it-self, but any types it may use }}
+
+
+   PROC translate_mactypeno = (INT mactypeno) STRUCT 2 INT:
+   BEGIN
+      { This procedure looks to see if a macro parameter (expressed in terms
+        of its calling environ "macenv"), is present in the macro's environ
+        "oldenv".  If not found there, the "newenv" is searched. The result
+        is (oldtypeno, newtypeno) }
+      REF TYPEDEC tdec = (types OF paramenv)[mactypeno];
+      IF sort OF tdec = outerdec
+      THEN INT oldtypeno = findnewtypeno(usage OF tdec, types OF oldenv);
+           IF oldtypeno = 0
+           THEN (0, findnewtypeno(usage OF tdec, (types OF newenv)[:envtypeno]))
+           ELSE (oldtypeno, translate_envno(oldtypeno, newenvtypenos))
+           FI
+      ELSE sys fault("translate_mactypeno"); (0, 0)
+      FI
+   END;
+
+   PROC set_consttype = (INT oldtypeno, TRANSFORMPROCS tp) INT:
+   ( TYPEC tc = (type OF tp)(MAKETNAME(oldtypeno), tp);
+     CASE t OF tc IN (REF TNAME tn) typeno OF tn
+     OUT sys fault("set_consttype"); 0
+     ESAC
+   );
+
+   PROC set_unittype = (UNIT u, TRANSFORMPROCS tp) VOID:
+   { Output type of UDYINDEX never kept explicitly, though types used are
+     referenced in ENVIRON.  Must therefore use type_expand to make sure
+     they are added to ENVIRON if necessary.  }
+   (  TYPE oldtype = unit_type(u, fdec, oldenv);
+      (type OF tp)(oldtype, tp)
+   );
+
+
+   { ---------------------------------------------------------------------- }
+   {{ Next set of procedures are used to add FN macro parameters to the
+      ENVIRON.  This not only includes the FN, but any TYPES it may use }}
+
+   PROC translate_macfnno = (INT macfnno) STRUCT 2 INT:
+   BEGIN
+      { This procedure looks to see if a macro parameter (expressed in terms
+        of its calling environ "paramenv"), is present in the macro's environ
+        "oldenv".  If not found there, the "newenv" is searched. The result
+        is (oldfnno, newfnno) }
+      REF FNDEC fdec = (fns OF paramenv)[macfnno];
+      IF sort OF fdec = outerdec
+      THEN INT oldfnno = findnewfnno(usage OF fdec, fns OF oldenv);
+           IF oldfnno = 0
+           THEN (0, findnewfnno(usage OF fdec, (fns OF newenv)[:envfnno]))
+           ELSE (oldfnno, translate_envno(oldfnno, newenvfnnos))
+           FI
+      ELSE (0, 0)
+      FI
+   END;
+
+
+   PROC set_envfn = (INSTANCE inst, TRANSFORMPROCS tprocs) INSTANCE:
+   BEGIN
+      INT fnno = fnno OF inst;
+      STRUCT 2 INT fnnos = translate_macfnno(fnno);
+      INT oldfnno = fnnos[1];
+      INT newfnno := fnnos[2];
+
+      IF newfnno = 0
+      THEN REF FNDEC fdec = (fns OF paramenv)[fnno];
+           REF FNDEC nfdec =
+             IF sort OF fdec = outerdec
+             THEN {Update environ to hold fdec spec- now in terms of paramenv }
+                  TYPEC tc = (type OF tprocs)(fndec_tfn(fdec), tprocs);
+                  HEAP FNDEC used := translate_fndec(fdec, paramenv, newenv);
+                  fnbody OF used := bodynull;
+                  used
+             ELSE HEAP FNDEC fd := fdec;
+                  fd
+             FI;
+           newfnno:= add_envfn(oldfnno, 0, nfdec, TRUE, TRUE)
+      FI;
+      ATTRC ac = (attr OF tprocs)(attr OF inst, tprocs);
+      (newfnno, nilmacparams, a OF ac)
+   END;
+
+
+   { ---------------------------------------------------------------------- }
+   {{ Next set of procedures are used to add ATTR macro parameters to the
+      ENVIRON.  }}
+
+   PROC translate_macattrno = (INT macattrno) STRUCT 2 INT:
+   BEGIN
+      { This procedure looks to see if a macro parameter (expressed in terms
+        of its calling environ "paramenv"), is present in the macro's environ
+        "oldenv".  If not found there, the "newenv" is searched. The result
+        is (oldattrno, newattrno) }
+      REF ATTRDEC adec = (attrs OF paramenv)[macattrno];
+      IF sort OF adec = outerdec
+      THEN INT oldattrno = findnewattrno(usage OF adec, attrs OF oldenv);
+           IF oldattrno = 0
+           THEN (0, findnewattrno(usage OF adec, (attrs OF newenv)[:envattrno]))
+           ELSE (oldattrno, translate_envno(oldattrno, newenvattrnos))
+           FI
+      ELSE (0, 0)
+      FI
+   END;
+
+
+   { ------------------------------------------------------------------------ }
+
+   {{ Main Transformation procedures }}
+   {{ ------------------------------ }}
+
+   { BOOL force added to cope with bug r6b178 }
+   BOOL force := FALSE;
+
+   PROC type_expand = (TYPE type, TRANSFORMPROCS tprocs) TYPEC:
+      CASE type IN
+      (REF TNAME tn)
+       ( IF typeno OF tn = -1 {macpardec} THEN (type, FALSE)
+         ELSE
+           REF ENVIRON env =
+             IF paramenv IS nilenviron THEN oldenv ELSE paramenv FI;
+           REF TYPEDEC tdec = (types OF env)[typeno OF tn];
+           IF sort OF tdec = macpardec
+           THEN  (subs_tmpar(tn), TRUE)
+           ELSE  BOOL changed := FALSE;
+                 STRUCT 2 INT typenos =
+                   IF paramenv IS nilenviron
+                   THEN  (typeno OF tn,
+                          translate_envno(typeno OF tn, newenvtypenos))
+                   ELSE  translate_mactypeno(typeno OF tn)
+                   FI;
+                 INT oldtypeno = typenos[1];
+                 INT newtypeno := typenos[2];
+                 IF newtypeno = 0
+                 THEN  IF sort OF tdec = localdec
+                       THEN sys fault("TYPEDEC - type_expand")
+                       ELSE TYPEDECC tc = (typedec OF nulltprocs)(tdec, tprocs);
+                            changed := c OF tc OREL force;
+                            newtypeno := add_envtype(oldtypeno, 0,
+                                                     (t OF tc, changed))
+                       FI
+                 FI;
+                 (MAKETNAME(newtypeno), changed OREL (oldtypeno /= newtypeno)
+                                        OREL (typeno OF tn /= newtypeno))
+           FI
+         FI
+       ),
+      (REF TBRACKET tb)( TYPEC tc = (type OF tprocs)(type OF tb, tprocs);
+                         (t OF tc, TRUE)
+                       )
+      OUT (type OF nulltprocs)(type, tprocs)
+      ESAC;
+
+
+   PROC attrstr_expand = (REF ATTRSTR st, TRANSFORMPROCS tprocs) ATTRSTRC:
+      IF st IS nilattrstr
+      THEN  (st, FALSE)
+      ELSE  ATTRC  ac = (attr OF tprocs)(elem OF st, tprocs);
+            ATTRSTRC  asc = (attrstr OF tprocs)(rest OF st, tprocs);
+            ATTRSTRC newc =
+              CASE a OF ac IN
+              (REF ATTRSTR as)
+               ( REF ATTRSTR ast := as;
+                 REF ATTRSTR newas := nilattrstr;
+                 REF REF ATTRSTR ptr := newas;
+                 WHILE ast ISNT nilattrstr
+                 DO REF REF ATTRSTR (ptr) := HEAP ATTRSTR
+                                          := (elem OF ast, nilattrstr);
+                    ast := rest OF ast;  ptr := rest OF ptr
+                 OD;
+                 REF REF ATTRSTR (ptr) := a OF asc;
+                 (newas, TRUE)
+                )
+              OUT (nilattrstr, FALSE)
+           ESAC;
+           IF c OF newc
+           THEN newc
+           ELIF c OF ac  OREL  c OF asc
+           THEN  (HEAP ATTRSTR:= (a OF ac, a OF asc), TRUE)
+           ELSE  (st, FALSE)
+           FI
+     FI;
+
+     PROC update_attr = (ATTR a, REF ENVIRON attrenv, REF INT newattrno) BOOL:
+     BEGIN
+        newattrno := 0;
+        BOOL changed := FALSE;
+
+        CASE a IN
+        (REF ATTRNAME an)
+          ( REF ATTRDEC adec = (attrs OF attrenv)[attrno OF an];
+            newattrno :=
+              findnewattrno(usage OF adec, (attrs OF newenv)[:envattrno]);
+            IF newattrno = 0
+            THEN  INT oldattrno = findnewattrno(usage OF adec, attrs OF oldenv);
+                  INT newno = add_envattr(oldattrno, 0, (adec,FALSE));
+                  OUTER oattr = outer OF find_outers(closureno OF usage OF adec,
+                                                     oldclosure, msg);
+                  REF ATTRDEC body = get_outerattr(oattr);
+                  IF update_attr(value OF body, environ OF oattr, newattrno)
+                  THEN changed := TRUE
+                  FI;
+                  newattrno := newno
+            FI;
+            IF newattrno /= attrno OF an THEN changed := TRUE FI
+          ),
+        (REF ATTRSTR as)
+          ( REF ATTRSTR ats := as;
+            WHILE ats ISNT nilattrstr
+            DO IF update_attr(elem OF ats, attrenv, newattrno)
+               THEN changed := TRUE
+               FI;
+               ats := rest OF ats
+            OD
+          ),
+       (REF ATTRBRACKET ab) update_attr(attr OF ab, attrenv, newattrno)
+       OUT SKIP
+       ESAC;
+       changed
+     END;
+
+
+   PROC attr_expand = (ATTR attr, TRANSFORMPROCS tprocs) ATTRC:
+      CASE attr IN
+      (REF ATTRNAME an)
+       ( IF attrno OF an = -1 {macpardec} THEN (attr, FALSE)
+         ELSE
+           REF ENVIRON env =
+             IF paramenv IS nilenviron THEN oldenv ELSE paramenv FI;
+           REF ATTRDEC adec = (attrs OF env)[attrno OF an];
+           IF sort OF adec = macpardec
+           THEN  (subs_ampar(an), TRUE)
+           ELSE  BOOL changed := FALSE;
+                 STRUCT 2 INT attrnos =
+                   IF paramenv IS nilenviron
+                   THEN  (attrno OF an,
+                          translate_envno(attrno OF an, newenvattrnos))
+                   ELSE  translate_macattrno(attrno OF an)
+                   FI;
+                 INT oldattrno = attrnos[1];
+                 INT newattrno := attrnos[2];
+                 IF newattrno = 0
+                 THEN  IF sort OF adec = localdec
+                       THEN sys fault("ATTRDEC - attr_expand")
+                       ELSE changed := update_attr(an, env, newattrno)
+                       FI
+                 FI;
+                 (MAKEATTRNAME(newattrno), changed OREL (oldattrno /= newattrno)
+                                        OREL (attrno OF an /= newattrno))
+           FI
+         FI
+       ),
+      (REF ATTRSTR as)
+       ( ATTRSTRC asc = (attrstr OF tprocs)(as, tprocs);
+         (a OF asc, c OF asc)
+       ),
+      (REF ATTRBRACKET ab)
+       ( ATTRC ac = (attr OF tprocs)(attr OF ab, tprocs);
+         (a OF ac, TRUE)
+       )
+      OUT (attr OF nulltprocs)(attr, tprocs)
+      ESAC;
+
+
+    PROC formula_expand = ( FORMULA formula, TRANSFORMPROCS tprocs) FORMULAC:
+      CASE formula IN
+      (REF FINT fi)     (formula, FALSE),
+      (REF FCHECK fck)  fcheck_evaluate(fck, tprocs, oldclose, diag),
+      (REF FARITH fa)   (formula, FALSE),
+      (REF FNAME fn)
+         IF intno OF fn = -1 {macpardec}
+         THEN (formula, FALSE)
+         ELSE fname_evaluate(fn, tprocs, oldclose, repldecs, subs_fmpar)
+         FI,
+      (REF FDOP fd)     fdop_simplify(fd, tprocs, oldclose, diag),
+      (REF FMOP fm)     fmop_simplify(fm, tprocs, oldclose, diag),
+      (REF FCOND fc)    fcond_simplify(fc, tprocs),
+      (REF FBRACKET fb)
+        ( FORMULAC fc = (formula OF tprocs)(formula OF fb, tprocs);
+          (f OF fc, TRUE)
+        )
+      OUT (formula OF nulltprocs)(formula, tprocs)
+      ESAC;
+
+
+
+   { ------------------------------------------------------------------- }
+
+   {{ Procedures used to correctly position macro declarations within body.
+      The positioning depends on which of the following 3 criteria the
+      declaration first meets.
+       1. After last declared local TYPE declaration used as macro parameter
+       2. At start of FNBODY containing instantiation
+       3. At its original declaration position
+   }}
+
+   MODE SEQSERC = STRUCT (REF SEQUENCE seq, REF SERIES ser, BOOL c);
+
+   PROC addfnname = (REF USELIST use, INT depth, REF SEQUENCE sq, REF SERIES sr,
+                                                 BOOL isseq) SEQSERC:
+   BEGIN
+      REF SERIES ser := sr;
+      REF SEQUENCE seq := sq;
+      IF (NOT declared OF use) ANDTH depth OF use >= depth
+      THEN  declared OF use := TRUE;
+            REF FNNAME fnname = MAKEFNNAME(newdecno OF use);
+            IF isseq
+            THEN  seq := HEAP SEQUENCE := (fnname, seq)
+            ELSE  ser := HEAP SERIES := (fnname, ser)
+            FI;
+            (seq, ser, TRUE)
+      ELSE  (sq, sr, FALSE)
+      FI
+   END;
+
+
+   PROC reposition_decls =
+                  (INT depth, DECLARATION decl, REF DECSLIST decslist,
+                            REF SEQUENCE sq, REF SERIES sr, BOOL isseq) SEQSERC:
+   BEGIN
+      REF SEQUENCE seq := sq;  REF SERIES ser := sr;
+      BOOL changed := FALSE;
+      REF DECSLIST macdecs := decslist;
+      WHILE macdecs ISNT nildecslist
+      DO  SEQSERC sc = addfnname(uselist OF macdecs, depth, seq, ser, isseq);
+          IF c OF sc
+          THEN  seq := seq OF sc;  ser := ser OF sc;
+                changed := TRUE
+          FI;
+          macdecs := rest OF macdecs
+      OD;
+      IF changed
+      THEN IF isseq
+           THEN  seq := HEAP SEQUENCE := (decl, seq)
+           ELSE  ser := HEAP SERIES := (decl, ser)
+           FI
+      FI;
+      (seq, ser, changed)
+   END;
+
+   PROC position_decls = (DECLARATION decl, REF SEQUENCE sq,
+                                            REF SERIES sr, BOOL isseq) SEQSERC:
+   BEGIN
+      INT depth = depth OF monitors OF diag;
+      CASE decl IN
+      (ATTRNAME adecl)
+         ( {{ MAC expanded with internal ATTR parameters }}
+           reposition_decls(depth, decl, macattrdecls[attrno OF adecl],
+                            sq, sr, isseq)
+         ),
+      (FNAME)     (sq, sr, TRUE),    {{ INT declaration removed }}
+      (CNAME)     (sq, sr, TRUE),    {{ CONST declaration removed }}
+      (TNAME tdecl)
+         ( {{ MAC expanded with internal TYPE parameters }}
+           reposition_decls(depth, decl, mactypedecls[typeno OF tdecl],
+                            sq, sr, isseq)
+         ),
+      (FNNAME fdecl)
+         ( IF fnno OF fdecl < 0  { i.e MAC declaration }
+           THEN REF SEQUENCE seq := sq;  REF SERIES ser := sr;
+                REF USELIST fuse := newenvfnnos[ABS fnno OF fdecl];
+                WHILE fuse ISNT niluselist
+                DO SEQSERC msc = addfnname(fuse, depth, seq, ser, isseq);
+                   seq := seq OF msc;   ser := ser OF msc;
+                   fuse := rest OF fuse
+                OD;
+                { If macro has never been used than declaration removed }
+                (seq, ser, TRUE)
+           ELSE {{ MAC expanded with internal FN parameters }}
+                reposition_decls(depth, decl, macfndecls[fnno OF fdecl],
+                                 sq, sr, isseq)
+           FI
+         )
+      OUT sysfault("position_decls"); SKIP
+      ESAC
+   END;
+
+   PROC fnbody_decl = (REF UNITTAG ut, BOOL c) FNBODYC:
+   BEGIN
+      INT depth = depth OF monitors OF diag;
+      BOOL isseq := FALSE, changed := FALSE;
+      REF SEQUENCE seq := nilsequence;  REF SERIES ser := nilseries;
+      CASE tag OF ut IN
+      (REF USEQUENCE uq) ( isseq := TRUE;  seq := body OF uq ),
+      (REF USERIES us)   ( ser := body OF us )
+      OUT SKIP
+      ESAC;
+      FORALL fns IN newenvfnnos
+      DO  REF USELIST fuse := fns;
+          WHILE fuse ISNT niluselist
+          DO SEQSERC sc = addfnname(fuse, depth, seq, ser, isseq);
+             IF c OF sc
+             THEN  seq := seq OF sc;   ser := ser OF sc;
+                   changed := TRUE
+             FI;
+             fuse := rest OF fuse
+          OD
+      OD;
+      IF changed
+      THEN UNIT u =
+             CASE tag OF ut IN
+             (REF USEQUENCE uq)
+                HEAP USEQUENCE:= (seq, output OF uq),
+             (REF USERIES us)
+                HEAP USERIES := (ser, output OF us)
+             OUT  HEAP USERIES := (ser, tag OF ut)
+             ESAC;
+           (MAKEUNITTAG(u), TRUE )
+      ELSE (ut, c)
+      FI
+   END;
+
+
+   PROC decl_inner = (DECLARATION decl, TRANSFORMPROCS tprocs) DECLARATIONC:
+   BEGIN
+      INT depth = depth OF monitors OF diag;
+      CASE decl IN
+      (ATTRNAME  adecl)
+         ( INT oldattrno = attrno OF adecl;
+           REF ATTRDEC adec = (attrs OF oldenv)[oldattrno];
+           ATTRDECC ac = (attrdec OF nulltprocs)(adec, tprocs);
+           INT newattrno= add_envattr(oldattrno, depth, ac);
+           IF (newattrno /= oldattrno)
+           THEN  (MAKEATTRNAME(newattrno), TRUE)
+           ELSE  (decl, FALSE)
+           FI
+         ),
+      (FNAME idecl)
+         ( INT oldintno = intno OF idecl;
+           REF INTDEC idec = (ints OF oldenv)[oldintno];
+           INT newintno =
+             IF sort OF idec = macpardec
+             THEN add_envint(oldintno, idec)
+             ELSE oldintno
+             FI;
+           IF newintno /= oldintno
+           THEN (MAKEFNAME(newintno), TRUE)
+           ELSE (decl, FALSE)
+           FI
+         ),
+      (TNAME  tdecl)
+         ( INT oldtypeno = typeno OF tdecl;
+           REF TYPEDEC tdec = (types OF oldenv)[oldtypeno];
+           TYPEDECC tc = (typedec OF nulltprocs)(tdec, tprocs);
+           INT newtypeno= add_envtype(oldtypeno, depth, tc);
+           IF (newtypeno /= oldtypeno)
+           THEN  (MAKETNAME(newtypeno), TRUE)
+           ELSE  (decl, FALSE)
+           FI
+         ),
+      (CNAME cdecl)
+         ( INT oldconstno = constno OF cdecl;
+           REF CONSTDEC cdec = (consts OF oldenv)[oldconstno];
+           INT newconstno =
+              IF sort OF cdec = macpardec
+              THEN add_envconst(oldconstno, cdec)
+              ELSE oldconstno
+              FI;
+           IF newconstno /= oldconstno
+           THEN (MAKECNAME(newconstno), TRUE)
+           ELSE (decl, FALSE)
+           FI
+         ),
+       (FNNAME  fdecl)
+          ( INT oldfnno = fnno OF fdecl;
+            REF FNDEC fdec = (fns OF oldenv)[oldfnno];
+            IF macro OF fdec ANDTH NOT (sort OF fdec = macpardec)
+            THEN (MAKEFNNAME(-oldfnno), TRUE)
+                 {marks decl so position_decls will remove it if not used}
+            ELSE REF VECTOR [] MACPARAM nilmp := nilmacparams;
+                 BOOL ignore := FALSE;
+                 FNDECC fc =
+                    fndec_expand(fdec, tprocs, (nilmp, FALSE), NIL, nilenviron,
+                                 HEAP FNDECENV := (oldenv,
+                                 subs_ampar, subs_fmpar, subs_tmpar,
+                                 subs_cmpar, subs_fnmpar, repldecs, mptable,
+                                 newenvattrnos, newenvtypenos, newenvfnnos),
+                                 ignore, monitors OF diag);
+                 INT newfnno =
+                     add_envfn(oldfnno, depth, f OF fc, TRUE, c OF fc);
+                 IF (newfnno /= oldfnno)
+                 THEN  (MAKEFNNAME(newfnno), TRUE)
+                 ELSE  (decl, FALSE)
+                 FI
+            FI
+          )
+      ESAC
+   END;
+
+   { --------------------------------------------------------------------- }
+
+   PROC series_decl = (REF SERIES ser) SERIESC:
+   BEGIN
+      IF ser IS nilseries
+      THEN  (ser, FALSE)
+      ELSE  SERIESC rest = series_decl(rest OF ser);
+            REF SERIES decs := s OF rest;
+            SERIESC decsc =
+               CASE step OF ser IN
+               (REF PRINT) (decs, TRUE),    {{ PRINT statements removed }}
+               (REF FAULT) (decs, TRUE),    {{ FAULT statements removed }}
+               (REF REPLJOIN rj)
+                  ( REF SERIES newser := nilseries;
+                    REF REF SERIES serptr := newser;
+                    REF JOINS js := joins OF rj;
+                    WHILE js ISNT niljoins
+                    DO  REF REF SERIES (serptr) :=
+                           HEAP SERIES := (join OF js, nilseries);
+                        serptr := rest OF serptr;
+                        js := rest OF js
+                    OD;
+                    REF REF SERIES (serptr) := decs;
+                    (newser, TRUE)
+                  ),
+               (DECLARATION decl)
+                  ( SEQSERC sc = position_decls(decl, NIL, decs, FALSE);
+                    (ser OF sc, c OF sc)
+                  )
+               OUT (decs, FALSE)
+               ESAC;
+            IF c OF decsc
+            THEN  decsc
+            ELIF c OF rest
+            THEN  (HEAP SERIES:= (step OF ser, s OF rest), TRUE)
+            ELSE  (ser, FALSE)
+            FI
+      FI
+   END;
+
+   PROC sequence_decl = (REF SEQUENCE seq) SEQUENCEC:
+   BEGIN
+   {{ This procedure need only be called in USEQUENCE since declarations,
+      PRINT and FAULT are not allowed in non-value delivering SEQ clauses}}
+      IF seq IS nilsequence
+      THEN  (seq, FALSE)
+      ELSE  SEQUENCEC rest = sequence_decl(rest OF seq);
+            REF SEQUENCE decs := s OF rest;
+            SEQUENCEC decsc =
+               CASE step OF seq IN
+               (REF PRINT) (decs, TRUE),    {{ PRINT statements removed }}
+               (REF FAULT) (decs, TRUE),    {{ FAULT statements removed }}
+               (DECLARATION decl)
+                  ( SEQSERC sc = position_decls(decl, decs, NIL, TRUE);
+                    (seq OF sc, c OF sc)
+                  )
+               OUT (nilsequence, FALSE)
+               ESAC;
+            IF c OF decsc
+            THEN decsc
+            ELIF c OF rest
+            THEN (HEAP SEQUENCE:= (step OF seq, s OF rest), TRUE)
+            ELSE (seq, FALSE)
+            FI
+      FI
+   END;
+
+   PROC body_unit = (UNIT u, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      BOOL bodyseries = is_fnbody;
+      IF is_fnbody
+      THEN is_fnbody := FALSE
+      ELSE joinlist := HEAP JOINLIST := (-1, nulljoinup, joinlist)
+      FI;
+
+      UNITC uc = (unit OF nulltprocs)(u, tprocs);
+
+      IF NOT bodyseries
+      THEN  mark_join(joinup, newclose, diag);
+            joinlist := join_completeness(joinlist, newclose, diag)
+      FI;
+      uc
+   END;
+
+   PROC useries_expand= (REF USERIES us, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      UNITC uc = body_unit(us, tprocs);
+      CASE u OF uc IN
+      (REF USERIES user)
+         ( SERIESC sc = series_decl(body OF user);
+           IF c OF sc
+           THEN (HEAP USERIES:= (s OF sc, output OF user), TRUE)
+           ELSE uc
+           FI
+         )
+      OUT sys fault("useries_expand"); SKIP
+      ESAC
+   END;
+
+   PROC usequence_expand = (REF USEQUENCE usq, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      UNITC uc = body_unit(usq, tprocs);
+      CASE u OF uc IN
+      (REF USEQUENCE useq)
+         ( SEQUENCEC sc = sequence_decl(body OF useq);
+           IF c OF sc
+           THEN (HEAP USEQUENCE:= (s OF sc, outputOF useq), TRUE)
+           ELSE uc
+           FI
+         )
+     OUT sys fault("usequence_check"); SKIP
+     ESAC
+   END;
+
+
+   PROC urow_expand = (REF UROW urow, TRANSFORMPROCS tprocs)UNITC:
+   BEGIN
+      FORMULAC fc = (formula OF tprocs)(size OF urow, tprocs);
+      UNITC uc = (unit OF tprocs)(elem OF urow, tprocs);
+      INT size = int(f OF fc);
+      HEAP VECTOR [size] REF JOINUP row;
+      FORALL elem IN row  DO  elem := joinup OD;
+      joinup := MAKEJOINROW row;
+      IF contains_diagnostics(u OF uc) ANDTH size > 1
+      THEN  REF USTR newbody := nilustr;
+            TO size DO newbody := HEAP USTR := (u OF uc, newbody) OD;
+            (newbody, TRUE)
+      ELIF c OF fc OREL c OF uc
+      THEN (HEAP UROW := (f OF fc, u OF uc), TRUE)
+      ELSE (urow, FALSE)
+      FI
+   END;
+
+   PROC uname_nameno = (REF UNAME un) UNITC:
+   BEGIN
+      joinup := find_joinup(nameno OF un, joinlist);
+      IF ( sort OF un = usource)  OREL (sort OF un = usink)
+      THEN coerce_joinup(joinup, sort OF un=usource);
+           CASE joinup IN
+           (JOINIO ji) joinup := IF sort OF un = usource
+                                 THEN source OF ji
+                                 ELSE sink OF ji
+                                 FI
+           OUT SKIP
+           ESAC
+      FI;
+      INT newnameno = newnamenos[nameno OF un];
+      IF newnameno /= nameno OF un
+      THEN  (HEAP UNAME := (sort OF un, newnameno), TRUE)
+      ELSE  (un, FALSE)
+      FI
+   END;
+
+   PROC ustr_joinup = (REF USTR ust, TRANSFORMPROCS tprocs) USTRC:
+   BEGIN
+      INT size := 0;
+      REF USTR u := ust;
+      WHILE u ISNT nilustr DO size PLUSAB 1;  u := rest OF u OD;
+      HEAP VECTOR [size] REF JOINUP row;
+
+      BOOL changed := FALSE;
+      REF USTR us := nilustr;        REF REF USTR ustrptr := us;
+      u := ust;
+
+      FOR index WHILE u ISNT nilustr
+      DO  UNITC uc = (unit OF tprocs)(elem OF u, tprocs);
+          IF c OF uc THEN changed := TRUE FI;
+          row[index] := joinup;
+          joinup := nulljoinup;
+          ustrptr := rest OF (REF REF USTR (ustrptr)
+                               := HEAP USTR := (u OF uc, nilustr) );
+          u := rest OF u
+      OD;
+      joinup := MAKEJOINROW row;
+      IF changed THEN (us, TRUE) ELSE (ust, FALSE) FI
+   END;
+
+   PROC udyindex_joinup = (REF UDYINDEX ud, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      UNITC udc = (unit OF tprocs)(unit OF ud, tprocs);
+      REF JOINUP jup := joinup;
+      joinup := nulljoinup;
+      UNITC udic = (unit OF tprocs)(index OF ud, tprocs);
+      joinup := jup;
+      set_unittype(index OF ud, tprocs);
+
+      TYPE ty = unit_type(u OF udic, newfdec, newenv);
+      REF TYPEDEC prim = primtype(ty, (newfdec, newenv));
+      CASE body OF prim IN
+      (REF NEWINTS ni)
+         ( INT lwb = int(lwb OF range OF ni),
+               upb = int(upb OF range OF ni);
+           joinup_trim(joinup, FALSE, lwb, upb)
+         )
+      OUT sys fault("udyindex_joinup")
+      ESAC;
+
+      IF c OF udc OREL c OF udic
+      THEN ( HEAP UDYINDEX := (u OF udc, u OF udic), TRUE)
+      ELSE ( ud, FALSE)
+      FI
+   END;
+
+
+   PROC uinst_joinup = (INSTANCE inst, UNIT left, right, BOOL udinst,
+                                             TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      UNITC luc = IF udinst
+                  THEN (unit OF tprocs)(left, tprocs)
+                  ELSE (unull, FALSE)
+                  FI;
+      mark_join(joinup, newclose, diag);
+      INSTANCEC ic = (instance OF tprocs)(inst, tprocs);
+      UNITC ruc = (unit OF tprocs)(right, tprocs);
+      mark_join(joinup, newclose, diag);
+
+      IF c OF luc  OREL  c OF ruc  OREL c OF ic
+      THEN IF udinst
+           THEN (HEAP UDINST := (u OF luc, i OF ic, u OF ruc), TRUE)
+           ELSE (HEAP UMINST := (i OF ic, u OF ruc), TRUE)
+           FI
+      ELSE (unull, FALSE)
+      FI
+   END;
+
+
+   PROC uchoices = (REF UCHOICES u, TRANSFORMPROCS tprocs, TYPE iptype,
+                    REF USTR tests) UCHOICESC:
+   BEGIN
+      IF u IS niluchoices
+      THEN  (u, FALSE)
+      ELSE  chooser_const := TRUE;
+            UNITC test := (unit OF tprocs)(test OF u, tprocs);
+            joinup := nulljoinup;
+            chooser_const := FALSE;
+            REF USTR newtests :=
+                IF (sort OF u) = elseofchoice THEN nilustr ELSE tests FI;
+            IF const_check(chooser, u OF test, newclose, diag)
+            THEN IF check OF u
+                 THEN choosers_check(iptype, u OF test, newtests, newclose,
+                                     diag)
+                 FI
+            ELSE test := (unull, TRUE)
+            FI;
+            UNITC ans = (unit OF tprocs)(output OF u, tprocs);
+            joinup := nulljoinup;
+
+            newtests := HEAP USTR := (u OF test, newtests);
+            UCHOICESC rest = uchoices(rest OF u, tprocs, iptype, newtests);
+            IF c OF rest  OREL  c OF test  OREL  c OF ans
+            THEN  (HEAP UCHOICES:= (check OF u, sort OF u, u OF test, u OF ans,
+                                    u OF rest), TRUE)
+            ELSE  (u, FALSE)
+            FI
+      FI
+   END;
+
+   PROC ucheck_expand = (REF UCHECK uck, TRANSFORMPROCS tprocs) UNITC:
+       {{ removes check mode }}
+   (  (formula OF tprocs)(check OF uck, tprocs);
+       UNITC uc = (unit OF tprocs)(unit OF uck, tprocs);
+       (u OF uc, TRUE)
+   );
+
+
+   PROC unit_expand = (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      CASE unit IN
+      (REF CPRIM cp)
+         ( INT newtype_cp = set_consttype(typeno OF cp, tprocs);
+           IF typeno OF cp /= newtype_cp
+           THEN  (HEAP CPRIM := (newtype_cp, primno OF cp), TRUE)
+           ELSE  (cp, FALSE)
+           FI
+         ),
+      (REF CINT ci)
+         ( INT newtype_ci = set_consttype(typeno OF ci, tprocs);
+           FORMULAC fc = (formula OF tprocs)(index OF ci, tprocs);
+           IF c OF fc  OREL  typeno OF ci /= newtype_ci
+           THEN  (HEAP CINT := (newtype_ci, f OF fc), TRUE)
+           ELSE  (ci, FALSE)
+           FI
+         ),
+      (REF CQUOTE cq)
+         ( INT newtype_cq = set_consttype(typeno OF cq, tprocs);
+           IF typeno OF cq /= newtype_cq
+           THEN  (HEAP CQUOTE := (newtype_cq, string OF cq), TRUE)
+           ELSE  (cq, FALSE)
+           FI
+         ),
+      (REF CNAME cn)
+         ( REF CONSTDEC cdec = (consts OF env OF oldclose)[constno OF cn];
+           UNITC cnc =
+             IF sort OF cdec = macpardec
+             THEN (subs_cmpar(cn), TRUE)
+             ELIF sort OF cdec = localdec
+             THEN UNITC cc = (unit OF tprocs)(value OF cdec, tprocs);
+                  (u OF cc, TRUE)
+             ELSE OUTER oc = find_int_const(closureno OF usage OF cdec,
+                                            ints_consts);
+                  {{ Const value expressed in terms of its own environ }}
+                  paramenv := environ OF oc;
+                  UNITC coc = (unit OF tprocs)(value OF get_outerconst(oc),
+                                               tprocs);
+                  paramenv := nilenviron;
+                  (u OF coc, TRUE)
+             FI;
+           joinup := nulljoinup;
+           IF const_check(value, u OF cnc, newclose, diag)
+           THEN (u OF cnc, TRUE)
+           ELSE (cn, FALSE)
+           FI
+         ),
+      (REF CRANGE cr)
+         ( INT newtypeno = set_consttype(typeno OF cr, tprocs);
+           RANGEC rc = (range OF tprocs)(range OF cr, tprocs);
+           IF c OF rc  OREL  typeno OF cr /= newtypeno
+           THEN  (HEAP CRANGE := (newtypeno, r OF rc), TRUE)
+           ELSE  (cr, FALSE)
+           FI
+         ),
+      (REF CPRIMRANGE cpr)
+         ( INT newtypeno = set_consttype(typeno OF cpr, tprocs);
+           REF VECTOR [] CHAR newchars = find_newchars(newtypeno, newclose);
+           BOOL is_contiguous := TRUE;
+           INT value := ABS newchars[firstno OF cpr];
+           FOR i FROM firstno OF cpr+1 TO lastno OF cpr WHILE is_contiguous
+           DO IF (value PLUSAB 1) /= ABS newchars[i]
+              THEN is_contiguous := FALSE  { assumes ASCII representation }
+              FI
+           OD;
+           IF NOT is_contiguous {change from range to ualts}
+           THEN REF UALTS newalts;
+                REF REF UALTS nextalts := newalts := nilualts;
+                FOR i FROM firstno OF cpr TO lastno OF cpr
+                DO REF REF UALTS(nextalts) := HEAP UALTS
+                                   := (HEAP CPRIM := (newtypeno, i), nilualts);
+                   nextalts := rest OF nextalts
+                OD;
+                (newalts, TRUE)
+           ELSE IF typeno OF cpr /= newtypeno
+                THEN  (HEAP CPRIMRANGE :=
+                            (newtypeno, firstno OF cpr, lastno OF cpr), TRUE)
+                ELSE  (cpr, FALSE)
+                FI
+           FI
+         ),
+      (REF UNAME un)   uname_nameno(un),
+      (REF USTR us)
+         (  USTRC usc = ustr_joinup(us, tprocs);
+            (u OF usc, c OF usc)
+         ),
+      (REF UCONC unc) uconc_expand(unc, tprocs, newclose, diag, joinup),
+      (REF UPORTNAME up)
+         ( UNITC upc = (unit OF nulltprocs)(up, tprocs);
+           CASE u OF upc IN
+           (REF UPORTNAME p) (INT ind = uportname_index(p, env OF newclose);
+                              joinup_trim(joinup, TRUE, ind, ind)
+                            )
+           ESAC;
+           upc
+         ),
+      (REF UINDEX ui)    uindex_expand(ui, tprocs, newclose, joinup),
+      (REF UTRIM ut)     utrim_expand(ut, tprocs, newclose, joinup),
+      (REF UDYINDEX ud)  udyindex_joinup(ud, tprocs),
+      (REF UASSOC ua)
+         ( INT newtypeno = set_consttype(typeno OF ua, tprocs);
+           UNITC uac = (unit OF tprocs)(assoc OF ua, tprocs);
+           joinup := nulljoinup;
+           IF c OF uac  OREL  newtypeno /= typeno OF ua
+           THEN  (HEAP UASSOC := (newtypeno, altno OF ua, u OF uac), TRUE)
+           ELSE  (unit, FALSE)
+           FI
+         ),
+      (REF UEXTRACT ue)
+         ( INT newtypeno = set_consttype(typeno OF ue, tprocs);
+           UNITC uec = (unit OF tprocs)(extract OF ue, tprocs);
+           joinup := nulljoinup;
+           IF c OF uec  OREL  newtypeno /= typeno OF ue
+           THEN  (HEAP UEXTRACT := (u OF uec, newtypeno, altno OF ue), TRUE)
+           ELSE  (unit, FALSE)
+           FI
+         ),
+      (REF UMINST um)
+         ( UNITC umc =
+              uinst_joinup(inst OF um, unull, right OF um, FALSE, tprocs);
+           IF c OF umc
+           THEN umc
+           ELSE (um, FALSE)
+           FI
+         ),
+      (REF UDINST ud)
+         ( UNITC udc =
+               uinst_joinup(inst OF ud, left OF ud, right OF ud, TRUE, tprocs);
+           IF c OF udc
+           THEN udc
+           ELSE (ud, FALSE)
+           FI
+         ),
+      (REF UCASE uca)
+         ( UNITC uc = (unit OF tprocs)(input OF uca, tprocs);
+           joinup := nulljoinup;
+           TYPE t = unit_type(u OF uc, newfdec, newenv);
+           UCHOICESC cc = uchoices(choices OF uca, tprocs, t, nilustr);
+           IF c OF uc  OREL  c OF cc
+           THEN  (HEAP UCASE:= (u OF uc, u OF cc), TRUE)
+           ELSE  (unit, FALSE)
+           FI
+         ),
+      (REF UCOND uc)     ucond_expand(uc, tprocs),
+      (REF UROW ur)      urow_expand(ur, tprocs),
+      (REF UREPL urp)    urepl_expand(urp, tprocs, oldenv, repldecs, joinup),
+      (REF USERIES us)   useries_expand(us, tprocs),
+      (REF USEQUENCE uq) usequence_expand(uq, tprocs),
+      (REF UCHECK uck)   ucheck_expand(uck, tprocs),
+      (REF UBRACKET ub)  ( UNITC ubc = (unit OF tprocs)(unit OF ub, tprocs);
+                           (u OF ubc, TRUE)
+                         )
+      OUT  (unit OF nulltprocs)(unit, tprocs)
+      ESAC
+   END;
+
+
+   PROC mparams_expand = (REF VECTOR [] MACPARAM macparams,
+                          REF VECTOR [] MACSPEC macspecs, TRANSFORMPROCS tprocs)
+                                                        REF VECTOR [] MACPARAM:
+   BEGIN
+      HEAP VECTOR [UPB macparams] MACPARAM newparams;
+      FORALL p IN macparams, np IN newparams, ms IN macspecs
+      DO np :=
+              CASE param OF p IN
+              (ATTRTAG ag)
+                 ( ATTR at = IF paramenv IS nilenviron
+                             THEN tag OF ag
+                             ELSE a OF attr_expand(tag OF ag, tprocs)
+                             FI;
+                   (explicitmacpar, MAKEATTRTAG(at))
+                 ),
+              (FORMULATAG fg) (explicitmacpar, fg),
+              (TYPETAG tg)
+                 ( TYPE ty = IF paramenv IS nilenviron
+                             THEN tag OF tg
+                             ELSE t OF type_expand(tag OF tg, tprocs)
+                             FI;
+                   (explicitmacpar, MAKETYPETAG(ty))
+                 ),
+              (UNITTAG c)
+                 ( UNIT ct = IF paramenv IS nilenviron
+                             THEN tag OF c
+                             ELSE u OF unit_expand(tag OF c, tprocs)
+                             FI;
+                   joinup := nulljoinup;
+                   (explicitmacpar, MAKEUNITTAG(ct))
+                 ),
+              (INSTANCE i)
+                 CASE spec OF ms IN
+                 (FNNAME fn)
+                    ( INSTANCE is = IF paramenv IS nilenviron
+                                    THEN i
+                                    ELSE set_envfn(i, tprocs)
+                                    FI;
+                      IF NOT macro OF (fns OF oldenv)[fnno OF fn]
+                      THEN (explicitmacpar, is)
+                      ELSE REF MACPARINFOS mis := mstable;
+                           WHILE mis ISNT nilmacparinfos
+                           DO IF fnno OF i = fnno OF minfo OF mis
+                              THEN mptable[fnno OF fn] := minfo OF mis
+                              FI;
+                              mis := rest OF mis
+                           OD;
+                           (explicitmacpar, is)
+                      FI
+                    )
+                  OUT sysfault("mparams_expand; FN"); SKIP
+                  ESAC
+             ESAC
+      OD;
+      newparams
+   END;
+
+   PROC macspecs_expand = (REF VECTOR [] MACSPEC mspecs, TRANSFORMPROCS tprocs)
+                                                                  MACSPECSC:
+   BEGIN
+      MACSPECSC msc =
+       IF (m OF params ISNT nilmacparams) ANDTH UPB (m OF params) > 0
+       THEN  force := c OF params;
+             REF VECTOR [] MACPARAM newparams =
+                     mparams_expand(m OF params, mspecs, tprocs);
+             m OF params := newparams;
+             { expand parameters now so paramenv needs only to be used here }
+             HEAP VECTOR [UPB mspecs] MACSPEC new;
+             FORALL m IN mspecs, n IN new, np IN newparams
+             DO  n := (explicitmacpar,
+                    CASE spec OF m IN
+                    (ATTRNAME an)
+                      ( REF ATTRDEC adec = (attrs OF oldenv)[attrno OF an];
+                        HEAP ATTRDEC ad := adec;
+                        value OF ad :=
+                           CASE param OF np IN (ATTRTAG ag) tag OF ag
+                           OUT sysfault("macspecs_expand = atr"); SKIP
+                           ESAC;
+                        INT newattrno = add_envattr(attrno OF an, 0, (ad,TRUE));
+                        MAKEATTRNAME(newattrno)
+                      ),
+                    (FNAME in)
+                      ( REF INTDEC idec = (ints OF oldenv)[intno OF in];
+                        HEAP INTDEC id := idec;
+                        value OF id :=
+                           CASE param OF np IN (FORMULATAG fg) tag OF fg
+                           OUT sysfault("macspecs_expand - formula"); SKIP
+                           ESAC;
+                        INT newintno = add_envint(intno OF in, id);
+                        MAKEFNAME(newintno)
+                      ),
+                    (TNAME tn)
+                      ( REF TYPEDEC odec = (types OF oldenv)[typeno OF tn];
+                        HEAP TYPEDEC td := odec;
+                        body OF td :=
+                           CASE param OF np IN (TYPETAG tg) HEAP TYPETAG := tg
+                           OUT sysfault("macspecs_expand - typebody"); SKIP
+                           ESAC;
+                        INT newtypeno = add_envtype(typeno OF tn, 0, (td,TRUE));
+                        MAKETNAME(newtypeno)
+                      ),
+                    (CNAME cn)
+                      ( REF CONSTDEC cdec = (consts OF oldenv)[constno OF cn];
+                        HEAP CONSTDEC cd := cdec;
+                        value OF cd :=
+                           CASE param OF np IN (UNITTAG cg) tag OF cg
+                           OUT sysfault("macspecs_expand - const"); SKIP
+                           ESAC;
+                        INT newctno = add_envconst(constno OF cn, cd);
+                        MAKECNAME(newctno)
+                      ),
+                    (FNNAME fn)
+                      ( REF FNDEC fdec = (fns OF oldenv)[fnno OF fn];
+                        HEAP UMINST um :=
+                          CASE param OF np IN
+                          (INSTANCE i) (i, unull)
+                          OUT sysfault("macspecs_expand - fn"); SKIP
+                          ESAC;
+                        REF FNDEC fd =
+                            skeleton_fndec(sort OF fdec, macro OF fdec,
+                                           fnname OF fdec, MAKEUNITTAG um);
+                        INT newfnno = add_envfn(fnno OF fn, 0, fd, TRUE, TRUE);
+                        MAKEFNNAME(newfnno)
+                      )
+                    ESAC)
+             OD;
+             (new, TRUE)
+       ELSE  (macspecs OF nulltprocs)(mspecs, tprocs)
+       FI;
+       {{ paramenv only needed for expansion of type and const parameters }}
+       paramenv := nilenviron;
+       force := FALSE;
+       msc
+   END;
+
+
+   PROC seqchoices = (REF SEQCHOICES sc, TRANSFORMPROCS tprocs, TYPE iptype,
+                      REF USTR tests) SEQCHOICESC:
+   BEGIN
+      IF sc IS nilseqchoices
+      THEN  (sc, FALSE)
+      ELSE  chooser_const := TRUE;
+            UNITC test := (unit OF tprocs)(test OF sc, tprocs);
+            joinup := nulljoinup;
+            chooser_const := FALSE;
+            REF USTR newtests :=
+               IF (sort OF sc) = elseofchoice THEN nilustr ELSE tests FI;
+            IF const_check(chooser, u OF test, newclose, diag)
+            THEN IF check OF sc
+                 THEN choosers_check(iptype, u OF test, newtests, newclose,
+                                     diag)
+                 FI
+            ELSE test := (unull, TRUE)
+            FI;
+            SEQSTEPC ans = (seqstep OF tprocs)(output OF sc, tprocs);
+            newtests := HEAP USTR := (u OF test, newtests);
+            SEQCHOICESC rest = seqchoices(rest OF sc, tprocs, iptype, newtests);
+            IF c OF rest  OREL  c OF test  OREL  c OF ans
+            THEN  (HEAP SEQCHOICES:= (check OF sc, sort OF sc, u OF test,
+                                      s OF ans, s OF rest), TRUE)
+            ELSE  (sc, FALSE)
+            FI
+      FI
+   END;
+
+   PROC seqcond_expand = (REF SEQCOND scond, TRANSFORMPROCS tprocs) SEQSTEPC:
+   BEGIN
+      FORMULAC cond = (formula OF tprocs)(cond OF scond, tprocs);
+      IF int(f OF cond) /= 0
+      THEN SEQSTEPC true = (seqstep OF tprocs)(true OF scond, tprocs);
+           (s OF true, TRUE)
+      ELSE SEQSTEPC false = (seqstep OF tprocs)(false OF scond, tprocs);
+           (s OF false, TRUE)
+     FI
+  END;
+
+   PROC seqrow_expand = (REF SEQROW srow, TRANSFORMPROCS tprocs) SEQSTEPC:
+   BEGIN
+      REF SEQUENCE newbody := nilsequence;
+      REF REF SEQUENCE nextelem := newbody;
+      FORMULAC fc = (formula OF tprocs)(size OF srow, tprocs);
+      INT upb = int(f OF fc);
+      FOR i TO upb
+      DO  SEQSTEPC body = (seqstep OF tprocs)(elem OF srow, tprocs);
+          REF REF SEQUENCE (nextelem) :=
+               HEAP SEQUENCE := (s OF body, nilsequence);
+          nextelem := rest OF nextelem
+      OD;
+      (newbody, TRUE)
+   END;
+
+   PROC seqrepl_expand = (REF SEQREPL srepl, TRANSFORMPROCS tprocs) SEQSTEPC:
+   BEGIN
+      REF SEQUENCE newbody := nilsequence;
+      REF REF SEQUENCE nextelem := newbody;
+      REPLICATOR repl = get_replicator(repl OF srepl, oldenv);
+      RANGEC rc = (range OF tprocs)(range OF repl, tprocs);
+      INT lwb = int(lwb OF r OF rc),
+          upb = int(upb OF r OF rc);
+      FOR i  FROM lwb TO upb
+      DO  repldecs[intno OF repl] := i;
+          SEQSTEPC body = (seqstep OF tprocs)(body OF srepl, tprocs);
+          REF REF SEQUENCE (nextelem) :=
+               HEAP SEQUENCE := (s OF body, nilsequence);
+          nextelem := rest OF nextelem
+      OD;
+      (newbody, TRUE)
+   END;
+
+   PROC seqstep_expand = (SEQSTEP seqstep, TRANSFORMPROCS tprocs) SEQSTEPC:
+   BEGIN
+      CASE seqstep IN
+      (REF SEQCASE sca)
+         ( UNITC uc = (unit OF tprocs)(input OF sca, tprocs);
+           joinup := nulljoinup;
+           TYPE t = unit_type(u OF uc, newfdec, newenv);
+           SEQCHOICESC sc = seqchoices(choices OF sca, tprocs, t, nilustr);
+           IF c OF uc  OREL  c OF sc
+           THEN  (HEAP SEQCASE := (u OF uc, s OF sc), TRUE)
+           ELSE  (seqstep, FALSE)
+           FI
+         ),
+      (REF SEQCOND sc)   seqcond_expand(sc, tprocs),
+      (REF SEQREPL sr)   seqrepl_expand(sr, tprocs),
+      (REF SEQROW sw)    seqrow_expand(sw, tprocs),
+      (REF SEQPVAR pp)
+         ( SEQSTEPC sc = (seqstep OF nulltprocs)(seqstep, tprocs);
+           joinup := nulljoinup;
+           IF c OF sc
+           THEN CASE s OF sc IN
+                (REF SEQPVAR sp) const_check(value, init OF sp, newclose, diag)
+                OUT sys fault("seqpvar")
+                ESAC
+           FI;
+           sc
+         )
+      OUT  (seqstep OF nulltprocs)(seqstep, tprocs)
+      ESAC
+   END;
+
+
+   PROC names_nameno = (REF NAMES namelist, TRANSFORMPROCS tprocs,
+                                            BOOL issource) NAMESC:
+   BEGIN
+      IF namelist IS nilnames
+      THEN (nilnames, FALSE)
+      ELSE INT nameno = nameno OF namelist;
+           NAMETYPE nametype = (nametypes OF fdec)[nameno];
+           TYPEC tc = (type OF tprocs)(type OF nametype, tprocs);
+           ATTRC ac = (attr OF tprocs)(attr OF nametype, tprocs);
+           INT newnameno = add_nametype(nameno, name OF nametype, tc, ac);
+           joinlist :=
+              join_setup(nameno, t OF tc, issource, newclose, joinlist);
+
+           NAMESC rest = names_nameno(rest OF namelist, tprocs, issource);
+           IF c OF rest OREL (newnameno /= nameno)
+           THEN (HEAP NAMES := (newnameno, n OF rest), TRUE)
+           ELSE (namelist, FALSE)
+           FI
+      FI
+   END;
+
+   PROC let_expand = (REF LET l, TRANSFORMPROCS tprocs) LETC:
+   BEGIN
+      LETC lc = (let OF nulltprocs)(l, tprocs);
+      mark_join(joinup, newclose, diag);
+      lc
+   END;
+
+   PROC join_expand = (REF JOIN join, TRANSFORMPROCS tprocs) JOINC:
+   BEGIN
+      UNITC luc = (unit OF tprocs)(from OF join, tprocs);
+      mark_join(joinup, newclose, diag);
+      UNITC ruc = (unit OF tprocs)(to OF join, tprocs);
+      mark_join(joinup, newclose, diag);
+      IF c OF luc  OREL  c OF ruc
+      THEN  (HEAP JOIN:= (u OF luc, u OF ruc), TRUE)
+      ELSE  (join, FALSE)
+      FI
+   END;
+
+   PROC repljoin_expand = (REF REPLJOIN rj, TRANSFORMPROCS tprocs) REF REPLJOIN:
+   BEGIN
+      REF JOINS newjoins := niljoins;
+      REF REF JOINS nextjoin := newjoins;
+
+      IF repls OF rj ISNT nilformulas
+      THEN  REPLICATOR repl = get_replicator(formula OF repls OF rj, oldenv);
+            RANGEC rc = (range OF tprocs)(range OF repl, tprocs);
+            INT lwb = int(lwb OF r OF rc),
+                upb = int(upb OF r OF rc);
+            FOR i FROM lwb TO upb
+            DO  repldecs[intno OF repl] := i;
+                HEAP REPLJOIN next := (rest OF repls OF rj, joins OF rj);
+                REF REPLJOIN nextrj = repljoin_expand(next, tprocs);
+                (REF REF JOINS (nextjoin)) := joins OF nextrj;
+                WHILE nextjoin ISNT niljoins DO nextjoin := rest OF nextjoin OD
+            OD;
+            HEAP REPLJOIN:= (nilformulas, newjoins)
+      ELSE  JOINSC jc = (joins OF tprocs)(joins OF rj, tprocs);
+            IF c OF jc
+            THEN  HEAP REPLJOIN:= (nilformulas, j OF jc)
+            ELSE  rj
+            FI
+      FI
+   END;
+
+
+   PROC step_expand = (STEP step, TRANSFORMPROCS tprocs) STEPC:
+   BEGIN
+      CASE step IN
+      (REF REPLJOIN rj) (repljoin_expand(rj, tprocs), TRUE)
+      OUT (step OF nulltprocs)(step, tprocs)
+      ESAC
+   END;
+
+
+
+   PROC print_expand = (REF PRINT print, TRANSFORMPROCS tprocs) PRINTC:
+   BEGIN
+      FORMULAC fc = (formula OF tprocs)(cond OF print, tprocs);
+      DIAGNOSTIC notrace = HEAP DIAG := (FALSE, monitors OF diag, sys fault);
+      IF CASE f OF fc IN (REF FNULL) TRUE OUT int(f OF fc) /= 0 ESAC
+      THEN start_printing;
+           printitems_print(print OF print, tprocs, notrace);
+           end_printing
+      FI;
+      (print, FALSE)
+   END;
+
+   PROC fault_expand = (REF FAULT fault, TRANSFORMPROCS tprocs) FAULTC:
+   BEGIN
+      FORMULAC fc = (formula OF tprocs)(cond OF fault, tprocs);
+      IF CASE f OF fc IN (REF FNULL) TRUE OUT int(f OF fc) /= 0 ESAC
+      THEN  put(out, ("*** FAULT ***", newline));
+            set failure(newclose, diag);
+            start_printing;
+            printitems_print(fault OF fault, tprocs, diag);
+            end_printing;
+            (flt OF diag)("Aborted after FAULT")
+      FI;
+      (fault, FALSE)
+   END;
+
+
+   PROC is_output = (UNIT body) BOOL:
+   BEGIN
+     CASE body IN
+     (REF USERIES us)   CASE output OF us IN (REF UNULL) FALSE OUT TRUE ESAC,
+     (REF USEQUENCE uq) CASE output OF uq IN (REF UNULL) FALSE OUT TRUE ESAC,
+     (REF UATTR ua)     is_output(unit OF ua),
+     (REF UBRACKET ub)  is_output(unit OF ub)
+     OUT TRUE
+     ESAC
+   END;
+
+   PROC fnbody_expand = (FNBODY fnbody, TRANSFORMPROCS tprocs) FNBODYC:
+   BEGIN
+      FNBODYC fc = (fnbody OF nulltprocs)(fnbody, tprocs);
+
+      CASE f OF fc IN
+      (REF UNITTAG ut)
+         ( FNBODYC fdc = fnbody_decl(ut, c OF fc);
+           mark_join(joinup, newclose, diag);
+           IF is_output(tag OF ut)
+           THEN  REF NAMES ts := outputs OF newfdec;
+                 WHILE ts ISNT nilnames
+                 DO  joinup := find_joinup(nameno OF ts, joinlist);
+                     mark_join(joinup, newclose, diag);
+                     ts := rest OF ts
+                 OD
+           FI;
+           joinlist := join_completeness(joinlist, newclose, diag);
+           fdc
+         ),
+      (REF ADELAY ad)   ( adelay_check(ad, FALSE, newclose, diag); fc ),
+      (REF IDELAY id)   ( idelay_check(id, FALSE, newclose, diag); fc ),
+      (REF RAM rm)      ( ram_check(rm, FALSE, newclose, diag); fc ),
+      (REF SAMPLE sp)   ( sample_check(sp, FALSE, newclose, diag); fc ),
+      (REF TIMESCALE ts)( timescale_check(ts, FALSE, newclose, diag); fc ),
+      (REF BODYCHECK bc)
+         ( IF check OF bc
+           THEN CASE fnbody OF bc IN
+                (REF REFORM rf)   reform_check(rf, newclose, diag),
+                (REF ADELAY ad)   adelay_check(ad, TRUE, newclose, diag),
+                (REF IDELAY id)   idelay_check(id, TRUE, newclose, diag),
+                (REF RAM rm)      ram_check(rm, TRUE, newclose, diag),
+                (REF SAMPLE sp)   sample_check(sp, TRUE, newclose, diag),
+                (REF TIMESCALE ts) timescale_check(ts, TRUE, newclose, diag)
+                OUT sys fault("no checks for this mode")
+                ESAC
+           FI;
+           (fnbody OF bc, TRUE)
+         )
+      OUT fc
+      ESAC
+   END;
+
+   { ----------------------------------------------------------------- }
+
+   {{  Instantiations.  There are five categories of instantiations.
+      1. FN  :- no expansion, but fnno may have changed
+      2. Unwanted MAC :- don't expand, treat as 1.
+      3. Local MAC :- call fndec_expand
+      4. Outer MAC with non-local parameters :- call outerfn_expand
+         ( params of MAC expressed in terms of different environ to body )
+      5. Outer MAC with local parameters :- call fndec_expand
+         ( Environ of MAC must be merged with current OUTERFN, uses own
+           translation tables )
+   }}
+
+   INT no_expansion = 0; {1,2}  { local = (3,5) , outer = 4 }
+
+   PROC attr_sort = (ATTR a, REF INT maxattrno) VOID:
+   BEGIN
+      {{ Finds greatest local attrno used in 'a' - macro parameters
+         already translated  }}
+      CASE a IN
+      (REF ATTRNAME an)
+          ( REF ATTRDEC ad =(attrs OF env OF newclose)[attrno OF an];
+            IF (sort OF ad = localdec) ANDTH (attrno OF an > maxattrno)
+            THEN  maxattrno := attrno OF an
+            FI
+          ),
+      (REF ATTRSTR atr)  ( REF ATTRSTR as := atr;
+                           WHILE (as ISNT nilattrstr)
+                           DO  attr_sort(elem OF as, maxattrno);
+                               as := rest OF as
+                           OD
+                         ),
+      (REF ATTRBRACKET ab) attr_sort(attr OF ab, maxattrno)
+      OUT SKIP
+      ESAC
+   END;
+
+   PROC type_sort = (TYPE t, REF INT maxtypeno) VOID:
+   BEGIN
+      {{ Finds greatest local typeno used in 't' - macro parameters
+         already translated  }}
+      CASE t IN
+      (REF TNAME tn)
+               ( REF TYPEDEC td =(types OF env OF newclose)[typeno OF tn];
+                 IF (sort OF td = localdec) ANDTH (typeno OF tn > maxtypeno)
+                 THEN  maxtypeno := typeno OF tn
+                 FI
+               ),
+      (REF TROW tr)     type_sort(elem OF tr, maxtypeno),
+      (REF TSTR tstr)   ( REF TSTR ts := tstr;
+                          WHILE (ts ISNT niltstr)
+                          DO  type_sort(elem OF ts, maxtypeno);
+                              ts := rest OF ts
+                          OD
+                        ),
+      (REF TFN tfn)     ( type_sort(to OF tfn, maxtypeno);
+                          type_sort(from OF tfn, maxtypeno)
+                        ),
+      (REF TSTRING tg)  type_sort(char OF tg, maxtypeno),
+      (REF TBRACKET tb) type_sort(type OF tb, maxtypeno)
+      OUT SKIP
+      ESAC
+   END;
+
+   PROC macparam_sort = (REF VECTOR [] MACPARAM params,
+                         REF INT maxattrno, maxtypeno, maxfnno) VOID:
+   BEGIN
+      IF (params ISNT nilmacparams) THEN
+      FORALL p IN params
+      DO  CASE param OF p IN
+          (ATTRTAG ag)
+             ( INT mtattrno := 0;
+               attr_sort(tag OF ag, mtattrno);
+               IF mtattrno > maxattrno THEN maxattrno := mtattrno FI
+             ),
+          (TYPETAG tg)
+             ( INT mttypeno := 0;
+               type_sort(tag OF tg, mttypeno);
+               IF mttypeno > maxtypeno THEN maxtypeno := mttypeno FI
+             ),
+          (UNITTAG cg)
+             ( TYPE ty = unit_type(tag OF cg, fdec OF newclose,env OF newclose);
+               INT mctypeno := 0;
+               type_sort(ty, mctypeno);
+               IF mctypeno > maxtypeno THEN maxtypeno := mctypeno FI
+             ),
+          (INSTANCE ig)
+             ( REF FNDEC fd = (fns OF env OF newclose)[fnno OF ig];
+               IF ( (sort OF fd = localdec) ANDTH  { ignore inst of MAC param }
+                     CASE fnbody OF fd IN (REF BODYNULL) FALSE OUT TRUE ESAC )
+                  ANDTH (fnno OF ig > maxfnno)
+               THEN maxfnno := fnno OF ig
+               FI
+             )
+          OUT SKIP
+          ESAC
+      OD
+      FI
+   END;
+
+
+
+   PROC instance_outer = (INSTANCE inst, REF FNDEC fdec, MACPARAMSC mpc,
+                                         TRANSFORMPROCS tprocs) INSTANCEC:
+   BEGIN
+      OUTER nf;
+      IF sort OF fdec /= outerdec THEN sys fault("instance_outer") FI;
+      INT oldfnno = fnno OF inst;
+      BOOL specchanged := FALSE;
+      INT closno = closureno OF usage OF fdec;
+      INT newclosno := find_closureno(closno, m OF mpc, specchanged);
+      INT newfnno := -1;
+      IF newclosno = -1
+      THEN {{ first time in closure with these parameters }}
+           REF VECTOR [] MACPARAM xparams :=
+              IF (m OF mpc ) ISNT nilmacparams
+              THEN  HEAP VECTOR [UPB m OF mpc] MACPARAM mp;
+                    FORALL m IN m OF mpc, n IN mp DO n := m OD;
+                    mp 
+              ELSE nilmacparams
+              FI;          
+           OUTER of = outer OF find_outers(closno, oldclosure, msg);
+           OUTERC ofc = outerfn_expand(of, tprocs, (xparams, c OF mpc),
+                                       inst_mstable, newenv, specchanged, 
+                                       monitors OF diag);
+           {{ xparams now in terms in environ of expanded macro }}
+           newclosno := add_outerfn(closno, ofc, xparams, specchanged);
+           nf := o OF ofc
+      ELSE monitor instance(fnname OF fdec, m OF mpc, newclose, diag);
+           newfnno := fnusage_fnno(oldfnno, newclosno);
+           IF newfnno = -1
+           THEN nf := outer OF find_outers(newclosno, newclosure, msg)
+           FI
+      FI;
+      IF newfnno = -1
+      THEN {{ first time in current fn with these parameters }}
+           REF FNDEC fdec = get_outerfn(nf);
+           paramenv := environ OF nf; {{ adds type aliases to environ }}
+           force := specchanged;
+           TYPEC tc = (type OF tprocs)(fndec_tfn(fdec), tprocs);
+           force := FALSE;
+           HEAP FNDEC usedfdec := translate_fndec(fdec, paramenv, newenv);
+           fnbody OF usedfdec := bodynull;
+           newfnno:= add_envfn(oldfnno, 0, usedfdec, TRUE, TRUE);
+           macpartable[newfnno] := m OF mpc;
+           paramenv := nilenviron
+      FI;
+      ATTRC ac = (attr OF tprocs)(attr OF inst, tprocs);
+      ((newfnno, m OF mpc, a OF ac), TRUE)
+   END;
+
+   PROC instance_inner = (INSTANCE inst, REF FNDEC fn, MACPARAMSC mpc,
+                          INT maxattrno, maxtypeno, maxfnno,
+                          REF FNDECENV inst_info, TRANSFORMPROCS tprocs)
+                                                                    INSTANCEC:
+   BEGIN
+      INT depth = depth OF monitors OF diag;
+      INT oldfnno = fnno OF inst;
+      HEAP FNDECENV i_info :=
+        (old OF inst_info, subs_ampar, subs_fmpar, subs_tmpar, subs_cmpar,
+        subs_fnmpar, repldecs, mptable OF inst_info, newenvattrnos OF inst_info,
+         newenvtypenos OF inst_info, newenvfnnos OF inst_info);
+
+      INT newfnno := fndec_fnno(m OF mpc, oldfnno, depth);
+      REF FNDEC fdec =
+         IF sort OF fn = outerdec
+         THEN INT closno = closureno OF usage OF fn;
+              OUTER ofn = outer OF find_outers(closno, oldclosure, msg);
+              IF newfnno = -1
+              THEN REF ENVIRON i_env = environ OF ofn;
+                   old OF i_info := i_env;
+                   VECTOR [UPB ints OF i_env] INT i_rdecs;
+                   FORALL r IN i_rdecs DO r := -9999 OD;
+                   repldecs OF i_info := i_rdecs;
+                   newenvattrnos OF i_info := merge_envattrs(newenv, i_env);
+                   newenvtypenos OF i_info := merge_envtypes(newenv, i_env);
+                   newenvfnnos OF i_info := merge_envfns(newenv, i_env)
+              FI;
+              get_outerfn(ofn)
+         ELSE
+               fn
+         FI;
+      IF newfnno = -1  {{ first time expanded with these parameters }}
+      THEN  BOOL ignore := FALSE;
+            FNDECC fc = fndec_expand(fdec, tprocs, mpc, inst_mstable, nilenviron,
+                                     i_info, ignore, monitors OF diag);
+            IF sort OF f OF fc = outerdec
+            THEN sort OF f OF fc := localdec
+            FI;
+            newfnno := add_envfn(oldfnno, depth, f OF fc, FALSE, c OF fc);
+            macpartable[newfnno] := m OF mpc;
+            IF maxattrno > 0
+            THEN macattrdecls[maxattrno] := HEAP DECSLIST :=
+                          (newenvfnnos[oldfnno], mactypedecls[maxtypeno])
+            FI;
+            IF maxtypeno > 0
+            THEN mactypedecls[maxtypeno] := HEAP DECSLIST :=
+                          (newenvfnnos[oldfnno], mactypedecls[maxtypeno])
+            FI;
+            IF maxfnno > 0
+            THEN macfndecls[maxfnno] := HEAP DECSLIST :=
+                      (newenvfnnos[oldfnno], macfndecls[maxfnno])
+            FI
+      ELSE  monitor instance(fnname OF fdec, m OF mpc, newclose, diag)
+      FI;
+      ATTRC ac = (attr OF tprocs)(attr OF inst, tprocs);
+      ((newfnno, m OF mpc, a OF ac), TRUE)
+   END;
+
+   PROC instance_no_expand = (INSTANCEC ic, REF FNDEC fn, MACPARAMSC mpc,
+                              BOOL mac_par, TRANSFORMPROCS tprocs) INSTANCEC:
+   BEGIN
+      INT oldfnno = fnno OF i OF ic;
+      INT newfnno := translate_envno(oldfnno, newenvfnnos);
+      IF newfnno = 0  {{ not yet added to ENVIRON }}
+      THEN  FNDECC fcc =
+              IF mac_par
+              THEN ( skeleton_fndec(localdec, macro OF fn, fnname OF fn,
+                                    bodynull),
+                     TRUE )
+              ELSE HEAP VECTOR [UPB nametypes OF fn] NAMETYPE nts :=
+                        nametypes OF fn;
+                   BOOL specchange := FALSE;
+                   FORALL nt IN nts
+                   DO  TYPEC tc = (type OF tprocs)(type OF nt, tprocs);
+                       IF c OF tc THEN specchange := TRUE FI;
+                       type OF nt := t OF tc
+                   OD;
+                   IF specchange
+                   THEN  HEAP FNDEC nfd := fn;
+                         nametypes OF nfd := nts;
+                         (nfd, TRUE)
+                   ELSE  (fn, FALSE)
+                   FI
+              FI;
+            newfnno := add_envfn(oldfnno, 0, f OF fcc, TRUE, c OF fcc)
+      FI;
+      ATTRC ac = (attr OF tprocs)(attr OF i OF ic, tprocs);
+      IF (newfnno /= oldfnno) OREL c OF mpc OREL c OF ac
+      THEN  ((newfnno, m OF mpc, a OF ac), TRUE)
+      ELSE  ic
+      FI
+   END;
+
+
+   PROC instance_expand = (INSTANCE inst, BOOL dont_expand,
+                                          TRANSFORMPROCS tprocs) INSTANCEC:
+   BEGIN
+      MACPARAMSC mpc = (macparams OF tprocs)(macparams OF inst, tprocs);
+
+      INSTANCEC ic := (inst, FALSE);
+      REF FNDEC fn := (fns OF oldenv)[fnno OF inst];
+      REF FNDECENV inst_info := info;
+      BOOL is_in_newenv := FALSE;
+
+      IF sort OF fn = macpardec
+      THEN is_in_newenv := TRUE;
+           IF NOT macro OF fn
+           THEN INSTANCE macpar = subs_fnmpar(MAKEFNNAME(fnno OF inst));
+                ATTR atts = append_attrs(attr OF inst, attr OF macpar);
+                ic := ((fnno OF macpar, macparams OF macpar, atts), TRUE)
+           ELSE REF MACPARINFO mi = mptable[fnno OF inst];
+                fn := fdec OF mi;
+                inst_info := info OF mi;
+                ic := ((fnno OF mi, nilmacparams, attr OF inst), TRUE)
+           FI
+      FI;
+
+      INT maxattrno := 0, maxtypeno := 0, maxfnno := 0;
+      INT sort =
+        IF dont_expand
+        THEN no_expansion
+        ELIF macro OF fn
+        THEN IF sort OF fn = outerdec
+             THEN IF wanted(fnname OF fn, not_wanted)
+                  THEN  macparam_sort(m OF mpc, maxattrno, maxtypeno, maxfnno);
+                        IF (maxattrno>0) OREL (maxtypeno > 0) OREL (maxfnno > 0)
+                        THEN localdec ELSE outerdec
+                        FI
+                  ELSE  no_expansion
+                  FI
+             ELSE macparam_sort(m OF mpc, maxattrno, maxtypeno, maxfnno);
+                  localdec
+             FI
+        ELSE no_expansion
+        FI;
+
+      IF sort = outerdec
+      THEN instance_outer(i OF ic, fn, mpc, tprocs)
+      ELIF sort = localdec
+      THEN instance_inner(i OF ic, fn, mpc, maxattrno, maxtypeno, maxfnno,
+                          inst_info, tprocs)
+      ELIF sort = no_expansion
+      THEN IF is_in_newenv
+           THEN ic { FN/MAC macro parameters already in terms of new environ }
+           ELSE instance_no_expand(ic, fn, mpc, dont_expand ANDTH macro OF fn,
+                                   tprocs)
+           FI
+      ELSE sys fault("instance_expand:illegal sort"); SKIP
+      FI
+   END;
+
+
+   PROC mparam_expand = (MPARAM mp, TRANSFORMPROCS tprocs) MPARAMC:
+   BEGIN
+      CASE mp IN
+      (INSTANCE inst)
+         ( BOOL is_macpar = (macparams OF inst IS nilmacparams);
+           INSTANCEC ic = instance_expand(inst, is_macpar, tprocs);
+           IF is_macpar
+           THEN inst_mstable := HEAP MACPARINFOS :=
+                  ( HEAP MACPARINFO :=   { unexpanded version }
+                     (fnno OF i OF ic, (fns OF oldenv)[fnno OF inst], info),
+                    inst_mstable
+                  )
+           FI;
+           (i OF ic, c OF ic)
+         ),
+      (UNITTAG ctag)
+         ( chooser_const := TRUE;
+           UNITC cc = (unit OF tprocs)(tag OF ctag, tprocs);
+           joinup := nulljoinup;
+           chooser_const := FALSE;
+           IF c OF cc
+           THEN  (MAKEUNITTAG (u OF cc), TRUE)
+           ELSE  (mp, FALSE)
+           FI
+         )
+      OUT (mparam OF nulltprocs)(mp, tprocs)
+      ESAC
+   END;
+
+   PROC macparams_expand =
+            (REF VECTOR [] MACPARAM mps, TRANSFORMPROCS tprocs) MACPARAMSC:
+   BEGIN
+      IF mps ISNT nilmacparams
+      THEN  HEAP VECTOR [UPB mps] MACPARAM  new;
+            BOOL  changed:= FALSE;
+            FORALL o IN mps, n IN new
+            DO  MPARAMC  mp = (mparam OF tprocs)(param OF o, tprocs);
+                IF c OF mp OREL (sort OF o = implicitmacpar)
+                THEN  changed:= TRUE
+                FI;
+                n:= (IF sort OF o = implicitmacpar
+                     THEN explicitmacpar
+                     ELSE sort OF o
+                     FI,
+                     m OF mp)
+            OD;
+            IF changed THEN (new, TRUE)  ELSE  (mps, FALSE)  FI
+      ELSE  (mps, FALSE)
+      FI
+   END;
+
+
+
+
+   {{ ********** start of expansion of FNDEC ************** }}
+
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+     ( unit_expand,
+       attrstr_expand,
+       attr_expand,
+       formula_expand,
+       type_expand,
+       seqstep_expand,
+       step_expand,
+       join_expand,
+       let_expand,
+       (REF NAMES n, TRANSFORMPROCS tp) NAMESC: names_nameno(n, tp, TRUE),
+       fault_expand,
+       print_expand,
+       fnbody_expand,
+       macparams_expand,
+       mparam_expand,
+       (INSTANCE i, TRANSFORMPROCS tp) INSTANCEC: instance_expand(i, FALSE, tp),
+       decl_inner
+    ));
+
+   set monitor(fdec, diag);
+
+   MACSPECSC msc = macspecs_expand(macspecs OF fdec, newtprocs);
+   IF c OF msc THEN macspecs OF newfdec := m OF msc FI;
+   ATTRC ac = attr_expand(attr OF fdec, newtprocs);
+   attr OF newfdec := a OF ac;
+
+   monitor fn(macspecs OF newfdec, newclose, diag);
+   joinlist := HEAP JOINLIST := (-1, nulljoinup, joinlist);
+
+   NAMESC ic = names_nameno(inputs OF fdec, newtprocs, TRUE);
+   NAMESC oc = names_nameno(outputs OF fdec, newtprocs, FALSE);
+   inputs OF newfdec := n OF ic;
+   outputs OF newfdec := n OF oc;
+   iochange := nametypechange;
+
+   FNBODYC bodyc= (fnbody OF newtprocs)(fnbody OF fdec, newtprocs);
+   IF c OF bodyc THEN fnbody OF newfdec := f OF bodyc FI;
+
+   reset scope(depth OF monitors OF diag);
+   reset monitor(diag);
+
+   REF REF VECTOR [] NAMETYPE nametypes = nametypes OF newfdec;
+   IF nametypeno < UPB nametypes
+   THEN  IF NOT nametypechange
+         THEN  nametypechange := TRUE;
+               nametypes := HEAP VECTOR[nametypeno]NAMETYPE
+                         := nametypes[:nametypeno]
+         ELSE  nametypes := nametypes[:nametypeno]
+         FI
+   FI;
+
+   IF was_macro OREL nametypechange  OREL  c OF msc  OREL  c OF ac
+        OREL c OF ic  OREL c OF oc  OREL  c OF bodyc
+   THEN  (newfdec, TRUE)
+   ELSE  (fdec, FALSE)
+   FI
+END;  {{ of PROC fndec_expand }}
+
+   VECTOR [UPB attrs OF oenv] REF USELIST newenvattrnos;
+   FORALL attrnos IN newenvattrnos DO attrnos := niluselist OD;
+
+   VECTOR [UPB types OF oenv] REF USELIST newenvtypenos;
+   FORALL typenos IN newenvtypenos DO typenos := niluselist OD;
+
+   VECTOR [UPB fns OF oenv] REF USELIST newenvfnnos;
+   FORALL fnnos IN newenvfnnos DO fnnos := niluselist OD;
+
+   REF FNDEC fdec = get_outerfn(ofn);
+   FNDECC fdecc = fndec_expand(fdec, tprocs, params, mstable, paramenv,
+                               HEAP FNDECENV := ( oenv, nilampar, nilfmpar,
+                               niltmpar, nilcmpar, nilfnmpar, rdecs, mptable,
+                               newenvattrnos, newenvtypenos, newenvfnnos),
+                               iochange, monitors);
+
+
+   REF REF VECTOR [] REF ATTRDEC attrs = attrs OF newenv;
+   REF REF VECTOR [] REF TYPEDEC types = types OF newenv;
+   REF REF VECTOR [] REF FNDEC fns = fns OF newenv;
+
+   IF sort OF fdec /= outerdec THEN sys fault("first dec") FI;
+   IF c OF fdecc ANDTH NOT envfnchanged
+   THEN  envfnchanged := TRUE;
+         fns := HEAP VECTOR [UPB fns] REF FNDEC := fns
+   FI;
+   INT newclosureno := closureno OF usage OF f OF fdecc;
+   IF macro OF fdec
+   THEN newclosureno := reserve_next_closureno(newclosure);
+        usage OF f OF fdecc := HEAP USAGE := usage OF fdec;
+        closureno OF usage OF f OF fdecc := newclosureno
+        {{ at end of transformation oldclosureno wil be added to free list }}
+   FI;
+   fns[1] := f OF fdecc;
+
+   IF envintno < UPB ints OF newenv
+   THEN IF envintno = 0
+        THEN envintchanged := TRUE;
+             ints OF newenv := nullintdecs
+        ELSE ints OF newenv := (ints OF newenv)[:envintno]
+        FI
+   FI;
+   IF envconstno < UPB consts OF newenv
+   THEN IF envconstno = 0
+        THEN envconstchanged := TRUE;
+             consts OF newenv := nullconstdecs
+        ELSE consts OF newenv := (consts OF newenv)[:envconstno]
+        FI
+   FI;
+
+   IF envattrno < UPB attrs
+   THEN  IF NOT envattrchanged
+         THEN  envattrchanged := TRUE;
+               attrs := HEAP VECTOR [envattrno] REF ATTRDEC := attrs[:envattrno]
+         ELSE  attrs := attrs[:envattrno]
+         FI
+   FI;
+   IF envtypeno < UPB types
+   THEN  IF NOT envtypechanged
+         THEN  envtypechanged := TRUE;
+               types := HEAP VECTOR [envtypeno] REF TYPEDEC := types[:envtypeno]
+         ELSE  types := types[:envtypeno]
+         FI
+   FI;
+   IF envfnno < UPB fns
+   THEN  IF NOT envfnchanged
+         THEN  envfnchanged := TRUE;
+               fns := HEAP VECTOR [envfnno] REF FNDEC := fns[:envfnno]
+         ELSE  fns := fns[:envfnno]
+         FI
+   FI;
+
+   IF envattrchanged  OREL  envtypechanged  OREL  envfnchanged
+      OREL envintchanged OREL envconstchanged OREL c OF fdecc
+   THEN ((newclosureno, outerfn, newenv), TRUE)
+   ELSE (ofn, FALSE)
+   FI
+END;  {{ end of PROC outerfn_expand }}
+
+
+
+DIAGNOSTIC outerdiag = HEAP DIAG := (trace, nilmonitor, flt);
+
+
+PROC outer_expand = (OUTER o, TRANSFORMPROCS tprocs) OUTERC:
+BEGIN
+   CLOSED close = (nilfndec, environ OF o);
+   HEAP ENVIRON  newenv := environ OF o;
+   BOOL  ac := FALSE, tc:= FALSE;
+
+   REF REF VECTOR [] REF ATTRDEC attrs = attrs OF newenv;
+   REF REF VECTOR [] REF TYPEDEC types = types OF newenv;
+   VECTOR [UPB ints OF environ OF o] INT repldecs;
+   FORALL r IN repldecs DO r := -9999 OD;
+
+   PROC attr_outer = (ATTR attr, TRANSFORMPROCS tprocs) ATTRC:
+      CASE attr IN
+      (REF ATTRNAME an)
+        ( REF ATTRDEC adec = attrs[attrno OF an];
+          ATTRDECC  adecc = (attrdec OF tprocs)(adec, tprocs);
+          IF c OF adecc
+          THEN  IF ac
+                THEN  adec:= a OF adecc
+                ELSE  ac:= TRUE;
+                      attrs:= HEAP VECTOR [UPB attrs] REF ATTRDEC := attrs;
+                      attrs[attrno OF an]:= a OF adecc
+                FI
+          FI;
+          (attr, FALSE)
+       ),
+      (REF ATTRBRACKET ab) ( ATTRC ac = (attr OF tprocs)(attr OF ab, tprocs);
+                             (a OF ac, TRUE)
+                           )
+      OUT (attr OF nulltprocs)(attr, tprocs)
+      ESAC;
+
+   PROC formula_outer = ( FORMULA formula, TRANSFORMPROCS tprocs) FORMULAC:
+      CASE formula IN
+      (REF FNAME fn) fname_evaluate(fn, tprocs, close, repldecs, nilfmpar),
+      (REF FCHECK fck)  fcheck_evaluate(fck, tprocs, close, outerdiag),
+      (REF FDOP fd)     fdop_simplify(fd, tprocs, close, outerdiag),
+      (REF FMOP fm)     fmop_simplify(fm, tprocs, close, outerdiag),
+      (REF FCOND fc)    fcond_simplify(fc, tprocs),
+      (REF FBRACKET fb)
+        ( FORMULAC fc = (formula OF tprocs)(formula OF fb, tprocs);
+          (f OF fc, TRUE)
+        )
+      {{ NOTE no macro parameters allowed                }}
+      {{      in outer INT, TYPE or CONST declarations   }}
+      OUT (formula OF nulltprocs)(formula, tprocs)
+      ESAC;
+
+
+   PROC type_outer = (TYPE type, TRANSFORMPROCS tprocs) TYPEC:
+      CASE type IN
+      (REF TNAME tn)
+        ( REF TYPEDEC tdec = types[typeno OF tn];
+          TYPEDECC  tdecc = (typedec OF tprocs)(tdec, tprocs);
+          IF c OF tdecc
+          THEN  IF tc
+                THEN  tdec:= t OF tdecc
+                ELSE  tc:= TRUE;
+                      types:= HEAP VECTOR [UPB types] REF TYPEDEC := types;
+                      types[typeno OF tn]:= t OF tdecc
+                FI
+          FI;
+          (type, FALSE)
+       ),
+      (REF TBRACKET tb)( TYPEC tc = (type OF tprocs)(type OF tb, tprocs);
+                         (t OF tc, TRUE)
+                       )
+      OUT (type OF nulltprocs)(type, tprocs)
+      ESAC;
+
+   PROC const_outer = (UNIT const, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      REF JOINUP j := nulljoinup; {joinup not used}
+      CASE const IN
+      (REF CNAME cn)
+         ( REF CONSTDEC cdec = (consts OF env OF close)[constno OF cn];
+           IF sort OF cdec /= outerdec
+           THEN sys fault("const_outer"); SKIP
+           ELSE OUTER oc =
+                   find_int_const(closureno OF usage OF cdec, ints_consts);
+                UNITC coc = (unit OF tprocs)
+                                (value OF (consts OF environ OF oc)[1], tprocs);
+                (u OF coc, TRUE)
+           FI
+         ),
+      (REF UBRACKET cb)  ( UNITC cc = (unit OF tprocs)(unit OF cb, tprocs);
+                           (u OF cc, TRUE)
+                         ),
+      (REF UREPL ur)     urepl_expand(ur, tprocs, env OF close, repldecs, j),
+      (REF UCOND uc)     ucond_expand(uc, tprocs),
+      (REF UCONC un)     uconc_expand(un, tprocs, close, outerdiag, j),
+      (REF UINDEX ui)    uindex_expand(ui, tprocs, close, j),
+      (REF UTRIM ut)     utrim_expand(ut, tprocs, close, j)
+      OUT (unit OF nulltprocs)(const, tprocs)
+      ESAC
+   END;
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+     ( formula_outer,
+       attr_outer,
+       type_outer,
+       const_outer
+     ));
+
+
+   CASE sort OF o IN
+   {outerattr}
+      ( ATTRC anc = (attr OF newtprocs)(MAKEATTRNAME(1), newtprocs);
+        IF c OF anc OREL ac
+        THEN ((closureno OF o, sort OF o, newenv), TRUE)
+        ELSE (o, FALSE)
+        FI
+      ),
+   {outerint} (outer OF nulltprocs)(o, newtprocs),
+   {outertype}
+      ( TYPEC tnc = (type OF newtprocs)(MAKETNAME(1), newtprocs);
+        IF c OF tnc OREL tc
+        THEN ints OF newenv:= nullintdecs;
+             ((closureno OF o, sort OF o, newenv), TRUE)
+        ELSE (o, FALSE)
+        FI
+      ),
+   {outerconst} (outer OF nulltprocs)(o, newtprocs),
+   {outerfn}  (sysfault("use outerfn_expand"); SKIP)
+   ESAC
+END;
+
+
+   REF OUTERS old := outers OF oldclosure;
+
+   WHILE old ISNT nilouters
+   DO BOOL keep := FALSE;
+      OUTER o = outer OF old;
+      OUTERC oc =
+         CASE sort OF o IN
+         {outerattr}  ( keep := TRUE;
+                        outer_expand(o, nulltprocs)
+                      ),
+         {outerint}   ( OUTERC oic = outer_expand(o, nulltprocs);
+                        ints_consts := HEAP OUTERS := (o OF oic, ints_consts);
+                        oic
+                      ),
+         {outertype}  ( keep := TRUE;
+                        outer_expand(o, nulltprocs)
+                      ),
+         {outerconst} ( OUTERC occ = outer_expand(o, nulltprocs);
+                        ints_consts := HEAP OUTERS := (o OF occ, ints_consts);
+                        occ
+                      ),
+         {outerfn}
+           ( IF NOT macro OF (fns OF environ OF o)[1]
+             THEN keep := TRUE;
+                  REF VECTOR [] MACPARAM mp := NIL;
+                  IF needs_expanding(o)
+                  THEN BOOL ignore := FALSE;
+                       outerfn_expand(o, nulltprocs, (mp, FALSE), NIL, NIL,
+                                      ignore, nilmonitor)
+                  ELSE REF FNDEC fdec = get_outerfn(o);
+                       DIAGNOSTIC diag := HEAP DIAG := (trace, nilmonitor, flt);
+                       CLOSED cl = (fdec, environ OF o);
+                       set monitor(fdec, diag);
+                       monitor fn(macspecs OF fdec, cl, diag);
+                       (o, FALSE)
+                  FI
+             ELSE (o, FALSE)
+             FI
+           )
+         OUT sys fault("expand"); SKIP
+         ESAC;
+
+      IF c OF oc OREL NOT keep THEN update_closure FI;
+      IF keep
+      THEN  outer OF newptr := o OF oc;
+            newptr := rest OF newptr
+      ELSE  free_outers(newptr, newclosure, msg)
+      FI;
+      old := rest OF old
+   OD;
+
+   IF failure THEN flt("Errors found in assembly") FI;
+
+   IF closurechanged
+   THEN (newclosure, TRUE)
+   ELSE (oldclosure, FALSE)
+   FI
+END;   {{ end OF PROC expand }}
+
+
+SKIP
+KEEP   expand
+FINISH

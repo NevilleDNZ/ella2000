@@ -1,0 +1,1399 @@
+DECS keamcase CONTEXT VOID USE  putstrings, basics, kesymbols, keambasics,
+     keamstandard, kebasics, kesignals, keconv:
+
+{ " Id: keamcase.sta,v 2.2 91/05/25 17:04:15 par Exp$" }
+configinfo A68CONFIG "$Id: keamcase.a68,v 34.2 1995/03/29 13:04:34 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:09:88  Module created to implement CASE clause atomic functions
+20:12:88  Coding of primitive tests made more efficient.  PAR
+21:12:88  Translation time of large patterns reduced.  PAR
+30:12:88  'translate case' takes 'input wires' and passed to
+              'output unit' (preparation for bug 55)  PAR.
+ 6:01:89  SELECTORs added to represent the input.  Bugs 55, 88, 89.  PAR
+ 9:01:89  Constant outputs identified correctly.  Bug 55.  PAR.
+10:01:89  Size calculations for tautologous patterns corrected, and
+              only done once.  Bug 89.  PAR.
+11:01:89  CCHARRANGE case added to 'element test'.  Bug 108.  PAR.
+14:01:89  Correction to `simplify pattern'.  Bug 115. BJE.
+15:01:89  Extra optimisation of 'disjoin'.  PAR.
+18:01:89  Corrections to 'element test' (and general recursion pattern)
+              (bug 123) and to 'make selector'.  PAR.
+20:01:89  Extra case in 'simplify pattern'.  Bug 126.  R4B036. PAR.
+20:01:89  Error in correction to bug 123.  Bug 129.  R4B039.  PAR.
+13:02:89  Fix to 'output unit' on USTR and UROW.  R4B121.  PAR.
+10:04:89  Change to signal encoding for speedup.  R4B134.  PAR.
+23:05:89  Misuse of pushstring.  R4B340.  SPT.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+09:08:89  Fixed 'output unit' for R4B317 and R4B389.  PAR.
+24:08:89  Parameters to 'translate copy inputs' changed.  R4B150.  PAR.
+10:11:89  CR 638. CTYPE mode now TYPE not INT typeno.  EVW
+02:05:91  Fix for incident 00103 (change to size passed to "string test"
+              so that it is the exact size in bits).  PAR.
+31:07:92  Changes made for CONST / UNIT mode change. JIT
+13:11:92  Updated for 'chars' mode changes. JIT
+27:10:93  R6B202: now handles CVOID in simplify pattern. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.024 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ A General Note
+  ==============
+
+  The expansion to primitive functions used in the current version of
+  this simulator is somewhat drastic, and should probably be reviewed
+  in due course.  CASE clauses show well the opportunities which have
+  been missed, and indeed some specific cases have now been restored.
+
+  There is no reason to separate the functionality of two units into
+  separate primitive functions when both of those units represent purely
+  combinatorial primitive functionality.  For example, as mentioned
+  below, an output arm of a CASE clause could directly handle things
+  like UASSOC, USTRING, or a nested UCASE -- in fact any UNIT
+  *other than* USEQUENCE, USERIES, UMINST, UDINST and UIO.
+
+  Units appearing in CASE clause outputs are the easiest to handle,
+  because they would simply put their result directly into the
+  CASE clause result location.  Other combinations of UNITs would
+  generally require intermediate storage.
+
+  Such merging would undoubtedly save both data space and code space.
+  There would be some gain in execution time arising from the removed
+  function overheads, but the major gain would come from the conditional
+  evaluation of CASE arms.  Occasionally, units connected in series
+  in this way (without evaluation flags) would be evaluated when the
+  values on which they depended had not changed; this might reduce the
+  possible gain in execution time, but it seems unlikely that it would
+  come anywhere near the gain from conditional execution.  This could be
+  the single biggest remaining optimisation in combinatorial logic, so
+  it obviously needs further quantification.
+
+  This merging of functionality should be quite easy to implement if
+  the relevant translation procedures were separated properly from the
+  wrapping in functions.  The intermediate storage for connected UNITs
+  could be tedious to work with, but being able to put units in series
+  would increase the number of cases in which conditional evaluation of
+  CASE arms would be effective.  Again, further quantification is
+  required.
+}
+
+
+
+{ Utilities }
+{ ========= }
+
+{PROC ord removed}
+
+
+{ Output handling }
+{ =============== }
+
+
+{
+  PROC const representation = (UNIT value) UNION (CONST, UNIT): removed as
+  CONST mode no longer exists.
+}
+
+
+{ 'output unit' generates the code to set the output of the case clause,
+  for a given arm.
+  The output is described by the UNIT 'result', and is to be put at the
+  location starting at 'output offset' in the functions instance data.
+  The output type has type table handle 'output type'.
+  Any named inputs used can be referenced using 'input wires' and
+  'input types'.
+
+  The possibilities for the unit are currently very restricted,
+  because of the expansion to atomic functions.  We are currently
+  required to handle:
+
+       1)  Any named input to the function (including internally
+           generated ones)
+       2)  Any entirely constant signal (including structures and
+           associations)
+       3)  Any structure of the above.
+
+  NOTE however, that it would be entirely possible to handle nested
+  UCASE, UASSOC, UEXTRACT, USTRING, UCONC (on strings), UTRIM (on
+  strings) and UINDEX (on strings), and expansion could be modified
+  to leave them alone in CASE outputs.  This should definitely be
+  considered as a future optimisation.
+
+  NB The handling of named inputs (the UNAME case) assumes that there
+  is precisely one BLOCK per primitive input (where the definition of
+  a primitive input is the same as that used to decide which components
+  have their own input pointers in the instance data).  We also assume
+  that these blocks appear in order of input pointers, both within each
+  user input and across different user inputs.
+}
+PROC output unit = (UNIT result, VECTOR [] WIRE input wires,
+                    VECTOR [] INT input types,
+                    INT output offset, output type,
+                    ENVIRON environ, CLOSURE closure) VOID:
+    CASE result IN
+        (REF UNAME name):
+            BEGIN
+                INT ip no = nameno OF name;
+                INT prim no := 1;
+                FOR i TO ip no - 1 DO
+                    prim no +:= UPB blocks OF input wires [i]
+                OD;
+                INT n = UPB blocks OF input wires [ip no];
+                VECTOR [] INT iptypes = input types [prim no : prim no + n - 1];
+                INT input offset = size unit + ws * prim no;
+                translate copy inputs (iptypes, input offset,
+                                       lookup type (output type),
+                                       output offset, reset flag, 1)
+            END,
+        (REF USTR str):
+            BEGIN
+                STYPE otype = lookup type (output type);
+                REF SST strtype =
+                    CASE otype IN
+                        (REF SST sst): sst,
+                        (REF SROW sr):
+                            BEGIN
+                                REF SST ans := nil sst;
+                                TO no OF sr DO
+                                    ans := HEAP SST := (type OF sr, ans)
+                                OD;
+                                ans
+                            END
+                    ESAC;
+                INT offset := output offset;
+                REF USTR uscan := str;
+                REF SST tscan := strtype;
+                WHILE uscan ISNT nil ustr DO
+                    INT elem type = add type (t OF tscan, machine width);
+                    INT elem elts = raw signal width (t OF tscan);
+                    INT width = lookup type size (elem type);
+                    output unit (elem OF uscan, input wires, input types,
+                                 offset, elem type,
+                                 environ, closure);
+                    offset +:= width;
+                    uscan := rest OF uscan;
+                    tscan := rest OF tscan
+                OD
+            END,
+        (REF UROW row):
+            BEGIN
+                { This is a poor way of duplicating the elements -- but how
+                  often do people write non-constant row outputs??
+                }
+                STYPE otype = lookup type (output type);
+                STYPE elem stype = CASE otype IN
+                                       (REF SST sst): t OF sst,
+                                       (REF SROW sr): type OF sr
+                                   ESAC;
+                INT offset := output offset;
+                INT elem type = add type (elem stype, machine width);
+                INT elem elts = raw signal width (elem stype);
+                INT width = lookup type size (elem type);
+                TO int (size OF row) DO
+                    output unit (elem OF row, input wires, input types,
+                                 offset, elem type, environ, closure);
+                    offset +:= width
+                OD
+            END
+    OUT translate output constant (convert const (result, environ, closure),
+                                   output type, output offset, reset flag, 1)
+
+    ESAC;
+
+
+
+{ Optimised Labels }
+{ ================ }
+
+{ In order to avoid compiling jumps to the next instruction, we can
+  annotate a label with an assertion that it is in some sense the
+  next location.  The exact sense is that whenever a label is
+  supplied as a parameter to a procedure of this module, it may be
+  marked as 'next' if its location will be immediately after the
+  code fragment to be generated by that procedure.  Otherwise,
+  we must ensure that it is not marked 'next'.
+  It is clearly normally meaningless for a returned label to be 'next',
+  so this should normally be prevented.
+}
+
+MODE OLAB = STRUCT (BOOL next, LABEL lab),
+     LABLIST = STRUCT (OLAB head, REF LABLIST tail);
+
+REF LABLIST nil lablist = NIL;
+
+
+PROC new olab = OLAB:  (FALSE, new label);
+
+
+PROC next = (OLAB label) OLAB:  (TRUE, lab OF label);
+
+PROC notnext = (OLAB label) OLAB:  (FALSE, lab OF label);
+
+PROC isnext = (OLAB label) BOOL:  next OF label;
+
+OP /= = (OLAB a, b) BOOL:
+    lab OF lab OF a /= lab OF lab OF b OREL tag OF lab OF a /= tag OF lab OF b;
+
+
+
+{ Description of the selector value }
+{ ================================= }
+
+
+{ The input unit to the case clause is translated into a SELECTOR.
+  We are prepared to handle input units consisting of:
+
+       1)  Any named input to the function.
+
+       2)  Any structure of these.
+
+  The selector value of a CASE clause is a sequence of elements,
+  each of which corresponds to a primitive input to the surrounding
+  function.  Notice that a complete association (including the
+  tag) is considered primitive, so has one element in the selector,
+  until it is known which tag value was present -- then the selector
+  elements for the primitive components of the rest of the value are
+  created.
+
+  An ELEMENT describes where the value of a primitive element is
+  to be found.  It includes the input number within the function,
+  an offset from the data found at that input, and the type of the
+  element in question (as an integer handle).  The offset is
+  non-zero only when processing associated values.
+
+  A SELECTOR is a list of ELEMENTs.
+
+  In the use of these below, parts of selector lists are shared:
+  this is quite safe, because they are read-only once they are
+  constructed.
+}
+MODE ELEMENT  = STRUCT (INT input, offset, type),
+     SELECTOR = STRUCT (ELEMENT element, REF SELECTOR rest);
+
+REF SELECTOR nil selector = NIL;
+
+
+{ 'drop' removes the first 'n' elements from the 'selector'
+}
+PROC drop = (INT n, REF SELECTOR selector) REF SELECTOR:
+BEGIN
+    REF SELECTOR ans := selector;
+    TO n DO ans := rest OF ans OD;
+    ans
+END;
+
+
+{ Initially, the selector is made from the input unit of the UCASE,
+  using the description of the 'input wires' and 'input types' to
+  the function.
+
+  See the comment with 'output unit' about the assumptions on blocks
+  in the UNAME case.
+}
+PROC make selector = (UNIT input, VECTOR [] WIRE input wires,
+                      VECTOR [] INT input types) REF SELECTOR:
+BEGIN
+    CASE input IN
+        (REF UNAME name):
+            BEGIN
+                REF SELECTOR ans := nil selector;
+                INT ip no = nameno OF name;
+                INT prim no := 1;
+                FOR i TO ip no - 1 DO
+                    prim no +:= UPB blocks OF input wires [i]
+                OD;
+                FOR i FROM UPB blocks OF input wires [ip no] - 1 BY -1 TO 0 DO
+                    ans := HEAP SELECTOR :=
+                        ((prim no + i, 0, input types [prim no + i]), ans)
+                OD;
+                ans
+            END,
+        (REF USTR str):
+            BEGIN
+                REF SELECTOR ans = make selector (elem OF str, input wires,
+                                                  input types);
+                IF rest OF str ISNT nil ustr THEN
+                    REF REF SELECTOR end := rest OF ans;
+                    WHILE end ISNT nil selector DO end := rest OF end OD;
+                    REF REF SELECTOR (end) :=
+                        make selector (rest OF str, input wires, input types)
+                FI;
+                ans
+            END
+    ESAC
+END;
+
+
+{ The sub-selector for an associated value is created from type handle
+  for the whole associated value, and the altno for this alternative,
+  together with a single input pointer, and a single starting offset,
+  since it can be assumed that the value is contiguous in store.
+}
+PROC make assoc selector = (INT type, altno, input, start) REF SELECTOR:
+BEGIN
+    STYPE stype = lookup type (type);
+    STYPE atype = CASE stype IN
+                      (REF SENUM e):
+                          BEGIN
+                              REF SENUM scan := e;
+                              TO altno - 1 DO
+                                  scan := rest OF scan
+                              OD;
+                              t OF scan
+                          END
+                  ESAC;
+    REF SST flat := flatten type (atype);
+    INT offset := start;
+    REF SELECTOR ans := nil selector;
+    REF REF SELECTOR end := ans;
+    WHILE flat ISNT nil sst DO
+        INT this type = add type (t OF flat, machine width);
+        REF REF SELECTOR (end) := HEAP SELECTOR :=
+            ((input, offset, this type), nil selector);
+        end := rest OF end;
+        offset +:= lookup type size (this type);
+        flat := rest OF flat
+    OD;
+    ans
+END;
+
+
+
+{ Simple functions of patterns }
+{ ============================ }
+
+
+{ In this module the 'unull' field of UNULL is given a meaning although
+  it has none in the assembler interface.  Patterns are pre-processed
+  to collapse tautologous sub-patterns down to a single UNULL, whose
+  'unull' field gives the number of primitive components required to
+  match that part of the pattern.  (This processing is done as a
+  separate pass both because it requires an ENVIRON and CLOSURE, and
+  because the calculation of the size in the CTYPE case is quite
+  expensive and should not be duplicated.)
+
+  Further, we replace any row denotation in a pattern with the
+  equivalent structure denotation, so that the 'match' procedure
+  and its subordinates are more uniform.
+
+  Pre-processing could be used much more effectively if we used a
+  different mode for patterns.  The two procedures 'width' and
+  'sometaut' could be replaced by simple annotations giving the
+  corresponding information at *every* node of the pattern.  The
+  passing of ENVIRONs and CLOSUREs around in the main recursion,
+  purely so that we can translate string constants, would be avoided
+  if the representation of basic values in the primitive patterns were
+  of the simulator's SVALUE form, rather than the assembler's CONST,
+  since in the situations in which machine encoding is called, the
+  STYPE is then available.
+}
+
+
+{ Calculate the number of primitive elements required to match the
+  given pattern, assuming that the pattern has been processed with
+  'simplify pattern'.
+}
+PROC width = (UNIT pattern) INT:
+    CASE pattern IN
+        (REF UNULL taut):    unull OF taut,
+        (REF USTR str):
+            BEGIN
+                REF USTR scan := str;
+                INT size := 0;
+                WHILE scan ISNT nilustr DO
+                    size +:= width (elem OF scan);
+                    scan := rest OF scan
+                OD;
+                size
+            END,
+        (REF UALTS alts):  width (alt OF alts)
+            { It must be the same for all of the alternatives }
+    OUT
+        1
+    ESAC;
+
+
+{ This procedure replaces with a UNULL any tautologous sub-pattern of
+  the pattern, ie one which contains a null test in such a position
+  that it must always match -- even if the signal contains queries.
+  In this case, it inserts into the UNULL the number of primitive
+  components which would be required to match that sub-pattern, since
+  this can sometimes be an awkward and expensive calculation.
+  UROWs are always converted to equivalent USTRs.
+
+  In general it is unsafe to modify the assembler modes, because structure
+  may be shared, and this procedure has been written to make copies.  Since
+  we are the final consumer, it may in fact be safe to do more modification
+  in situ.
+
+  NB  It is possible for an element of a UALTS itself to be UALTS,
+  or for an element of a UROW or USTR to be one of these.  We would
+  generate smaller (but *not* faster) code if these cases were
+  flattened, because the three state logic of single level structures
+  has been optimised.  This task would best be performed here.
+}
+PROC simplify pattern = (UNIT pattern, ENVIRON environ, CLOSURE closure) UNIT:
+    CASE pattern IN
+        (REF CVOID cv):
+           BEGIN
+              HEAP UNULL cans;
+              unull OF cans := 1;
+              cans
+           END,
+        (REF CTYPE ctype):
+            BEGIN
+                STYPE stype = convert type (type OF ctype, environ, closure);
+                REF SST flat := flatten type (stype);
+                INT size := 0;
+                WHILE flat ISNT nil sst DO
+                    size +:= 1;
+                    flat := rest OF flat
+                OD;
+                HEAP UNULL ans;
+                unull OF ans := size;
+                ans
+            END,
+        (REF UASSOC ass):
+            HEAP UASSOC := (typeno OF ass,
+                            altno OF ass,
+                            simplify pattern (assoc OF ass, environ, closure)),
+        (REF UROW row):
+            BEGIN
+                UNIT t = simplify pattern (elem OF row, environ, closure);
+                CASE t IN
+                    (REF UNULL taut):  (unull OF taut *:= int (size OF row);  t)
+                OUT
+                    REF USTR ans := nil ustr;
+                    TO int (size OF row) DO
+                        ans := HEAP USTR := (t, ans)
+                    OD;
+                    ans
+                ESAC
+            END,
+        (REF USTRING string):
+            BEGIN
+                UNIT t = simplify pattern (char OF string, environ, closure);
+                CASE t IN
+                    (REF UNULL taut):  t
+                OUT
+                    string
+                ESAC
+            END,
+        (REF USTR str):
+            BEGIN
+                REF USTR scan := str;
+                REF USTR ans := nil ustr;
+                REF REF USTR end := ans;
+                BOOL tautology := TRUE;
+                INT size := 0;
+                WHILE scan ISNT nil ustr DO
+                    UNIT t = simplify pattern (elem OF scan, environ, closure);
+                    CASE t IN
+                        (REF UNULL taut):  size +:= unull OF taut
+                    OUT
+                        tautology := FALSE;
+                        size +:= width (t)
+                    ESAC;
+                    REF REF USTR (end) := HEAP USTR := (t, nil ustr);
+                    end := rest OF end;
+                    scan := rest OF scan
+                OD;
+                IF tautology THEN
+                    HEAP UNULL cn;
+                    unull OF cn := size;
+                    cn
+                ELSE  ans
+                FI
+            END,
+        (REF UALTS alts):
+            BEGIN
+                REF UALTS scan := alts;
+                REF UALTS ans := nil ualts;
+                REF UALTS last := nil ualts;
+                REF REF UALTS end := ans;
+                BOOL tautology := FALSE;
+                WHILE (scan ISNT nil ualts) AND NOT tautology DO
+                    UNIT t = simplify pattern (alt OF scan, environ, closure);
+                    CASE t IN
+                        (REF UNULL taut): tautology := TRUE
+                    OUT
+                        SKIP
+                    ESAC;
+                    REF REF UALTS (end) := last:= HEAP UALTS := (t, nil ualts);
+                    end := rest OF end;
+                    scan := rest OF scan
+                OD;
+                IF tautology THEN
+                    { The last thing added to the list was a UNULL, which
+                      will do for our answer since it already has the size
+                      (which is, of course, the same for all alternatives).
+                    }
+                    alt OF last
+                ELSE  ans
+                FI
+            END
+    OUT
+        pattern
+    ESAC;
+
+
+{ In 'disjoin' we can always omit the qchain if we know that the
+  pattern contains no tautologies.  See the comment there for further
+  explanation.  This procedure determines whether a pattern contains
+  any tautologies, assuming that it has previously been processed with
+  'simplify pattern.
+
+  As mentioned at the head of this section, this should really be done
+  in pattern preprocessing, if it were possible.
+}
+PROC sometaut = (UNIT pattern) BOOL:
+    CASE pattern IN
+        (REF UNULL):      TRUE,
+        (REF UASSOC ass): sometaut (assoc OF ass),
+        (REF USTR str):   IF str IS nil ustr THEN  FALSE
+                          ELSE
+                              sometaut (elem OF str) OREL sometaut (rest OF str)
+                          FI,
+        (REF UALTS alts): IF alts IS nil ualts THEN  FALSE
+                          ELSE
+                              sometaut (alt OF alts) OREL sometaut (rest OF alts)
+                          FI
+    OUT
+        FALSE
+    ESAC;
+
+
+
+{ Basic abstract machine macros for tests }
+{ ======================================= }
+
+
+{ The primitive test macros of this section make no attempt to
+  optimise when a label is 'next'.  This is because the labels never
+  are 'next' in the use of these macros in 'element test'.  If we
+  were more clever in 'element test', we could identify some
+  situations in which the labels were 'next', and the macros here
+  would have to be enhanced as well.
+}
+
+
+{ Load the input pointer onto the stack.
+  'd' is the current stack size.
+}
+PROC locate = (INT input, d) VOID:
+BEGIN
+    am local (d-1);                          { Instance ptr }
+    am pushint (input * ws + size unit);     { Addr of this input ptr }
+    am add;
+    am global (ws, indirect)                 { Actual input ptr }
+END;
+
+
+{ Fetch a machine integer onto the stack, given a pointer on the stack
+  and a static offset here.
+}
+PROC fetch int = (INT offset, size) VOID:
+BEGIN
+    IF offset > 0 THEN
+        am pushint (offset);
+        am add
+    FI;
+    am global (size, indirect)               { The integer value }
+END;
+
+
+{ Fetch the given size string onto the stack, using a bit offset and
+  a pointer on the stack, and the static offset given here.
+}
+PROC fetch string = (INT offset, size) VOID:
+BEGIN
+    IF offset > 0 THEN
+        am pushint (offset);
+        am add
+    FI;
+    am bstring (size, size, indirect)              { The string value }
+END;
+
+
+{ 'simple enum test' tests a value encoded in a single word, with query
+  represented by zero.  This version is appropriate for use when a jump
+  is required on a definite match.
+  The integer 'compare' is the value against which the match is done.
+}
+PROC simple enum test = (INT input, offset, d, compare, OLAB q, t) VOID:
+BEGIN
+    locate (input, d);                       { Get the input pointer }
+    fetch int (offset, size unit);           { The actual value }
+    am local (0);                            { Copy value }
+    am pushint (compare);
+    am neq;                                  { Test for defined value }
+    am jump no (1, lab OF t);                { Drop copy if jump taken }
+    am test;                                 { Test for query }
+    am jump no (0, lab OF q)
+END;
+
+
+{ 'enum test' tests a value encoded in a single word, with query
+  represented by zero.  This version is appropriate for use when a jump
+  is required on a definite no match (as for associated types).
+  The integer 'compare' is the value against which the match is done.
+}
+PROC enum test = (INT input, offset, d, compare, OLAB q, f) VOID:
+BEGIN
+    locate (input, d);                       { Get the input pointer }
+    fetch int (offset, size unit);           { The actual value }
+    am local (0);                            { Copy value }
+    am test;                                 { Test for query }
+    am jump no (1, lab OF q);                { Drop copy if jump taken }
+    am pushint (compare);
+    am eq;                                   { Test for defined value }
+    am jump no (0, lab OF f)
+END;
+
+
+{ 'enum range test' tests a value encoded in a single word, with query
+  represented by zero, as for character ranges.
+  The jump is required on a definite match.
+  The integers 'lwb' and 'upb' give the range against which the match is done,
+  and query is only tested for if the value is outside that range.
+}
+PROC enum range test = (INT input, offset, d, lwb, upb, OLAB q, t) VOID:
+BEGIN
+    LABEL maybe query = new label;
+    locate (input, d);                       { Get the input pointer }
+    fetch int (offset, size unit);           { The actual value }
+    am local (0);                            { Copy value }
+    am pushint (lwb);
+    am ge;                                   { Test against lower bound }
+    am jump no (0, maybe query);             { Drop copy if jump taken }
+    am local (0);                            { Copy value part again }
+    am pushint (upb);
+    am gt;                                   { Test against upper bound }
+    am jump no (1, lab OF t);
+    am label (d+1, maybe query);
+    am test;                                 { Test for query }
+    am jump no (0, lab OF q)                 { Drop copy if jump taken }
+END;
+
+
+{ 'int test' tests a value encoded in a two words, with the query flag
+  in the first word, with query represented by zero.
+  The jump is required on a definite no match.
+  The integer 'compare' is the value against which the match is done,
+  given that the value as a whole is not query.
+}
+PROC int test = (INT input, offset, d, compare, OLAB q, f) VOID:
+BEGIN
+    locate (input, d);                       { Get the input pointer }
+    am local (0);                            { Copy input pointer }
+    fetch int (offset, size unit);           { Get the query flag }
+    am test;                                 { Test for query }
+    am jump no (1, lab OF q);                { Drop copy if jump taken }
+    fetch int (offset + size unit, ws);      { Get the value part }
+    am pushint (compare);
+    am eq;                                   { Test the defined value }
+    am jump no (0, lab OF f)
+END;
+
+
+{ 'range test' tests a value encoded in a two words, with the query flag
+  in the first word, with query represented by zero.
+  The jump is required on a definite no match.
+  The integers 'lwb' and 'upb' give the range against which the match is done,
+  given that the value as a whole is not query.
+}
+PROC range test = (INT input, offset, d, lwb, upb, OLAB q, f) VOID:
+BEGIN
+    locate (input, d);                       { Get the input pointer }
+    am local (0);                            { Copy input pointer }
+    fetch int (offset, size unit);           { Get the query flag }
+    am test;                                 { Test for query }
+    am jump no (1, lab OF q);                { Drop copy if jump taken }
+    fetch int (offset + size unit, ws);      { Get the value part }
+    am local (0);                            { Copy value part }
+    am pushint (lwb);
+    am ge;                                   { Test against lower bound }
+    am jump no (1, lab OF f);                { Drop copy if jump taken }
+    am pushint (upb);
+    am le;                                   { Test against upper bound }
+    am jump no (0, lab OF f)
+END;
+
+
+{ 'string test' tests a value encoded as a query flag followed by a string,
+  with query represented by zero in the flag.
+  The jump is required on a definite no match.
+  The string 'compare' is the value against which the match is done,
+  given that the value as a whole is not query.  The 'size' is the size
+  to compare *in bits*.
+}
+PROC string test = (INT input, offset, size, d, VECTOR [] CHAR compare,
+                    OLAB q, f) VOID:
+BEGIN
+    am pushint (0);                          { Bit offset for 'fetch string' }
+    locate (input, d+1);                       { Get the input pointer }
+    am local (0);                            { Copy input pointer }
+    fetch int (offset, size unit);           { Get the query flag }
+    am test;                                 { Test for query }
+    am jump no (2, lab OF q);                { Drop copy and offset on jump }
+    fetch string (offset + size unit, size); { Get the value part }
+    WORD w := MAKEID compare; up (w);
+       { Pushstring is to be used to push compare onto the AM stack.
+         compare is supplied in machine()'ed form.  Ie as it would appear
+         in AM memory.  Pushstring expects its parameter to be simply
+         a string of bytes. So to ensure that the string which appears
+         on the AM stack appears as if we had used a bstring instruction
+         to load compare from memory we have to make it a simple string
+         of bytes.  We cancel the effect of direction of encoding with
+         another call of "up". }
+    am pushstring (size, w);
+    am eq;                                   { Test the defined value }
+    am jump no (0, lab OF f)
+END;
+
+
+
+{ Code for matching a selector with a pattern }
+{ =========================================== }
+
+
+{ The procedures of this section generate the pattern test.  They
+  return a label labelling the start of the code for their part
+  of the pattern.  If the code to be generated is going to be an
+  unconditional jump, this may label later code (the target).
+  Because code is generated as a side effect, and we need the labels
+  before the code itself, there are two types of call to each
+  procedure: one, with 'do' TRUE actually generates the code; the
+  other, with 'do' FALSE simply calculates the label.
+}
+
+
+{ A 'null test' is one whose result is always TRUE, therefore it is
+  given only the 'true' label, and the only work to be done is the
+  decision as to whether a jump is actually required.
+}
+PROC null test = (OLAB t, BOOL do) OLAB:
+BEGIN
+    IF do AND NOT isnext (t) THEN
+        am jump (lab OF t)
+    FI;
+    notnext (t)
+END;
+
+
+{ A complete pattern is translated by 'casetest', which uses
+  'match' to do nearly all of the work.  It ensures that 'match'
+  is not given a tautologous pattern to start with (and then the
+  subfunctions of match itself ensure that it is not called on a
+  tautologous component).  This will only work correctly if the
+  pattern has already been processed by 'simplify pattern'.
+
+  The definitions of the remaining pattern matching procedures have
+  been nested within 'casetest' to circumvent a weakness of the
+  assembler modes in a moderately clean fashion -- the interpretation
+  of CQUOTE and USTRING cannot be fully identified in the absence
+  of an ENVIRON and a CLOSURE (this is also true of the other constants,
+  but we are able to get away without the full type details for many).
+  To keep the things clean, we only pass the ENVIRON and CLOSURE
+  into 'casetest', and use them globally from the remaining procedures.
+}
+PROC casetest = (REF SELECTOR selector, UNIT pattern, OLAB q, f, t,
+                 ENVIRON environ, CLOSURE closure) VOID:
+BEGIN
+
+    PROC (REF SELECTOR, UNIT, OLAB, OLAB, OLAB, BOOL) OLAB match;
+
+
+{ Test one primitive value }
+{ ------------------------ }
+
+
+{ The element to be tested is always part of an input to the function,
+  and is represented here by an ELEMENT.  Associations are handled here,
+  since their semantics are simpler than that of structures -- if the
+  tag value is a query match, the complete match is always query, and the
+  associated value is never tested (we would not know what type it was!)
+  Associations are changed from single primitive ELEMENTs to full SELECTORs
+  when their tag is known.
+  The current stack depth is 'd'.
+  Note that 'element test' is called only from 'match', and it is
+  guaranteed that the pattern is not a tautology (ie is not REF CTYPE, REF CVOID
+  or REF UNULL).
+}
+PROC element test = (REF ELEMENT element, INT d, UNIT pattern,
+                     OLAB q, f, t, BOOL do) OLAB:
+BEGIN
+    OLAB start = new olab;
+    IF do THEN
+        am label (d, lab OF start);
+        CASE pattern IN
+            (REF CPRIM b):
+                BEGIN
+                    simple enum test (input OF element, offset OF element, d,
+                                      primno OF b, notnext (q), notnext (t));
+                    null test (f, TRUE)
+                END,
+            (REF UASSOC a):
+                BEGIN
+                    enum test (input OF element, offset OF element, d,
+                               altno OF a, notnext (q), notnext (f));
+                    REF SELECTOR sub elements =
+                        make assoc selector (type OF element, altno OF a,
+                                             input OF element,
+                                             offset OF element + ws);
+                    casetest (sub elements, assoc OF a, q, f, t,
+                              environ, closure)
+                END,
+            (REF CINT i):
+                BEGIN
+                    int test (input OF element, offset OF element, d,
+                              int (index OF i), notnext (q), notnext (f));
+                    null test (t, TRUE)
+                END,
+            (REF CRANGE r):
+                BEGIN
+                    range test (input OF element, offset OF element, d,
+                                int (lwb OF range OF r), int (upb OF range OF r),
+                                notnext (q), notnext (f));
+                    null test (t, TRUE)
+                END,
+            (REF CPRIMRANGE cr):
+                BEGIN
+                    enum range test (input OF element, offset OF element, d,
+                                     firstno OF cr, lastno OF cr,
+                                     notnext (q), notnext (t));
+                    null test (f, TRUE)
+                END,
+            (UNION (REF CQUOTE, REF USTRING) cs):
+                BEGIN
+                    SVALUE sv = convert const (cs, environ, closure);
+                    STYPE st = CASE sv IN (REF SVSTR svstr): type OF svstr ESAC;
+                    WORD word = machine (sv, st);
+                    INT size = CASE st IN
+                                 (REF SSTRING ss):
+                                   IF UPB char OF t OF ss = 2 THEN  no OF ss
+                                   ELSE  no OF ss * bits per byte
+                                   FI
+                               ESAC;
+                    string test (input OF element, offset OF element, size, d,
+                                 word [size unit + 1 : ], notnext (q), notnext (f));
+                    null test (t, TRUE)
+                END
+        ESAC
+    FI;
+    start
+END;
+
+
+
+{ Complete test, with structuring and alternatives }
+{ ------------------------------------------------ }
+
+
+{ Alternatives are handled as a three state disjunction, in
+  which any definite match overrides unknown matches.  Two chains
+  of tests are produced, the 'fchain' for the general case, and
+  the 'qchain' for the case when an undefined match has been seen.
+  These two chains are produced by the procedures 'fchain' and
+  'dqchain' respectively.
+
+  The 'qchain' can safely be omitted unless there is some component
+  of the pattern (however deeply nested) which is capable of giving
+  a definite true match for a query input signal.  This is because
+  the 'qchain' can only have any effect if it converts the a priori
+  unknown match into a definite true match *on the same signals*.
+  Because there is no logical compliment operator in CASE clause
+  patterns, this can only be achieved if some component match which
+  was undefined in one alternative is a defined true match in another.
+  The only patterns which can match query signal components are
+  the tautologies, so it follows that the 'qchain' is definitely
+  redundant unless the pattern contains some tautology (however
+  deeply nested).
+
+  The chains are produced in two passes.  The first pass comes
+  from the end of the pattern towards the start, and has code
+  generation switched off.  It is used to predict the labels
+  which will be used, so has to mark the label sequence for
+  later repetition.  The second pass is executed only if 'do' is
+  TRUE, and goes forwards along the pattern using the predicted
+  labels to generate code.  (Note that the switching off of the
+  second pass when 'NOT do' requires that the first pass is
+  careful not to mark the label sequence.)
+
+  The recursion stops at a single element pattern so as to take
+  maximum advantage of the 'next' property of the supplied labels.
+  It is guaranteed that 'disjoin' will never be called with an
+  empty list of alternatives.
+
+  Note that the labels of a dummy chain may finish with one which
+  is 'next', contrary to the normal rule that returned labels should
+  be 'notnext'.  This is useful and safe for the known use of these
+  labels.
+}
+PROC fchain = (REF SELECTOR selector, REF UALTS pattern,
+               LABLIST qq, OLAB f, t, BOOL do) OLAB:
+BEGIN
+
+    PROC labs only = (REF UALTS pat, REF LABLIST qs) REF LABLIST:
+        IF rest OF pat IS nil ualts THEN
+            IF do THEN mark label sequence FI;
+            HEAP LABLIST :=
+                (match (selector, alt OF pat, head OF qs, f, t, FALSE),
+                 nil lablist)
+        ELSE
+            REF LABLIST tail = labs only (rest OF pat, tail OF qs);
+            IF do THEN mark label sequence FI;
+            HEAP LABLIST :=
+                (match (selector, alt OF pat, notnext (head OF qs),
+                        next (head OF tail), notnext (t), FALSE),
+                 tail)
+        FI;
+
+    PROC do it = (REF UALTS pat, REF LABLIST qs, fs) VOID:
+    BEGIN
+        repeat label sequence;
+        IF rest OF pat IS nil ualts THEN
+            match (selector, alt OF pat, head OF qs, f, t, TRUE);
+            continue label sequence
+        ELSE
+            match (selector, alt OF pat, notnext (head OF qs),
+                   next (head OF fs), notnext (t), TRUE);
+            continue label sequence;
+            do it (rest OF pat, tail OF qs, tail OF fs)
+        FI
+    END;
+
+    REF LABLIST ff = labs only (pattern, LOC LABLIST := qq);
+    IF do THEN do it (pattern, LOC LABLIST := qq, tail OF ff) FI;
+    head OF ff
+END;
+
+
+PROC dqchain = (REF SELECTOR selector, REF UALTS pattern,
+                OLAB q, t, BOOL do) REF LABLIST:
+BEGIN
+
+    PROC labs only = (REF UALTS pat) REF LABLIST:
+        IF rest OF pat IS nil ualts THEN
+            IF do THEN mark label sequence FI;
+            HEAP LABLIST :=
+                (match (selector, alt OF pat, q, q, t, FALSE),
+                 HEAP LABLIST := (notnext (q), nil lablist))
+        ELSE
+            REF LABLIST tail = labs only (rest OF pat);
+            IF do THEN mark label sequence FI;
+            HEAP LABLIST :=
+                (match (selector, alt OF pat, next (head OF tail),
+                        next (head OF tail), notnext (t), FALSE),
+                 tail)
+        FI;
+
+    PROC do it = (REF UALTS pat, REF LABLIST qs) VOID:
+    BEGIN
+        repeat label sequence;
+        IF rest OF pat IS nil ualts THEN
+            match (selector, alt OF pat, q, q, t, TRUE);
+            continue label sequence
+        ELSE
+            match (selector, alt OF pat, next (head OF qs),
+                   next (head OF qs), notnext (t), TRUE);
+            continue label sequence;
+            do it (rest OF pat, tail OF qs)
+        FI
+    END;
+
+    REF LABLIST qq = labs only (pattern);
+    IF do THEN do it (pattern, tail OF qq) FI;
+    qq
+END;
+
+
+PROC ddummychain = (REF UALTS pattern, OLAB label) REF LABLIST:
+BEGIN
+    REF UALTS scan := pattern;
+    REF LABLIST result := HEAP LABLIST := (label, nil lablist);
+    WHILE scan ISNT nil ualts DO
+        result := HEAP LABLIST := (notnext (label), result);
+        scan := rest OF scan
+    OD;
+    result
+END;
+
+
+PROC disjoin = (REF SELECTOR selector, REF UALTS pattern,
+                OLAB q, f, t, BOOL do) OLAB:
+BEGIN
+    BOOL qchain needed = t /= q ANDTH (rest OF pattern ISNT nil ualts)
+                         ANDTH sometaut (pattern);
+    OLAB nnf = IF qchain needed THEN  notnext (f)
+               ELSE  f
+               FI;
+    OLAB nnt = IF qchain needed THEN  notnext (t)
+               ELSE  t
+               FI;
+    mark label sequence;
+    REF LABLIST qlabs = IF qchain needed THEN
+                            dqchain (selector, rest OF pattern, q, t, FALSE)
+                        ELSE
+                            ddummychain (rest OF pattern, q)
+                        FI;
+
+    OLAB start = fchain (selector, pattern, qlabs, nnf, nnt, do);
+    IF qchain needed AND do THEN
+        repeat label sequence;
+        dqchain (selector, rest OF pattern, q, t, TRUE)
+    FI;
+    continue label sequence;
+
+    start
+END;
+
+
+{ Structured constants are broken down to their components, and the match
+  of the whole is the conjunction of the separate matches of the pieces.
+  Since each component may separately be query, and would therefore have
+  an undefined match with any pattern other than the type name, the
+  conjunction is done in three state logic, with any definite mismatch
+  overriding an unknown.  Again, two chains of tests are produced,
+  in this case by the procedures 'tchain' and 'cqchain' respectively.
+
+  The procedures for conjunction are more complicated than those
+  for disjunction because it is possible for some of the component
+  tests to be tautologies.  It is also necessary to advance the
+  'element' number in the recursion.  It may be helpful to note that
+  the undelying recursion patterns are identical.
+
+  The chains are produced in two passes.  The first pass comes
+  from the end of the pattern towards the start, and has code
+  generation switched off.  It is used to predict the labels
+  which will be used, so has to mark the label sequence for
+  later repetition.  The second pass is executed only if 'do' is
+  TRUE, and goes forwards along the pattern using the predicted
+  labels to generate code.  (Note that the switching off of the
+  second pass when 'NOT do' requires that the first pass is
+  careful not to mark the label sequence.)
+
+  The recursion stops at a single element pattern so as to take
+  maximum advantage of the 'next' property of the supplied labels.
+  It is guaranteed that 'conjoin' will never be called with an
+  empty list of alternatives.
+
+  Note that the labels of a dummy chain may finish with one which
+  is 'next', contrary to the normal rule that returned labels should
+  be 'notnext'.  This is useful and safe for the known use of these
+  labels.
+}
+PROC tchain = (REF SELECTOR selector, REF USTR pattern,
+               LABLIST qq, OLAB f, t, BOOL do) OLAB:
+BEGIN
+
+    PROC labs only = (REF SELECTOR sel, REF USTR pat,
+                      REF LABLIST qs) REF LABLIST:
+    BEGIN
+        IF rest OF pat IS nil ustr THEN
+            IF do THEN mark label sequence FI;
+            OLAB this =
+                CASE elem OF pat IN
+                    (REF UNULL):  null test (t, FALSE)
+                OUT
+                    match (sel, elem OF pat, head OF qs, f, t, FALSE)
+                ESAC;
+            HEAP LABLIST := (this, nil lablist)
+        ELSE
+            INT skip = width (elem OF pat);
+            REF LABLIST tail =
+                labs only (drop (skip, sel), rest OF pat, tail OF qs);
+            IF do THEN mark label sequence FI;
+            OLAB this =
+                CASE elem OF pat IN
+                    (REF UNULL):  null test (next (head OF tail), FALSE)
+                OUT
+                    match (sel, elem OF pat, notnext (head OF qs),
+                           notnext (f), next (head OF tail), FALSE)
+                ESAC;
+            HEAP LABLIST := (this, tail)
+        FI
+    END;
+
+    PROC do it = (REF SELECTOR sel, REF USTR pat,
+                  REF LABLIST qs, ts) VOID:
+    BEGIN
+        repeat label sequence;
+        IF rest OF pat IS nil ustr THEN
+            CASE elem OF pat IN
+                (REF UNULL):  null test (t, TRUE)
+            OUT
+                match (sel, elem OF pat, head OF qs, f, t, TRUE)
+            ESAC;
+            continue label sequence
+        ELSE
+            INT skip = width (elem OF pat);
+            CASE elem OF pat IN
+                (REF UNULL):  null test (next (head OF ts), TRUE)
+            OUT
+                match (sel, elem OF pat, notnext (head OF qs),
+                       notnext (f), next (head OF ts), TRUE)
+            ESAC;
+            continue label sequence;
+            do it (drop (skip, sel), rest OF pat, tail OF qs, tail OF ts)
+        FI
+    END;
+
+    REF LABLIST tt = labs only (selector, pattern, LOC LABLIST := qq);
+    IF do THEN do it (selector, pattern, LOC LABLIST := qq, tail OF tt) FI;
+    head OF tt
+END;
+
+
+PROC cqchain = (BOOL omit, REF SELECTOR selector, REF USTR pattern,
+                OLAB q, f, BOOL do) REF LABLIST:
+BEGIN
+
+    PROC labs only = (BOOL omit, REF SELECTOR sel, REF USTR pat) REF LABLIST:
+    BEGIN
+        BOOL taut1 = CASE elem OF pat IN  (REF UNULL): TRUE  OUT  FALSE  ESAC;
+        IF rest OF pat IS nil ustr THEN
+            IF do THEN mark label sequence FI;
+            OLAB this =
+                IF omit THEN
+                    notnext (q)
+                ELIF taut1 THEN
+                    null test (q, FALSE)
+                ELSE
+                    match (sel, elem OF pat, q, f, q, FALSE)
+                FI;
+            HEAP LABLIST := (this, HEAP LABLIST := (notnext (q), nil lablist))
+        ELSE
+            INT skip = width (elem OF pat);
+            REF LABLIST tail =
+                labs only (omit AND taut1, drop (skip, sel), rest OF pat);
+            IF do THEN mark label sequence FI;
+            OLAB this =
+                IF omit THEN
+                    notnext (head OF tail)
+                ELIF taut1 THEN
+                    null test (next (head OF tail), FALSE)
+                ELSE
+                    match (sel, elem OF pat, next (head OF tail),
+                           notnext (f), next (head OF tail), FALSE)
+                FI;
+            HEAP LABLIST := (this, tail)
+        FI
+    END;
+
+    PROC do it = (BOOL omit, REF SELECTOR sel, REF USTR pat,
+                  REF LABLIST qs) VOID:
+    BEGIN
+        BOOL taut1 = CASE elem OF pat IN  (REF UNULL): TRUE  OUT  FALSE  ESAC;
+        repeat label sequence;
+        IF rest OF pat IS nil ustr THEN
+            IF omit THEN  SKIP
+            ELIF taut1 THEN
+                null test (q, TRUE)
+            ELSE
+                match (sel, elem OF pat, q, f, q, TRUE)
+            FI;
+            continue label sequence
+        ELSE
+            INT skip = width (elem OF pat);
+            IF omit THEN  SKIP
+            ELIF taut1 THEN
+                null test (next (head OF qs), TRUE)
+            ELSE
+                match (sel, elem OF pat, next (head OF qs),
+                       notnext (f), next (head OF qs), TRUE)
+            FI;
+            continue label sequence;
+            do it (omit AND taut1, drop (skip, sel), rest OF pat, tail OF qs)
+        FI
+    END;
+
+    REF LABLIST qq = labs only (omit, selector, pattern);
+    IF do THEN do it (omit, selector, pattern, tail OF qq) FI;
+    qq
+END;
+
+
+PROC cdummychain = (REF USTR pattern, OLAB label) REF LABLIST:
+BEGIN
+    REF USTR scan := pattern;
+    REF LABLIST result := HEAP LABLIST := (label, nil lablist);
+    WHILE scan ISNT nil ustr DO
+        result := HEAP LABLIST := (notnext (label), result);
+        scan := rest OF scan
+    OD;
+    result
+END;
+
+
+PROC conjoin = (REF SELECTOR selector, REF USTR pattern,
+                OLAB q, f, t, BOOL do) OLAB:
+BEGIN
+    BOOL qchain needed = f /= q ANDTH (rest OF pattern ISNT nil ustr);
+    OLAB nnf = IF qchain needed THEN  notnext (f)
+               ELSE  f
+               FI;
+    OLAB nnt = IF qchain needed THEN  notnext (t)
+               ELSE  t
+               FI;
+    BOOL tautfirst = CASE elem OF pattern IN  (REF UNULL): TRUE  OUT  FALSE  ESAC;
+    INT skip = width (elem OF pattern);
+    mark label sequence;
+    REF LABLIST qlabs = IF qchain needed THEN
+                            cqchain (tautfirst, drop (skip, selector),
+                                     rest OF pattern, q, f, FALSE)
+                        ELSE
+                            cdummychain (rest OF pattern, q)
+                        FI;
+
+    OLAB start = tchain (selector, pattern, qlabs, nnf, nnt, do);
+    IF qchain needed AND do THEN
+        repeat label sequence;
+        cqchain (tautfirst, drop (skip, selector),
+                 rest OF pattern, q, f, TRUE)
+    FI;
+    continue label sequence;
+
+    start
+END;
+
+
+{ 'match' is called recursively to generate the code to test parts
+  of the pattern.
+  The pattern is guaranteed never to be a tautology, so in particular
+  can never be REF UNULL or REF CTYPE.  Also, UROWs have been replaced
+  with equivalent USTRs.
+}
+match := (REF SELECTOR selector, UNIT pattern, OLAB q, f, t, BOOL do) OLAB:
+    CASE pattern IN
+        (REF UALTS alts):  disjoin (selector, alts, q, f, t, do),
+        (REF USTR str):    conjoin (selector, str, q, f, t, do)
+    OUT
+        element test (element OF selector, 1, pattern, q, f, t, do)
+    ESAC;
+
+
+{ The main body of 'casetest' now follows:
+}
+    CASE pattern IN
+        (REF UNULL):  null test (t, TRUE)
+    OUT
+        match (selector, pattern, q, f, t, TRUE)
+    ESAC
+
+
+END; { Of 'casetest' }
+
+
+
+{ Translation of the complete clause }
+{ ================================== }
+
+
+{ 'translate case body' handles the control flow of the entire CASE clause.
+  It adds code at the end to generate a query result should there be
+  an undefined pattern match.
+}
+PROC translate case body = (REF SELECTOR selector, REF UCHOICES choices,
+                            VECTOR [] WIRE input wires,
+                            VECTOR [] INT input types,
+                            INT output offset, output type,
+                            ENVIRON environ, CLOSURE closure) VOID:
+BEGIN
+
+    OLAB query arm = notnext (new olab);
+    OLAB end case = notnext (new olab);
+    REF UCHOICES scan := choices;
+
+    WHILE scan ISNT niluchoices DO
+        OLAB this arm = next (new olab);
+        OLAB next test = notnext (new olab);
+        UNIT pattern = simplify pattern (test OF scan, environ, closure);
+        casetest (selector, pattern, query arm, next test, this arm,
+                  environ, closure);
+        am label (1, lab OF this arm);
+        output unit (output OF scan, input wires, input types,
+                     output offset, output type, environ, closure);
+        am jump (lab OF end case);
+        am label (1, lab OF next test);
+        scan := rest OF scan
+    OD;
+
+    { Construct the output for the query case, and label the end
+      of the entire clause.
+    }
+    am label (1, lab OF query arm);
+    INT data size = lookup type size (output type);
+    am pushint (output offset);
+    am pushint (data size);
+    am call (3, label ("Genericquery"));
+    am drop (2);
+
+    am label (1, lab OF end case)
+
+END;
+
+
+{ Complete translation of a CASE function.
+}
+PROC translate case = (UCASE body, ID name, FNDEC declaration,
+                       VECTOR [] WIRE input wires,
+                       VECTOR [] INT input types, INT output type,
+                       ENVIRON environ, CLOSURE closure,
+                       FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+    INT output offset = size unit                   { for the flag }
+                        + ws                        { for input count }
+                        + UPB input types * ws;     { the inputs }
+
+    REF SELECTOR selector = make selector (input OF body,
+                                           input wires, input types);
+
+    translate start function (name);
+
+    translate case body (selector, choices OF body,
+                         input wires, input types, output offset, output type,
+                         environ, closure);
+
+    INT fixed part size = output offset + lookup type size (output type);
+    translate end function (fixed part size, 1);
+    (fixed part size, output offset, combinatorial)
+END
+
+
+KEEP
+    translate case
+FINISH

@@ -1,0 +1,280 @@
+DECS libmessages CONTEXT VOID USE putstrings, messageproc:
+
+{ " Id: libmessages.sta,v 1.1 91/10/14 14:30:23 edcad Exp $" }
+configinfo A68CONFIG "$Id: libmessages.a68,v 34.2 1995/03/29 13:03:28 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+03:02:89  Libmessages created.  EVW
+28:11:90  Processing of library size changed.  DCT
+10:01:91  R6B4:  export of non-FN/MAC prevented.  DCT
+17:01:91  Renumbered after compactlibrary and export changes for EPI.  DCT
+22:03:91  Modify for more general form of MSGNO, see messageproc. DJS
+27:06:91  R6B50 Initialise vector of messages in lib_facility to put NIL
+             into the references.  DJS
+04:07:91  increase_library messages corrected.  DCT
+22:06:93  "name" added to facility in messageproc.  DCT
+25:08:93  printclosure renamed checkclosure. EVW
+27:10:93  printdecls date enabled.  DCT
+
+   If modifications are made to the vector in 'lib_facility' they
+   will need to be reflected in  PROC lib_mp  in module EPIETISUPPORT.STA.
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT max_lib_messages = 134;
+
+FACILITY lib_facility = ( "library",
+                          LOC VECTOR [max_lib_messages] MESSAGE,
+                          LOC BOOL := FALSE,
+                          (  { Vector of messages }
+{ General message procedures }
+( 1, outpart_class, ",   "),
+( 2, output_class,  ""),   {newline}
+
+{ ************** KEEPSAKEBUFFERS **************************************** }
+
+{ PROC increase_library }
+( 4, user_class,    "There is not enough space in the * file."),
+( 5, user_class,    "* is too big to increase"),
+( 6, error_class,   "An attempt to increase the * file size has failed with "
+               "the message: ""*"".  Please check your file store."),
+( 7, user_class,    "Not enough space available"),
+( 8, output_class,  "The * file has been increased to * bytes"),
+( 9, user_class,    "There is no space left in the * file"),
+
+
+{ ************* LIBINTERFACE / LIBPROCS ***************************** }
+
+{ Check procedures }
+( 14, user_class,    "Context * is empty"),
+( 15, user_class,    "I can't find a context called *"),
+( 16, user_class,    "I can't find an imports region called /* in context *"),
+( 17, user_class,    "No imports region has been selected in context *"),
+( 18, user_class,    "I can't find *"),
+( 19, user_class,    "I can't find an import called *"),
+( 20, user_class,    "* is not a simple context"),
+( 21, user_class,    "* is not a compound context"),
+
+{ General library messages }
+
+( 23, diag2_class,   "Context *"),
+( 24, diag2_class,   "Version *"),
+( 25, diag2_class,   "Change state of library is now *"),
+( 28, user_class,    "ELLA library not opened"),
+( 29, output_class,  "Library size = * bytes,  free = * bytes"),
+( 30, output_class,  "    *  Ella library:  *,  Version: *  *"),
+
+{ ********** Library Procedures ************************* }
+
+{ PROC open_library }
+( 31, user_class,    "Your library is out of date"),
+( 32, fatal_class,   "Database inconsistency"),
+( 33, fatal_class,   "This isn't an ELLA library"),
+( 34, diag2_class,   "ELLA mark no currently = *, the library mark no = *"),
+
+{ PROC clear_library }
+( 35, output_class,  "Library has been cleared"),
+
+{ PROC increase_library }
+( 36, user_class,    "*"),     { remote message from KEEPSAKE  }
+( 37, user_class,    "The minimum increase is * bytes"),
+( 38, user_class,    "This would make the library too large"),
+( 39, output_class,  "The library has been increased by * bytes"),
+
+{ PROC regress_library }
+( 40, output_class,  "Gone back to version *"),
+( 41, user_class,    "Nothing has changed since version *"),
+
+{ PROC save_libchanges }
+( 42, user_class,    "There are no changes to save"),
+
+{ PROC create_library }
+( 43, log_class,     "File ""*"" created as a new ELLA library"),
+( 44, fatal_class,   "*"),     { remote message from KEEPSAKE }
+
+{ PROC  compact_library }
+*5 ( 45, user_class,
+*5                "File ""*"" already exists - you should supply a new name"),
+( 46, log_class,    "New library file, *, created"),
+( 47, log_class,    "The old library file, *, may now be deleted"),
+
+
+{ ******************* Compilation Procedures ********************** }
+
+{ PROC outputcancelled }
+( 50, outpart_class, "You need to reimport  "),
+( 51, output_class,  "You need to reimport into the imports region /*:"),
+( 52, outpart_class, "* *"),  { sort, name }
+
+{ PROC isimported }
+( 53, output_class,  "Context * is imported by:"),
+( 54, output_class,  "* * is imported by:"),
+( 55, outpart_class, "    *"),  {context name}
+( 56, diag2_class,   "* *"),    { sort, name }
+
+{ PROC loadable }
+( 57, outpart_class, "You need to recompile  "),
+( 58, outpart_class, "* *"), { sort name }
+( 59, output_class,  "      * * uses old specification of * *"),
+
+{ PROC inimports }
+( 60, output_class,  "You can't import * from context * into context * since "
+              "this would make the closure circular"),
+( 61, output_class,  "You can't import * from * into the imports region /* of "
+              "the same context"),
+
+{ PROC info_chars }
+( 62, outpart_class, "      from *"),
+( 63, output_class,  "  written *"),   { awaiting request for date - CR560 }
+
+{ PROC printdecl }
+( 64, output_class,  "   * *(*)"),
+( 65, outpart_class, "      uses:    "),
+( 66, outpart_class, "* *"),
+( 67, outpart_class, "(*, old specication)"),
+( 68, outpart_class, "      used by: "),
+( 69, outpart_class, "* *"),
+
+{ PROC sortdecl }
+( 70, output_class,  "The following contain a circularity:"),
+
+{ PROC merge_compiled / merge_imports }
+( 71, user_class,    "Failed to compile"),
+( 72, output_class,  "Current context has been updated"),
+( 73, output_class,  "Compilation has been ignored"),
+( 74, output_class,  "Current context has been updated"),
+
+
+{ ****************** Context Procedures **************************** }
+
+{ PROC make_context / copy_context }
+( 79, user_class,    "* is already a context"),
+( 80, output_class,  "* is now a context"),
+
+{ PROC clear_context }
+( 81, user_class,    "You can't clear context * since it contains exports"),
+( 82, output_class,  "Context * has been cleared"),
+
+{ PROC erase_context }
+( 83, user_class,    "* is a special context which can't be erased"),
+( 84, user_class,    "You can't erase * since it contains exports"),
+( 85, output_class,  "* is no longer a context"),
+
+
+{ ******************** Region Procedures *************************** }
+
+{ PROC clear_imports }
+( 90, output_class,  "* doesn't contain any imports"),
+( 91, output_class,  "In context *:"),
+( 92, output_class,  "* * is no longer imported"),
+( 93, output_class,  "All imports of * have been cleared"),
+
+{ PROC erase_region }
+( 94, user_class,    "You must have at least one imports region"),
+( 95, user_class,    "You can't erase * since it is still needed"),
+( 96, output_class,  "/* is no longer an imports region"),
+
+{ PROC make_region / copy_region }
+( 97, user_class,    "/* is already an imports region in context *"),
+( 98, output_class,  "/* is now an imports region"),
+
+{ PROC name_region }
+( 99, user_class,    "You can't convert context *"),
+( 100, output_class,
+                  "Context * is now a compound context with imports region /*"),
+
+{ PROC dont_name_region }
+( 101, user_class,    "Context * has more than one imports region"),
+( 102, output_class,  "Context * is now a simple context"),
+
+
+{ ****************** Declaration Procedures ***************************** }
+
+{ PROC dont_import }
+( 106, output_class,  "* hasn't been imported"),
+( 107, output_class,  "* is no longer imported"),
+
+{ PROC erase }
+( 108, user_class,    "* * is exported"),
+( 109, user_class,    "* * is still needed"),
+( 110, output_class,  "* * has been erased"),
+
+{ PROC dont_export }
+( 111, output_class,  "* * isn't an export"),
+( 112, output_class,  "* * is no longer exported"),
+( 113, diag2_class,   "* * is still needed"),
+
+{ PROC export }
+( 115, output_class,  "* * is already exported"),
+( 116, user_class,    "* can't be exported as it is *"),
+( 117, output_class,  "* * is now exported"),
+
+{ PROC exportall }
+( 118, output_class,  "In context *:"),
+( 119, output_class,  "   * * was already exported"),
+( 120, output_class,  "   * * has been exported"),
+( 121, output_class,  "There is nothing*to export from *"),
+
+{ PROC clear_exports }
+( 122, output_class,  "* doesn't contain any exports"),
+( 123, output_class,  "In context *:"),
+( 124, output_class,  "* * is no longer exported"),
+( 125, diag2_class,   "All exports of * have been cleared"),
+
+
+
+{ ****************** Closure Procedures **************************** }
+
+( 128, user_class,    "Context * can't be assembled - try ""checkclosure"""),
+
+{ closure_details }
+( 129, output_class,  "      * * needs importing"),
+( 130, output_class,  "Closure of * contains:"),
+( 131, output_class,  "   context *"),
+( 132, output_class,  "      empty"),
+( 133, output_class,  "      ok"),
+( 134, output_class,  "End of closure")
+                          ) );
+
+PROC lib_msg = (INT number) MSGNO: make_msgno(number, lib_facility);
+
+PROC is_lib_msg = (MSGNO msgno) BOOL: is_facility_msg(msgno, lib_facility);
+
+FORALL message IN messages OF lib_facility
+DO  message := ( ( 0, NIL, 2r0 ), NIL )  OD
+
+KEEP  lib_msg, is_lib_msg
+FINISH
