@@ -1,0 +1,488 @@
+DECS local CONTEXT VOID USE putstrings, messageproc,  basics,  assmodes, 
+                            transformprocs, modeprocs,  osinterface,
+                            closureprocs, environprocs, clear:
+
+configinfo A68CONFIG "$Id: local.a68,v 34.2 1995/03/29 13:02:42 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+05:01:93 Additions made so that macro transform will tidy environs. JIT
+21:03:95  33.001  DJS   Release   Re-worked as it was over writing. Now tidies
+                                  the environs without need to re-call the
+                                  macro transform.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE TRANSMAP = STRUCT( INT oldtonew,
+                            newtoold );
+
+PROC make_outer = (UNION( REF ATTRDEC, REF TYPEDEC, REF FNDEC ) dec,
+                   INT decno,
+                   REF ENVIRONC ec,
+                   BOOL create_new_environ )OUTER:
+BEGIN
+   INT nattrs = UPB attrs OF e OF ec,
+       ntypes = UPB types OF e OF ec,
+       nfns = UPB fns OF e OF ec;
+
+   VECTOR[ nattrs ]TRANSMAP attrmap;
+   VECTOR[ ntypes ]TRANSMAP typemap;
+   VECTOR[ nfns ]TRANSMAP fnmap;
+
+   VECTOR[ nattrs ]REF ATTRDEC transattrs;
+   VECTOR[ ntypes ]REF TYPEDEC transtypes;
+   VECTOR[ nfns ]REF FNDEC transfns;
+   INT newattrno := 0, newtypeno := 0, newfnno := 0;
+
+   clear( attrmap );
+   clear( typemap );
+   clear( fnmap );
+
+   PROC update_attrno = (INT attrno, REF INT mapped )BOOL:
+   BEGIN REF TRANSMAP map = attrmap[ attrno ];
+         IF oldtonew OF map = 0
+         THEN  oldtonew OF map := newattrno PLUSAB 1;
+               newtoold OF attrmap[ newattrno ] := attrno
+         FI;
+         mapped := oldtonew OF map;
+         oldtonew OF map /= attrno
+   END;
+
+   PROC update_typeno = (INT typeno, REF INT mapped )BOOL:
+   BEGIN REF TRANSMAP map = typemap[ typeno ];
+         IF oldtonew OF map = 0
+         THEN  oldtonew OF map := newtypeno PLUSAB 1;
+               newtoold OF typemap[ newtypeno ] := typeno
+         FI;
+         mapped := oldtonew OF map;
+         oldtonew OF map /= typeno
+   END;
+
+   PROC update_fnno = (INT fnno, REF INT mapped )BOOL:
+   BEGIN REF TRANSMAP map = fnmap[ fnno ];
+         IF oldtonew OF map = 0
+         THEN  oldtonew OF map := newfnno PLUSAB 1;
+               newtoold OF fnmap[ newfnno ] := fnno
+         FI;
+         mapped := oldtonew OF map;
+         oldtonew OF map /= fnno
+   END;
+
+   PROC attr = (ATTR attr, TRANSFORMPROCS tprocs)ATTRC:
+   CASE attr IN
+   (REF ATTRNAME an )
+   ( INT map;
+     IF update_attrno( attrno OF an, map )
+     THEN  (MAKEATTRNAME map, TRUE)
+     ELSE  (attr, FALSE)
+     FI
+   )
+   OUT (attr OF nulltprocs)(attr, tprocs)
+   ESAC;
+
+   PROC type = (TYPE type, TRANSFORMPROCS tprocs)TYPEC:
+   CASE type IN
+   (REF TNAME tn)
+   ( INT map;
+     IF update_typeno( typeno OF tn, map )
+     THEN  (MAKETNAME map, TRUE)
+     ELSE  (tn, FALSE)
+     FI
+   )
+   OUT  (type OF nulltprocs)(type, tprocs)
+   ESAC;
+
+   PROC unit = (UNIT unit, TRANSFORMPROCS tprocs )UNITC:
+   CASE unit IN
+   (REF CPRIM cpr )
+   ( INT map;
+     IF update_typeno( typeno OF cpr, map )
+     THEN  (HEAP CPRIM := ( map, primno OF cpr ), TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF CINT ci )
+   ( INT map;
+     IF update_typeno( typeno OF ci, map )
+     THEN  (HEAP CINT := ( map,
+                           f OF (formula OF tprocs)( index OF ci, tprocs)),
+            TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF CRANGE crng )
+   ( INT map;
+     IF update_typeno( typeno OF crng, map )
+     THEN  (HEAP CRANGE := ( map,
+                             r OF (range OF tprocs)( range OF crng, tprocs)),
+           TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF CPRIMRANGE cprng )
+   ( INT map;
+     IF update_typeno( typeno OF cprng, map )
+     THEN  (HEAP CPRIMRANGE := ( map, firstno OF cprng, lastno OF cprng ),
+            TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF CQUOTE cqu )
+   ( INT map;
+     IF update_typeno( typeno OF cqu, map )
+     THEN  (HEAP CQUOTE := ( map, string OF cqu ), TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF UASSOC uas )
+   ( INT map;
+     IF update_typeno( typeno OF uas, map )
+     THEN  (HEAP UASSOC := ( map, altno OF uas,
+                             u OF (unit OF tprocs)( assoc OF uas, tprocs)),
+            TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF UEXTRACT uex )
+   ( INT map;
+     IF update_typeno( typeno OF uex, map )
+     THEN  (HEAP UEXTRACT := (u OF (unit OF tprocs)( extract OF uex, tprocs),
+                              map, altno OF uex ),
+            TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   ),
+   (REF UPORTNAME upt )
+   ( INT map;
+     IF update_fnno( fnno OF upt, map )
+     THEN  (HEAP UPORTNAME := (u OF (unit OF tprocs)( unit OF upt, tprocs),
+                               map, nameno OF upt ),
+            TRUE)
+     ELSE  (unit OF nulltprocs)(unit, tprocs)
+     FI
+   )
+   OUT  (unit OF nulltprocs)(unit, tprocs)
+   ESAC;
+
+   PROC instance = (INSTANCE inst, TRANSFORMPROCS tprocs)INSTANCEC:
+   BEGIN
+     INT map;
+     IF update_fnno( fnno OF inst, map )
+     THEN  (HEAP INSTANCE := ( map, macparams OF inst,
+                               a OF (attr OF tprocs)( attr OF inst, tprocs) ),
+            TRUE)
+     ELSE  (instance OF nulltprocs)(inst, tprocs)
+     FI
+   END;
+
+   PROC macspecs = (REF VECTOR [] MACSPEC  mss,
+                          TRANSFORMPROCS  tprocs) MACSPECSC: ( mss, FALSE );
+   {{ Macspecs will have been transformed out so no need to process
+      them.  Therefore supply a dummy transform. }}
+
+   TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( attr,
+                                                            type,
+                                                            unit,
+                                                            instance,
+                                                            macspecs ));
+   INT deccnt, mpno, outersort, newclosureno;
+   REF ATTRDEC atdec;
+   REF TYPEDEC tydec;
+   REF FNDEC fndec;
+
+   CASE dec IN
+   (REF ATTRDEC atd )
+   (  outersort := outerattr;
+      atdec := atd;
+      newclosureno := closureno OF usage OF atd;
+      update_attrno( decno, mpno )
+   ),
+   (REF TYPEDEC tyd )
+   (  outersort := outertype;
+      tydec := tyd;
+      newclosureno := closureno OF usage OF tyd;
+      update_typeno( decno, mpno )
+   ),
+   (REF FNDEC fnd )
+   (  outersort := outerfn;
+      fndec := fnd;
+      newclosureno := closureno OF usage OF fnd;
+      update_fnno( decno, mpno )
+   )
+   OUT SKIP
+   ESAC;
+
+   BOOL atch := FALSE, tych := FALSE, fnch := FALSE;
+
+   deccnt := 0;
+   WHILE ( deccnt PLUSAB 1 ) <= nfns ANDTH
+          ( mpno := newtoold OF fnmap[ deccnt ] ) > 0
+   DO  IF deccnt /= 1 OREL outersort /= outerfn
+       THEN  fndec := ( fns OF e OF ec )[ mpno]
+       FI;
+       FNDECC fndc = (fndec OF nulltprocs)( fndec, newtprocs );
+       transfns[ deccnt ] := f OF fndc;
+       fnch := fnch OREL c OF fndc
+   OD;
+
+   deccnt := 0;
+   WHILE ( deccnt PLUSAB 1 ) <= ntypes ANDTH
+          ( mpno := newtoold OF typemap[ deccnt ] ) > 0
+   DO  IF deccnt /= 1 OREL outersort /= outertype
+       THEN  tydec := ( types OF e OF ec )[ mpno]
+       FI;
+       TYPEDECC tydc = (typedec OF nulltprocs)( tydec, newtprocs );
+       transtypes[ deccnt ] := t OF tydc;
+       tych := tych OREL c OF tydc
+   OD;
+
+   deccnt := 0;
+   WHILE ( deccnt PLUSAB 1 ) <= nattrs ANDTH
+          ( mpno := newtoold OF attrmap[ deccnt ] ) > 0
+   DO  IF deccnt /= 1 OREL outersort /= outerattr
+       THEN  atdec := ( attrs OF e OF ec )[ mpno]
+       FI;
+       ATTRDECC atdc = (attrdec OF nulltprocs)( atdec, newtprocs );
+       transattrs[ deccnt ] := a OF atdc;
+       atch := atch OREL c OF atdc
+   OD;
+
+   discard_tprocs( newtprocs );
+
+   { Create new environ vectors }
+
+   REF ENVIRON newenv = HEAP ENVIRON := e OF ec;
+
+   IF atch OREL newattrno /= nattrs OREL create_new_environ
+   THEN attrs OF newenv := HEAP VECTOR [newattrno] REF ATTRDEC :=
+                           transattrs[ : newattrno ]
+   FI;
+   IF tych OREL newtypeno /= ntypes OREL create_new_environ
+   THEN types OF newenv := HEAP VECTOR [newtypeno] REF TYPEDEC :=
+                           transtypes[ : newtypeno ]
+   FI;
+   IF fnch OREL newfnno /= nfns OREL create_new_environ
+   THEN  fns OF newenv := HEAP VECTOR [newfnno] REF FNDEC :=
+                          transfns[ : newfnno ]
+   FI;
+   ( newclosureno, outersort, newenv )
+END;  { make_outer }
+
+
+PROC transform_local  = (CLOSURE outerclosure, MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+   CLOSUREC result := ( outerclosure, FALSE );
+   REF CLOSURE thisclosure = cl OF result;
+   REF BOOL closure_changed = c OF result;
+   REF OUTERS closureptr := outers OF thisclosure;
+
+   PROC newclosure = REF CLOSURE:
+   BEGIN  IF NOT closure_changed
+          THEN closure_changed := TRUE;
+               thisclosure := copy_closure( thisclosure, msg);
+               closureptr := find_outers( closureno OF outer OF closureptr,
+                                          thisclosure, msg)
+          FI;
+          thisclosure
+   END;
+
+   PROC insert_newouter = (OUTER newouter, INT closureno )VOID:
+   BEGIN  REF REF OUTERS ptr := outers OF newclosure;
+          WHILE closureno OF outer OF ptr /= closureno DO ptr := rest OF ptr OD;
+          insert_outer( newouter, ptr, thisclosure, msg)
+   END;
+
+   PROC outerfn_local = (OUTER ofn, TRANSFORMPROCS outertprocs) OUTERC:
+   BEGIN
+      ENVIRONC ec := MAKEENVIRONC environ OF ofn;
+      REF FNDEC fdec = (fns OF e OF ec)[1];
+      USAGE newusage := usage OF fdec;
+      REF INT newclosureno = closureno OF newusage;
+
+      {{ The following transformations are only applied to the bodies of
+         function declarations.  This will include inner declarations.  }}
+
+      PROC create_outer = (DECLARATION dec, TRANSFORMPROCS tprocs )BOOL:
+      BEGIN
+
+         CASE dec IN
+         (ATTRNAME atn)
+         (INT attrno = attrno OF atn;
+          REF ATTRDEC ad = HEAP ATTRDEC := (attrs OF e OF ec)[ attrno];
+          sort OF ad := outerdec;
+          newclosureno := reserve_next_closureno( newclosure);
+          attrname OF ad := oneline(( attrname OF ad, "_", newclosureno));
+          usage OF ad := HEAP USAGE := newusage;
+          REF ATTRDEC innerad := HEAP ATTRDEC := ad;
+          value OF innerad := attrnull;
+          newattrs( ec )[ attrno] := innerad;
+          insert_newouter( make_outer( ad, attrno, ec, TRUE), closureno OF ofn )
+         ),
+         (TNAME tyn)
+         (INT typeno = typeno OF tyn;
+          REF TYPEDEC td = HEAP TYPEDEC := (types OF e OF ec)[ typeno];
+          sort OF td := outerdec;
+          newclosureno := reserve_next_closureno( newclosure);
+          typename OF td := oneline(( typename OF td, "_", newclosureno));
+          usage OF td := HEAP USAGE := newusage;
+          REF TYPEDEC innertd := HEAP TYPEDEC := td;
+          attr OF innertd := attrnull;
+          newtypes( ec )[ typeno] := innertd;
+          insert_newouter( make_outer( td, typeno, ec, TRUE), closureno OF ofn )
+         ),
+         (FNNAME fnn)
+         (INT fnno = fnno OF fnn;
+          FNDECC fndc = (fndec OF nulltprocs)( (fns OF e OF ec)[ fnno],
+                                               tprocs );
+          REF FNDEC fd = IF c OF fndc
+                         THEN  f OF fndc
+                         ELSE  HEAP FNDEC := (fns OF e OF ec)[ fnno]
+                         FI;
+          sort OF fd := outerdec;
+          newclosureno := reserve_next_closureno( newclosure);
+          fnname OF fd := oneline(( fnname OF fd, "_",  newclosureno));
+          usage OF fd := HEAP USAGE := newusage;
+          REF FNDEC innerfd := HEAP FNDEC := fd;
+          attr OF innerfd := attrnull;
+          fnbody OF innerfd := bodynull;
+          newfns( ec )[ fnno] := innerfd;
+          insert_newouter( make_outer( fd, fnno, ec, TRUE), closureno OF ofn )
+         )
+         OUT SKIP
+         ESAC;
+
+         TRUE
+      END;
+
+      PROC step = (STEP step, TRANSFORMPROCS tprocs) STEPC:
+      CASE step IN
+         (DECLARATION dec)
+         IF create_outer( dec, tprocs )
+         THEN  (stepnull, TRUE)
+         ELSE  (dec, FALSE)
+         FI
+      OUT (step OF outertprocs)(step, tprocs)
+      ESAC;
+
+      PROC seqstep = (SEQSTEP step, TRANSFORMPROCS tprocs) SEQSTEPC:
+      CASE step IN
+         (DECLARATION dec)
+         IF create_outer( dec, tprocs )
+         THEN  (seqnull, TRUE)
+         ELSE  (dec, FALSE)
+         FI
+      OUT (seqstep OF outertprocs)(step, tprocs)
+      ESAC;
+
+      {{  Watch the stack!!  Not my style but at least it is safe, concise
+          and easily understood.  Could give trouble on really big
+          function bodies.  }}
+
+      PROC series = (REF SERIES ser, TRANSFORMPROCS tprocs) SERIESC:
+      BEGIN
+         IF ser IS nilseries
+         THEN  (ser, FALSE)
+         ELSE  STEPC sc = (step OF tprocs)(step OF ser, tprocs);
+               SERIESC rest = (series OF tprocs)(rest OF ser, tprocs);
+               IF c OF rest  OREL  c OF sc
+               THEN  CASE s OF sc IN
+                     (REF STEPNULL) (s OF rest, TRUE) 
+                     OUT (HEAP SERIES:= (s OF sc, s OF rest), TRUE)
+                     ESAC
+               ELSE  (ser, FALSE)
+               FI
+         FI
+      END;
+
+      PROC sequence = (REF SEQUENCE seq, TRANSFORMPROCS tprocs) SEQUENCEC:
+      BEGIN
+         IF seq IS nilsequence
+         THEN  (seq, FALSE)
+         ELSE  SEQSTEPC sc = (seqstep OF tprocs)(step OF seq, tprocs);
+               SEQUENCEC rest = (sequence OF tprocs)(rest OF seq, tprocs);
+               IF c OF rest  OREL  c OF sc
+               THEN  CASE s OF sc IN
+                     (REF SEQNULL) (s OF rest, TRUE) 
+                     OUT (HEAP SEQUENCE:= (s OF sc, s OF rest), TRUE)
+                     ESAC
+               ELSE  (seq, FALSE)
+               FI
+         FI
+      END;
+
+      TRANSFORMPROCS newtprocs = make_newtprocs( outertprocs, ( step,
+                                                                series,
+                                                                seqstep,
+                                                                sequence ));
+      FNBODYC bc = (fnbody OF outertprocs)( fnbody OF fdec, newtprocs);
+      {{  Perform the main transformation to extract local declarations
+          to be outer declarations. }}
+
+      discard_tprocs( newtprocs );
+      IF c OF bc OREL c OF ec
+      THEN  REF FNDEC newfndec = HEAP FNDEC := fdec;
+            fnbody OF newfndec := f OF bc;
+            newfns( ec )[1] := newfndec;
+            {{  Perform transformation on the new declaration in order to
+                minimise the environments so they contain only what is needed.
+            }}
+            (make_outer( newfndec, 1, ec, FALSE ), TRUE)
+      ELSE  (ofn, FALSE)
+      FI
+   END;  { outerfn_local }
+
+   PROC outer = (OUTER outeritem, TRANSFORMPROCS tprocs) OUTERC:
+   IF sort OF outeritem = outerfn 
+   THEN  outerfn_local( outeritem, tprocs )
+   ELSE  ( outeritem, FALSE)
+   FI;
+
+   IF outers OF outerclosure ISNT nilouters
+   THEN
+       TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, outer);
+
+       WHILE closureptr ISNT nilouters
+       DO flt_if_interrupted(msg);
+          OUTERC oc = (outer OF newtprocs)(outer OF closureptr, newtprocs);
+          IF c OF oc THEN outer OF closureptr := o OF oc FI;
+          closureptr := rest OF closureptr
+       OD;
+       discard_tprocs( newtprocs )
+   FI;
+   result
+END; { closure }
+
+   SKIP
+
+KEEP transform_local
+FINISH
