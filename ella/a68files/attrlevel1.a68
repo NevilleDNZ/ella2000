@@ -1,0 +1,508 @@
+DECS  attrlevel1  CONTEXT VOID USE  putstrings, messageproc, basics,
+      osinterface, databasebuffers, libmodes:
+
+{ " Id: attrlevel1.sta,v 1.1 91/10/14 14:25:57 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrlevel1.a68,v 34.2 1995/03/29 13:03:16 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+02:02:89  Updated to Kernel. EVW
+28:02:89  R4B144. "rename_class" renamed to "rename_password" and
+                     "rename_class" added.    TK
+14:03:89  R4B143. dependencies in ordering of procedure arguments
+                     evaluation removed.  TK
+21:03:89  R4B274. Replace inspecs by get_kepts. EVW
+07:04:89  R4B285. The dangerous proc `open_allclasses' defined for
+                     the stand-alone dumper.   TK
+29:07:89  get_kepts replaced by get_decls. EVW
+15:08:89  CR ???. low-level changes for declaration attributes. EVW
+                     Order changed in introduce_class, remove_class as
+                     disc operations must occur before changes to CLASS.
+27:10:89  CR 636. Adam replaced by su_keepsake. JIT
+17:07:90  Attributes now known by EASE, save, open no longer needed. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+09:01:91  R6B3:  incremental comp:  'SHR 3' added in class_lifetime. JIT
+07:02:91  attdps not initialised - keepsake now checks.  DCT
+21:02:91  KEEPSAKE operations on ints replaced by in2 / outint2.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+23:02:93  cpu_time_used renamed get_cpu_time in OSIF level 1.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.015 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{  LEVEL 1 ATTRIBUTE PROCEDURES
+   ============================
+
+   This module is partly owned by RSRE.  They must be consulted before any
+   modifications are made to this module.
+
+   These procedures write and read attribute information at the most
+   fundamental level in the ADAM database.
+
+   Classes are added to or subtracted from the ADAM database by the procedures
+   `introduce_class' and `remove_class'.
+
+   All reading and writing of attribute data at any level MUST ultimately use
+   the procedures `read_class' and `write_class'.
+
+
+   STRUCTURE OF ADAM DATABASE
+   ==========================
+
+   ELLA library pointers (available in module `libinterface'):
+
+      ptrattributes - points to a []DISCPTR attribute data for library
+                       [1]  - holds the library version numbers for the most
+                              recent change in each class;
+
+                       [2:] - library attribute information
+
+      ptrattinfo    - points to a block which holds class names, passwords
+                      and keys.
+
+   ELLA context pointers:
+
+      (val OF context)[2]  - points to a []INT which holds the library version
+                             numbers for the most recent change in each class;
+
+      (val OF context)[3:] - points to context attribute information.
+}
+
+{************************ NON-USER PROCEDURES ******************************}
+{               (Communication with ADAM database)                         }
+
+
+MODE ATTPOINTERS = STRUCT (REF CONTXT ct, INT offset,
+                           REF VECTOR [] DISCPTR attdps,
+                           REF VECTOR [] INT attinfo);
+
+PROC ct_to_dps = (REF CONTXT ct, MESSAGEPROC  msg) REF VECTOR [] DISCPTR:
+BEGIN
+   REF VECTOR [] DISCPTR dps;
+   INT offset := 0;
+   DISCPTR dp = IF ct IS nilcontxt { i.e Library attribute }
+                THEN  ptrattributes
+                ELSE  offset := 1; val OF ct
+                FI;
+   IF isnilptr(discfile, dp)
+   THEN  dps := HEAP VECTOR[1 + offset] DISCPTR;
+         FORALL d IN dps DO d := nilptr OD
+   ELSE  dps := HEAP VECTOR [ndiscptrs(discfile, dp, msg)] DISCPTR;
+         myreaddiscptrs(discfile, dps, dp, msg)
+   FI;
+   dps
+END;
+
+PROC read attpointers = (ID ctn, BOOL info, MESSAGEPROC msg) ATTPOINTERS:
+BEGIN
+   REF CONTXT ct =
+      IF ctn = nullid THEN nilcontxt ELSE check_context(ctn, msg) FI;
+   INT offset = IF ctn = nullid THEN 1 ELSE 2 FI;
+   REF VECTOR [] DISCPTR dps := ct_to_dps(ct, msg);
+   HEAP VECTOR [UPB dps -offset] INT attinfo;
+   IF info
+   THEN  BUFFER  buffer = read buffer(discfile, dps[offset]);
+         FORALL int IN attinfo DO  int:= in2(buffer)  OD
+   ELSE  FORALL int IN attinfo DO  int:= -1  OD
+   FI;
+   (ct, offset, dps, attinfo)
+END;
+
+PROC write attpointers = (ATTPOINTERS attp, MESSAGEPROC msg) VOID:
+BEGIN
+   (attdps OF attp)[offset OF attp]
+       := IF UPB (attinfo OF attp) = 0
+       THEN  nilptr
+       ELSE  BUFFER  buffer = make buffer(discfile, block_size, validwrite);
+             FORALL int IN attinfo OF attp DO  outint2(int, buffer, msg)  OD;
+             end write(buffer, msg)
+       FI;
+   IF (ct OF attp) IS nilcontxt
+   THEN  ptrattributes := mywritediscptrs(discfile, attdps OF attp, msg)
+   ELSE  val OF ct OF attp := mywritediscptrs(discfile, attdps OF attp, msg)
+         {{??updates library mode }}
+   FI;
+   setlibchanged(msg)
+END;
+
+
+PROC add class = (MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTEXTS c := contexts OF library;
+   REF CONTXT ct := context OF c;
+   REF VECTOR [] DISCPTR dps := ct_to_dps(ct, msg);
+   INT offset := 2;
+   INT oldnumber = UPB dps - offset;
+   INT number = oldnumber + 1;
+   VECTOR [number] INT attinfo;
+   VECTOR [number + offset] DISCPTR attdps;
+   FORALL dp IN attdps DO  dp:= nilptr  OD;
+   WHILE IF number > 1
+         THEN  BUFFER  buffer = read buffer(discfile, dps[offset]);
+               FORALL int IN attinfo[: oldnumber] DO  int:= in2(buffer)  OD;
+               attdps[:oldnumber+offset] := dps
+         FI;
+         attinfo[number] := version OF library;
+         attdps[number+offset] := nilptr;
+         write attpointers((ct, offset, attdps[:number+offset], attinfo), msg);
+         c ISNT nilcontexts
+   DO c := rest OF c;
+      IF c IS nilcontexts
+      THEN  offset := 1; ct := nilcontxt
+      ELSE  offset := 2; ct := context OF c
+      FI;
+      dps := ct_to_dps(ct, msg)
+   OD
+END;
+
+PROC subtract class = (INT index, MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTEXTS c := contexts OF library;
+   REF CONTXT ct := context OF c;
+   REF VECTOR [] DISCPTR dps := ct_to_dps(ct, msg);
+   INT offset := 2;
+   INT number = UPB dps - offset;
+   VECTOR [number] INT attinfo;
+   VECTOR [UPB dps] DISCPTR attdps;
+   WHILE BUFFER  buffer = read buffer(discfile, dps[1+offset]);
+         FORALL int IN attinfo DO  int:= in2(buffer)  OD;
+         attdps := dps;
+         IF index /= number
+         THEN  attinfo[index : number-1] := attinfo[index+1 :];
+               attdps[index+offset :  UPB attdps-1] :=  attdps[index+offset+1 :]
+         FI;
+         write attpointers((ct, offset, attdps[:number+offset-1],
+                            attinfo[:number-1]), msg);
+         c ISNT nilcontexts
+   DO c := rest OF c;
+      IF c IS nilcontexts
+      THEN  offset := 1; ct := nilcontxt
+      ELSE  offset := 2; ct := context OF c
+      FI;
+      dps := ct_to_dps(ct, msg)
+   OD
+END;
+
+{****************** NON-USER PROCS ON CLASSES ****************************}
+
+
+PROC qfindname = (VECTOR[]CHAR name) REF CLASSES:
+BEGIN
+   REF CLASSES att := classes OF library;
+   WHILE (att ISNT nilclasses) ANDTH NOT (name OF att = name)
+      DO  att := rest OF att  OD;
+   att
+END;
+
+PROC qfindclass = (INT key) REF CLASSES:
+BEGIN
+   REF CLASSES att := classes OF library;
+   WHILE (att ISNT nilclasses) ANDTH NOT (key OF att = key)
+     DO  att := rest OF att  OD;
+   att
+END;
+
+PROC att check = (REF CLASSES att, INT key, MESSAGEPROC msg) VOID:
+BEGIN
+   IF att IS nilclasses
+   THEN  msg(user,
+             "I can't find an attribute class with the key " + intchars(key))
+   ELIF NOT (login OF att)
+   THEN  msg(user, "You have not logged into attribute class " + name OF att)
+   FI
+END;
+
+PROC find class = (INT key, MESSAGEPROC msg) REF CLASSES:
+BEGIN
+   REF CLASSES att = qfindclass(key);
+   att check(att, key, msg);
+   att
+END;
+
+PROC find index = (INT key, MESSAGEPROC msg) INT:
+BEGIN
+   INT index := 1;
+   REF CLASSES att := classes OF library;
+   WHILE (att ISNT nilclasses) ANDTH NOT (key OF att = key)
+     DO  index PLUSAB 1;  att := rest OF att  OD;
+   att check(att, key, msg);
+   index
+END;
+
+{{ Possible values of class sort }}
+
+INT normal_class = 1, declaration_class = 2;
+
+PROC class_sort = (INT key) INT:  ABS (BIN key AND 2r111);
+
+INT perm_life = 0, decl_life = 1, spec_life = 2, body_life = 3;
+
+PROC class_lifetime = (INT key) INT: ABS ((BIN key AND 2r111000) SHR 3);
+
+{ Division of Key :                            }
+{   Bits  1-26 : Unique identifier             }
+{   Bits 27-29 : lifetime of class             }
+{   Bits 30-32 : class sort                    }
+
+PROC make key = (INT class sort, lifetime) INT:
+BEGIN
+   BITS sort = BIN class sort;
+   BITS life = BIN lifetime SHL 3;
+   INT range = 100000;
+   INT key := get_cpu_time MOD range;
+   BITS bkey := (BIN key SHL 6) OR sort OR life;
+   key := ABS bkey;
+   REF CLASSES atts := classes OF library;
+   WHILE (atts ISNT nilclasses)
+   DO  IF key OF atts = key
+       THEN  key := (key+1) MOD range;
+             bkey := (BIN key SHL 6) OR sort OR life;
+             key := ABS bkey;
+             atts := classes OF library
+       ELSE  atts := rest OF atts
+       FI
+   OD;
+   key
+END;
+
+PROC intro_class = (VECTOR[]CHAR n, p, INT classsort, lifetime, MESSAGEPROC msg)
+                                                                           VOID:
+BEGIN
+   ID name := MAKEID n;  ID password := MAKEID p;
+   REF CLASSES att = qfindname(name);
+   IF att ISNT nilclasses
+   THEN  msg(user, "Attribute class " + name + " already in library")
+   ELSE add class(msg);
+        INT key = make key(classsort, lifetime);
+        IF classes OF library IS nilclasses
+        THEN classes OF library := HEAP CLASSES :=
+                           (name, password, key, FALSE, nilclasses)
+        ELSE REF CLASSES atts := classes OF library;
+             WHILE rest OF atts ISNT nilclasses DO atts := rest OF atts OD;
+             rest OF atts := HEAP CLASSES :=
+                             (name, password, key, FALSE, nilclasses)
+        FI
+   FI
+END;
+
+{***************** USER PROCEDURES ON CLASSES *****************************}
+
+{ Reads class information from ADAM database into main store }
+
+PROC get_classes = (BOOL restart) VOID:
+BEGIN
+   PROC make classes = (BUFFER buff) REF CLASSES:
+   ( IF index OF buff < UPB rvc OF current OF buff
+     THEN  ID name = inid2(buff);
+           ID pword = inid2(buff);
+           INT key = in2(buff);
+           BOOL login = (in2(buff) = 1);
+           HEAP CLASSES :=
+              (name, pword, key, (restart | login | FALSE), make classes(buff))
+     ELSE  nilclasses
+     FI
+   );
+
+   IF isnilptr(discfile, ptrattinfo)
+   THEN  classes OF library := nilclasses
+   ELSE  BUFFER attbuffer := read buffer(discfile, ptrattinfo);
+         classes OF library :=  make classes(attbuffer)
+   FI
+END;
+
+{Very dangerous version of `get_classes' in which all of the classes
+ are automatically logged in.  We need this for the stand-alone dumper only.}
+
+ PROC open_allclasses = VOID:
+ BEGIN
+    PROC make classes = (BUFFER buff) REF CLASSES:
+    ( IF index OF buff < UPB rvc OF current OF buff
+      THEN  ID name = inid2(buff);
+            ID pword = inid2(buff);
+            INT key = in2(buff);
+            in2(buff);  {ignore login}
+            HEAP CLASSES := (name, pword, key, TRUE, make classes(buff))
+      ELSE  nilclasses
+      FI
+   );
+
+   IF isnilptr(discfile, ptrattinfo)
+   THEN  classes OF library := nilclasses
+   ELSE  BUFFER attbuffer := read buffer(discfile, ptrattinfo);
+         classes OF library :=  make classes(attbuffer)
+   FI
+END;
+
+{ Writes class information from main store into ADAM database }
+
+PROC put_classes = (MESSAGEPROC msg) VOID:
+BEGIN
+   VECTOR [block_size] CHAR buffer;
+   BUFFER attbuff := start write(discfile, buffer);
+   REF CLASSES atts := classes OF library;
+   WHILE atts ISNT nilclasses
+   DO  outid2(name OF atts, attbuff, msg);
+       outid2(password OF atts, attbuff, msg);
+       outint2(key OF atts, attbuff, msg);
+       outint2(ABS login OF atts, attbuff, msg);
+       atts := rest OF atts
+   OD;
+   ptrattinfo := end write(attbuff, msg);
+   setlibchanged(msg)
+END;
+
+
+PROC scan_classes = ( PROC( VECTOR[]CHAR {name},
+                            INT  {key},
+                            BOOL {login},
+                            BOOL {needspassword} )BOOL action )BOOL:
+BEGIN
+    REF CLASSES attr := classes OF library;
+
+    WHILE ( attr ISNT nilclasses ) ANDTH
+          action( name OF attr,
+                  key OF attr,
+                  login OF attr,
+                  ( password OF attr ISNT nilid ) ANDTH
+                    UPB password OF attr > 0 )
+    DO attr := rest OF attr OD;
+    attr ISNT nilclasses
+END;
+
+
+{***************** USER PROCEDURES ON A SINGLE CLASS *************************}
+
+
+PROC introduce_class = (VECTOR[]CHAR n, p, MESSAGEPROC msg) VOID:
+   intro_class(n, p, normal_class, perm_life, msg);
+
+PROC remove_class = (INT key, MESSAGEPROC msg) VOID:
+BEGIN
+   INT index = find index(key, msg);
+   subtract class(index, msg);
+   IF key OF classes OF library = key
+   THEN  classes OF library := rest OF classes OF library
+   ELSE  REF REF CLASSES atts := classes OF library;
+         WHILE (atts ISNT nilclasses) ANDTH (key OF atts /= key)
+           DO  atts := rest OF atts  OD;
+         REF REF CLASSES (atts) := rest OF atts
+   FI
+END;
+
+PROC rename_password =(INT key, VECTOR[]CHAR new_password, MESSAGEPROC msg) INT:
+BEGIN
+   REF CLASSES att = find class(key, msg);
+   password OF att := MAKEID new_password;
+   INT sort = class_sort(key);
+   INT lifetime = class_lifetime(key);
+   key OF att := make key(sort, lifetime)
+END;
+
+PROC rename_class = (INT key, VECTOR[]CHAR newname, MESSAGEPROC msg) INT:
+BEGIN
+   REF CLASSES att = find class(key, msg);
+   name OF att := MAKEID newname;
+   INT sort = class_sort(key);
+   INT lifetime = class_lifetime(key);
+   key OF att := make key(sort, lifetime)
+END;
+
+PROC login_class = (VECTOR[]CHAR name, password, MESSAGEPROC msg) INT:
+BEGIN
+   REF CLASSES att = qfindname(name);
+   IF att IS nilclasses
+   THEN  msg(user, "I can't find an attribute class called " + name); 0
+   ELIF password /= password OF att
+   THEN  msg(user, password + " is not the correct password for " + name); 0
+   ELSE  login OF att := TRUE;
+         key OF att
+   FI
+END;
+
+PROC logout_class = (INT key, MESSAGEPROC msg) VOID:
+BEGIN
+   REF CLASSES att = find class(key, msg);
+   login OF att := FALSE
+END;
+
+
+PROC write_class = (VECTOR[]CHAR ctn, DISCPTR attptr, INT key, MESSAGEPROC msg)
+                                                                         VOID:
+BEGIN
+   INT index = find index(key, msg);
+   ATTPOINTERS attp := read attpointers(MAKEID ctn, TRUE, msg);
+   (attinfo OF attp)[index] := version OF library;
+   (attdps OF attp)[index+offset OF attp]  := attptr;
+   write attpointers(attp, msg)
+END;
+
+PROC read_class = (VECTOR[]CHAR ctn, INT key, MESSAGEPROC msg) DISCPTR:
+BEGIN
+   INT index = find index(key, msg);
+   ATTPOINTERS attp = read attpointers(MAKEID ctn, TRUE, msg);
+   (attdps OF attp)[index+offset OF attp]
+END;
+
+PROC can_remove_class = (INT key, MESSAGEPROC print, msg ) BOOL:
+BEGIN
+   REF CONTEXTS cts := contexts OF library;
+   ID ctn;
+   BOOL no_msg := TRUE;
+   WHILE ctn :=
+            IF cts IS nilcontexts THEN nullid ELSE name OF context OF cts FI;
+         IF NOT isnilptr(discfile, read_class(ctn, key, msg))
+         THEN  no_msg := FALSE;
+               print(log, ctn)
+         FI;
+         cts ISNT nilcontexts
+   DO  cts := rest OF cts  OD;
+   no_msg
+END;
+
+
+
+SKIP
+KEEP {class sort}      normal_class,  declaration_class,
+     {class lifetime}  perm_life,  decl_life,  spec_life,  body_life,
+
+     class_sort,        class_lifetime,       intro_class,  qfindclass,
+     open_allclasses,
+
+ { User procedures }
+     get_classes,       put_classes,          scan_classes,
+     introduce_class,   remove_class,         rename_class,
+     login_class,       logout_class,         write_class,
+     read_class,        can_remove_class,     rename_password
+FINISH

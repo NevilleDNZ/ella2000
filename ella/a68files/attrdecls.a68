@@ -1,0 +1,303 @@
+DECS  attrdecls  CONTEXT VOID  USE  putstrings, basics, messageproc,
+      databasebuffers, libmodes, attrlevel1:
+
+{ " Id: attrdecls.sta,v 1.1 91/10/14 14:25:55 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrdecls.a68,v 34.2 1995/03/29 13:03:16 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:12:88  DECLATTS started.  EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+27:11:90  clear_declattributes added for clear_context in libprocs.  DCT
+21:02:91  No longer reads / writes version numbers directly to KEEPSAKE.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+
+   Structure of declaration attributes.
+
+                             |------------> VECTOR [] INT version numbers
+                             |
+          @ DISCPTR          |------------>  One discptr for each declaration
+               ------------->|
+        (declaration_class)  |------------>
+                             |
+                             |------------>
+                             ...
+
+
+   MODE DECLATTRIBUTES = STRUCT (INT key, BOOL changed,
+                                 REF VECTOR [] INT version,
+                                 REF VECTOR [] DISCPTR data,
+                                 REF DECLATTRIBUTES rest);
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  28.005 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC introduce_decl_class = (VECTOR[]CHAR n, p, INT lifetime, MESSAGEPROC msg)
+                                                                          VOID:
+BEGIN
+   intro_class(n, p, declaration_class, lifetime, msg)
+END;
+
+PROC is_decl_class = (INT key) BOOL:  (class_sort(key) = declaration_class);
+
+PROC check_decl_class = (INT key, MESSAGEPROC msg) VOID:
+BEGIN
+   IF class_sort(key) /= declaration_class
+   THEN  msg(user, "You need a declaration attribute class here")
+   FI
+END;
+
+
+
+PROC readdeclattributes = (REF CONTXT ct, INT key, MESSAGEPROC msg)
+                                                         REF DECLATTRIBUTES:
+BEGIN
+   check_decl_class(key, msg);
+   DISCPTR class = read_class(name OF ct, key, msg);
+   IF isnilptr(discfile, class)
+   THEN  HEAP DECLATTRIBUTES := (key, FALSE, HEAP VECTOR [0] INT,
+                                 HEAP VECTOR [0] DISCPTR, nildeclattributes)
+   ELSE  HEAP VECTOR [ndiscptrs(discfile, class, msg)] DISCPTR pointers;
+         myreaddiscptrs(discfile, pointers, class, msg);
+         BUFFER  buffer = read buffer(discfile, pointers[1]);
+         HEAP VECTOR [in2(buffer)] INT version;
+         FORALL int IN version DO  int:= in2(buffer)  OD;
+         HEAP DECLATTRIBUTES :=
+             (key, FALSE, version, pointers[2:], nildeclattributes)
+   FI
+END;
+
+PROC get_declattribute = (REF CONTXT ct, INT key, MESSAGEPROC msg)
+                                                          REF DECLATTRIBUTES:
+BEGIN
+   REF DECLATTRIBUTES set := declattributes OF ct;
+   WHILE  (set ISNT nildeclattributes)  ANDTH (key /= key OF set)
+   DO set := rest OF set OD;
+   IF set IS nildeclattributes
+   THEN REF DECLATTRIBUTES da := readdeclattributes(ct, key, msg);
+        rest OF da := declattributes OF ct;
+        declattributes OF ct := da;
+        set := declattributes OF ct
+   FI;
+   set
+END;
+
+PROC get_all_declattributes = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   { Updates the declattributes field of CONTXT to contain all the
+     declaration attributes for that context.  This is not a user procedure
+     since it circumvents the class password }
+   PROC action = (VECTOR [] CHAR class, INT key, BOOL login, needspass) BOOL:
+   BEGIN
+      IF is_decl_class(key)
+      THEN  IF NOT login
+            THEN ID pass =
+                   IF needspass THEN password OF qfindclass(key) ELSE nullid FI;
+                 login_class(class, pass, msg)
+            FI;
+            get_declattribute(ct, key, msg);
+            IF NOT login
+            THEN logout_class(key, msg)
+            FI
+      FI;
+      TRUE
+   END;
+   scan_classes(action)
+END;
+
+
+PROC write_declattributes = (REF CONTXT ct, VECTOR [] INT keys,
+                                                      MESSAGEPROC msg) VOID:
+BEGIN
+   FORALL key IN keys
+   DO  REF DECLATTRIBUTES set := declattributes OF ct;
+       WHILE  (set ISNT nildeclattributes)  ANDTH (key /= key OF set)
+       DO set := rest OF set OD;
+       IF (set ISNT nildeclattributes) ANDTH changed OF set
+       THEN  DISCPTR dp =
+               IF UPB data OF set = 0
+               THEN nilptr
+               ELSE VECTOR [UPB data OF set + 1] DISCPTR pointers;
+                    BUFFER  buffer =
+                        make buffer(discfile, block_size, validwrite);
+                    outint2(UPB version OF set, buffer, msg);
+                    FORALL int IN version OF set
+                    DO  outint2(int, buffer, msg)  OD;
+                    pointers[1] := end write(buffer, msg);
+                    pointers[2:] := data OF set;
+                    mywritediscptrs(discfile, pointers, msg)
+               FI;
+             write_class(name OF ct, dp, key, msg)
+       FI
+   OD
+END;
+
+
+PROC scan_declattributes = (REF CONTXT ct,
+                            PROC (REF DECLATTRIBUTES, MESSAGEPROC) BOOL action,
+                            MESSAGEPROC msg) BOOL:
+BEGIN
+   REF DECLATTRIBUTES set := declattributes OF ct;
+   WHILE (set ISNT nildeclattributes) ANDTH action(set, msg)
+   DO set := rest OF set OD;
+   set ISNT nildeclattributes
+END;
+
+PROC scan_all_declattributes = (REF CONTXT ct,
+                            PROC (REF DECLATTRIBUTES, MESSAGEPROC) BOOL action,
+                            MESSAGEPROC msg) BOOL:
+BEGIN
+   get_all_declattributes(ct, msg);
+   scan_declattributes(ct, action, msg)
+END;
+
+
+
+PROC update_declattributes = (REF CONTXT ct, VECTOR [] INT table,
+                                             MESSAGEPROC msg) VOID:
+BEGIN
+   get_all_declattributes(ct, msg);
+   REF VECTOR [] DECL decls = decls OF ct;
+   INT upb = UPB decls;
+
+   REF DECLATTRIBUTES set := declattributes OF ct;
+   WHILE set ISNT nildeclattributes
+   DO  INT lifetime = class_lifetime(key OF set);
+       HEAP VECTOR [upb] INT newversions;
+       FORALL nv IN newversions DO nv := version OF library OD;
+       HEAP VECTOR [upb] DISCPTR newdata;
+       FORALL nd IN newdata DO nd := nilptr OD;
+
+       INT oldindex := 0;
+       FORALL v IN version OF set, d IN data OF set
+       DO  INT newindex = table[oldindex PLUSAB 1];
+           INT status = status OF decls[newindex];
+           IF lifetime = perm_life OREL lifetime = decl_life OREL
+              (lifetime = body_life ANDTH (BIN status AND body_mask)/=body_mask)
+              OREL
+              (lifetime = spec_life ANDTH (BIN status AND spec_mask)/=spec_mask)
+           THEN
+               newversions[newindex] := v;
+               newdata[newindex] := d
+           FI
+       OD;
+       changed OF set := TRUE;
+       version OF set := newversions;
+       data OF set := newdata;
+       set := rest OF set
+   OD
+END;
+
+PROC merge_declattribute = (REF CONTXT ct, INT key, REF VECTOR [] INT declnos,
+                            INT newversion, REF VECTOR [] DISCPTR newdata,
+                            MESSAGEPROC msg )VOID:
+BEGIN
+   REF DECLATTRIBUTES set := get_declattribute(ct, key, msg);
+   FORALL data IN newdata, declno IN declnos
+   DO (version OF set)[declno] := newversion;
+      (data OF set)[declno] := data;
+      changed OF set := TRUE
+   OD
+END;
+
+
+{ ************* PROCs which work on individual declaration ***************** }
+
+MODE DECLDATA = STRUCT (INT version, DISCPTR data);
+
+PROC write_decldata = (REF DECLATTRIBUTES set, INT declno, DECLDATA data,
+                                                      MESSAGEPROC msg) VOID:
+BEGIN
+   (data OF set)[declno] := data OF data;
+   (version OF set)[declno] := version OF data;
+   changed OF set := TRUE
+END;
+
+
+PROC read_decldata = (REF DECLATTRIBUTES set, INT declno, MESSAGEPROC msg)
+                                                                   DECLDATA:
+BEGIN
+   ((version OF set)[declno], (data OF set)[declno])
+END;
+
+PROC erase_decldata = (REF DECLATTRIBUTES set, INT declno, MESSAGEPROC msg)VOID:
+BEGIN
+   INT upb = UPB version OF set;
+{{?? do I need new HEAP or can I make use of existing arrays,shift and trim }}
+   HEAP VECTOR [upb - 1] INT newversion;
+   HEAP VECTOR [upb - 1] DISCPTR newdata;
+   IF declno > 1
+   THEN  newversion[1:declno-1] := (version OF set)[1:declno-1];
+         newdata[1:declno-1] := (data OF set)[1:declno-1]
+   FI;
+   IF declno < upb
+   THEN  newversion[declno: ] := (version OF set)[declno+1: ];
+         newdata[declno: ] := (data OF set)[declno+1: ]
+   FI;
+   version OF set := newversion;
+   data OF set := newdata;
+   changed OF set := TRUE
+END;
+
+PROC erase_declattributes = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+BEGIN
+   get_all_declattributes(ct, msg);
+   REF DECLATTRIBUTES set := declattributes OF ct;
+   WHILE set ISNT nildeclattributes
+   DO  erase_decldata(set, declno, msg);
+       set := rest OF set
+   OD
+END;
+
+PROC  clear_declattributes = (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+BEGIN
+   get_all_declattributes(ct, msg);
+   REF DECLATTRIBUTES  set:= declattributes OF ct;
+   WHILE set ISNT nildeclattributes
+   DO  set:= rest OF ( REF DECLATTRIBUTES (set):=
+                         ( key OF set, TRUE, HEAP VECTOR [0] INT,
+                           HEAP VECTOR [0] DISCPTR, rest OF set ) )
+   OD
+END
+
+
+KEEP   DECLDATA,
+       introduce_decl_class,  is_decl_class,    check_decl_class,
+       get_declattribute,     get_all_declattributes,
+       write_declattributes,  scan_declattributes,  update_declattributes,
+       merge_declattribute,
+       write_decldata,        read_decldata,  erase_decldata,
+       erase_declattributes,  clear_declattributes
+FINISH
