@@ -1,0 +1,704 @@
+DECS kesignals CONTEXT VOID USE putstrings, basics, kesymbols, kebasics,
+     keambasics:
+
+{ " Id: kesignals.sta,v 2.1 91/02/22 18:35:28 edcad Exp$" }
+configinfo A68CONFIG "$Id: kesignals.a68,v 34.2 1995/03/29 13:04:55 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement the encoding and decoding
+              of signals, and the calculation of their sizes.
+30:11:88  Encoding of integer & string query values corrected. MDR.
+02:12:88  `row width' and `raw trim wire' corrected.  BJE.
+07:12:88  Corrections to string poking. MDR.
+09:12:88  'encode query' to handle structured types.  PAR.
+21:12:88  `encode query' handles SNULL.  Bug 77.  BJE
+12:01:89  Bug 102. MDR.
+13:01:89  Bug 109. Removed high level signal encode/decode code. MDR.
+19:01:89  `encode query' handles structures of function types.  Bug 113.
+              BJE
+01:02:89  Correction to `encode query' for enumerated types with associated
+              types.  R4B078.  BJE.
+10:04:89  Change to encode/decode for speedup. R4B134.  PAR.
+21:04:89  Fixed associated value encoding.  R4B307/R4B308.  PAR.
+06:06:89  Comment changes regarding alignment.  SPT.
+15:10:92  Changes for VOID. JIT
+25:11:92  R6B134: Change to machine width for SVOID. JIT
+04:12:92  Void encoded in the same way as query. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.016 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ The next two procedures provide the minimum number of bytes
+  required for encoding objects as integers if they are bounded
+  as specified.
+}
+PROC unsigned bytes = (INT upb) INT:
+BEGIN
+    INT size := 1,
+        upper := upb;
+    WHILE upper >= 256 DO
+        size +:= 1;
+        upper %:= 256
+    OD;
+    size
+END;
+
+PROC signed bytes = (INT lwb, upb) INT:
+BEGIN
+    INT size := 1,
+        lower := lwb,
+        upper := upb;
+    WHILE lower < -128 OREL upper >= 128 DO
+        size +:= 1;
+        lower %:= 256;
+        upper %:= 256
+    OD;
+    size
+END;
+
+
+{ The following procedure takes two sizes in bytes, and adds them
+  adjusting the sum for alignment constraints.  The first item is
+  assumed to go at address zero, which is assumed to satisfy all the
+  alignment properties of any address at which the final object could
+  be aligned.
+}
+PROC aligned sum = (INT first, second) INT:
+BEGIN
+    INT a := first,
+        b := second;
+    al (0, a);
+    INT offset = al (a, b);
+    offset + b
+END;
+
+
+{ The width of the machine encoding of any type
+}
+PROC machine width = (STYPE t) INT:
+BEGIN
+
+    PROC enum width = (REF SENUM e) INT:
+    BEGIN
+        INT value count := 0,
+            max assoc width := 0;
+        REF SENUM scan := e;
+        WHILE scan ISNT nil senum DO
+            value count +:= 1;
+            INT assoc width = machine width (t OF scan);
+            IF assoc width > max assoc width THEN
+                max assoc width := assoc width
+            FI;
+            scan := rest OF scan
+        OD;
+        INT tag size := unsigned bytes (value count);
+        aligned sum (tag size, max assoc width)
+    END;
+
+    PROC row width = (REF SROW r) INT:
+    BEGIN
+        INT elem width := machine width (type OF r);
+        al (0, elem width);
+        INT next elem offset = al (elem width, elem width);
+        no OF r * next elem offset
+    END;
+
+    PROC string width = (REF SSTRING s) INT:
+    BEGIN
+        REF SCHAR c = t OF s;
+        BOOL bitstring = UPB char OF c = 2;
+        IF bitstring THEN
+            aligned sum (size unit, (no OF s + 7) % 8)
+        ELSE
+            INT upbc = unsigned bytes (UPB char OF c);
+            aligned sum (size unit, no OF s * upbc)
+        FI
+    END;
+
+    PROC structure width = (REF SST s) INT:
+    BEGIN
+        INT acc := 0;
+        REF SST scan := s;
+        WHILE scan ISNT nil sst DO
+            INT elem size := machine width (t OF scan);
+            acc := aligned sum (acc, elem size);
+            scan := rest OF scan
+        OD;
+        acc
+    END;
+
+    CASE t IN
+        (REF SENUM e):   enum width (e),
+        (REF SINT i):    aligned sum (size unit, signed bytes (lwb OF i, upb OF i)),
+        (REF SCHAR c):   aligned sum (0, unsigned bytes (UPB char OF c)),
+        (REF SROW r):    row width (r),
+        (REF SSTRING s): string width (s),
+        (REF SFN f):     aligned sum (machine width (from OF f),
+                                      machine width (to OF f)),
+        (REF SST s):     structure width (s),
+        (SVOID v):       aligned sum (0, 1),
+        (SNULL n):       0
+    ESAC
+END;
+
+
+{ In the case of a structured signal (structured meaning by 'row' or
+  'structure' operations), we need to be able to find a single-level
+  structure representing the flattened structure.
+  The result is in new memory structures, with only the leaves being
+  shared with the original.
+}
+PROC flatten type = (STYPE t) REF SST:
+    CASE t IN
+        (SVOID v):       HEAP SST := (t, nil sst),
+        (REF SENUM e):   HEAP SST := (t, nil sst),
+        (REF SINT i):    HEAP SST := (t, nil sst),
+        (REF SCHAR c):   HEAP SST := (t, nil sst),
+        (REF SSTRING s): HEAP SST := (t, nil sst),
+        (REF SFN f):     HEAP SST := (t, nil sst),
+        (REF SROW r):
+            BEGIN
+                REF SST ans := nil sst;
+                FOR i TO no OF r DO
+                    ans := ans + flatten type (type OF r)
+                OD;
+                ans
+            END,
+        (REF SST s):
+            BEGIN
+                REF SST ans := nil sst;
+                REF SST scan := s;
+                WHILE scan ISNT nil sst DO
+                    ans := ans + flatten type (t OF scan);
+                    scan := rest OF scan
+                OD;
+                ans
+            END
+    ESAC;
+
+
+{ Public Pure Functions }
+{ ===================== }
+
+
+{ The number of primitive signals in a structured signal, ie the
+  length of the flattened type.
+}
+PROC raw signal width = (STYPE t) INT:
+BEGIN
+    INT ans := 0;
+    REF SST flat := flatten type (t);
+    WHILE flat ISNT nil sst DO
+        ans +:= 1;
+        flat := rest OF flat
+    OD;
+    ans
+END;
+
+
+{ The type representing a contiguous subset of the primitive signals
+  in a structured signal, ie a sublist of the flattened type.
+  We assume we are free to modify the result of 'flatten type', since
+  it creates new structures.
+}
+PROC raw trim signal = (STYPE t, INT lwb, upb) REF SST:
+BEGIN
+    REF SST result := flatten type (t);
+    TO lwb - 1 WHILE result ISNT nil sst DO
+        result := rest OF result
+    OD;
+    REF REF SST end := result;
+    TO upb - lwb + 1 WHILE end ISNT nil sst DO
+        end := rest OF end
+    OD;
+    REF REF SST (end) := nil sst;
+    result
+END;
+
+
+{ 'raw trim wire' does the corresponding thing for a WIRE.  As well as
+  trimming the type, it has to calculate a new set of BLOCKs to
+  represent the memory occupied by the trimmed signal.
+
+  It assumes that it will never be required to divide an indirect block.
+}
+PROC raw trim wire = (WIRE w, INT lwb, upb) WIRE:
+BEGIN
+    REF SST new part = raw trim signal (type OF w, lwb, upb);
+    REF SST prefix = raw trim signal (type OF w, 1, lwb-1);
+    INT skip size := machine width (prefix);
+    INT kept size := machine width (new part);
+    INT first block := 1,
+        last block := 1;
+    WHILE skip size >= size OF (blocks OF w) [first block] DO
+        skip size -:= size OF (blocks OF w) [first block];
+        first block +:= 1
+    OD;
+    last block := first block;
+    WHILE kept size + skip size > size OF (blocks OF w) [last block] DO
+        kept size -:= size OF (blocks OF w) [last block];
+        last block +:= 1
+    OD;
+    HEAP VECTOR [last block - first block + 1] BLOCK new blocks;
+    new blocks := (blocks OF w) [first block : last block];
+    offset OF new blocks [1] +:= skip size;
+    size OF new blocks [1] -:= skip size;
+    size OF new blocks [UPB new blocks] := kept size;
+    (new part, new blocks)
+END;
+
+
+{ 'raw trim ram' delivers a WIRE describing some set of the elements of
+  a ram.
+}
+PROC raw trim ram = (REF SRAM ram, INT lwb, upb) WIRE:
+BEGIN
+    WIRE first cell = first cell OF ram;
+    IF UPB blocks OF first cell > 1 THEN
+        sys fault ("kesignals: unexpected RAM description")
+    FI;
+    BLOCK first cell block = (blocks OF first cell) [1];
+    STYPE type = HEAP SROW := (upb - lwb + 1, type OF first cell);
+    HEAP VECTOR [1] BLOCK location :=
+        BLOCK (inst offset OF first cell block,
+               offset OF first cell block + (lwb - lwb OF ram) * step OF ram,
+               (upb - lwb + 1) * size OF first cell block
+              );
+    (type, location)
+END;
+
+
+{ Signal Encoding and Decoding }
+{ ============================ }
+
+
+{ Encoding Functions }
+{ ------------------ }
+
+{ For every encoding it is a precondition and postcondition that the supplied
+  pointer is aligned for the machine. }
+
+{ 'encode query' generates a query value for the given type, in its
+  machine level representation.
+  This procedure is used only by 'encode signal'.
+  Although the ELLA language has no concept of a query value for a
+  structured type as a whole, the kernel mode SQUERY allows this
+  representation, meaning that each element is query.
+}
+PROC encode query or void = (STYPE type, WORD result, REF INT ix) VOID:
+BEGIN
+    INT size = machine width (type);
+    TO size DO
+        result [(ix +:= 1) - 1] := REPR 0
+    OD
+END;
+
+PROC encode char = (SVALUE val, REF SCHAR c, WORD result, REF INT ix) VOID:
+    CASE val IN (REF SVCHAR v):
+        BEGIN
+            INT i := 1;
+            WHILE value OF v /= (char OF c) [i] DO i +:= 1 OD;
+            INT size = machine width (c);
+            WORD part = result [ix : ix + size - 1];
+            ix +:= size;
+            unsigned to word (i, part);
+            up (part)
+        END
+    ESAC;
+
+
+PROC encode int = (SVALUE val, REF SINT i, WORD result, REF INT ix) VOID:
+    CASE val IN
+        (REF SVINT v):
+            BEGIN
+                INT int size = machine width (i) - size unit;
+                WORD query part = result [ix : ix + size unit - 1];
+                ix +:= size unit;
+                WORD int part = result [ix : ix + int size - 1];
+                ix +:= int size;
+                unsigned to word (1, query part);
+                up (query part);
+                signed to word (value OF v, int part);
+                up (int part)
+            END
+    ESAC;
+
+
+PROC encode string = (SVALUE val, REF SSTRING s, WORD result, REF INT ix) VOID:
+    CASE val IN
+        (REF SVSTR str):
+            BEGIN
+                REF SCHAR c = t OF s;
+                INT upbc = unsigned bytes (UPB char OF c);
+                BOOL bitstring = UPB char OF c = 2;
+                INT string size = machine width (s) - size unit;
+                WORD query part = result [ix : ix + size unit - 1];
+                ix +:= size unit;
+                WORD string part = result [ix : ix + string size - 1];
+                ix +:= string size;
+                unsigned to word (1, query part);
+                up (query part);
+                FOR i TO string size DO  string part [i] := REPR 0  OD;
+                    { To get padding }
+                INT j := 1;
+                INT upbs = UPB value OF str;
+                IF bitstring THEN
+                    FOR i TO upbs + (- upbs MOD 8) DO
+                        INT bit = IF i <= upbs ANDTH
+                                     (value OF str) [i] = (char OF c)[2]
+                                  THEN  1
+                                  ELSE  0
+                                  FI;
+                            {'bit' is zero or one, depending on the character }
+                        string part [j] := REPR (2 * ABS string part [j] + bit);
+                        j +:= ABS (i MOD 8 = 0)
+                    OD
+                ELSE
+                    FOR i TO upbs DO
+                        INT k := 1;
+                        WHILE (value OF str) [i] /= (char OF c) [k] DO k +:= 1 OD;
+                        unsigned to word (k, string part [j : j+upbc-1]);
+                        j +:= upbc
+                    OD
+                FI;
+                up (string part)
+            END
+    ESAC;
+
+
+{ 'encode signal' does the encoding of a SVALUE as a WORD object.
+  Sufficient space for the result is allocated in the 'result' parameter,
+  and the encoding will start at the position 'ix' (which will be
+  modified to the next unused position).
+}
+PROC encode signal = (SVALUE val, STYPE type, WORD result, REF INT ix) VOID:
+BEGIN
+
+    PROC encode enum = (SVALUE val, REF SENUM e, WORD result, REF INT ix) VOID:
+        CASE val IN
+            (REF SVENUM v):
+                BEGIN
+                    INT next ix = ix + machine width (type OF v);
+                    REF SENUM p := e;
+                    INT value count := 0;
+                    WHILE p ISNT nil senum DO
+                        value count +:= 1;
+                        p := rest OF p
+                    OD;
+                    INT tag size := unsigned bytes (value count);
+                    al (0, tag size);
+                    WORD tag part = result [ix : ix + tag size - 1];
+                    ix +:= tag size;
+                    unsigned to word (tag OF v, tag part);
+                    up (tag part);
+                    p := e;
+                    FOR i TO tag OF v - 1 DO p := rest OF p OD;
+                    encode signal (assoc OF v, t OF p, result, ix);
+                    WHILE ix < next ix DO
+                        { Add any necessary padding to the full width }
+                        result [ix] := REPR 0;
+                        ix +:= 1
+                    OD
+                END
+        ESAC;
+
+    PROC encode row = (SVALUE val, REF SROW r, WORD result, REF INT ix) VOID:
+        CASE val IN
+            (REF SVST st):
+                BEGIN
+                    REF SVST p := st;
+                    FOR i FROM 1 TO no OF r DO
+                        encode signal (head OF p, type OF r, result, ix);
+                        p := tail OF p
+                    OD
+                END
+        ESAC;
+
+    PROC encode structure = (SVALUE val, REF SST s, WORD result, REF INT ix) VOID:
+        CASE val IN
+            (REF SVST st):
+                BEGIN
+                    REF SVST p := st;
+                    REF SST  q := s;
+                    WHILE q ISNT nil sst DO
+                        encode signal (head OF p, t OF q, result, ix);
+                        p := tail OF p;
+                        q := rest OF q
+                    OD
+                END
+        ESAC;
+
+    PROC encode fn = (SVALUE val, REF SFN f, WORD result, REF INT ix) VOID:
+        CASE val IN
+            (REF SVFN vf):
+                BEGIN
+                    encode signal (from OF vf, from OF f, result, ix);
+                    encode signal (to OF vf, to OF f, result, ix)
+                END
+        ESAC;
+
+    CASE val IN
+        (REF SQUERY q):  encode query or void(type, result, ix)
+    OUT
+        CASE type IN
+            (REF SENUM e):   encode enum (val, e, result, ix),
+            (REF SCHAR c):   encode char (val, c, result, ix),
+            (REF SINT i):    encode int (val, i, result, ix),
+            (REF SROW r):    encode row (val, r, result, ix),
+            (REF SSTRING s): encode string (val, s, result, ix),
+            (REF SFN f):     encode fn (val, f, result, ix),
+            (REF SST s):     encode structure (val, s, result, ix),
+            (SVOID v):       encode query or void(type, result, ix),
+            (SNULL n):       SKIP
+        ESAC
+    ESAC
+END;
+
+
+{ All the work is done by 'encode signal' -- all that remains is to
+  provide the space into which the result can be placed.
+  Note that there is now no difference between the machine level
+  encoding and the more abstract encoding.
+}
+PROC raw encode = (SVALUE value, STYPE type) {=-}REF{=+}WORD:
+BEGIN
+    INT size = machine width (type);
+    HEAP VECTOR [size] CHAR answer;
+    INT index := 1;
+    encode signal (value, type, answer, index);
+    {=-}HEAP WORD := {=+}answer
+END;
+
+PROC machine = (SVALUE value, STYPE type) {=-}REF{=+}WORD:
+BEGIN
+    INT size = machine width (type);
+    HEAP VECTOR [size] CHAR answer;
+    INT index := 1;
+    encode signal (value, type, answer, index);
+    {=-}HEAP WORD := {=+}answer
+END;
+
+
+{ Signal Decoding Functions }
+{ ------------------------- }
+
+
+{ 'decode string' makes sense only as a service to 'decode signal' (below).
+  It receives the part after the query flag.
+}
+PROC decode string = (WORD rep, SSTRING type) REF VECTOR [] CHAR:
+BEGIN
+    SCHAR c = t OF type;
+    INT step = unsigned bytes (UPB char OF c);
+    WORD bytes =
+        IF UPB char OF c /= 2 THEN  rep
+        ELSE
+            HEAP VECTOR [8 * UPB rep] CHAR bs;
+            FOR i TO UPB rep DO
+                FOR j TO 8 DO
+                    bs [8*(i-1)+j] :=
+                       REPR (1 + ABS ((bitswidth-8+j) ELEM BIN ABS rep [i]))
+                OD
+            OD;
+            bs
+        FI;
+    REF VECTOR [] CHAR ans = HEAP VECTOR [no OF type] CHAR;
+    FOR i TO no OF type DO
+        ans [i] := (char OF c) [word to unsigned (bytes [(i-1)*step+1 : i*step])]
+    OD;
+    ans
+END;
+
+
+{ decode signal modifies the given index 'ix' to drop the part of
+  'rep' it has used in decoding the value for the given type.
+}
+PROC decode signal = (WORD rep, REF INT ix, STYPE type) SVALUE:
+BEGIN
+
+    PROC decode row = (WORD rep, REF INT ix, SROW r) REF SVST:
+    BEGIN
+        REF SVST ans := nil svst;
+        REF REF SVST end := ans;
+        FOR i TO no OF r DO
+            REF REF SVST (end) := HEAP SVST :=
+                (decode signal (rep, ix, type OF r), nilsvst);
+            end := tail OF end
+        OD;
+        ans
+    END;
+
+    PROC decode structure = (WORD rep, REF INT ix, REF SST s) REF SVST:
+    BEGIN
+        REF SVST ans := nil svst;
+        REF REF SVST end := ans;
+        REF SST scan := s;
+        WHILE scan ISNT nil sst DO
+            REF REF SVST (end) := HEAP SVST :=
+                (decode signal (rep, ix, t OF scan), nil svst);
+            end := tail OF end;
+            scan := rest OF scan
+        OD;
+        ans
+    END;
+
+    PROC decode fn = (WORD rep, REF INT ix, REF SFN f) REF SVFN:
+    BEGIN
+        HEAP SVFN ans;
+        from OF ans := decode signal (rep, ix, from OF f);
+        to OF ans := decode signal (rep, ix, to OF f);
+        ans
+    END;
+
+    CASE type IN
+        (REF SENUM e):
+            BEGIN
+                INT saved ix = ix;
+                SVALUE result;
+                REF SENUM p := e;
+                INT value count := 0;
+                WHILE p ISNT nil senum DO
+                    value count +:= 1;
+                    p := rest OF p
+                OD;
+                INT tag size := unsigned bytes (value count);
+                al (0, tag size);
+                WORD tag part = rep [ix : ix + tag size - 1];
+                ix +:= tag size;
+                up (tag part);
+                INT ordinal = word to unsigned (tag part);
+                IF ordinal = 0 THEN
+                    HEAP SQUERY q;
+                    type OF q := e;
+                    result := q
+                ELSE
+                    p := e;
+                    FOR i TO ordinal - 1 DO p := rest OF p OD;
+                    result := HEAP SVENUM :=
+                        (e, ordinal, decode signal (rep, ix, t OF p))
+                FI;
+                ix := saved ix + machine width (type);
+                result
+            END,
+        (REF SINT i):
+            BEGIN
+                INT int size = machine width (type) - size unit;
+                WORD query part = rep [ix : ix + size unit - 1];
+                ix +:= size unit;
+                { Don't bother with 'up' -- only a zero test! }
+                IF word to unsigned (query part) = 0 THEN
+                    HEAP SQUERY q;
+                    type OF q := i;
+                    ix +:= int size;
+                    q
+                ELSE
+                    WORD int part = rep [ix : ix + int size - 1];
+                    ix +:= int size;
+                    up (int part);
+                    INT val = word to signed (int part);
+                    HEAP SVINT:= (i, val)
+                FI
+            END,
+        (REF SCHAR c):
+            BEGIN
+                INT size = machine width (type);
+                WORD part = rep [ix : ix + size - 1];
+                ix +:= size;
+                up (part);
+                INT ordinal = word to unsigned (part);
+                IF ordinal = 0 THEN
+                    HEAP SQUERY q;
+                    type OF q := c;
+                    q
+                ELSE
+                    CHAR val = (char OF c) [ordinal];
+                    HEAP SVCHAR := (c, val)
+                FI
+            END,
+        (REF SROW r):    decode row (rep, ix, r),
+        (REF SSTRING s):
+            BEGIN
+                INT string size = machine width (type) - size unit;
+                WORD query part = rep [ix : ix + size unit - 1];
+                ix +:= size unit;
+                { Don't bother with 'up' -- only a zero test! }
+                IF word to unsigned (query part) = 0 THEN
+                    HEAP SQUERY q;
+                    type OF q := s;
+                    ix +:= string size;
+                    q
+                ELSE
+                    WORD string part = rep [ix : ix + string size - 1];
+                    ix +:= string size;
+                    up (string part);
+                    REF VECTOR [] CHAR val = decode string (string part, s);
+                    HEAP SVSTR := (s, val)
+                FI
+            END,
+        (REF SFN f):     decode fn (rep, ix, f),
+        (REF SST s):     decode structure (rep, ix, s),
+        (SVOID v):       void svalue,
+        (SNULL n):       null svalue
+    ESAC
+END;
+
+
+{ All the work is done by 'decode signal' -- all that remains is to
+  give it a representation and an index it can change.
+  Note that there is now no difference between the machine level
+  encoding and the more abstract encoding.
+}
+PROC raw decode = (WORD rep, STYPE type) SVALUE:
+BEGIN
+    VECTOR [UPB rep] CHAR myrep := rep;
+    INT index := 1;
+    decode signal (myrep, index, type)
+END;
+
+PROC unmachine = (WORD rep, STYPE type) SVALUE:
+BEGIN
+    VECTOR [UPB rep] CHAR myrep := rep;
+    INT index := 1;
+    decode signal (myrep, index, type)
+END
+
+
+KEEP
+    machine width, raw signal width, flatten type,
+    raw trim signal, raw trim wire, raw trim ram,
+    raw encode, raw decode,
+    machine, unmachine
+FINISH
