@@ -1,0 +1,2049 @@
+DECS kecodegenserversparc CONTEXT VOID USE putstrings, osinterface, basics, kesave,
+kemassemsparc:
+
+{ "  Id: kecodegenserversparc.sta,v 1.1 91/10/14 14:29:20 edcad Exp $ "; }
+configinfo A68CONFIG "$Id: kecodegenserversparc.a68,v 34.2 1995/03/29 13:04:46 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+23:02:89 Created from 68020 version. MDR.
+05:06:89 Fixed stack offset in SAVEWINDOW. R4B347. MDR.
+10:10:89 Ensure OP + never produces (sum)consts > 13 bits. R4B493. MDR.
+04:12:89 EXTEND provided for MEMORY.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{                        SPARC Code Generator Server                          }
+{-----------------------------------------------------------------------------}
+
+{ Notes
+  -----
+
+  This module provides a basic set of classes and modes for the code generator.
+}
+
+{======================================================================}
+MODE AMVERSION
+{---------------------------------------}
+{ The specific parameters of this abstract machine.
+  The translator must align data objects on boundaries which are 
+  evenly divisible by the data item size (in bytes).
+}
+
+   = STRUCT (INT ws, BOOL up, INT sizeunit, REF VECTOR [] INT al);
+
+AMVERSION am_version = (4, FALSE, 4, HEAP VECTOR [3] INT := (1, 2, 4));
+
+
+{======================================================================}
+MODE FERRYOUTANDFLT
+{---------------------------------------}
+{ An object associating a ferryout procedure and a fault procedure. }
+
+   = STRUCT (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryout, FLTPROC flt);
+
+   PROC ferryoutandflt = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID fp,
+                          FLTPROC ft) FERRYOUTANDFLT:
+   {---------------------------------------}
+
+      (fp, ft);
+
+{======================================================================}
+MODE FERRYINANDFLT
+{---------------------------------------}
+{ An object associating a ferryin procedure and a fault procedure. }
+
+   = STRUCT (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryin, FLTPROC flt);
+
+   PROC ferryinandflt = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID fp,
+                         FLTPROC ft) FERRYINANDFLT:
+   {---------------------------------------}
+
+      (fp, ft);
+
+   OP DUMP = (BOOL b, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"BOOL",newline));
+         IF b THEN
+            put (screen, (indent + " TRUE", newline))
+         ELSE
+            put (screen, (indent + " FALSE", newline))
+         FI
+      END;
+
+   OP SAVE = (BOOL x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         write bool (x, ferryout OF ff, flt OF ff)
+      END;
+
+   OP RESTORE = (REF BOOL x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         x := read bool (ferryin OF ff, flt OF ff)
+      END;
+
+{======================================================================}
+MODE OFFSET
+{---------------------------------------}
+{ An abstract machine offset }
+
+   = INT;
+
+   OP SAVE = (INT x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         write int (x, ferryout OF ff, flt OF ff)
+      END;
+
+   OP RESTORE = (REF INT x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         x := read int (ferryin OF ff, flt OF ff)
+      END;
+
+{======================================================================}
+MODE WORD
+{---------------------------------------}
+{ A machine word }
+
+   = REF VECTOR [] CHAR;
+
+   PROC newword = (INT i) WORD:
+   {---------------------------------------}
+   { Produce a word of required length. }
+
+      HEAP VECTOR [i] CHAR;
+
+   PROC word = (INT i) WORD:
+   {---------------------------------------}
+   { Produce a word from an integer. }
+   
+      BEGIN
+         INT acc := i;
+         WORD result := HEAP VECTOR [4] CHAR;
+         FOR n TO 4 DO
+           result [4 - n + 1] := REPR (acc MOD 256);
+           acc := IF acc >= 0 THEN acc OVER 256 ELSE ((acc + 1) OVER 256) -1 FI
+         OD;
+         result
+      END;
+
+   OP DUMP = (WORD w, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"WORD",newline));
+         FOR i TO UPB w DO
+            IF i MOD 20 = 1 THEN put (screen, indent + " ") FI;
+            put (screen, (ABS (w[i])," "));
+            IF i MOD 20 = 0 OR i = UPB w THEN put (screen, newline) FI
+         OD
+      END;
+   
+   OP NEW = (WORD w) WORD:
+   {---------------------------------------}
+      (HEAP VECTOR [UPB w] CHAR := w);
+
+   OP INTEGER = (WORD w) INT:
+   {---------------------------------------}
+   { Produce an integer from a word. }
+   
+      BEGIN
+         BOOL signed = ABS (w [1]) >= 128;
+         INT ans := 0;
+         FOR i TO UPB w DO
+            INT unsval = ABS w [i];
+            INT val =
+               IF signed AND unsval >= 128 AND i = 1 THEN unsval - 256
+               ELSE unsval
+               FI;
+            ans := 256 * ans + val
+         OD;
+         ans
+      END;
+   
+   OP LENGTH = (WORD w) INT:
+   {---------------------------------------}
+   { The bit length of a word }
+   
+      8 * (UPB w);
+   
+   OP SAVE = (REF VECTOR [] CHAR x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         write id (x, ferryout OF ff, flt OF ff)
+      END;
+
+   OP RESTORE = (REF REF VECTOR [] CHAR x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         x := read id (ferryin OF ff, flt OF ff)
+      END;
+
+{======================================================================}
+MODE STACKNUMBER
+{---------------------------------------}
+{ Any number indexing an array representing a stack. }
+
+   = INT;
+
+STACKNUMBER nullstacknumber = -1;
+
+{======================================================================}
+MODE MACHINEOFFSETSTACK
+{---------------------------------------}
+{ A list of machine_offset. }
+
+   = STRUCT (MACHINEOFFSET machine_offset, REF MACHINEOFFSETSTACK rest);
+
+   REF MACHINEOFFSETSTACK machineoffsetstack = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF MACHINEOFFSETSTACK lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF MACHINEOFFSETSTACK var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT machineoffsetstack DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF MACHINEOFFSETSTACK lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"MACHINEOFFSETSTACK", newline));
+         REF MACHINEOFFSETSTACK var := lis;
+         FOR i TO LENGTH lis DO
+            put (screen, (machine_offset OF var));
+            IF i MOD 20 = 0 OR i = LENGTH lis THEN put (screen, newline) FI;
+            var := rest OF var
+         OD
+      END;
+
+   OP PUSH = (REF REF MACHINEOFFSETSTACK lis, MACHINEOFFSET k) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := (HEAP MACHINEOFFSETSTACK := (k, lis))
+      END;
+
+   OP POP = (REF REF MACHINEOFFSETSTACK lis) MACHINEOFFSET:
+   {---------------------------------------}
+      BEGIN
+         MACHINEOFFSET k = machine_offset OF lis;
+         lis := rest OF lis;
+         k
+      END;
+
+   OP CLEARED = (REF MACHINEOFFSETSTACK lis) BOOL:
+   {---------------------------------------}
+   { Returns TRUE if the list is empty. }
+      lis IS machineoffsetstack;
+   
+
+{======================================================================}
+MODE REGISTERNUMBER
+{---------------------------------------}
+{ The number of a register }
+
+   = INT;
+
+
+{======================================================================}
+MODE BYTENUMBER
+{---------------------------------------}
+{ A byte numbering. Byte zero would mean the first byte (or no offset). }
+
+   = INT;
+
+
+{======================================================================}
+MODE BITNUMBER
+{---------------------------------------}
+{ A bit numbering. Bit zero would mean the first bit (or no offset). }
+
+   = INT;
+
+   OP BYTESIZE = (BITNUMBER n) BYTENUMBER:
+   {---------------------------------------}
+   { Return the smallest bytesize that will store an object of supplied
+     bitlength.  (An integral number of longwords.) }
+
+      IF n = 0 THEN 4 ELSE (((n - 1) OVER 32) + 1) * 4 FI;
+
+{======================================================================}
+MODE MEMORY
+{---------------------------------------}
+{ An area of memory to be used at simulation time by the generated code }
+
+   = STRUCT (REF VECTOR [] CHAR mem);
+
+   PROC nullmemory = MEMORY:
+   {---------------------------------------}
+   
+      BEGIN
+         MEMORY result;
+         mem OF result := NIL;
+         result
+      END;
+
+   OP DESTROY = (REF MEMORY m) VOID:
+   {---------------------------------------}
+   { We need to destroy memory because, being virtual memory, it is not
+     garbage collected. }
+
+      BEGIN
+         IF (mem OF m) ISNT WORD (NIL) THEN free_vec_chars (mem OF m) FI
+            { Otherwise, no memory has been created. }
+      END;
+
+   OP CREATE =  (REF MEMORY m, INT size) VOID:
+   {---------------------------------------}
+   
+      BEGIN
+         DESTROY m;
+         mem OF m := get_vec_chars (BYTESIZE(size*8))
+      END;
+
+   OP EXTEND =  (REF MEMORY m, INT size) VOID:
+   {---------------------------------------}
+   
+      BEGIN
+         MEMORY old := m;
+         INT old size = UPB mem OF old;
+         mem OF m := get_vec_chars (old size + BYTESIZE(size*8));
+         (mem OF m) [ : old size] := mem OF old;
+         DESTROY old
+      END;
+
+   OP SAVE = (REF MEMORY x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         IF (mem OF x) ISNT WORD (NIL) THEN
+            TRUE SAVE ff;
+            UPB mem OF x SAVE ff;
+            (ferryout OF ff) (mem OF x, flt OF ff)
+         ELSE
+            FALSE SAVE ff
+         FI
+      END;
+
+   OP RESTORE = (REF MEMORY x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         DESTROY x;
+         BOOL exists; exists RESTORE ff;
+         IF exists THEN
+            INT size;
+            size RESTORE ff;
+            mem OF x := get_vec_chars (size);
+            (ferryin OF ff) (mem OF x, flt OF ff)
+         ELSE
+            (mem OF x) := WORD (NIL)
+         FI
+      END;
+
+   OP DUMP = (MEMORY m, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"MEMORY",newline));
+         IF (mem OF m) ISNT WORD (NIL) THEN
+            mem OF m DUMP indent + " "
+         FI
+      END;
+   
+   OP SIZEOF = (REF MEMORY x) BYTENUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         IF (mem OF x) ISNT WORD (NIL) THEN
+            UPB (mem OF x)
+         ELSE
+            0
+         FI
+      END;
+
+   OP LEN = (INT os, INT le) STRUCT (INT off, INT len):
+   {---------------------------------------}
+   { A little operation to put together a structure.}
+
+      (os, le);
+
+   OP GET = (REF MEMORY m, STRUCT (OFFSET off , INT len) ip) WORD:
+   {---------------------------------------}
+   { Get a word from memory at given offset. }
+
+   BEGIN
+
+      HEAP VECTOR [len OF ip] CHAR result;
+      IF NOT up OF am_version THEN
+         result := (mem OF m)
+            [1 + off OF ip:off OF ip + len OF ip]
+      ELSE
+         WORD result;
+         FOR i TO len OF ip DO
+            result[i] := (mem OF m) [off OF ip + 1 + len OF ip - i] OD
+      FI;
+      result
+   END;
+
+   OP ATT = (WORD wo, BYTENUMBER os) STRUCT (WORD w, BYTENUMBER o):
+   {---------------------------------------}
+   { A little operation to put together a structure. }
+
+      (wo, os);
+
+   OP PUT = (REF MEMORY m, STRUCT (WORD w, BYTENUMBER o) ip) VOID:
+   {---------------------------------------}
+   { Put a word into memory at given offset. }
+
+   IF NOT up OF am_version THEN
+      (mem OF m) [o OF ip + 1 : o OF ip + UPB w OF ip ] := w OF ip
+   ELSE
+      FOR i TO UPB w OF ip DO
+         (mem OF m) [o OF ip + 1 + UPB w OF ip - i] :=
+            (w OF ip) [i] OD
+   FI;
+   
+{======================================================================}
+MODE LABEL
+{---------------------------------------}
+{ A label.  As shared with the translator. }
+
+   = STRUCT (INT lab, REF VECTOR [] CHAR tag);
+
+   PROC label = (VECTOR [] CHAR c) LABEL:
+   {---------------------------------------}
+   { Create a label out of a string of characters. }
+
+      (0, HEAP VECTOR [UPB c] CHAR := c);
+
+   OP DUMP = (LABEL lab, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent + " ","LABEL",newline));
+         put (screen, (lab OF lab,newline));
+         tag OF lab DUMP indent + " "
+      END;
+
+   OP SAVE = (REF LABEL x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         lab OF x SAVE ff;
+         tag OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF LABEL x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         lab OF x RESTORE ff;
+         tag OF x RESTORE ff
+
+      END;
+
+   OP = = (REF LABEL l1, LABEL l2) BOOL:
+   {---------------------------------------}
+      (lab OF l1 = lab OF l2) ANDTH (tag OF l1 = tag OF l2);
+
+
+{======================================================================}
+MODE ADDRESS
+{---------------------------------------}
+{ An abstract machine address }
+
+   = UNION (OFFSET, LABEL, VOID);
+
+ADDRESS indirect := EMPTY;
+
+   OP DUMP = (ADDRESS a, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent, "ADDRESS", newline));
+         CASE a IN
+         (OFFSET o): put (screen, (indent + " ",o,newline)),
+         (LABEL o): o DUMP indent + " ",
+         (VOID): put (screen, (indent + " ","VOID",newline))
+         ESAC
+      END;
+
+{======================================================================}
+MODE LABELEDOFFSET
+{---------------------------------------}
+{ An association of a label with an offset into a processor memory item. }
+
+   = STRUCT (LABEL label, MACHINEOFFSET machine_offset);
+
+   PROC labeledoffset = (LABEL lab, MACHINEOFFSET m) LABELEDOFFSET:
+   {---------------------------------------}
+   
+      (lab,m);
+
+   OP DUMP = (LABELEDOFFSET lo, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"LABELEDOFFSET",newline));
+         label OF lo DUMP indent + " ";
+         put (screen, (indent + " ","machine_offset",
+            machine_offset OF lo,newline))
+      END;
+   
+   OP SAVE = (REF LABELEDOFFSET x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         label OF x SAVE ff;
+         machine_offset OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF LABELEDOFFSET x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         label OF x RESTORE ff;
+         machine_offset OF x RESTORE ff
+
+      END;
+
+{======================================================================}
+MODE LABELLIST
+{---------------------------------------}
+{ A list of labeled_offset. }
+
+   = STRUCT (LABELEDOFFSET labeled_offset, REF LABELLIST rest);
+
+   REF LABELLIST labellist = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF LABELLIST lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF LABELLIST var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT labellist DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF LABELLIST lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"LABELLIST", newline));
+         REF LABELLIST var := lis;
+         FOR i TO LENGTH lis DO
+            labeled_offset OF var DUMP indent + " ";
+            var := rest OF var
+         OD
+      END;
+
+   OP SAVE = (REF LABELLIST lis, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         (LENGTH lis) SAVE ff;
+         REF LABELLIST var := lis;
+         FOR i TO LENGTH lis DO
+            labeled_offset OF var SAVE ff;
+            var := rest OF var
+         OD
+      END;
+
+   OP RESTORE = (REF REF LABELLIST lis, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         STACKNUMBER length; length RESTORE ff;
+         LABELEDOFFSET item;
+         lis := labellist;
+         FOR i TO length DO
+            item RESTORE ff;
+            lis := HEAP LABELLIST := (item, lis)
+         OD
+      END;
+
+   OP LOOKUP = (REF LABELLIST lis, LABEL k) MACHINEOFFSET:
+   {---------------------------------------}
+   { Returns null machine_offset if no items match label given. }
+      BEGIN
+         REF LABELLIST var := lis;
+         WHILE (var ISNT labellist) ANDTH
+            NOT (label OF labeled_offset OF var = k) DO
+            var := rest OF var
+         OD;
+         IF var IS labellist THEN
+            nullmachineoffset
+         ELSE
+            machine_offset OF labeled_offset OF var
+         FI
+      END;
+
+   OP WRITE = (REF REF LABELLIST lis, LABELEDOFFSET k) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := (HEAP LABELLIST := (k, lis))
+      END;
+
+   OP REMOVELAST = (REF REF LABELLIST lis) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := rest OF lis
+      END;
+
+   OP CLEARED = (REF LABELLIST lis) BOOL:
+   {---------------------------------------}
+   { Returns TRUE if the list is empty. }
+      lis IS labellist;
+
+{======================================================================}
+MODE MACHINELABELSTACK
+{---------------------------------------}
+{ A list of machine_label. }
+
+   = STRUCT (MACHINELABEL machine_label, REF MACHINELABELSTACK rest);
+
+   REF MACHINELABELSTACK machinelabelstack = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF MACHINELABELSTACK lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF MACHINELABELSTACK var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT machinelabelstack DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF MACHINELABELSTACK lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"MACHINELABELSTACK", newline));
+         REF MACHINELABELSTACK var := lis;
+         FOR i TO LENGTH lis DO
+            IF i MOD 20 = 1 THEN put (screen, indent + " ") FI;
+            put (screen, (indent + "location ",
+               location OF machine_label OF var,
+               " size ", size OF machine_label OF var, newline));
+            IF i MOD 20 = 0 OR i = LENGTH lis THEN put (screen, newline) FI;
+            var := rest OF var
+         OD
+      END;
+
+   OP PUSH = (REF REF MACHINELABELSTACK lis, MACHINELABEL k) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := (HEAP MACHINELABELSTACK := (k, lis))
+      END;
+
+   OP POP = (REF REF MACHINELABELSTACK lis) MACHINELABEL:
+   {---------------------------------------}
+      BEGIN
+         MACHINELABEL k := machine_label OF lis;
+         lis := rest OF lis;
+         k
+      END;
+
+   OP CLEARED = (REF MACHINELABELSTACK lis) BOOL:
+   {---------------------------------------}
+   { Returns TRUE if the list is empty. }
+      lis IS machinelabelstack;
+   
+
+{======================================================================}
+MODE BACKPATCH
+{---------------------------------------}
+{ Association of a label with a machine label (ie a location to be fixed.) }
+
+   = STRUCT (LABEL label, REF MACHINELABELSTACK machine_label_stack);
+
+   PROC backpatch = (LABEL lab, REF MACHINELABELSTACK ml) BACKPATCH:
+   {---------------------------------------}
+
+      (lab,ml);
+
+   OP DUMP = (BACKPATCH bp, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"BACKPATCH"));
+         label OF bp DUMP indent + " ";
+         machine_label_stack OF bp DUMP indent + " "
+      END;
+
+
+{======================================================================}
+MODE BACKPATCHLIST
+{---------------------------------------}
+{ A list of back_patch. }
+
+   = STRUCT (BACKPATCH back_patch, REF BACKPATCHLIST rest);
+
+   REF BACKPATCHLIST backpatchlist = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF BACKPATCHLIST lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF BACKPATCHLIST var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT backpatchlist DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF BACKPATCHLIST lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"BACKPATCHLIST", newline));
+         REF BACKPATCHLIST var := lis;
+         FOR i TO LENGTH lis DO
+            back_patch OF var DUMP indent + " ";
+            var := rest OF var
+         OD
+      END;
+
+   OP ATT = (MACHINELABEL ml, LABEL lab) STRUCT (MACHINELABEL ml, LABEL lab):
+   {---------------------------------------}
+      (ml,lab);
+
+   OP WRITE = (REF REF BACKPATCHLIST lis, STRUCT(MACHINELABEL ml, LABEL lab) ip) VOID:
+   {---------------------------------------}
+      BEGIN
+         REF REF BACKPATCHLIST var := lis;
+         WHILE (var ISNT backpatchlist) ANDTH
+            NOT (label OF back_patch OF var = lab OF ip) DO
+            var := rest OF var
+         OD;
+         IF var IS backpatchlist THEN
+            REF MACHINELABELSTACK newstack := machinelabelstack;
+            newstack PUSH ml OF ip;
+            lis := (HEAP BACKPATCHLIST := ((lab OF ip, newstack), lis))
+         ELSE
+            machine_label_stack OF back_patch OF var PUSH ml OF ip
+         FI
+      END;
+
+   OP LOOKUPREMOVE = (REF REF BACKPATCHLIST lis, LABEL k) REF MACHINELABELSTACK:
+   {---------------------------------------}
+   { Returns null machine_label_stack if no items match label given. }
+      BEGIN
+         REF BACKPATCHLIST var := lis;
+         REF BACKPATCHLIST lastvar := backpatchlist;
+         WHILE (var ISNT backpatchlist) ANDTH
+            NOT (label OF back_patch OF var = k) DO
+            lastvar := var;
+            var := rest OF var
+         OD;
+         IF var IS backpatchlist THEN
+            machinelabelstack
+         ELSE
+            IF lastvar IS backpatchlist THEN
+               lis := rest OF var
+            ELSE
+               rest OF lastvar := rest OF var
+            FI;
+            machine_label_stack OF back_patch OF var
+         FI
+      END;
+      
+   OP CLEARED = (REF BACKPATCHLIST lis) BOOL:
+   {---------------------------------------}
+   { Returns TRUE if the list is empty. }
+      lis IS backpatchlist;
+   
+
+{======================================================================}
+MODE PARAM
+{---------------------------------------}
+{ Description of a parameter to an item of named code. }
+
+   = STRUCT (INT sort, BITNUMBER size);
+
+INT unknown = 0, {String} fixed = 1 {String}, instanceptr = 2,
+    boolean = 3, integer = 4;
+
+   { No constructor procedure because we never expect to create one. }
+
+   OP DUMP = (PARAM p, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+      BEGIN
+         put (screen, (indent + "PARAM ", sort OF p, " ", size OF p, newline))
+      END;
+
+   OP SAVE = (REF PARAM x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         sort OF x SAVE ff;
+         size OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF PARAM x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         sort OF x RESTORE ff;
+         size OF x RESTORE ff
+
+      END;
+
+{======================================================================}
+MODE PARAMS
+{---------------------------------------}
+{ A set of parameters, input or output, to an item of named code.
+  PARAMS will always be used as REF PARAMS, with NIL indicating zero
+  of them. }
+
+   = STRUCT (PARAM head, REF PARAMS tail);
+
+REF PARAMS nilparams = NIL;
+
+{ No constructor procedure because we never expect to create one. }
+
+   OP DUMP = (REF PARAMS ip, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+      BEGIN
+         IF ip ISNT nilparams THEN
+            head OF ip DUMP indent + " ";
+            tail OF ip DUMP indent + " "
+         ELSE
+            SKIP
+         FI
+      END;
+
+   OP SAVE = (REF PARAMS x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         IF x ISNT nilparams THEN
+            TRUE SAVE ff;
+            head OF x SAVE ff;
+            tail OF x SAVE ff
+         ELSE
+            FALSE SAVE ff
+         FI
+      END;
+
+   OP RESTORE = (REF REF PARAMS x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         BOOL another; another RESTORE ff;
+         IF another THEN
+            x := HEAP PARAMS;
+            head OF x RESTORE ff;
+            tail OF x RESTORE ff
+         ELSE
+            x := nilparams
+         FI
+      END;
+
+   OP LENGTH = (REF PARAMS p) INT:
+   {---------------------------------------}
+   { The number of parameters in the list. }
+
+      BEGIN
+         REF PARAMS ip := p;
+         INT count := 0;
+         WHILE ip ISNT nilparams DO count PLUSAB 1; ip := tail OF ip OD;
+         count
+      END;
+
+{======================================================================}
+MODE LABELEDPARAMS =
+{---------------------------------------}
+{ A an associations of parameters with label of named code. }
+
+   STRUCT(LABEL label, REF PARAMS input_params, output_params);
+
+   PROC labeledparams = (LABEL lab, REF PARAMS ip, op) LABELEDPARAMS:
+   {---------------------------------------}
+      (lab, ip, op);
+
+   OP DUMP = (LABELEDPARAMS p, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+      BEGIN
+         put (screen, (indent + "LABELEDPARAMS", newline));
+         label OF p DUMP indent + " ";
+         input_params OF p DUMP indent + " ";
+         output_params OF p DUMP indent + " "
+      END;
+
+   OP SAVE = (REF LABELEDPARAMS x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         label OF x SAVE ff;
+         input_params OF x SAVE ff;
+         output_params OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF LABELEDPARAMS x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         label OF x RESTORE ff;
+         input_params OF x RESTORE ff;
+         output_params OF x RESTORE ff
+
+      END;
+
+{======================================================================}
+MODE LABELEDSPEC =
+{---------------------------------------}
+{ A an associations of the stack state with a jump label. }
+
+   STRUCT(LABEL label, REF PARAMS spec);
+
+   PROC labeledspec = (LABEL lab, REF PARAMS sp) LABELEDSPEC:
+   {---------------------------------------}
+      (lab, sp);
+
+   OP DUMP = (LABELEDSPEC p, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+      BEGIN
+         put (screen, (indent + "LABELEDSPEC", newline));
+         label OF p DUMP indent + " ";
+         spec OF p DUMP indent + " "
+      END;
+
+{======================================================================}
+MODE SPECLIST
+{---------------------------------------}
+{ A list of labeled_spec. }
+
+   = STRUCT (LABELEDSPEC labeled_spec, REF SPECLIST rest);
+
+   REF SPECLIST speclist = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF SPECLIST lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF SPECLIST var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT speclist DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF SPECLIST lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"SPECLIST", newline));
+         REF SPECLIST var := lis;
+         FOR i TO LENGTH lis DO
+            labeled_spec OF var DUMP indent + " ";
+            var := rest OF var
+         OD
+      END;
+
+   OP PRESENT = (REF SPECLIST lis, LABEL k) BOOL:
+   {---------------------------------------}
+   { Returns FALSE if no items match label given. }
+      BEGIN
+         REF SPECLIST var := lis;
+         WHILE (var ISNT speclist) ANDTH
+            NOT (label OF labeled_spec OF var = k) DO
+            var := rest OF var
+         OD;
+         var ISNT speclist
+      END;
+
+   OP LOOKUPREMOVE = (REF REF SPECLIST lis, LABEL k) REF PARAMS:
+   {---------------------------------------}
+   { Returns null spec if no items match label given. }
+      BEGIN
+         REF SPECLIST var := lis;
+         REF SPECLIST lastvar := speclist;
+         WHILE (var ISNT speclist) ANDTH
+            NOT (label OF labeled_spec OF var = k) DO
+            lastvar := var;
+            var := rest OF var
+         OD;
+         IF var IS speclist THEN
+            nilparams
+         ELSE
+            IF lastvar IS speclist THEN
+               lis := rest OF var
+            ELSE
+               rest OF lastvar := rest OF var
+            FI;
+            spec OF labeled_spec OF var
+         FI
+      END;
+      
+   OP WRITE = (REF REF SPECLIST lis, LABELEDSPEC k) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := (HEAP SPECLIST := (k, lis))
+      END;
+
+
+{======================================================================}
+MODE PARAMETERLIST
+{---------------------------------------}
+{ A list of labeled_params. }
+
+   = STRUCT (LABELEDPARAMS labeled_params, REF PARAMETERLIST rest);
+
+   REF PARAMETERLIST parameterlist = NIL;
+   {---------------------------------------}
+
+   OP LENGTH = (REF PARAMETERLIST lis) STACKNUMBER:
+   {---------------------------------------}
+
+      BEGIN
+         REF PARAMETERLIST var := lis;
+         STACKNUMBER count := 0;
+         WHILE var ISNT parameterlist DO
+            count PLUSAB 1;
+            var := rest OF var
+         OD;
+         count
+      END;
+
+   OP DUMP = (REF PARAMETERLIST lis, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent,"PARAMETERLIST", newline));
+         REF PARAMETERLIST var := lis;
+         FOR i TO LENGTH lis DO
+            labeled_params OF var DUMP indent + " ";
+            var := rest OF var
+         OD
+      END;
+
+   OP SAVE = (REF PARAMETERLIST lis, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         (LENGTH lis) SAVE ff;
+         REF PARAMETERLIST var := lis;
+         FOR i TO LENGTH lis DO
+            labeled_params OF var SAVE ff;
+            var := rest OF var
+         OD
+      END;
+
+   OP RESTORE = (REF REF PARAMETERLIST lis, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         STACKNUMBER length; length RESTORE ff;
+         LABELEDPARAMS item;
+         lis := parameterlist;
+         FOR i TO length DO
+            item RESTORE ff;
+            lis := HEAP PARAMETERLIST := (item, lis)
+         OD
+      END;
+
+   OP LOOKUP = (REF PARAMETERLIST lis, LABEL k) [] REF PARAMS:
+   {---------------------------------------}
+   { Finds the most recent addition to the parameter list with
+     the given label.  In some sense this is inconsistent with
+     the named code labels, which would be searched in order
+     of arrival.  However, the parameters are not *directly*
+     linked to the labels, since they are an addition to the
+     am definition. }
+      BEGIN
+         REF PARAMETERLIST var := lis;
+         WHILE (var ISNT parameterlist) ANDTH
+            NOT (label OF labeled_params OF var = k) DO
+            var := rest OF var
+         OD;
+         (input_params OF labeled_params OF var,
+            output_params OF labeled_params OF var)
+      END;
+
+   OP REMOVE = (REF REF PARAMETERLIST lis, LABEL k) VOID:
+   {---------------------------------------}
+   { Deletes the entry matching the label if one can be found. }
+      BEGIN
+         REF PARAMETERLIST var := lis;
+         REF PARAMETERLIST lastvar := parameterlist;
+         WHILE (var ISNT parameterlist) ANDTH
+            NOT (label OF labeled_params OF var = k) DO
+            lastvar := var;
+            var := rest OF var
+         OD
+      END;
+      
+   OP WRITE = (REF REF PARAMETERLIST lis, LABELEDPARAMS k) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis REMOVE label OF k;
+         lis := (HEAP PARAMETERLIST := (k, lis))
+      END;
+
+   OP REMOVELAST = (REF REF PARAMETERLIST lis) VOID:
+   {---------------------------------------}
+      BEGIN
+         lis := rest OF lis
+      END;
+
+{======================================================================}
+MODE RMALLOCATOR
+{---------------------------------------}
+{ An object to allocate registers to model stack items.
+  This allocation scheme depends upon the register numbers being sequential.
+  An important point to note is that the register allocated to the top of
+  stack will only ever be an 'in' register when the stack length is less
+  than a window length. ie window_offset = 0.
+  See the SPARC Architecture Manual Appendix D for details.}
+   = STRUCT (REGISTERNUMBER window_offset,
+             REGISTERNUMBER register_ind,
+             MACHINEOFFSET memory_offset,
+             MACHINEOFFSET max_offset);
+
+
+REGISTERNUMBER maxregister = ABS i5;
+REGISTERNUMBER minregister = ABS o0;
+
+R              tempreg1 = g4,
+               tempreg2 = g5,
+               tempreg3 = g6,
+               tempreg4 = g7;
+
+R              callinstpointer = g3,
+               dynamicpointer  = g2,
+	       globalpointer   = g1;
+
+
+   PROC rmallocator = RMALLOCATOR:
+   {---------------------------------------}
+   
+      (0, maxregister+1, 0, 0);
+
+   OP DUMP = (RMALLOCATOR r, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+        put (screen, (indent + "RMALLOCATOR", newline));
+        put (screen, (indent + "window_offset ", window_offset OF r, newline));
+        put (screen, (indent + "register_ind ", register_ind OF r, newline));
+        put (screen, (indent + "memory_offset ", memory_offset OF r, newline));
+        put (screen, (indent + "max_offset ", max_offset OF r, newline))
+      END;
+
+   OP SAVE = (REF RMALLOCATOR x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't save window_offset }
+         { Don't save register_ind }
+         { Don't save memory_offset }
+
+         max_offset OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF RMALLOCATOR x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't restore window_offset }
+         { Don't restore register_ind }
+         { Don't restore memory_offset }
+
+         max_offset OF x RESTORE ff
+
+      END;
+
+   OP CLEAR = (REF RMALLOCATOR r) VOID:
+   {---------------------------------------}
+   { Set the state of the allocator back to its initial state except
+     for the record of its maximum static memory usage. }
+      BEGIN
+         register_ind OF r := maxregister+1;
+         memory_offset OF r := 0;
+         WHILE window_offset OF r /= 0 DO
+           restore USING RRR(g0, g0, g0);
+           window_offset OF r -:= 16
+         OD
+      END;
+
+   OP SAVEWINDOW = (REF RMALLOCATOR r)VOID:
+   {---------------------------------------}    
+      BEGIN
+         window_offset OF r +:= 16;
+         save USING RIR(sp, -(23+1)*4, sp)
+      END;
+
+   OP RESTOREWINDOW = (REF RMALLOCATOR r)VOID:
+   {---------------------------------------}    
+      IF window_offset OF r > 0 THEN 
+         window_offset OF r -:= 16;
+         restore USING RRR(g0, g0, g0)
+      FI;
+
+   OP WILLSAVEONRESERVER = (REF RMALLOCATOR r) BOOL:
+   {---------------------------------------}
+         register_ind OF r + window_offset OF r = ABS minregister;
+     
+   OP RESERVER = (REF RMALLOCATOR r) REGISTERNUMBER:
+   {---------------------------------------}
+      BEGIN
+         register_ind OF r -:= 1;
+ 
+         IF register_ind OF r + window_offset OF r < ABS minregister THEN
+            SAVEWINDOW r
+	 ELIF register_ind OF r + window_offset OF r = ABS r15 THEN
+            register_ind OF r := ABS r13 - window_offset OF r 
+         FI;
+
+         register_ind OF r
+      END;
+
+   OP UNRESERVER = (REF RMALLOCATOR r) VOID:
+   {---------------------------------------}
+      BEGIN
+         register_ind OF r +:= 1;
+
+         IF register_ind OF r + window_offset OF r = (ABS i0) ANDTH
+            window_offset OF r /= 0 
+         THEN
+            RESTOREWINDOW r;
+            register_ind OF r :=  ABS r8 - window_offset OF r
+         ELIF register_ind OF r + window_offset OF r = ABS r14 THEN
+            register_ind OF r :=  ABS r16 - window_offset OF r
+         FI
+      END;
+
+{======================================================================}
+MODE INREGISTER
+{---------------------------------------}
+{ For small locations:  Value is in allocated register or value is equal
+  to the callinstptr minus the global pointer.
+  The "loaded" state and if callinstptr also the "loaded out" state.
+  For large locations: The address of the value on the dynamic memory
+  stack is in the allocated register.  The "Loaded in" state.
+  For unknown locations:  Address of value on dynamic memory stack is in
+  the allocated register.  The "Loaded in" state. }
+
+   = STRUCT (BOOL ircallinst_flag);
+
+   PROC inregister = (BOOL f) INREGISTER:
+   {---------------------------------------}
+      BEGIN
+         INREGISTER r;
+         ircallinst_flag OF r := f;
+         r
+      END;
+   
+   OP DUMP = (INREGISTER s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+         put (screen, (indent + "INREGISTER", ircallinst_flag OF s, newline))
+      END;
+   
+{======================================================================}
+MODE COPY
+{---------------------------------------}
+{ For small, large and unknown locations:  Value is that of another location.
+  For large and unknown locations:
+  The address of space reserved on dynamic memory stack may either be
+  in allocated register or static memory. }
+
+   = STRUCT (STACKNUMBER copy_stack_number, BOOL register_flag);
+
+   PROC copy = (STACKNUMBER s, BOOL f) COPY:
+   {---------------------------------------}
+      (s,f);
+   
+   OP DUMP = (COPY s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+         put (screen, (indent + "COPY ", copy_stack_number OF s, " ",
+            register_flag OF s, newline))
+      END;
+   
+{======================================================================}
+MODE CONST
+{---------------------------------------}
+{ For small locations:  Value is a 13 bit constant.
+  For large locations:  Value is a constant, kept in a separate object
+  for storage in-line 
+  Its address is in the allocated register.}
+
+   = STRUCT (WORD constant);
+
+   PROC const = (WORD i) CONST:
+   {---------------------------------------}
+   
+      BEGIN
+         CONST c;
+         constant OF c := i;
+         c
+      END;
+
+   OP DUMP = (CONST s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+         put (screen, (indent + "CONST", newline));
+         constant OF s DUMP indent + " "
+      END;
+   
+{======================================================================}
+MODE SUMCONST
+{---------------------------------------}
+{ For small locations:  Value is sum of constant and allocated register or
+     callinst pointer plus constant minus global memory pointer. }
+
+   = STRUCT (INT sumconstant, BOOL callinst_flag);
+
+   PROC sumconst = (INT i, BOOL callinstf) SUMCONST:
+   {---------------------------------------}
+   
+      (i, callinstf);
+
+   OP DUMP = (SUMCONST s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+         put (screen, (indent + "SUMCONST", newline));
+         sumconstant OF s DUMP indent + " ";
+         put (screen, (indent, callinst_flag OF s, newline))
+      END;
+   
+{======================================================================}
+MODE INDIRECTED
+{---------------------------------------}
+{ For large locations: Value is at address equal to callinstptr, indexed
+  by tempreg1, or at allocated register indexed by tempreg1.}
+
+   = STRUCT (BOOL indcallinst_flag);
+
+   PROC indirected = (BOOL callinstf) INDIRECTED:
+   {---------------------------------------}
+   
+      BEGIN
+         INDIRECTED i;
+         indcallinst_flag OF i := callinstf;
+         i
+      END;
+   
+   OP DUMP = (INDIRECTED s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+ 
+      BEGIN
+         put (screen, (indent + "INDIRECTED", indcallinst_flag OF s, newline))
+      END;
+
+{======================================================================}
+MODE CONDITION
+{---------------------------------------}
+{ For small locations:  The value is represented as a processor condition.
+  This symbolic state disappears very quickly. }
+
+{ The actual values of condition are processor specific and defined
+  by the machine assembler. }
+
+   = STRUCT (BITS condition);
+
+   PROC condition = (BITS i) CONDITION:
+   {---------------------------------------}
+   
+      BEGIN
+         CONDITION c;
+         condition OF c := i;
+         c
+      END;
+
+   OP DUMP = (CONDITION c, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+  
+      put (screen, (indent + "CONDITION ",condition OF c, newline));
+
+{======================================================================}
+MODE SYMBOLICSTATE
+{---------------------------------------}
+{ Any symbolic stack item.  Plus VOID for the convenience of some OP
+  outputs only.
+  The VOID option is returned from some operations and indicates that
+  there is no symolic representation of the operation:  Often this means
+  that code to perform the operation must be assembled. }
+
+   = UNION (INREGISTER, COPY, CONST, SUMCONST, INDIRECTED,
+	    CONDITION, VOID);
+
+   OP DUMP = (SYMBOLICSTATE r, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      CASE r IN
+      (INREGISTER s) s DUMP indent,
+      (COPY s) s DUMP indent,
+      (CONST s) s DUMP indent,
+      (SUMCONST s) s DUMP indent,
+      (INDIRECTED s) s DUMP indent,
+      (CONDITION s) s DUMP indent
+      ESAC;
+   
+   OP + = (SYMBOLICSTATE r,s) SYMBOLICSTATE:
+   {---------------------------------------}
+   
+      CASE r IN
+      (INREGISTER rr):
+         CASE s IN
+         (CONST c): sumconst (INTEGER constant OF c, ircallinst_flag OF rr)
+         OUT EMPTY
+         ESAC,
+      (CONST rc):
+         CASE s IN
+         (INREGISTER sr):
+            IF ircallinst_flag OF sr THEN
+               sumconst (INTEGER constant OF rc, TRUE)
+            ELSE
+               EMPTY
+            FI,
+         (CONST sc):
+            BEGIN
+               INT total = (INTEGER constant OF rc) + (INTEGER constant OF sc);
+               IF total > max imm13 OR total < min imm13 THEN
+                  EMPTY
+               ELSE
+                  const(word(total))
+               FI
+            END,
+         (SUMCONST ssc):
+            IF callinst_flag OF ssc THEN
+               INT total = (INTEGER constant OF rc) + (sumconstant OF ssc);
+               IF total > max imm13 OR total < min imm13 THEN
+                  EMPTY
+               ELSE               
+                  sumconst(total, TRUE)
+               FI
+            ELSE EMPTY FI
+         OUT EMPTY ESAC,
+      (SUMCONST rsc):
+         CASE s IN
+         (CONST sc):
+            BEGIN
+               INT total = (sumconstant OF rsc) + (INTEGER constant OF sc);
+               IF total > max imm13 OR total < min imm13 THEN
+                  EMPTY
+               ELSE
+                  sumconst(total, callinst_flag OF rsc)
+               FI
+            END
+         OUT EMPTY ESAC
+      OUT
+         EMPTY
+      ESAC;
+
+   OP NOT = (SYMBOLICSTATE s) SYMBOLICSTATE:
+   {---------------------------------------}
+
+      CASE s IN
+      (CONDITION cd):
+         condition(invcondition(condition OF cd))
+      OUT
+         EMPTY
+      ESAC;
+
+   OP ALLOCREGISTERINUSE = (SYMBOLICSTATE s) BOOL:
+   {---------------------------------------}
+   { Returns true if the symbolic state indicates the allocated register
+     is in use. }
+
+      CASE s IN
+      (COPY): FALSE,
+      (CONST): FALSE,
+      (SUMCONST sc): NOT callinst_flag OF sc,
+      (INDIRECTED i): NOT indcallinst_flag OF i,
+      (CONDITION):
+         BEGIN
+            simfault("Invalid use of condition on stack.");
+            FALSE
+         END,
+      (INREGISTER ir): NOT ircallinst_flag OF ir
+      ESAC;
+
+   OP CALLINSTPOINTERINUSE = (SYMBOLICSTATE s) BOOL:
+   {---------------------------------------}
+   { Returns true if the symbolic state indicates the callinst pointer
+     is in use. }
+
+      CASE s IN
+      (COPY): FALSE,
+      (CONST): FALSE,
+      (SUMCONST sc):  callinst_flag OF sc,
+      (INDIRECTED i): indcallinst_flag OF i,
+      (CONDITION):
+         BEGIN
+            simfault("Invalid use of condition on stack.");
+            FALSE
+         END,
+      (INREGISTER ir): ircallinst_flag OF ir
+      ESAC;
+         
+{ Stack locations are rarely interesting on their own.
+  The stack allocator implements most operations on them. }
+
+{======================================================================}
+MODE SMALLSTACKLOCATION = BOOL;
+
+   SMALLSTACKLOCATION smallstacklocation = TRUE;
+
+MODE LARGESTACKLOCATION = INT;
+
+   LARGESTACKLOCATION largestacklocation = 0;
+
+MODE UNKNOWNSTACKLOCATION = CHAR;
+
+   UNKNOWNSTACKLOCATION unknownstacklocation = " ";
+
+{======================================================================}
+MODE STACKLOCATION 
+{---------------------------------------}
+{ A union mode representing the type of a location. }
+
+   = UNION (SMALLSTACKLOCATION, LARGESTACKLOCATION, UNKNOWNSTACKLOCATION);
+
+{======================================================================}
+MODE LOCATION
+{---------------------------------------}
+   = STRUCT (STACKLOCATION location_type,
+               SYMBOLICSTATE symbolic_state,
+               REGISTERNUMBER alloc_register,
+               BITNUMBER bit_length);
+
+   OP DUMP = (LOCATION s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      CASE location_type OF s IN
+      (SMALLSTACKLOCATION):
+         BEGIN
+            put (screen, (indent + "SMALLSTACKLOCATION", newline));
+            symbolic_state OF s DUMP indent + " ";
+            put (screen, (indent, bit_length OF s, newline))
+         END,
+      (LARGESTACKLOCATION):
+         BEGIN
+            put (screen, (indent + "LARGESTACKLOCATION", newline));
+            symbolic_state OF s DUMP indent + " ";
+            put (screen, (indent, bit_length OF s, newline))
+         END,
+      (UNKNOWNSTACKLOCATION):
+         BEGIN
+            put (screen, (indent + "UNKNOWNSTACKLOCATION", newline));
+            symbolic_state OF s DUMP indent + " "
+         END
+      ESAC;
+
+{======================================================================}
+MODE LOCATIONSTACK
+{---------------------------------------}
+{ A simple stack of locations }
+
+   = STRUCT (REF VECTOR [] LOCATION stack_locations,
+      STACKNUMBER top);
+      { top points to top of stack. }
+
+   PROC locationstack = LOCATIONSTACK:
+   {---------------------------------------}
+   
+      (HEAP VECTOR [7] LOCATION, 0);
+
+   OP DUMP = (LOCATIONSTACK s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent + "LOCATIONSTACK", newline));
+         put (screen, (indent + "top ", top OF s, newline));
+         FOR i FROM 1 TO top OF s DO
+            (stack_locations OF s) [i] DUMP indent + " "
+         OD
+      END;
+
+   OP NEW = (REF LOCATIONSTACK s) LOCATIONSTACK:
+   {---------------------------------------}
+
+      (HEAP VECTOR [UPB stack_locations OF s]LOCATION := stack_locations OF s,
+       top OF s);
+
+   OP CLEAR = (REF LOCATIONSTACK s) VOID:
+   {---------------------------------------}
+   { Clear the location stack. }
+
+      top OF s := 0;
+
+   OP LENGTH = (REF LOCATIONSTACK s) INT:
+   {---------------------------------------}
+      top OF s;
+
+   OP POP = (REF LOCATIONSTACK s) LOCATION:
+   {---------------------------------------}
+   { Pop off the top location from the location stack. }
+   
+      BEGIN
+         top OF s MINUSAB 1;
+         (stack_locations OF s) [top OF s + 1]
+      END;
+   
+   OP PUSH = (REF LOCATIONSTACK s, LOCATION loc) VOID:
+   {---------------------------------------}
+   { Push another location onto the top of the location stack. }
+   
+      BEGIN
+         IF top OF s = UPB stack_locations OF s THEN
+            HEAP VECTOR [UPB stack_locations OF s * 2] LOCATION newlocs;
+            newlocs [1:UPB stack_locations OF s] := stack_locations OF s;
+            stack_locations OF s := newlocs
+         FI;
+   
+         top OF s PLUSAB 1;
+         (stack_locations OF s) [top OF s] := loc
+      END;
+   
+   OP GET = (REF LOCATIONSTACK s, STACKNUMBER o) LOCATION:
+   {---------------------------------------}
+   { Get a copy of the location at given offset. }
+
+      (stack_locations OF s) [top OF s - o];
+
+   OP ATT = (LOCATION lo, STACKNUMBER nu)
+                                    STRUCT (LOCATION loc, STACKNUMBER o):
+   {---------------------------------------}
+   { A little operation to put together a structure. }
+      (lo,nu);
+
+   OP PUT = (REF LOCATIONSTACK s,STRUCT(LOCATION loc,STACKNUMBER o) ip) VOID:
+   {---------------------------------------}
+   { Replace a location at given offset. }
+
+      (stack_locations OF s) [top OF s - o OF ip] := loc OF ip;
+
+   OP CLEARED = (REF LOCATIONSTACK s) BOOL:
+   {---------------------------------------}
+   { TRUE if the stack is empty. }
+
+      top OF s = 0;
+   
+   OP TYPEOF = (REF LOCATIONSTACK s, STACKNUMBER o) STACKLOCATION:
+   {---------------------------------------}
+   { Return the type of a given location. }
+
+      location_type OF (stack_locations OF s) [top OF s - o];
+
+   OP STATEOF = (REF LOCATIONSTACK s, STACKNUMBER o) SYMBOLICSTATE:
+   {---------------------------------------}
+   { Return the symbolic state of a location or of the location. }
+
+      symbolic_state OF (stack_locations OF s) [top OF s - o];
+
+   OP REGISTEROF = (REF LOCATIONSTACK s, STACKNUMBER o) REGISTERNUMBER:
+   {---------------------------------------}
+   { Return the register allocated to the location. }
+      
+      alloc_register OF (stack_locations OF s) [top OF s - o];
+
+   OP SIZEOF = (REF LOCATIONSTACK s, STACKNUMBER o) BITNUMBER:
+   {---------------------------------------}
+   { For small and large locations, return the bit size of the location. }
+
+      bit_length OF (stack_locations OF s) [top OF s - o];
+
+   OP GIVEN = (STACKNUMBER nu, SYMBOLICSTATE sy) STRUCT
+                                              (STACKNUMBER o, SYMBOLICSTATE ss):
+   {---------------------------------------}
+   { Little operation to construct a structure. }
+
+      (nu,sy);
+
+   OP CHANGESTATEOF = (REF LOCATIONSTACK s,
+                               STRUCT(STACKNUMBER o,SYMBOLICSTATE ss) ip) VOID:
+   {---------------------------------------}
+   { Replace the state of the location.  If a copy, do not affect the
+     copied location. }
+
+      symbolic_state OF (stack_locations OF s) [top OF s - o OF ip] := ss OF ip;
+
+   OP GIVENN = (STACKNUMBER nu,BITNUMBER bi) STRUCT(STACKNUMBER o,BITNUMBER bl):
+   {---------------------------------------}
+   { A little operation to construct a structure. }
+
+      (nu, bi);
+
+   OP CHANGESIZEOF = (REF LOCATIONSTACK s, STRUCT(STACKNUMBER o, BITNUMBER bl) ip)VOID:
+   {---------------------------------------}
+   { Replace the size of the location.  If a copy, do not affect the
+     copied location. }
+
+      bit_length OF (stack_locations OF s) [top OF s - o OF ip] := bl OF ip;
+
+   OP GIVEN = (STACKNUMBER nu, REGISTERNUMBER op) STRUCT(STACKNUMBER o,
+						         REGISTERNUMBER r):
+   {---------------------------------------}
+   { A little operation to construct a structure. }
+
+      (nu, op);
+
+				
+   OP CHANGEREGISTEROF = (REF LOCATIONSTACK s, STRUCT(STACKNUMBER o,
+						      REGISTERNUMBER  r) ip)
+      VOID:
+   {---------------------------------------}
+   { Change the allocated register of the indicated location. }
+
+      alloc_register OF (stack_locations OF s) [top OF s - o OF ip] := r OF ip;
+
+{======================================================================}
+MODE SIZERECORDER
+{---------------------------------------}
+{ An object to record the maximum size of a stack structure in memory.
+  (In fact the dynamic memory size). }
+
+   = STRUCT ( BYTENUMBER current_size, BYTENUMBER max_size);
+
+{ An object to encode abstract machine stack operations. }
+
+
+   PROC sizerecorder = SIZERECORDER:
+   {---------------------------------------}
+
+      (0,0);
+
+   OP DUMP = (SIZERECORDER sr, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      put (screen, (indent + "SIZERECORDER", current_size OF sr,
+         max_size OF sr, newline));
+
+   OP SAVE = (REF SIZERECORDER x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         current_size OF x SAVE ff;
+         max_size OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF SIZERECORDER x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         current_size OF x RESTORE ff;
+         max_size OF x RESTORE ff
+
+      END;
+
+   OP MAXSIZE = (REF SIZERECORDER sr) BYTENUMBER:
+   {---------------------------------------}
+
+      max_size OF sr;
+
+   OP PLUS = (REF SIZERECORDER sr, BYTENUMBER n) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         current_size OF sr PLUSAB n;
+         IF current_size OF sr > max_size OF sr THEN
+            max_size OF sr := current_size OF sr
+         FI
+      END;
+
+   OP MINUS = (REF SIZERECORDER sr, BYTENUMBER n) VOID:
+   {---------------------------------------}
+
+      current_size OF sr MINUSAB n;
+
+   OP CLEAR = (REF SIZERECORDER sr) VOID:
+   {---------------------------------------}
+
+      current_size OF sr := 0
+
+KEEP
+AMVERSION,
+   am_version,
+FERRYOUTANDFLT,
+   ferryoutandflt,
+FERRYINANDFLT,
+   ferryinandflt,
+   DUMP (BOOL, VECTOR [] CHAR),
+   SAVE (BOOL, FERRYOUTANDFLT),
+   RESTORE (REF BOOL, FERRYINANDFLT),
+OFFSET,
+   SAVE (INT, FERRYOUTANDFLT),
+   RESTORE (REF INT, FERRYINANDFLT),
+WORD,
+   newword,
+   word,
+   SAVE (WORD, FERRYOUTANDFLT),
+   RESTORE (REF WORD, FERRYINANDFLT),
+   NEW (WORD),
+   INTEGER (WORD),
+   LENGTH (WORD),
+STACKNUMBER,
+   nullstacknumber,
+MACHINEOFFSETSTACK,
+   machineoffsetstack,
+   DUMP (REF MACHINEOFFSETSTACK, VECTOR [] CHAR),
+   POP (REF REF MACHINEOFFSETSTACK),
+   PUSH (REF REF MACHINEOFFSETSTACK, MACHINEOFFSET),
+   CLEARED (REF MACHINEOFFSETSTACK),
+REGISTERNUMBER,
+BYTENUMBER,
+BITNUMBER,
+   BYTESIZE (BITNUMBER),
+MEMORY,
+   nullmemory,
+   CREATE (REF MEMORY, INT),
+   EXTEND (REF MEMORY, INT),
+   DESTROY (REF MEMORY),
+   DUMP (MEMORY, VECTOR [] CHAR),
+   SIZEOF (REF MEMORY),
+   SAVE (REF MEMORY, FERRYOUTANDFLT),
+   RESTORE (REF MEMORY, FERRYINANDFLT),
+   LEN (INT, INT),
+   GET (REF MEMORY, STRUCT (OFFSET off, INT len)),
+   ATT (WORD, BYTENUMBER),
+   PUT (REF MEMORY, STRUCT (WORD w, BYTENUMBER o)),
+LABEL,
+   label,
+   DUMP (LABEL, VECTOR [] CHAR),
+   SAVE (REF LABEL, FERRYOUTANDFLT),
+   RESTORE (REF LABEL, FERRYINANDFLT),
+   = (REF LABEL, LABEL),
+ADDRESS,
+   indirect,
+   DUMP (ADDRESS, VECTOR [] CHAR),
+LABELEDOFFSET,
+   labeledoffset,
+   DUMP (LABELEDOFFSET, VECTOR [] CHAR),
+   SAVE (REF LABELEDOFFSET, FERRYOUTANDFLT),
+   RESTORE (REF LABELEDOFFSET, FERRYINANDFLT),
+LABELLIST,
+   labellist,
+   DUMP (REF LABELLIST, VECTOR [] CHAR),
+   SAVE (REF LABELLIST, FERRYOUTANDFLT),
+   RESTORE (REF REF LABELLIST, FERRYINANDFLT),
+   LOOKUP (REF LABELLIST, LABEL),
+   WRITE (REF REF LABELLIST, LABELEDOFFSET),
+   REMOVELAST (REF REF LABELLIST),
+   CLEARED (REF LABELLIST),
+MACHINELABELSTACK,
+   machinelabelstack,
+   DUMP (REF MACHINELABELSTACK, VECTOR [] CHAR),
+   POP (REF REF MACHINELABELSTACK),
+   PUSH (REF REF MACHINELABELSTACK, MACHINELABEL),
+   CLEARED (REF MACHINELABELSTACK),
+BACKPATCH,
+   backpatch,
+   DUMP (BACKPATCH, VECTOR [] CHAR),
+BACKPATCHLIST,
+   backpatchlist,
+   DUMP (REF BACKPATCHLIST, VECTOR [] CHAR),
+   CLEARED (REF BACKPATCHLIST),
+   LOOKUPREMOVE (REF REF BACKPATCHLIST, LABEL),
+   ATT (MACHINELABEL, LABEL),
+   WRITE (REF REF BACKPATCHLIST, STRUCT (MACHINELABEL ml, LABEL lab)),
+PARAM,
+   unknown,
+   fixed,
+   instanceptr,
+   boolean,
+   integer,
+   DUMP (PARAM, VECTOR [] CHAR),
+   SAVE (REF PARAM, FERRYOUTANDFLT),
+   RESTORE (REF PARAM, FERRYINANDFLT),
+PARAMS,
+   nilparams,
+   DUMP (REF PARAMS, VECTOR [] CHAR),
+   SAVE (REF PARAMS, FERRYOUTANDFLT),
+   RESTORE (REF REF PARAMS, FERRYINANDFLT),
+   LENGTH (REF PARAMS),
+LABELEDPARAMS,
+   labeledparams,
+   DUMP (LABELEDPARAMS, VECTOR [] CHAR),
+   SAVE (REF LABELEDPARAMS, FERRYOUTANDFLT),
+   RESTORE (REF LABELEDPARAMS, FERRYINANDFLT),
+LABELEDSPEC,
+   labeledspec,
+   DUMP (LABELEDSPEC, VECTOR [] CHAR),
+SPECLIST,
+   speclist,
+   DUMP (REF SPECLIST, VECTOR [] CHAR),
+   LOOKUPREMOVE (REF REF SPECLIST, LABEL),
+   PRESENT (REF SPECLIST, LABEL),
+   WRITE (REF REF SPECLIST, LABELEDSPEC),
+PARAMETERLIST,
+   parameterlist,
+   DUMP (REF PARAMETERLIST, VECTOR [] CHAR),
+   SAVE (REF PARAMETERLIST, FERRYOUTANDFLT),
+   RESTORE (REF REF PARAMETERLIST, FERRYINANDFLT),
+   LOOKUP (REF PARAMETERLIST, LABEL),
+   WRITE (REF REF PARAMETERLIST, LABELEDPARAMS),
+   REMOVELAST (REF REF PARAMETERLIST),
+SIZERECORDER,
+   sizerecorder,
+   DUMP (SIZERECORDER, VECTOR [] CHAR),
+   SAVE (REF SIZERECORDER, FERRYOUTANDFLT),
+   RESTORE (REF SIZERECORDER, FERRYINANDFLT),
+   CLEAR (REF SIZERECORDER),
+   MAXSIZE (REF SIZERECORDER),
+   PLUS (REF SIZERECORDER, BYTENUMBER),
+   MINUS (REF SIZERECORDER, BYTENUMBER),
+RMALLOCATOR,
+   rmallocator,
+   globalpointer,
+   callinstpointer,
+   dynamicpointer,
+   tempreg1,
+   tempreg2,
+   tempreg3,
+   tempreg4,
+   DUMP (RMALLOCATOR, VECTOR [] CHAR),
+   SAVE (REF RMALLOCATOR, FERRYOUTANDFLT),
+   RESTORE (REF RMALLOCATOR, FERRYINANDFLT),
+   CLEAR (REF RMALLOCATOR),
+   SAVEWINDOW (REF RMALLOCATOR),
+   RESTOREWINDOW (REF RMALLOCATOR),
+   WILLSAVEONRESERVER (REF RMALLOCATOR),
+   RESERVER (REF RMALLOCATOR),
+   UNRESERVER (REF RMALLOCATOR),
+INREGISTER,
+   inregister,
+   DUMP (INREGISTER, VECTOR [] CHAR),
+COPY,
+   copy,
+   DUMP (COPY, VECTOR [] CHAR),
+CONST,
+   const,
+   DUMP (CONST, VECTOR [] CHAR),
+SUMCONST,
+   sumconst,
+   DUMP (SUMCONST, VECTOR [] CHAR),
+INDIRECTED,
+   indirected,
+   DUMP (INDIRECTED, VECTOR [] CHAR),
+CONDITION,
+   condition,
+   DUMP (CONDITION, VECTOR [] CHAR),
+SYMBOLICSTATE,
+   DUMP (SYMBOLICSTATE, VECTOR [] CHAR),
+   + (SYMBOLICSTATE, SYMBOLICSTATE),
+   ALLOCREGISTERINUSE (SYMBOLICSTATE),
+   CALLINSTPOINTERINUSE (SYMBOLICSTATE),
+   NOT (SYMBOLICSTATE),
+SMALLSTACKLOCATION,
+   smallstacklocation,
+LARGESTACKLOCATION,
+   largestacklocation,
+UNKNOWNSTACKLOCATION,
+   unknownstacklocation,
+STACKLOCATION,
+LOCATION,
+   DUMP (LOCATION, VECTOR [] CHAR),
+LOCATIONSTACK,
+   locationstack,
+   DUMP (LOCATIONSTACK, VECTOR [] CHAR),
+   NEW (REF LOCATIONSTACK),
+   CLEAR (REF LOCATIONSTACK),
+   LENGTH (REF LOCATIONSTACK),
+   POP (REF LOCATIONSTACK),
+   PUSH (REF LOCATIONSTACK, LOCATION),
+   GET (REF LOCATIONSTACK, STACKNUMBER),
+   ATT (LOCATION, STACKNUMBER),
+   PUT (REF LOCATIONSTACK,STRUCT(LOCATION loc, STACKNUMBER o)),
+   CLEARED (REF LOCATIONSTACK),
+   TYPEOF (REF LOCATIONSTACK, STACKNUMBER),
+   STATEOF (REF LOCATIONSTACK, STACKNUMBER),
+   REGISTEROF (REF LOCATIONSTACK, STACKNUMBER),
+   SIZEOF (REF LOCATIONSTACK, STACKNUMBER),
+   GIVEN (STACKNUMBER, SYMBOLICSTATE),
+   CHANGESTATEOF (REF LOCATIONSTACK, STRUCT(STACKNUMBER o, SYMBOLICSTATE ss)),
+   GIVENN (STACKNUMBER, BITNUMBER),
+   CHANGESIZEOF (REF LOCATIONSTACK, STRUCT(STACKNUMBER o, BITNUMBER bl)),
+   GIVEN (STACKNUMBER, REGISTERNUMBER),
+   CHANGEREGISTEROF (REF LOCATIONSTACK, STRUCT(STACKNUMBER o, REGISTERNUMBER r))
+FINISH

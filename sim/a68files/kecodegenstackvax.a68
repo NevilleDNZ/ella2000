@@ -1,0 +1,2961 @@
+DECS kecodegenstackvax CONTEXT VOID USE putstrings, osinterface, basics, kesave,
+     kemassemvax, kecodegenservervax:
+
+{ " Id: kecodegenstackvax.sta,v 2.1 91/02/22 18:35:00 edcad Exp$" }
+configinfo A68CONFIG "$Id: kecodegenstackvax.a68,v 34.2 1995/03/29 13:04:49 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+22:05:89 R4B339.  Fanout fails for zero case.
+            R4B383.  Use of ASH rather than ROT for STOU corrected.  SPT.
+20:07:89 R4B341.  Missing parameter to insv instruction.
+                     LOCATECOPY missing from instruction in FANOUT.   SPT.
+02:07:89 R4B419.  OP EQ reuses tos1 to take the condition.
+                     For large locations this is wrong.  SPT.
+31:08:89 R4B462.  stack conformity for large stacks.  SPT.
+14:09:89 R4B464.  LOADBITSTRING for large starts picking up long words
+                     from the start address not the end address.
+                     I think I can simplify this considerably!
+                     A LOCATECOPY is missing in BSTRING. Innocuous.  SPT.
+10:10:89 R4B496.  He thought he could simplify things but really
+                     screwed it up.  SPT.
+21:03:90          Install diagnostic HEAP allocation counting.  SPT.
+04:12:89 FANOUT changed to go indirect through pointer to list.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.008 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{                          VAX Code Generator Stack                            }
+{------------------------------------------------------------------------------}
+{ Notes
+  -----
+
+  This module provides all the operations, on the stack allocator class of
+  object which makes up the code generator.
+
+}
+
+{======================================================================}
+MODE STACKALLOCATOR
+{---------------------------------------}
+{ An object to encode abstract machine stack operations. }
+
+{ Note that one principle permeating the stack allocator
+  is that changes to the state of one location on the stack
+  should not affect adjacent locations (immediately above or
+  below on the stack).  This allows much code to be written
+  without fear of side effects and is enabled by ensuring
+  that operations on copy locations do not affect the copied
+  location(s).
+
+  The only time I can think that this is a bit
+  inefficient is where the copied location is a sum constant.
+  In this case it is necessary to evaluate the sum for each
+  copied location (all other symbolic states produce a single
+  operand representing their values). }
+
+
+   = STRUCT ( LOCATIONSTACK location_stack,
+              RMALLOCATOR rm_allocator,
+              REF CONSTANTSTACK constant_backpatches,
+              SIZERECORDER size_recorder);
+
+STACKNUMBER tos = 0; { The top of stack. }
+STACKNUMBER tos1 = 1; { The top of stack but one. }
+
+   PROC stackallocator = STACKALLOCATOR:
+   {---------------------------------------}
+
+      (locationstack, rmallocator, constantstack, sizerecorder);
+
+*0 INT new on stackallocator count := 0;
+*0
+   OP NEW = (REF STACKALLOCATOR s) REF STACKALLOCATOR:
+   {---------------------------------------}
+   { A copy of the value of a stack allocator. }
+
+      BEGIN
+*0       new on stackallocator count PLUSAB 1;
+         HEAP STACKALLOCATOR :=
+            (NEW (location_stack OF s),
+            (rm_allocator OF s),
+            NEW (constant_backpatches OF s),
+            size_recorder OF s)
+      END;
+
+   OP DUPLICATE = (REF STACKALLOCATOR to, from) VOID:
+   {---------------------------------------}
+   { Copy the value of a stack allocator to another stack allocator. }
+
+      BEGIN
+         (location_stack OF to) DUPLICATE (location_stack OF from);
+         rm_allocator OF to := rm_allocator OF from;
+         constant_backpatches OF to := constant_backpatches OF from;
+         size_recorder OF to := size_recorder OF from
+      END;
+
+   OP DUMP = (STACKALLOCATOR s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent + "STACKALLOCATOR", newline));
+         location_stack OF s DUMP indent + " ";
+         rm_allocator OF s DUMP indent + " ";
+         constant_backpatches OF s DUMP indent + " ";
+         size_recorder OF s DUMP indent + " "
+      END;
+
+   OP SAVE = (REF STACKALLOCATOR x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't save location_stack }
+         rm_allocator OF x SAVE ff;
+
+         { Don't save constant_backpatches }
+         size_recorder OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF STACKALLOCATOR x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't restore location_stack }
+         rm_allocator OF x RESTORE ff;
+
+         { Don't restore constant_backpatches }
+         size_recorder OF x RESTORE ff
+
+      END;
+
+   OP CLEAR = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Remove all items from the stack but don't close down! }
+      BEGIN
+         CLEAR location_stack OF s;
+         CLEAR rm_allocator OF s;
+         CLEAR size_recorder OF s
+      END;
+
+   OP STATICUSAGE = (REF STACKALLOCATOR s) MACHINEOFFSET:
+   {---------------------------------------}
+      MEMORYUSAGE rm_allocator OF s;
+
+   OP DYNAMICUSAGE = (REF STACKALLOCATOR s) MACHINEOFFSET:
+   {---------------------------------------}
+      MAXSIZE size_recorder OF s;
+
+   OP LENGTH = (REF STACKALLOCATOR s) INT:
+   {---------------------------------------}
+      LENGTH location_stack OF s;
+
+   OP CLEARED = (REF STACKALLOCATOR s) BOOL:
+   {---------------------------------------}
+   { No locations remain. }
+      LENGTH s = 0;
+
+   OP STATICOFFSETOF = (REF STACKALLOCATOR s, STACKNUMBER o) MACHINEOFFSET:
+   {---------------------------------------}
+   { For all locations, return the static memory offset of the location.
+     This operantion will also work for one *past* the top of stack (-1). }
+      IF o = tos - 1 THEN
+         FREEM rm_allocator OF s
+      ELSE
+         machine_offset OF (((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )
+      FI;
+
+   OP BITOFFSETOF = (REF STACKALLOCATOR s, STACKNUMBER o) BITNUMBER:
+   {---------------------------------------}
+   { For small and large bit string indirected locations, return bit offset. }
+      CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (BSINDIRECTED bsi): bit_offset OF bsi,
+      (BSINDIRECTEDSUMCONST bsisc): bit_offset OF bsisc
+      ESAC;
+
+   OP SMALLOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the operand locating the first (possibly only) value of
+     a location for small, large or unknown locations.  This is useful
+     when the address of the start of an item is needed, when SMALL-
+     OPERAND doesn't require tempdata to be cleared. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (SMALLSTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INREGISTER ss):
+               IF ircallinst_flag OF ss THEN
+                  BEGIN simfault("No operand for callinst pointer."); LITL 0 END
+               ELSE
+                  R (alloc_register OF l)
+               FI,
+            (COPY):
+               (machine_offset OF l) DISP staticframepointer,
+            (INMEMORY):
+               (machine_offset OF l) DISP staticframepointer,
+            (CONST ss):
+               LITL (constant OF ss),
+            (SUMCONST):
+               BEGIN simfault("No operand for sum constants."); LITL 0 END,
+            (INDIRECTED ss):
+               IF indcallinst_flag OF ss THEN
+                  RD callinst pointer
+               ELSE
+                  RD (alloc_register OF l)
+               FI,
+            (INDIRECTEDSUMCONST ss):
+               IF callinst_flag OF ss THEN
+                  (iscconstant OF ss) DISP callinstpointer
+               ELSE
+                  (iscconstant OF ss) DISP (alloc_register OF l)
+               FI,
+            (BSINDIRECTED ss):
+               IF bsicallinst_flag OF ss THEN
+                  RD callinstpointer
+               ELSE
+                  RD (alloc_register OF l)
+               FI,
+            (BSINDIRECTEDSUMCONST ss):
+               IF callinst_flag OF ss THEN
+                  (bsiconstant OF ss) DISP callinstpointer
+               ELSE
+                  (bsiconstant OF ss) DISP (alloc_register OF l)
+               FI,
+            (CONDITION):
+               BEGIN simfault("No operand for condition."); LITL 0 END
+            ESAC,
+         (LARGESTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INMEMORY):
+               (machine_offset OF l) DISPD staticframepointer,
+            (INREGISTER):
+               RD (alloc_register OF l),
+            (COPY ss):
+               IF register_flag OF ss THEN
+                  RD (alloc_register OF l)
+               ELSE
+                  (machine_offset OF l) DISPD staticframepointer
+               FI,
+            (INDIRECTED ss):
+               IF indcallinst_flag OF ss THEN
+                  RD callinstpointer
+               ELSE
+                  RD (alloc_register OF l)
+               FI,
+            (INDIRECTEDSUMCONST ss):
+               IF callinst_flag OF ss THEN
+                  iscconstant OF ss DISP callinstpointer
+               ELSE
+                  iscconstant OF ss DISP (alloc_register OF l)
+               FI,
+            (BSINDIRECTED ss):
+               IF bsicallinst_flag OF ss THEN
+                  RD callinstpointer
+               ELSE
+                  RD (alloc_register OF l)
+               FI,
+            (BSINDIRECTEDSUMCONST ss):
+               IF callinst_flag OF ss THEN
+                  (bsiconstant OF ss) DISP callinstpointer
+               ELSE
+                  (bsiconstant OF ss) DISP (alloc_register OF l)
+               FI,
+            (CONST ss): RD (alloc_register OF l)
+            ESAC,
+         (UNKNOWNSTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INREGISTER):
+               RD (alloc_register OF l),
+            (INMEMORY):
+               machine_offset OF l DISPD staticframepointer,
+            (COPY ss):
+               IF register_flag OF ss THEN
+                  RD (alloc_register OF l)
+               ELSE
+                  machine_offset OF l DISPD staticframepointer
+               FI
+            ESAC
+         ESAC
+      END;
+
+   OP CURRENTOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the operand locating the value of a location or for
+     copies, the location where there is a right to store the value.
+     (For small locations this must be static memory.)
+     For large and unknown locations, this will be longword indexed by
+     the temp data register to allow looping. }
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (SMALLSTACKLOCATION):
+         s SMALLOPERAND o,
+      (LARGESTACKLOCATION):
+         (s SMALLOPERAND o) // tempreg,
+      (UNKNOWNSTACKLOCATION):
+         (s SMALLOPERAND o) // tempreg
+      ESAC;
+
+   OP STATICMEMORYOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the operand locating the area of static memory allocated
+     to the location. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (SMALLSTACKLOCATION):
+            (machine_offset OF l) DISP staticframepointer,
+         (LARGESTACKLOCATION):
+            (machine_offset OF l) DISP staticframepointer,
+         (UNKNOWNSTACKLOCATION):
+            (machine_offset OF l) DISP staticframepointer
+         ESAC
+      END;
+
+   OP SMALLLOADOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the non-indexed operand representing where value
+     of a location may be stored to achieve the loaded state. }
+   { Use of this operation requires for small locations that the allocated
+     register be claimed, and for large and unknown locations that
+     the allocated register contains the address in dynamic memory
+     for the value. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (SMALLSTACKLOCATION):
+            R (alloc_register OF l),
+         (LARGESTACKLOCATION):
+            RD (alloc_register OF l),
+         (UNKNOWNSTACKLOCATION):
+            RD (alloc_register OF l)
+         ESAC
+      END;
+
+   OP LOADOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the operand representing where value
+     of a location may be stored to achieve the loaded state.
+     For large and unknown locations, this will be longword indexed by
+     the temp data register to allow looping. }
+   { Use of this operation requires for small locations that the allocated
+     register be claimed, and for large and unknown locations that
+     the allocated register contains the address in dynamic memory
+     for the value. }
+
+      BEGIN
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+            s SMALLLOADOPERAND o,
+         (LARGESTACKLOCATION):
+            (s SMALLLOADOPERAND o) // tempreg,
+         (UNKNOWNSTACKLOCATION):
+            (s SMALLLOADOPERAND o) // tempreg
+         ESAC
+      END;
+
+   OP SMALLLOADOUTOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the non-indexed operand representing where the value of a location
+     may be stored to achieve the loaded-out state. }
+   { Use of this operation for large and unknown locations requires
+     that static memory should hold the address in dynamic memory. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (SMALLSTACKLOCATION):
+            (machine_offset OF l) DISP staticframepointer,
+         (LARGESTACKLOCATION):
+            (machine_offset OF l) DISPD staticframepointer,
+         (UNKNOWNSTACKLOCATION):
+            (machine_offset OF l) DISPD staticframepointer
+         ESAC
+      END;
+
+   OP LOADOUTOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { Produces the operand representing where the value of a location
+     may be stored to achieve the loaded-out state.
+     For large and unknown locations, this will be longword indexed by
+     the temp data register to allow looping. }
+   { Use of this operation for large and unknown locations requires
+     that static memory should hold the address in dynamic memory. }
+
+      BEGIN
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+            s SMALLLOADOUTOPERAND o,
+         (LARGESTACKLOCATION):
+            s SMALLLOADOUTOPERAND o // tempreg,
+         (UNKNOWNSTACKLOCATION):
+            s SMALLLOADOUTOPERAND o // tempreg
+         ESAC
+      END;
+
+   OP INDIRECTSMALLOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { For small locations only,
+     produces the operand which may be used as a destination address
+     for the storage of small values. }
+   { Note that use of this operation requires first that
+     MAKEINDIRECTABLE is invoked on the location. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (SMALLSTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INREGISTER ss):
+               IF ircallinst_flag OF ss THEN
+                  RD callinst pointer
+               ELSE
+                  RD (alloc_register OF l)
+               FI,
+            (SUMCONST ss):
+               IF callinst_flag OF ss THEN
+                  (sumconstant OF ss) DISP callinstpointer
+               ELSE
+                  (sumconstant OF ss) DISP (alloc_register OF l)
+               FI
+            ESAC
+         ESAC
+      END;
+
+   OP INDIRECTLARGEOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { For small locations only,
+     produces the operand which may be used as a destination address
+     for the storage of large values. }
+   { Note that use of this operation requires first that
+     MAKEINDIRECTABLE is invoked on the location. }
+
+      (s INDIRECTSMALLOPERAND o) // tempreg;
+
+   OP ADDRESSOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { For large and unknown locations gives the operand representing the address
+     in dynamic memory reserved for the value. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE location_type OF l IN
+         (LARGESTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INREGISTER ss):
+               R (alloc_register OF l),
+            (INMEMORY ss):
+               (machine_offset OF l) DISP staticframepointer,
+            (COPY ss):
+               IF register_flag OF ss THEN
+                  R (alloc_register OF l)
+               ELSE
+                  (machine_offset OF l) DISP staticframepointer
+               FI
+            ESAC,
+         (UNKNOWNSTACKLOCATION):
+            CASE symbolic_state OF l IN
+            (INREGISTER ss):
+               R (alloc_register OF l),
+            (INMEMORY ss):
+               (machine_offset OF l) DISP staticframepointer,
+            (COPY ss):
+               IF register_flag OF ss THEN
+                  R (alloc_register OF l)
+               ELSE
+                  (machine_offset OF l) DISP staticframepointer
+               FI
+            ESAC
+         ESAC
+      END;
+
+   OP SIZEOPERAND = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { For all locations gives the operand representing the size
+     field in static memory.  This will be unused for small
+     locations. }
+
+      ((s STATICOFFSETOF o) + 4) DISP staticframepointer;
+
+   OP SMALLCOUNT = (REF STACKALLOCATOR s, STACKNUMBER o) STACKNUMBER:
+   {---------------------------------------}
+   { Calculate the number of small stack locations below the indicated
+     location on the stack (which may be *one past* the top of stack
+     (-1). }
+
+      IF o < (top OF location_stack OF s) - 1 THEN
+         STACKNUMBER count := 0;
+         STACKNUMBER i := o + 1;
+         WHILE i < (top OF location_stack OF s) ANDTH
+            CASE ((location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) ) IN (SMALLSTACKLOCATION): TRUE OUT FALSE ESAC DO
+            count PLUSAB 1;
+            i PLUSAB 1
+         OD;
+         count
+      ELSE
+         0
+      FI;
+
+   OP NEARESTLARGEUNKNOWN = (REF STACKALLOCATOR s, STACKNUMBER o) STACKNUMBER:
+   {---------------------------------------}
+   { Returns the nearest unknown or large location below the indicated location
+     (which may be *one past* the top of stack), or returns null stack number. }
+
+      IF (s SMALLCOUNT o) + o < (LENGTH s - 1) THEN
+         (s SMALLCOUNT o) + o + 1
+      ELSE
+         nullstacknumber
+      FI;
+
+   OP DYNAMICADDRESS = (REF STACKALLOCATOR s, STACKNUMBER o) OPERAND:
+   {---------------------------------------}
+   { The operand giving the address in dynamic memory reserved for
+     the location.  This will only work for large and unknown locations.
+     Small locations require that the address be calculated. }
+
+      BEGIN
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+         CASE location_type OF l IN
+         (UNION (LARGESTACKLOCATION, UNKNOWNSTACKLOCATION)):
+            CASE symbolic_state OF l IN
+            (UNION (INMEMORY, CONST, INDIRECTED, INDIRECTEDSUMCONST,
+               BSINDIRECTED, BSINDIRECTEDSUMCONST)):
+               s STATICMEMORYOPERAND o,
+            (COPY c):
+               IF register_flag OF c THEN
+                  R (alloc_register OF l)
+               ELSE
+                  s STATICMEMORYOPERAND o
+               FI,
+            (INREGISTER):
+               R (alloc_register OF l)
+            ESAC
+         ESAC
+      END;
+
+   OP CALCULATENEWDYNAMICADDR = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Calculate in the tempaddr register the address in dynamic memory
+     where the location indicated may store its value.  This will also
+     give the address where the location *one past* the top of stack
+     (-1) will be able to store its value. }
+
+      BEGIN
+         { First we must locate the nearest unknown or large location
+           down the stack, if one exists.  This, or the dynamic pointer
+           will form the base of the new address. }
+
+         STACKNUMBER nearestlu = s NEARESTLARGEUNKNOWN o;
+
+         IF nearestlu = nullstacknumber THEN
+            assemble (moval,
+               (4 * (s SMALLCOUNT o) DISP dynamicpointer, R tempreg))
+         ELSE
+            CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (nearestlu)] )  IN
+            (UNKNOWNSTACKLOCATION):
+               BEGIN
+                  assemble (addl3,
+                     (s SIZEOPERAND nearestlu, LITL 31, R tempreg));
+
+                  { Round up to nearest longword and add a longword }
+                  assemble (ashl, (LITB -5, R tempreg, R tempreg));
+                  assemble (ashl, (LITB 2, R tempreg, R tempreg));
+                  assemble (addl2, (s DYNAMICADDRESS nearestlu, R tempreg));
+
+                  IF (s SMALLCOUNT o) /= 0 THEN
+                     assemble (addl2,
+                        (LITL (4 * (s SMALLCOUNT o)), R tempreg))
+                  FI
+               END,
+            (LARGESTACKLOCATION):
+               BEGIN
+                  assemble (addl3, (s DYNAMICADDRESS nearestlu,
+                     LITL (4 * (s SMALLCOUNT o)
+                     + BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (nearestlu)] ) )), R tempreg))
+               END
+            ESAC
+         FI
+      END;
+
+   OP LOADINDEX = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { An operation to load temp register with the size minus one in
+     longwords of the indicated location, so it can serve as a loop counter. }
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (SMALLSTACKLOCATION): assemble (clrl, R tempreg),
+      (LARGESTACKLOCATION):
+         assemble (movl, (LITL ((BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )) OVER 4 - 1),
+            R tempreg)),
+      (UNKNOWNSTACKLOCATION):
+         BEGIN
+            assemble (subl3, (LITL 1, s SIZEOPERAND o, R tempreg));
+            assemble (ashl, (LITB - 5, R tempreg, R tempreg))
+         END
+      ESAC;
+
+   OP LOOPINDEX = (REF STACKALLOCATOR s, MACHINEOFFSET loop) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         INT offset = loop - (location + 3);
+         assemble (sobgeq, (R tempreg, BRANCHDISPB offset))
+      END;
+
+   OP POP = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         UNRESERVER rm_allocator OF s;
+         (rm_allocator OF s) UNRESERVEM (s STATICOFFSETOF tos);
+         REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ;
+         CASE location_type OF l IN
+         (UNION (SMALLSTACKLOCATION, LARGESTACKLOCATION)):
+            size_recorder OF s MINUS BYTESIZE (bit_length OF l)
+         OUT SKIP
+         ESAC;
+         (top OF location_stack OF s MINUSAB 1)
+      END;
+
+   OP LOCATECOPY = (REF STACKALLOCATOR s, STACKNUMBER o) STACKNUMBER:
+   {---------------------------------------}
+   { Locate the offset of the location which is copied by the location
+     indicated, or if it is not a copy, then return the offset of the
+     current location. }
+
+      CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (COPY c): s LOCATECOPY (copy_stack_number OF c + o) OUT o
+      ESAC;
+
+   OP ALLOCREGISTERINUSE = (REF STACKALLOCATOR s, STACKNUMBER o) BOOL:
+   {---------------------------------------}
+   { For all locations report whether the allocated register
+     is in use. }
+
+   BEGIN
+      REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+      CASE location_type OF l IN
+      (SMALLSTACKLOCATION): ALLOCREGISTERINUSE (symbolic_state OF l),
+      (LARGESTACKLOCATION):
+         CASE symbolic_state OF l IN
+         (CONST): TRUE,
+         (INMEMORY): FALSE,
+         (INREGISTER): TRUE,
+         (INDIRECTEDSUMCONST isc): NOT (callinst_flag OF isc),
+         (INDIRECTED i): NOT (indcallinst_flag OF i),
+         (BSINDIRECTEDSUMCONST bisc): NOT (callinst_flag OF bisc),
+         (BSINDIRECTED bi): NOT (bsicallinst_flag OF bi),
+         (COPY c): register_flag OF c
+         ESAC,
+      (UNKNOWNSTACKLOCATION):
+         CASE symbolic_state OF l IN
+         (INMEMORY): FALSE,
+         (INREGISTER ir): NOT (ircallinst_flag OF ir),
+         (COPY c): register_flag OF c
+         ESAC
+      ESAC
+   END;
+
+   OP CALLINSTPTRINUSE = (REF STACKALLOCATOR s, STACKNUMBER o) BOOL:
+   {---------------------------------------}
+   { For all locations report whether the callinst pointer
+     is in use. }
+
+   BEGIN
+      REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+      CASE location_type OF l IN
+      (SMALLSTACKLOCATION):
+         CASE symbolic_state OF l IN
+         (INREGISTER ss): ircallinst_flag OF ss,
+         (INMEMORY ss): FALSE,
+         (CONST ss): FALSE,
+         (SUMCONST ss): callinst_flag OF ss,
+         (INDIRECTED ss): indcallinst_flag OF ss,
+         (INDIRECTEDSUMCONST ss): callinst_flag OF ss,
+         (BSINDIRECTED ss): bsicallinst_flag OF ss,
+         (BSINDIRECTEDSUMCONST ss): callinst_flag OF ss,
+         (COPY): FALSE
+         ESAC,
+      (LARGESTACKLOCATION):
+         CASE symbolic_state OF l IN
+         (CONST): FALSE,
+         (INMEMORY): FALSE,
+         (INREGISTER): FALSE,
+         (INDIRECTEDSUMCONST isc): callinst_flag OF isc,
+         (INDIRECTED i): indcallinst_flag OF i,
+         (BSINDIRECTEDSUMCONST bisc): callinst_flag OF bisc,
+         (BSINDIRECTED bi): bsicallinst_flag OF bi,
+         (COPY): FALSE
+         ESAC,
+      (UNKNOWNSTACKLOCATION):
+         CASE symbolic_state OF l IN
+         (INMEMORY): FALSE,
+         (INREGISTER ir): FALSE,
+         (COPY): FALSE
+         ESAC
+      ESAC
+   END;
+
+   OP STATICMEMORYINUSE = (REF STACKALLOCATOR s, STACKNUMBER o) BOOL:
+   {---------------------------------------}
+   { For small locations report whether the static memory
+     (apart from the length field) is in use. }
+
+   BEGIN
+      REF LOCATION l = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+      CASE location_type OF l IN
+      (SMALLSTACKLOCATION):
+         CASE symbolic_state OF l IN
+            (INMEMORY): TRUE
+         OUT FALSE
+         ESAC
+      ESAC
+   END;
+
+   PROC (REF STACKALLOCATOR, STACKNUMBER) VOID forceloadout;
+
+   OP FORCELOADOUT = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+      forceloadout(s,o);
+
+    OP CLAIMREGISTER = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Claim the register allocated to the indicated location from
+     whichever location has it. }
+   BEGIN
+      BOOL notdone := TRUE;
+
+      FOR i FROM o+8 BY 8 TO (top OF location_stack OF s) - 1 WHILE notdone DO
+         IF (s ALLOCREGISTERINUSE i) THEN
+            notdone := FALSE;
+            s FORCELOADOUT i
+         FI
+      OD;
+      FOR i FROM o-8 BY -8 TO 0 WHILE notdone DO
+         IF (s ALLOCREGISTERINUSE i) THEN
+            notdone := FALSE;
+            s FORCELOADOUT i
+         FI
+      OD
+   END;
+
+   OP SWAPREGISTER =
+      (REF STACKALLOCATOR s,STRUCT(STACKNUMBER o, REGISTERNUMBER i) ip)
+      VOID:
+   {---------------------------------------}
+   { Swap the allocated register of the indicated location for the
+     one supplied. }
+
+      IF (s ALLOCREGISTERINUSE o OF ip) AND
+         NOT (((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o OF ip)] ) ) = i OF ip) THEN
+         REGISTERNUMBER oldreg = (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o OF ip)] ) ;
+         (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((o OF ip))] := (i OF ip));
+         s CLAIMREGISTER o OF ip;
+         assemble (movl, (R oldreg, R i OF ip))
+      FI;
+
+   OP PUSHNEW = (REF STACKALLOCATOR s, BITNUMBER length) VOID:
+   {---------------------------------------}
+   { Create a new stack location with given length and initial state
+     'loaded' without generating any code. }
+      BEGIN
+         IF BYTESIZE length = 4 THEN
+            location_stack OF s PUSH (LOCATION (smallstacklocation,
+               rm_allocator OF s RESERVEM 8,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length))
+         ELSE
+            location_stack OF s PUSH (LOCATION (largestacklocation,
+               rm_allocator OF s RESERVEM 8,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length))
+         FI;
+         size_recorder OF s PLUS BYTESIZE length
+      END;
+
+   OP PUSHNEWSTACKLOCATION = (REF STACKALLOCATOR s, BITNUMBER length) VOID:
+   {---------------------------------------}
+   { Create a new stack location with given length
+     (small or large as appropriate).  Fix initial state as
+     'loaded'. }
+      BEGIN
+         IF BYTESIZE length = 4 THEN
+            location_stack OF s PUSH (LOCATION (smallstacklocation,
+               rm_allocator OF s RESERVEM 8,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length));
+            s CLAIMREGISTER tos
+         ELSE
+            location_stack OF s PUSH (LOCATION (largestacklocation,
+               rm_allocator OF s RESERVEM 8,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length));
+            s CLAIMREGISTER tos;
+            s CALCULATENEWDYNAMICADDR tos;
+            assemble (movl, (R tempreg, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+         FI;
+         size_recorder OF s PLUS BYTESIZE length
+      END;
+
+   OP PUSHNEWUNKNOWNSTACKLOCATION = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Create a new unknown location, and fix its initial state as
+     'loaded'.  Unknown locations have as their first word their length. }
+
+      BEGIN
+         location_stack OF s PUSH
+            (LOCATION (unknownstacklocation, rm_allocator OF s
+               RESERVEM 8,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, -1));
+         s CLAIMREGISTER tos;
+         s CALCULATENEWDYNAMICADDR tos;
+         assemble (movl, (R tempreg, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+      END;
+
+   OP USEDREGISTER = (REF STACKALLOCATOR s, STACKNUMBER o) REGISTERNUMBER:
+   {---------------------------------------}
+   { Produce the register used in the current operand of the location.
+     NB. The user of this operation must know that *a* register is
+     in use. }
+
+      IF s ALLOCREGISTERINUSE o THEN (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] )
+      ELSE
+         "No register in use." ASSERT (s CALLINSTPTRINUSE o);
+         callinstpointer
+      FI;
+
+   OP REGISTERMASK = (REF STACKALLOCATOR s) BITS:
+   {---------------------------------------}
+   { Produce a register mask for those cyclic registers which hold
+     values which must be preserved.  In general, this will need
+     to be ANDed with a mask representing which registers need be
+     saved for a character string move etc. }
+
+      BEGIN
+         BITS mask := 16r0;
+
+         FOR o FROM tos TO (top OF location_stack OF s) - 1 DO
+            IF s ALLOCREGISTERINUSE o THEN
+               mask := mask OR (16r1 SHL ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ))
+            FI
+         OD;
+         mask
+      END;
+
+   PROC blockmove = (REF STACKALLOCATOR s, STACKNUMBER o, []OPERAND sop, []OPERAND lop) VOID:
+   {---------------------------------------}
+   { Stack number is offset of principle location.
+     Either a character string move will be assembled or the conventional
+     loop. }
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (LARGESTACKLOCATION):
+
+         BEGIN
+            BITS regmask = 16r3f AND REGISTERMASK s;
+            IF regmask = 16r0 THEN
+               assemble (movc3, (LITW BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                  sop[1], sop[2]))
+            ELIF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) >= 128 THEN
+               assemble (pushr, LITW ABS regmask);
+               assemble (movc3, (LITW BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),sop[1], sop[2]));
+               assemble (popr, LITW ABS regmask)
+            ELSE
+               s LOADINDEX o;
+               MACHINEOFFSET loop = location;
+               assemble (movl, (lop[1], lop[2]));
+               s LOOPINDEX loop
+            FI
+         END,
+
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            BITS regmask = 16r3f AND REGISTERMASK s;
+            IF regmask = 16r0 THEN
+               assemble (addl3, (LITL 31, s SIZEOPERAND o, R tempreg));
+               assemble (ashl, (LITB -5, R tempreg, R tempreg));
+               assemble (ashl, (LITB 2, R tempreg, R tempreg));
+               assemble (movc3, (R tempreg, sop[1], sop[2]))
+            ELSE
+               s LOADINDEX o;
+               MACHINEOFFSET loop = location;
+               assemble (movl, (lop[1], lop[2]));
+               s LOOPINDEX loop
+            FI
+         END
+      ESAC;
+
+   PROC blockcompare = (REF STACKALLOCATOR s, STACKNUMBER o, []OPERAND op) BOOL:
+   {---------------------------------------}
+   { Stack number is offset of principle location.  Returns whether
+     a block compare has been assembled. }
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (LARGESTACKLOCATION):
+
+         BEGIN
+            BITS regmask = 16rf AND REGISTERMASK s;
+            IF regmask = 16r0 THEN
+               assemble (cmpc3, (LITW BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ), op[1], op[2]));
+               TRUE
+            ELIF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) >= 64 THEN
+               assemble (pushr, LITW ABS regmask);
+               assemble (cmpc3, (LITW BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ), op[1], op[2]));
+               assemble (popr, LITW ABS regmask);
+               TRUE
+            ELSE
+               FALSE
+            FI
+         END,
+
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            BITS regmask = 16rf AND REGISTERMASK s;
+            IF regmask = 16r0 THEN
+               assemble (addl3, (LITL 31, s SIZEOPERAND o, R tempreg));
+               assemble (ashl, (LITB -5, R tempreg, R tempreg));
+               assemble (ashl, (LITB 2, R tempreg, R tempreg));
+               assemble (cmpc3, (R tempreg, op[1], op[2]));
+               TRUE
+            ELSE
+               FALSE
+            FI
+         END
+      ESAC;
+
+   OP FREECOPY = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For small and large locations only,
+     if the location is a copy, make it reflect the
+     state of the copied location.  This may involve copying the
+     contents of its allocated register. }
+   { Note that this operation does not guarantee that the state
+     will be that of the copy location (!). }
+
+      BEGIN
+         STACKNUMBER copiedloc := s LOCATECOPY o;
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (COPY):
+            CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  IF s ALLOCREGISTERINUSE copiedloc THEN
+                     IF NOT (((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) = ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] ) )) THEN
+                        s CLAIMREGISTER o;
+                        assemble (movl, (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] ) ),
+                           R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+                     ELSE
+                        s CLAIMREGISTER o
+                        { I assume this won't corrupt its value! }
+                     FI
+                  FI;
+                  IF s STATICMEMORYINUSE copiedloc THEN
+                     assemble (movl, (s STATICMEMORYOPERAND copiedloc,
+                        s STATICMEMORYOPERAND o))
+                  FI;
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] ) )))
+               END,
+            (LARGESTACKLOCATION):
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] )  IN
+               (UNION (INMEMORY, INREGISTER)):
+                  BEGIN
+                     blockmove(s,o,
+                        (s SMALLOPERAND copiedloc, s SMALLOPERAND o),
+                        (s CURRENTOPERAND copiedloc, s CURRENTOPERAND o));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (IF s ALLOCREGISTERINUSE o THEN inregister(FALSE) ELSE inmemory FI))
+                  END,
+               (UNION(CONST, INDIRECTED, INDIRECTEDSUMCONST, BSINDIRECTED,
+                  BSINDIRECTEDSUMCONST)):
+                  { We know that the allocated register may hold
+                    useful information not just the address of dynamic
+                    memory block. }
+                  BEGIN
+                     IF s ALLOCREGISTERINUSE o THEN
+                        assemble (movl, (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                           s STATICMEMORYOPERAND o))
+                        { Move the "copy" location dynamic memory address
+                          out to static memory. }
+                     ELSE
+                        s CLAIMREGISTER o
+                     FI;
+                     IF s ALLOCREGISTERINUSE copiedloc THEN
+                        assemble (movl,
+                           (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] ) ), R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+                     FI;
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] ) )))
+                  END
+               ESAC,
+            (UNKNOWNSTACKLOCATION):
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] )  IN
+               (UNION (INMEMORY, INREGISTER)):
+                  BEGIN
+                     blockmove(s,o,
+                        (s SMALLOPERAND copiedloc, s SMALLOPERAND o),
+                        (s CURRENTOPERAND copiedloc, s CURRENTOPERAND o));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (IF s ALLOCREGISTERINUSE o THEN inregister(FALSE) ELSE inmemory FI))
+                  END
+               ESAC
+            ESAC
+         OUT
+            SKIP
+         ESAC
+      END;
+
+   OP LOADBITSTRING = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For small and large bitstring indirected and bitstring indirected
+     sum const locations and copies of these, load the value of the bitstring. }
+
+      BEGIN
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (UNION (BSINDIRECTED, BSINDIRECTEDSUMCONST)):
+            BEGIN
+               s FREECOPY o;
+               BITNUMBER
+                  offset = (s BITOFFSETOF o) + ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) - 32,
+                  padding = (8 * BYTESIZE ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )) - ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) );
+
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                     assemble (extv, (LITL offset, LITB 32,
+                        s CURRENTOPERAND o, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)));
+
+                     { Correct the padding }
+                     assemble (insv, (LITL 0, LITL 0,
+                        LITB padding, s CURRENTOPERAND o))
+                  END,
+               (LARGESTACKLOCATION):
+                  BEGIN
+                     { The address of dynamic memory reserved for the value is
+                       in static memory. }
+                     { This, at first sight, over complex method is due to the ext
+                       instruction interpreting its base address as a *byte* ref
+                       which means we can't index each longword as we do normally. }
+
+                     IF NOT (s ALLOCREGISTERINUSE o) THEN
+                        s CLAIMREGISTER o;
+                        assemble (moval, (s SMALLOPERAND o,
+                           R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                        (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (bsindirected(FALSE, s BITOFFSETOF o)))
+                     FI;
+
+                     s LOADINDEX o;
+
+                     MACHINEOFFSET loop = location;
+                     assemble (extv, (LITL offset, LITB 32,
+                        s SMALLOPERAND o, s LOADOUTOPERAND o));
+                     assemble (subl2, (LITL 4, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+
+                     s LOOPINDEX loop;
+                        { All longwords have now been moved }
+
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory));
+
+                     { Correct the padding on the last one }
+                     assemble (insv, (LITL 0, LITL 0,
+                        LITB padding, s SMALLOPERAND o))
+
+                  END
+               ESAC
+            END
+         OUT SKIP
+         ESAC
+      END;
+
+   OP MAKEREADABLE = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For any location.  Make sum constant and inregister callinstptr states
+     readable by forcing into the allocated register.  (We must subtract
+     the global memory pointer from the value of the callinstptr to get
+     the required value.) Force bit strings to be loaded.
+     If the location is a copy, do not affect the copied
+     location (who's state remains sum constant). }
+
+      BEGIN
+         s LOADBITSTRING o;
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] )  IN
+         (INREGISTER ir):
+            IF ircallinst_flag OF ir THEN
+               s CLAIMREGISTER o;
+               assemble (subl3, (R global pointer, R callinstpointer,
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+            ELSE
+               SKIP
+            FI,
+         (SUMCONST sc):
+         BEGIN
+            s CLAIMREGISTER o;
+            IF NOT ((s USEDREGISTER (s LOCATECOPY o)) = ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )) THEN
+               assemble (movl, (R (s USEDREGISTER (s LOCATECOPY o)),
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+            FI;
+            IF sumconstant OF sc /= 0 THEN
+               assemble(addl2, (LITL sumconstant OF sc, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+            FI;
+            IF callinst_flag OF sc THEN
+               assemble (subl2, (R global pointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+            FI;
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+         END
+         OUT SKIP ESAC
+      END;
+
+   OP MAKEWRITABLE = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For small and large locations only,
+     if the location is a copy, make the state faithfully reflect the
+     state of the copied location.  This may involve copying the
+     contents of its allocated register.  Force bit strings to be
+     loaded. }
+
+      BEGIN
+         s FREECOPY o;
+         s LOADBITSTRING o
+      END;
+
+
+   OP MAKEINDIRECTABLE = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For small locations only, make a location capable of acting as
+     the address for a store.
+     The symbolic states inregister and sumconstant are acceptable.
+     The value (if any) in allocated register is augmented by the
+     global memory pointer. }
+
+      BEGIN
+         s LOADBITSTRING o;
+         s FREECOPY o;
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (UNION (INMEMORY, CONST, INDIRECTED, INDIRECTEDSUMCONST)):
+            BEGIN
+               IF NOT (s ALLOCREGISTERINUSE o) THEN
+                  s CLAIMREGISTER o
+               FI;
+               assemble (addl3, (s CURRENTOPERAND o, R globalpointer,
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (FALSE)))
+            END,
+         (UNION (INREGISTER, SUMCONST)):
+            IF (s ALLOCREGISTERINUSE o) THEN
+               assemble (addl2, (R globalpointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+            FI
+         ESAC
+      END;
+
+   OP FORCEALLOCREGISTER = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { For small locations only, load the value into the allocated register.
+     Do not affect copied locations.  The inregister callinstptr state
+     is not acceptable. }
+      BEGIN
+         s MAKEREADABLE o;
+            { This eliminates sum constant and callinstptr states }
+         IF NOT (s ALLOCREGISTERINUSE o) THEN s CLAIMREGISTER o FI;
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (INREGISTER ir):
+            SKIP
+         OUT
+            assemble(movl, (s CURRENTOPERAND (s LOCATECOPY o),
+               R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+         ESAC;
+         (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+      END;
+
+   OP FORCELOAD = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Force the location into its loaded state.  Do not affect copied locations. }
+
+      BEGIN
+         REF LOCATION loc = ((stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ;
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+            CASE symbolic_state OF loc IN
+            (INREGISTER): SKIP,
+            (COPY):
+               CASE ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] ) ) IN
+               (INREGISTER ir):
+                  IF s CALLINSTPTRINUSE (s LOCATECOPY o) THEN
+                     { This is a callinstptr location! }
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(TRUE)))
+                  ELSE
+                     s FORCEALLOCREGISTER o
+                  FI
+               OUT
+                  s FORCEALLOCREGISTER o
+               ESAC
+            OUT
+               s FORCEALLOCREGISTER o
+            ESAC,
+         (UNION (LARGESTACKLOCATION, UNKNOWNSTACKLOCATION)):
+            BEGIN
+               s MAKEREADABLE o;
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+                (INREGISTER): SKIP,
+                (INMEMORY):
+                   BEGIN
+                      s CLAIMREGISTER o;
+                      assemble (movl, (s STATICMEMORYOPERAND o,
+                         R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                      (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+                   END,
+                (UNION(CONST, INDIRECTED, INDIRECTEDSUMCONST)):
+                   BEGIN
+                     s CLAIMREGISTER o;
+                     blockmove(s, o,
+                        (s SMALLOPERAND o, s SMALLLOADOUTOPERAND o),
+                        (s CURRENTOPERAND o, s LOADOUTOPERAND o));
+                     s CLAIMREGISTER o;
+                     assemble (movl,
+                        (s STATICMEMORYOPERAND o, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+                  END,
+               (COPY):
+                  BEGIN
+                     s CLAIMREGISTER o;
+                     IF NOT (s ALLOCREGISTERINUSE o) THEN
+                        assemble (movl, (s STATICMEMORYOPERAND o,
+                           R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )))
+                     FI;
+                     blockmove(s,o,
+                        (s SMALLOPERAND (s LOCATECOPY o), s SMALLLOADOPERAND o),
+                        (s CURRENTOPERAND (s LOCATECOPY o), s LOADOPERAND o));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+                  END
+               ESAC
+            END
+         ESAC
+      END;
+
+   {PROC} forceloadout := (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Force the location into loaded out state, with no use of registers.
+     The only exception is the small location; inregister; callinstptr
+     state which is acceptable as it is. }
+      BEGIN
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+            CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] )  IN
+            (INREGISTER ir):
+               IF ircallinst_flag OF ir THEN
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (TRUE)))
+               ELSE
+                  assemble (movl, (s CURRENTOPERAND (s LOCATECOPY o),
+                     s STATICMEMORYOPERAND o));
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory))
+               FI
+            OUT
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+               (INMEMORY): SKIP
+               OUT
+                  s MAKEREADABLE o;
+                  assemble(movl, (s CURRENTOPERAND (s LOCATECOPY o),
+                     s STATICMEMORYOPERAND o));
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory))
+               ESAC
+            ESAC,
+         (UNION(LARGESTACKLOCATION, UNKNOWNSTACKLOCATION)):
+            BEGIN
+               s MAKEREADABLE o;
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+               (INMEMORY): SKIP,
+               (INREGISTER):
+                  BEGIN
+                     assemble (movl, (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                        s STATICMEMORYOPERAND o));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory))
+                  END,
+               (UNION (CONST, INDIRECTED, INDIRECTEDSUMCONST)):
+                  BEGIN
+                     blockmove(s,o,
+                        (s SMALLOPERAND o, s SMALLLOADOUTOPERAND o),
+                        (s CURRENTOPERAND o, s LOADOUTOPERAND o));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory))
+                  END,
+               (COPY):
+                  BEGIN
+                     blockmove(s,o,
+                        (s SMALLOPERAND (s LOCATECOPY o), s SMALLOPERAND o),
+                        (s CURRENTOPERAND (s LOCATECOPY o),s CURRENTOPERAND o));
+                     IF s ALLOCREGISTERINUSE o THEN
+                        assemble (movl, (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                           s STATICMEMORYOPERAND o))
+                     FI;
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inmemory))
+                  END
+               ESAC
+            END
+         ESAC
+      END;
+
+   OP FORCECONDITION = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force the storage of any stack location whose state is represented in the
+     condition code register of the processor.  This should be called before
+     code generation of all instructions except conditional branches. }
+   { I assume that a condition, if it exists, could only possibly be the
+     small location at tos, and that a register is available to store the
+     value. }
+   IF NOT CLEARED s THEN
+      CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+      (CONDITION c):
+         BEGIN
+            MACHINELABEL true, done;
+            ma bcc byte (condition OF c, true);
+            assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ));
+            ma bra byte (done);
+            fixmachinelabel (true);
+            assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ));
+            assemble (decl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ));
+            fixmachinelabel (done);
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inregister(FALSE)))
+         END
+      OUT SKIP ESAC
+   FI;
+
+   OP FORCEALLLOAD = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force the evaluation of all locations so they are independent of values
+     in memory.  This will be necessary before execution of any store
+     operation, which could potentially affect values on the stack which
+     have not yet been loaded. }
+      FOR i FROM (top OF location_stack OF s) -1 BY -1 TO tos DO
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] )  IN
+         (UNION (INDIRECTED, INDIRECTEDSUMCONST, BSINDIRECTED,
+            BSINDIRECTEDSUMCONST)): s FORCELOAD i
+         OUT SKIP ESAC OD;
+
+   OP TRANSMUTESMALL = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Make unknown locations into small locations.  This is to allow
+     them to be used as small locations where context demands it. }
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            s CLAIMREGISTER o;
+            s MAKEREADABLE o;
+
+            OPERAND oldoperand = s SMALLOPERAND (s LOCATECOPY o);
+            location_stack OF s PUT ((LOCATION (smallstacklocation,
+               s STATICOFFSETOF o,
+               inregister (FALSE),
+               (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ,
+               32)) ATT o);
+
+            assemble (movl, (oldoperand, s CURRENTOPERAND o))
+         END,
+
+      (SMALLSTACKLOCATION):
+         SKIP
+      ESAC;
+
+   OP CONFORM = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force stack conformity (needed whereever flows of control converge).
+     Amounts to loading the values of all locations.  The topmost location
+     which uses a specific processor register for its "LOAD" state may
+     use that register.  Other locations using the same processor register
+     must use the "LOADOUT" state (which doesn't need allocated registers). }
+
+      BEGIN
+         REGISTERNUMBER r := noofregisters;
+
+         FOR i FROM tos TO LENGTH s -1 DO
+            IF r = 0 THEN
+               s FORCELOADOUT i
+            ELSE
+               s FORCELOAD i;
+               IF s ALLOCREGISTERINUSE i THEN
+                  r MINUSAB 1
+               FI
+            FI
+         OD
+      END;
+
+   OP ADVANCE = (REF STACKALLOCATOR s, REF PARAMS ips) MACHINEOFFSET:
+   {---------------------------------------}
+   { Force coercion to types specified for the top most stack locations
+     (the parameters).  Everything should be in  the loaded out state.
+     Return the static memory
+     offset of the bottom-most parameter on the stack so the static
+     frame pointer can be advanced (and after the call, reset). }
+
+   { I assume:
+     1) Where a bit length is specified by a param, it overrides that
+     of the location itself.
+     2) I never have to coerce an unknown to a fixed location. }
+
+      IF (LENGTH ips) /= 0 THEN
+         STACKNUMBER o = LENGTH ips - 1;
+
+         REF PARAMS i := ips;
+         STACKNUMBER n := o;
+         WHILE i ISNT nilparams {AND n/= tos - 1!} DO
+            IF sort OF head OF i = unknown THEN
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] )  IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                     s MAKEREADABLE n;
+                     s CALCULATENEWDYNAMICADDR n;
+                     assemble (movl, (s CURRENTOPERAND (s LOCATECOPY n),
+                        RD tempreg));
+                     assemble (movl, (R tempreg, s STATICMEMORYOPERAND n));
+                     assemble (movl, (LITL ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) ), s SIZEOPERAND n));
+                     location_stack OF s PUT ((LOCATION (unknownstacklocation,
+                        s STATICOFFSETOF n,
+                        inmemory,
+                        (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) , -1)) ATT n)
+                  END,
+               (LARGESTACKLOCATION):
+                  BEGIN
+                     s FORCELOADOUT n;
+                     assemble (movl, (LITL ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) ), s SIZEOPERAND n));
+                     location_stack OF s PUT ((LOCATION (unknownstacklocation,
+                        s STATICOFFSETOF n,
+                        inmemory,
+                        (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) , -1)) ATT n)
+                  END,
+               (UNKNOWNSTACKLOCATION):
+                  s FORCELOADOUT n
+               ESAC
+            ELIF sort OF head OF i = instanceptr THEN
+               s FORCELOADOUT n;
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] )  IN
+               (INREGISTER ir):
+                  "Callinst pointer not found as specified on stack advance."
+                     ASSERT ircallinst_flag OF ir = TRUE
+               OUT
+                  simfault(
+                    "Callinst pointer not found as specified on stack advance.")
+               ESAC
+            ELIF sort OF head OF i = fixed THEN
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] )  IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                     s FORCELOADOUT n
+                  END,
+               (LARGESTACKLOCATION):
+                  BEGIN
+                     s FORCELOADOUT n
+                  END
+               OUT
+                  simfault(
+                     "Fixed location not found as specified on stack advance.")
+               ESAC
+            ELIF (sort OF head OF i = boolean) OR (sort OF head OF i = integer)
+               THEN
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] )  IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                     s FORCELOADOUT n
+                  END
+               OUT
+                  simfault(
+                     "Small location not found as specified on stack advance.")
+               ESAC
+            FI;
+            i := tail OF i;
+            n := n - 1
+         OD;
+
+         { Now ensure all items on the stack, including non-parameters
+           are loaded out. }
+         FOR i FROM LENGTH s - 1 BY -1 TO tos DO s FORCELOADOUT i OD;
+
+         s STATICOFFSETOF o
+      ELSE
+
+         { Now ensure all items on the stack, including non-parameters
+           are loaded out. }
+         FOR i FROM LENGTH s - 1 BY -1 TO tos DO s FORCELOADOUT i OD;
+
+         FREEM rm_allocator OF s
+      FI;
+
+   OP REPLACE = (REF STACKALLOCATOR s, [] REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Replace the input (1st parameter) representations on the stack with
+     the output (2nd parameter) representations. (No code should be generated;
+     This is merely a correction of the model stack to reflect what will
+     have happened during the subroutine.) }
+
+      BEGIN
+         TO LENGTH p[1] DO POP s OD;
+
+         REF PARAMS ops := p[2];
+
+         WHILE ops ISNT nilparams DO
+            IF sort OF head OF ops = unknown THEN
+               location_stack OF s PUSH
+                  (LOCATION (unknownstacklocation, rm_allocator OF s RESERVEM 8,
+                     inmemory,
+                     RESERVER rm_allocator OF s, -1))
+            ELIF sort OF head OF ops = instanceptr THEN
+               s PUSHNEW 32;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inregister(TRUE)))
+            ELIF sort OF head OF ops = fixed THEN
+               s PUSHNEW size OF head OF ops;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inmemory))
+            ELIF (sort OF head OF ops = boolean)
+               OR (sort OF head OF ops = integer)
+               THEN
+               s PUSHNEW 32;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inmemory))
+            FI;
+            ops := tail OF ops
+         OD
+      END;
+
+   OP COMPRESS = (REF STACKALLOCATOR s, INT n) VOID:
+   {---------------------------------------}
+   { At the end of a call or callinst, remove all but the "n" topmost
+     locations from the stack.  All of these remaining locations should
+     assume the loaded out state. }
+
+      BEGIN
+         IF n /= 0 THEN
+
+            IF n /= LENGTH s THEN
+
+               { Make the locations of interest independent }
+               FOR i FROM tos TO n - 1 DO
+                  s FREECOPY i
+               OD;
+               { Make the other locations inert }
+               FOR i FROM n TO (top OF location_stack OF s) - 1 DO
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] := (inmemory))
+               OD;
+
+               STACKNUMBER offset = LENGTH s - n;
+
+               FOR i FROM n - 1 BY - 1 TO tos DO
+                  CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] )  IN
+                  (SMALLSTACKLOCATION):
+                     BEGIN
+                        location_stack OF s PUT (
+                           (LOCATION (smallstacklocation,
+                              s STATICOFFSETOF (offset + i),
+                              copy (-offset, FALSE),
+                              (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] ) ,
+                              (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )) ATT (offset + i));
+
+                        IF s CALLINSTPTRINUSE i THEN
+                           (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] := (((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )))
+                        FI;
+
+                        s FORCELOADOUT (offset + i)
+                     END,
+                  (LARGESTACKLOCATION):
+                     BEGIN
+                        location_stack OF s PUT (
+                           (LOCATION (largestacklocation,
+                              s STATICOFFSETOF (offset + i),
+                              copy (-offset, TRUE),
+                              (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] ) ,
+                              (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )) ATT (offset + i));
+
+                        s CLAIMREGISTER (offset + i);
+                        s CALCULATENEWDYNAMICADDR (offset + i);
+                        assemble (movl,
+                           (R tempreg, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] ) )));
+                        s FORCELOADOUT (offset + i)
+                     END,
+                  (UNKNOWNSTACKLOCATION):
+                     BEGIN
+                        location_stack OF s PUT (
+                           (LOCATION (unknownstacklocation,
+                              s STATICOFFSETOF (offset + i),
+                              copy (-offset, TRUE),
+                              (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] ) , -1))
+                              ATT (offset + i));
+
+
+                        s CLAIMREGISTER (offset + i);
+                        s CALCULATENEWDYNAMICADDR (offset + i);
+                        assemble (movl, (R tempreg, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((offset + i))] ) )));
+                        assemble (movl, (s SIZEOPERAND i, s SIZEOPERAND (offset + i)));
+                        s FORCELOADOUT (offset + i)
+                     END
+                  ESAC
+               OD;
+
+               WHILE LENGTH s > n DO POP s OD
+
+            ELSE
+
+               { Every stack item is an output }
+               FOR i FROM tos TO n - 1 DO
+                  s FORCELOADOUT i
+               OD
+            FI
+         FI
+      END;
+
+   OP CREATEPARAMS = (REF STACKALLOCATOR s, REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Add objects representing supplied params to the stack allocator.
+     Their initial state should be loaded out.  Generate no code. }
+
+      BEGIN
+         REF PARAMS pc := p;
+         WHILE pc ISNT nilparams DO
+            IF sort OF head OF pc = unknown THEN
+               location_stack OF s PUSH
+                  (LOCATION (unknownstacklocation,
+                  rm_allocator OF s RESERVEM 8,
+                  inmemory,
+                  RESERVER rm_allocator OF s, -1))
+            ELIF sort OF head OF pc = instanceptr THEN
+               s PUSHNEW 32;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inregister (TRUE)))
+            ELIF sort OF head OF pc = fixed THEN
+               s PUSHNEW size OF head OF pc;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inmemory))
+            ELIF sort OF head OF pc = boolean OR
+               sort OF head OF pc = integer THEN
+               s PUSHNEW 32;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inmemory))
+            FI;
+            pc := tail OF pc
+         OD
+      END;
+
+   OP CREATESPEC = (REF STACKALLOCATOR s, REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Replace the current stack state with items matching the supplied
+     spec. Their initial state should be loaded.  Generate no code. }
+   { Note that the SPEC treats booleans and integers as (small) strings.
+     This is not a problem since the code generator can't distinguish
+     in any case when a SPEC is DERIVEd. }
+
+      BEGIN
+         CLEAR s;
+         REF PARAMS pc := p;
+         WHILE pc ISNT nilparams DO
+            IF sort OF head OF pc = unknown THEN
+               location_stack OF s PUSH
+                  (LOCATION (unknownstacklocation,
+                  rm_allocator OF s RESERVEM 8,
+                  inregister(FALSE),
+                  RESERVER rm_allocator OF s, -1))
+            ELIF sort OF head OF pc = instanceptr THEN
+               s PUSHNEW 32;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inregister (TRUE)))
+            ELIF sort OF head OF pc = fixed THEN
+               s PUSHNEW size OF head OF pc
+            FI;
+            pc := tail OF pc
+         OD;
+
+         REGISTERNUMBER r := noofregisters;
+
+         FOR i FROM tos TO LENGTH s - 1 DO
+            IF s ALLOCREGISTERINUSE i THEN
+               IF r = 0 THEN
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] := (inmemory))
+               ELSE
+                  r MINUSAB 1
+               FI
+            FI
+         OD
+      END;
+
+*0 INT derivespec on sa count := 0;
+
+   OP DERIVESPEC = (REF STACKALLOCATOR s) REF PARAMS:
+   {---------------------------------------}
+   { Derive the specification of the stack as it is at present. }
+
+      BEGIN
+         REF PARAMS result := NIL;
+            FOR i FROM tos TO (top OF location_stack OF s) - 1 DO
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] )  IN
+               (SMALLSTACKLOCATION):
+                  CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] )  IN
+                  (INREGISTER ir):
+                     IF ircallinst_flag OF ir THEN
+                        result := HEAP PARAMS := ((instanceptr, 32), result)
+                     ELSE
+                        result := HEAP PARAMS := ((fixed, ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )), result)
+                     FI
+                  OUT
+                     result := HEAP PARAMS := ((fixed, ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )), result)
+                  ESAC,
+               (LARGESTACKLOCATION):
+                  result := HEAP PARAMS := ((fixed, ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (i)] ) )), result),
+               (UNKNOWNSTACKLOCATION):
+                  result := HEAP PARAMS := ((unknown, 0), result)
+               ESAC
+            OD;
+*0          derivespec on sa count PLUSAB 1;
+            result
+         END;
+
+   OP STORECONSTANTS = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Store out any large constant values and backpatch the storage of their
+     addresses. }
+
+      BEGIN
+         WHILE PRESENT constant_backpatches OF s DO
+            MACHINEOFFSET currentlocation = location;
+            CONSTANTBACKPATCH item = POP constant_backpatches OF s;
+            location := offset OF item;
+            assemble (moval, (RELL (currentlocation - location - 6),
+               R register OF item));
+            location := currentlocation;
+
+            IF up OF am_version THEN
+               FOR i FROM UPB (constant OF item) BY - 1 TO 1 DO
+                  ma put char ((constant OF item) [i])
+               OD
+            ELSE
+               FOR i TO UPB (constant OF item) DO
+                  ma put char ((constant OF item) [i])
+               OD
+            FI
+         OD
+      END;
+
+   OP GENERICMONOP = (REF STACKALLOCATOR s) [] OPERAND:
+   {---------------------------------------}
+
+   { Return two operands.  One, a register, for the result to be stored in,
+     and one representing top of stack as it is. }
+
+      BEGIN
+         s MAKEREADABLE tos;
+         s CLAIMREGISTER tos;
+         OPERAND t = s SMALLOPERAND (s LOCATECOPY tos);
+
+         POP s;
+         s PUSHNEWSTACKLOCATION 32;
+
+         (t, s CURRENTOPERAND tos)
+
+      END;
+
+   OP GENERICDYOP = (REF STACKALLOCATOR s) [] OPERAND:
+   {---------------------------------------}
+
+   { Return two operands.  The one for the result will always be a register. }
+
+      BEGIN
+         s TRANSMUTESMALL tos1; { Eliminate unknown locations. }
+         s MAKEREADABLE tos;
+         s FORCEALLOCREGISTER tos1;
+         OPERAND sop = s SMALLOPERAND (s LOCATECOPY tos),
+            r = s CURRENTOPERAND tos1;
+
+         POP s;
+
+         (sop, r)
+
+      END;
+
+   OP GENERICTRIOP = (REF STACKALLOCATOR s) [] OPERAND:
+   {---------------------------------------}
+
+   { Return three operands.  The one for the results will always be a register.
+     The others may be anything that is readable. }
+
+      BEGIN
+         s CLAIMREGISTER tos1;
+         s MAKEREADABLE tos1;
+         s MAKEREADABLE tos;
+         OPERAND t = s SMALLOPERAND (s LOCATECOPY tos),
+            t1 = s SMALLOPERAND (s LOCATECOPY tos1);
+
+         POP s; POP s;
+
+         s PUSHNEWSTACKLOCATION 32;
+
+         (t, t1, s CURRENTOPERAND tos)
+      END;
+
+   OP GENERICOP = (REF STACKALLOCATOR s, [] BITS ops) VOID:
+   {---------------------------------------}
+
+   { Given a 2 operand operation, then a 3 operand operation, this
+    will assemble whichever is the more efficient. }
+
+      BEGIN
+         s CLAIMREGISTER tos1;
+         s MAKEREADABLE tos1;
+         s MAKEREADABLE tos;
+         OPERAND t = s SMALLOPERAND (s LOCATECOPY tos),
+            t1 = s SMALLOPERAND (s LOCATECOPY tos1);
+
+         POP s; POP s;
+
+         s PUSHNEWSTACKLOCATION 32;
+
+         OPERAND r = s CURRENTOPERAND tos;
+
+         IF t1 = r THEN
+            assemble (ops[1], (t, r))
+         ELSE
+            assemble (ops[2], (t, t1, r))
+         FI
+
+      END;
+
+   OP ADD = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         s TRANSMUTESMALL tos1; { Eliminate unknown locations. }
+         s TRANSMUTESMALL tos;
+
+         SYMBOLICSTATE r := ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ) + ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) );
+         CASE r IN
+         (VOID):
+            BEGIN
+               s FORCEALLOCREGISTER tos1;
+               r := ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ) + ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )
+            END
+         OUT SKIP
+         ESAC;
+
+         CASE r IN
+         (VOID):
+            s GENERICOP ([] BITS (addl2, addl3))
+         OUT
+            BEGIN
+               s MAKEWRITABLE tos1;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (r));
+               POP s
+            END
+         ESAC
+      END;
+
+   OP ABS = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         s TRANSMUTESMALL tos;
+         s FORCEALLOCREGISTER tos;
+
+         MACHINELABEL ok;
+
+         assemble (tstl, s CURRENTOPERAND tos);
+         ma bcc byte (geq, ok);
+
+         assemble (mnegl, (s CURRENTOPERAND tos, s CURRENTOPERAND tos));
+
+         fix machine label (ok)
+
+      END;
+
+   OP IAND = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         assemble (mcoml, GENERICMONOP s);
+            { Create "mask" }
+         s GENERICOP ([]BITS (bicl2, bicl3))
+            { Do bit clear }
+      END;
+
+   OP NOT = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         SYMBOLICSTATE r := NOT ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) );
+         CASE r IN
+         (VOID):
+            assemble (mcoml, GENERICMONOP s)
+         OUT
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (r))
+         ESAC
+      END;
+
+   OP SHL = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         [] OPERAND ops = GENERICTRIOP s;
+
+         { We must check the shift count..
+           the instruction won't cope with more than a byte
+           sized shift count. }
+
+         MACHINELABEL doit, toosmall, done;
+
+         assemble (cvtbl, (ops[1], R tempreg));
+         assemble (cmpl, (R tempreg, ops[1]));
+         ma bcc byte (eql, doit);
+         ma bcc byte (gtr, toosmall); { Shift right by too much }
+
+         { Shift left by too much }
+         assemble (movl, (LITL 0, ops[3]));
+         ma bra byte (done);
+
+         fix machine label (toosmall);
+         { Shift right by too much }
+         assemble (movl, (LITL -32, R tempreg));
+
+         fix machine label (doit);
+         assemble (bicpsw, LITW ABS 16r20); { Prevent overflow trap }
+         assemble (ashl, (R tempreg, ops[2], ops[3]));
+         assemble (bispsw, LITW ABS 16r20); { Enable overflow trap }
+
+         fix machine label (done)
+
+      END;
+
+   OP SHR = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         assemble (mnegl, GENERICMONOP s);
+         SHL s
+      END;
+
+   OP MOD = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         [] OPERAND ops = GENERICTRIOP s;
+
+         MACHINELABEL addon, done1, done2;
+
+         assemble (divl3, (ops[1],ops[2],R tempreg));
+         assemble (mull2, (ops[1],R tempreg));
+         assemble (subl3, (R tempreg,ops[2],ops[3]));
+         assemble (cmpl, (ops[3], LITL 0));
+         ma bcc byte (geq, done1);
+         assemble (cmpl, (ops[1], LITL 0));
+         ma bcc byte (geq, addon);
+         assemble (subl2, (ops[1], ops[3]));
+         ma bra byte (done2);
+         fix machine label (addon);
+         assemble (addl2, (ops[1], ops[3]));
+         fix machine label (done1);
+         fix machine label (done2)
+
+      END;
+
+   OP TEST = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         assemble (tstl, (GENERICMONOP s)[1]);
+         (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (condition(neq)))
+      END;
+
+   OP GENERICRELATION = (REF STACKALLOCATOR s, BITS c) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         [] OPERAND ops = GENERICTRIOP s;
+         assemble (cmpl, (ops[2],ops[1]));
+         (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (condition(c)))
+      END;
+
+   OP EQ = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Equality on strings and on integers.  Ie small large and unknown locs. }
+
+      BEGIN
+         BOOL done := FALSE;
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+         (SMALLSTACKLOCATION):
+            CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] )  IN
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  { We can compare constant sizes }
+                  IF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ) /= ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ) THEN
+                     s CLAIMREGISTER tos1;
+                     assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (condition (neq)));
+                     POP s
+                  ELSE
+                     s GENERICRELATION eql
+                  FI;
+                  done := TRUE
+               END,
+            (LARGESTACKLOCATION):
+               BEGIN
+                  POP s; POP s;
+                  s PUSHNEWSTACKLOCATION 32;
+
+                  assemble (clrl, s CURRENTOPERAND tos);
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (condition (neq)));
+                  done := TRUE
+               END
+            OUT
+               SKIP
+            ESAC,
+         (LARGESTACKLOCATION):
+            CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] )  IN
+            (LARGESTACKLOCATION):
+               IF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ) /= ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ) THEN
+                  POP s; POP s;
+                  s PUSHNEWSTACKLOCATION 32;
+                  assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ));
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (condition(neq)));
+                  done := TRUE
+               ELSE
+                  SKIP
+               FI,
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  s CLAIMREGISTER tos1;
+                  assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ));
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (condition (neq)));
+                  POP s;
+                  done := TRUE
+               END
+            OUT
+               SKIP
+            ESAC
+         OUT
+            SKIP
+         ESAC;
+
+         IF NOT done THEN
+
+            s CLAIMREGISTER tos1;
+            s MAKEREADABLE tos1;
+            s MAKEREADABLE tos;
+
+            { Compare the lengths of the items. }
+            assemble (cmpl, (s SIZEOPERAND tos, s SIZEOPERAND tos1));
+
+            MACHINELABEL finished1, finished2;
+            ma bcc byte (neq, finished1);
+
+            IF NOT blockcompare(s,s LOCATECOPY tos,
+               (s SMALLOPERAND (s LOCATECOPY tos),
+               s SMALLOPERAND (s LOCATECOPY tos1)))
+            THEN
+               s LOADINDEX tos;
+               MACHINEOFFSET loop = location;
+               { Compare the items themselves. }
+               assemble (cmpl, (s CURRENTOPERAND (s LOCATECOPY tos),
+                  s CURRENTOPERAND (s LOCATECOPY tos1)));
+               { Loop until there is a mis-match, or the loop counter runs out. }
+               ma bcc byte (neq, finished2);
+               s LOOPINDEX loop;
+               { The strings are equal.  We must indicated this. }
+               assemble (clrl, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ));
+               fix machine label (finished2)
+            FI;
+
+            fix machine label (finished1);
+
+            POP s; POP s;               { This should generate no code, }
+            s PUSHNEWSTACKLOCATION 32;  { and so not affect the condition }
+                                        { codes }
+
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (condition(eql)))
+
+         FI
+
+      END;
+
+   OP LEN = (WORD w, INT l) STRUCT (WORD wo, INT len):
+   {---------------------------------------}
+      (w, l);
+
+   OP PUSHCONST = (REF STACKALLOCATOR s, STRUCT (WORD wo, INT len) x) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         { Set up a string, at least big enough and zero padded. }
+
+         WORD newconst := newword(BYTESIZE len OF x);
+
+         FOR i TO UPB newconst DO
+            IF i - 1 > len OF x OVER 8 THEN
+               newconst[i] := REPR 0
+            ELSE
+               newconst[i] := (wo OF x) [i]
+            FI
+         OD;
+
+         IF len OF x MOD 8 /= 0 THEN
+            newconst[ 1 + (len OF x  OVER  8)] :=
+               REPR ABS ((BIN ABS newconst[1 + (len OF x OVER 8)]
+                  SHR (8 - len OF x MOD 8)) SHL (8 - len OF x MOD 8))
+         FI;
+
+         { Given the word, create the location. }
+
+         s PUSHNEWSTACKLOCATION len OF x;
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+         (SMALLSTACKLOCATION):
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (const(INTEGER newconst))),
+         (LARGESTACKLOCATION):
+            BEGIN
+               assemble (movl,
+                  (R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ), s STATICMEMORYOPERAND tos));
+                  { The dynamic memory address must be put in static memory. }
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (const(0)));
+               s CLAIMREGISTER tos;
+               constant_backpatches OF s PUSH
+                  constantbackpatch(newconst,location,(alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) );
+               assemble (moval, (RELL 0, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+                  { Generate some code to be reassembled later to
+                    load the actual storage address of the constant.
+                    This mode is limited to 16 bit displacement. }
+            END
+         ESAC
+      END;
+
+   OP PUSHINT = (REF STACKALLOCATOR s, INT i) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         s PUSHNEWSTACKLOCATION 32;
+         (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (const(i)))
+
+      END;
+
+   OP DROP = (REF STACKALLOCATOR s, INT n) VOID:
+   {---------------------------------------}
+
+      TO n DO POP s OD;
+
+   OP LOCAL = (REF STACKALLOCATOR s, INT n) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         s FORCELOAD n;
+
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] )  IN
+         (SMALLSTACKLOCATION):
+            BEGIN
+               s PUSHNEWSTACKLOCATION ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) );
+               IF s CALLINSTPTRINUSE (n + 1) THEN
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((n + 1))] ) )))
+               ELSE
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (copy(n + 1, FALSE)))
+               FI
+            END,
+
+         (LARGESTACKLOCATION):
+            BEGIN
+               s PUSHNEWSTACKLOCATION ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (n)] ) );
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (copy (n+1, TRUE)))
+            END,
+
+         (UNKNOWNSTACKLOCATION):
+            BEGIN
+               PUSHNEWUNKNOWNSTACKLOCATION s;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (copy(n + 1, TRUE)));
+               assemble (movl, (s SIZEOPERAND (n+1),
+                  s SIZEOPERAND tos))
+            END
+         ESAC
+      END;
+
+   OP GLOBAL = (REF STACKALLOCATOR s, BYTENUMBER w) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         s TRANSMUTESMALL tos; { Eliminate unknown locations. }
+
+         SYMBOLICSTATE r := IND ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) );
+
+         CASE r IN
+         (VOID):
+            BEGIN
+               s FORCEALLOCREGISTER tos;
+               r := IND ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )
+                  { I now assume this is always indirectable. }
+            END
+         OUT SKIP
+         ESAC;
+
+         REGISTERNUMBER oldreg = s USEDREGISTER tos;
+         POP s;
+         s PUSHNEW w * 8;
+         (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (r));
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+         (LARGESTACKLOCATION):
+            BEGIN
+               s CALCULATENEWDYNAMICADDR tos;
+               assemble (movl, (R tempreg, s STATICMEMORYOPERAND tos))
+            END
+         OUT SKIP
+         ESAC;
+
+         IF ALLOCREGISTERINUSE r THEN
+            s CLAIMREGISTER tos;
+            IF NOT (((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) ) = oldreg) THEN
+               assemble (addl3, (R oldreg, R globalpointer,
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+            ELSE
+               assemble (addl2, (R globalpointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+            FI
+         FI
+      END;
+
+   OP FROMM = (BITNUMBER w,l) STRUCT (BITNUMBER w, l):
+   {---------------------------------------}
+      (w, l);
+
+   OP BSTRING = (REF STACKALLOCATOR s, STRUCT (BITNUMBER w,l) ip) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         STACKNUMBER addr = tos, boffset = tos1;
+         s TRANSMUTESMALL addr; { Eliminate unknown locations. }
+         s TRANSMUTESMALL boffset;
+
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY boffset))] )  IN
+         (CONST bc):
+            BEGIN
+               { We can differ the loading of the bitstring. }
+               SYMBOLICSTATE r;
+
+               IF (constant OF bc) = 0 ANDTH w OF ip = l OF ip ANDTH
+                  w OF ip MOD 32 = 0 THEN
+                  { Treat the string as a standard small or large location. }
+                  r := IND ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) );
+                  CASE r IN
+                  (VOID):
+                     BEGIN
+                        s FORCEALLOCREGISTER addr;
+                        r := IND ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) )
+                           { Always indirectable. }
+                     END
+                  OUT SKIP
+                  ESAC
+               ELSE
+                  r := ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) )
+                     BIND (BYTESIZE l OF ip) * 8 -
+                        (constant OF bc + w OF ip);
+                  CASE r IN
+                  (VOID):
+                     BEGIN
+                        s FORCEALLOCREGISTER addr;
+                        r := ((symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) )
+                           BIND (BYTESIZE l OF ip) * 8 -
+                              (constant OF bc + w OF ip)
+                        { I assume this is always indirectable. }
+                     END
+                  OUT SKIP
+                  ESAC
+               FI;
+
+               REGISTERNUMBER oldreg = s USEDREGISTER addr;
+               POP s; POP s;
+
+               s PUSHNEW w OF ip;
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (r));
+               CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+               (LARGESTACKLOCATION):
+                  BEGIN
+                     s CALCULATENEWDYNAMICADDR tos;
+                     assemble (movl, (R tempreg, s STATICMEMORYOPERAND tos))
+                  END
+               OUT
+                  SKIP
+               ESAC;
+
+               IF ALLOCREGISTERINUSE r THEN
+                  s CLAIMREGISTER tos;
+                  IF NOT (((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  ) = oldreg) THEN
+                     assemble (addl3,
+                        (R oldreg, R globalpointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+                  ELSE
+                     assemble (addl2, (R globalpointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )))
+                  FI
+               FI
+            END
+         OUT
+            { Unfortunately, we must load the bitstring immediately! }
+
+            s CLAIMREGISTER boffset;
+            s MAKEREADABLE boffset;
+            s CLAIMREGISTER addr;
+            s MAKEREADABLE addr;
+
+            { Calculate initial values. }
+            assemble (addl3, (R globalpointer,
+               s CURRENTOPERAND (s LOCATECOPY addr),
+               R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) )));
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] := (inregister(FALSE)));
+
+            assemble (subl3, (s CURRENTOPERAND (s LOCATECOPY boffset),
+               LITL (8 * (BYTESIZE l OF ip) - 32),
+               R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (boffset)] ) )));  { offset = padded(l) - b - 32 }
+            (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (boffset)] := (inregister(FALSE)));
+
+            REGISTERNUMBER
+               boffsetreg = (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (boffset)] ) ,
+               addrreg = (alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (addr)] ) ;
+
+            { Prepare stack for afterwards. }
+            TO 2 DO POP s OD;
+            s PUSHNEW w OF ip;
+
+            CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] )  IN
+            (SMALLSTACKLOCATION):
+
+               BEGIN
+                  assemble (extv, (R boffsetreg, LITB 32,
+                     RD addrreg, s CURRENTOPERAND tos));
+                  assemble (insv, (LITL 0, LITL 0,
+                     LITL (8* (BYTESIZE w OF ip) - w OF ip),
+                     s CURRENTOPERAND tos))
+               END,
+
+            (LARGESTACKLOCATION):
+
+               BEGIN
+                  s CALCULATENEWDYNAMICADDR tos;
+                  assemble (movl, (R tempreg, s STATICMEMORYOPERAND tos));
+                  (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] := (inmemory));
+
+                  s LOADINDEX tos;
+
+                  MACHINEOFFSET loop = location;
+                  assemble (extv, (R boffsetreg, LITB 32,
+                     RI addrreg, s CURRENTOPERAND tos));
+                  assemble (subl2, (LITL 32, R boffsetreg));
+                  s LOOPINDEX loop;
+                     { All longwords have now been moved }
+
+                  { Correct the padding on the last one }
+                  assemble (insv, (LITL 0, LITL 0,
+                     LITB (8* (BYTESIZE w OF ip) - w OF ip),
+                        s SMALLOPERAND tos))
+               END
+            ESAC
+         ESAC
+      END;
+
+   OP ATT = (STRUCT (INT off, INT len) ip, INT n) STRUCT (INT w, INT v, a):
+   {---------------------------------------}
+   { A little operation to put together a structure. }
+
+      (len OF ip, off OF ip, n);
+
+   OP STORE = (REF STACKALLOCATOR s,
+                STRUCT (BYTENUMBER w, STACKNUMBER v,a) ip) VOID:
+   {---------------------------------------}
+   { NB. The locations nominated v and a must be the top two locations
+     on the stack. }
+
+      BEGIN
+
+         FORCEALLLOAD s;
+
+         s TRANSMUTESMALL (a OF ip);
+         s MAKEREADABLE (v OF ip);
+         s MAKEINDIRECTABLE (a OF ip);
+
+         IF w OF ip <= 4 THEN
+
+            { The location is a single longword. }
+
+            assemble (movl,
+               (s SMALLOPERAND (s LOCATECOPY (v OF ip)),
+               s INDIRECTSMALLOPERAND (s LOCATECOPY (a OF ip))));
+            POP s; POP s
+
+         ELSE
+
+            blockmove(s,v OF ip,
+               (s SMALLOPERAND (s LOCATECOPY (v OF ip)),
+               s INDIRECTSMALLOPERAND (s LOCATECOPY (a OF ip))),
+               (s CURRENTOPERAND (s LOCATECOPY (v OF ip)),
+               s INDIRECTLARGEOPERAND (s LOCATECOPY (a OF ip))));
+            POP s; POP s
+         FI
+      END;
+
+   OP ITOS = (REF STACKALLOCATOR s, STRUCT(STACKNUMBER o, BITNUMBER i) ip) VOID:
+   {---------------------------------------}
+   { Convert a signed integer to a string length i. }
+      BEGIN
+         { It is assumed that the location is small. }
+
+         IF i OF ip = 32 THEN
+            { Location is already a string. }
+            SKIP
+         ELSE
+            s FORCEALLOCREGISTER o OF ip;
+            assemble (ashl, (LITL (32 - i OF ip), s SMALLOPERAND o OF ip,
+               s SMALLOPERAND o OF ip));
+            (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o OF ip)] := (i OF ip))
+         FI
+
+      END;
+
+   OP UTOS = (REF STACKALLOCATOR s, STRUCT(STACKNUMBER o, BITNUMBER i) ip) VOID:
+   {---------------------------------------}
+   { Convert an unsigned integer to a string. }
+      BEGIN
+         { It is assumed that the location is small. }
+
+         IF i OF ip = 32 THEN
+            { Location is already a string. }
+            SKIP
+         ELSE
+            s FORCEALLOCREGISTER o OF ip;
+            assemble (bicpsw, (LITW ABS 16r20));
+            assemble (ashl, (LITB (32 - i OF ip), s SMALLOPERAND o OF ip,
+               s SMALLOPERAND o OF ip));
+            assemble (bispsw, (LITW ABS 16r20));
+            (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o OF ip)] := (i OF ip))
+         FI
+
+      END;
+
+   OP STOI = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to a signed integer. }
+
+      BEGIN
+         STACKNUMBER copiedloc = s LOCATECOPY o;
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+
+            IF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) = 32 THEN
+               { Location is already an integer. }
+               SKIP
+            ELSE
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] )  IN
+               (UNION (BSINDIRECTED, BSINDIRECTEDSUMCONST)):
+                  BEGIN
+                     s CLAIMREGISTER o;
+                     assemble (extv, (LITL (s BITOFFSETOF copiedloc),
+                        LITB ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                        s CURRENTOPERAND copiedloc,
+                        R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+                  END
+               OUT
+                  BEGIN
+                     s CLAIMREGISTER o;
+                     assemble (ashl, (LITB - (32 - ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )),
+                        s CURRENTOPERAND copiedloc,
+                        R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (FALSE)))
+                  END
+               ESAC;
+               (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (32))
+            FI,
+
+         (UNKNOWNSTACKLOCATION):
+
+            BEGIN
+               OPERAND sizeoperand = s SIZEOPERAND o;
+                 { Original size of the unknown in memory }
+
+               s TRANSMUTESMALL o;
+               s CLAIMREGISTER o;
+               assemble (subl3, (LITL 32, sizeoperand, R tempreg));
+               assemble (ashl, (R tempreg, s SMALLOPERAND (s LOCATECOPY o),
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (FALSE)))
+            END
+         ESAC
+      END;
+
+   OP STOU = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to a unsigned integer. }
+
+      BEGIN
+         STACKNUMBER copiedloc = s LOCATECOPY o;
+         CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+         (SMALLSTACKLOCATION):
+
+            IF ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ) = 32 THEN
+               { Location is already an integer. }
+               SKIP
+            ELSE
+               CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (copiedloc)] )  IN
+               (UNION (BSINDIRECTED, BSINDIRECTEDSUMCONST)):
+                  BEGIN
+                     s CLAIMREGISTER o;
+                     assemble (extzv, (LITL (s BITOFFSETOF copiedloc),
+                        LITB ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ),
+                        s CURRENTOPERAND copiedloc,
+                        R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister(FALSE)))
+                  END
+               OUT
+                  BEGIN
+                     s CLAIMREGISTER o;
+                     assemble (rotl, (LITB - (32 - ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )),
+                        s CURRENTOPERAND copiedloc,
+                        R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                  { Use of rotate assumes that the lsbs are all zero }
+                     (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (FALSE)))
+                  END
+               ESAC;
+               (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (32))
+            FI,
+
+         (UNKNOWNSTACKLOCATION):
+
+            BEGIN
+               OPERAND sizeoperand = s SIZEOPERAND o;
+                 { Original size of the unknown in memory }
+
+               s TRANSMUTESMALL o;
+               s CLAIMREGISTER o;
+               assemble (subl3, (LITL 32, sizeoperand, R tempreg));
+               assemble (rotl, (R tempreg, s SMALLOPERAND (s LOCATECOPY o),
+                  R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )));
+                  { Use of rotate assumes that the lsbs are all zero }
+               (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] := (inregister (FALSE)))
+            END
+
+         ESAC
+      END;
+
+OP ITOS = (REF STACKALLOCATOR s, BITNUMBER w) VOID:
+{---------------------------------------}
+{ Convert a signed integer to a string length w. }
+
+   s ITOS (tos GIVEN w);
+
+OP UTOS = (REF STACKALLOCATOR s, BITNUMBER w) VOID:
+{---------------------------------------}
+{ Convert an unsigned integer to a string. }
+
+    s UTOS (tos GIVEN w);
+
+OP STOI = (REF STACKALLOCATOR s) VOID:
+{---------------------------------------}
+{ Convert a bitstring to a signed integer. }
+
+   s STOI tos;
+
+OP STOU = (REF STACKALLOCATOR s) VOID:
+{---------------------------------------}
+{ Convert a bitstring to a unsigned integer. }
+
+   s STOU tos;
+
+   OP FANOUT = (REF STACKALLOCATOR s, INT offset) VOID:
+   {---------------------------------------}
+   { Go to each of the addresses in a list and thereby locate a word to set
+     to 1. }
+
+      BEGIN
+         s PUSHINT offset; ADD s;
+         s GLOBAL 4;                  { Indirect through that location }
+
+         s PUSHINT 0; { An extra location as intermediate storage }
+
+         s CLAIMREGISTER tos;
+         s CLAIMREGISTER tos1;
+         s MAKEREADABLE tos1;
+
+         assemble (addl3, (s CURRENTOPERAND (s LOCATECOPY tos1), R globalpointer,
+            R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ))); { Address of size }
+
+         assemble (subl3, (LITL 1, RI ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ), R tempreg));
+            { Set value of loop counter.
+              Indirectly, step the value of the address
+              on by one longword to point to the first address. }
+
+         MACHINELABEL over;
+         ma bcc byte (lss, over);
+
+         MACHINEOFFSET loop = location;
+
+         assemble (addl3, (RI ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] ) ),
+            R global pointer, R ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )));
+
+         assemble (movl, (LITL 1, RD ((alloc_register OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos)] ) )));
+
+         s LOOPINDEX loop;
+
+         fix machine label (over);
+
+         POP s; POP s
+      END
+
+KEEP
+STACKALLOCATOR,
+   tos, tos1,
+   stackallocator,
+   NEW (REF STACKALLOCATOR),
+   DUPLICATE (REF STACKALLOCATOR, REF STACKALLOCATOR),
+   DUMP (STACKALLOCATOR, VECTOR [] CHAR),
+   SAVE (REF STACKALLOCATOR, FERRYOUTANDFLT),
+   RESTORE (REF STACKALLOCATOR, FERRYINANDFLT),
+   STATICOFFSETOF (REF STACKALLOCATOR, STACKNUMBER),
+   BITOFFSETOF (REF STACKALLOCATOR, STACKNUMBER),
+   CURRENTOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   SMALLOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   STATICMEMORYOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   LOADOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   LOADOUTOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   INDIRECTSMALLOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   ADDRESSOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   SIZEOPERAND (REF STACKALLOCATOR, STACKNUMBER),
+   CALCULATENEWDYNAMICADDR (REF STACKALLOCATOR, STACKNUMBER),
+   LOADINDEX (REF STACKALLOCATOR, STACKNUMBER),
+   LOOPINDEX (REF STACKALLOCATOR, MACHINEOFFSET),
+   STATICUSAGE (REF STACKALLOCATOR),
+   DYNAMICUSAGE (REF STACKALLOCATOR),
+   LENGTH (REF STACKALLOCATOR),
+   CLEARED (REF STACKALLOCATOR),
+   POP (REF STACKALLOCATOR),
+   LOCATECOPY (REF STACKALLOCATOR, STACKNUMBER),
+   ALLOCREGISTERINUSE (REF STACKALLOCATOR, STACKNUMBER),
+   CALLINSTPTRINUSE (REF STACKALLOCATOR, STACKNUMBER),
+   STATICMEMORYINUSE (REF STACKALLOCATOR, STACKNUMBER),
+   FORCELOADOUT (REF STACKALLOCATOR, STACKNUMBER),
+   CLAIMREGISTER (REF STACKALLOCATOR, STACKNUMBER),
+   PUSHNEWSTACKLOCATION (REF STACKALLOCATOR, BITNUMBER),
+   PUSHNEWUNKNOWNSTACKLOCATION (REF STACKALLOCATOR),
+   USEDREGISTER (REF STACKALLOCATOR, STACKNUMBER),
+   FREECOPY (REF STACKALLOCATOR, STACKNUMBER),
+   LOADBITSTRING (REF STACKALLOCATOR, STACKNUMBER),
+   MAKEREADABLE (REF STACKALLOCATOR, STACKNUMBER),
+   MAKEWRITABLE (REF STACKALLOCATOR, STACKNUMBER),
+   MAKEINDIRECTABLE (REF STACKALLOCATOR, STACKNUMBER),
+   FORCEALLOCREGISTER (REF STACKALLOCATOR, STACKNUMBER),
+   FORCELOAD (REF STACKALLOCATOR, STACKNUMBER),
+   FORCECONDITION (REF STACKALLOCATOR),
+   FORCEALLLOAD (REF STACKALLOCATOR),
+   TRANSMUTESMALL (REF STACKALLOCATOR, STACKNUMBER),
+   CONFORM (REF STACKALLOCATOR),
+   ADVANCE (REF STACKALLOCATOR, REF PARAMS),
+   REPLACE (REF STACKALLOCATOR, [] REF PARAMS),
+   COMPRESS (REF STACKALLOCATOR, INT),
+   CREATEPARAMS (REF STACKALLOCATOR, REF PARAMS),
+   CLEAR (REF STACKALLOCATOR),
+   CREATESPEC (REF STACKALLOCATOR, REF PARAMS),
+   DERIVESPEC (REF STACKALLOCATOR),
+   STORECONSTANTS (REF STACKALLOCATOR),
+   GENERICDYOP (REF STACKALLOCATOR),
+   GENERICMONOP (REF STACKALLOCATOR),
+   GENERICTRIOP (REF STACKALLOCATOR),
+   GENERICOP (REF STACKALLOCATOR, [] BITS),
+   ADD (REF STACKALLOCATOR),
+   ABS (REF STACKALLOCATOR),
+   IAND (REF STACKALLOCATOR),
+   NOT (REF STACKALLOCATOR),
+   SHL (REF STACKALLOCATOR),
+   SHR (REF STACKALLOCATOR),
+   MOD (REF STACKALLOCATOR),
+   TEST (REF STACKALLOCATOR),
+   GENERICRELATION (REF STACKALLOCATOR, BITS),
+   LEN (WORD, INT),
+   PUSHCONST (REF STACKALLOCATOR, STRUCT (WORD wo, INT len)),
+   EQ (REF STACKALLOCATOR),
+   PUSHINT (REF STACKALLOCATOR, INT),
+   DROP (REF STACKALLOCATOR, INT),
+   LOCAL (REF STACKALLOCATOR, INT),
+   GLOBAL (REF STACKALLOCATOR, BYTENUMBER),
+   FROMM (BITNUMBER, BITNUMBER),
+   BSTRING (REF STACKALLOCATOR, STRUCT (BITNUMBER w,l)),
+   ATT (STRUCT (INT off, INT len), INT),
+   STORE (REF STACKALLOCATOR, STRUCT(BYTENUMBER w, STACKNUMBER v,a)),
+   ITOS (REF STACKALLOCATOR, STRUCT(STACKNUMBER o, BITNUMBER i)),
+   UTOS (REF STACKALLOCATOR, STRUCT(STACKNUMBER o, BITNUMBER i)),
+   STOI (REF STACKALLOCATOR, STACKNUMBER),
+   STOU (REF STACKALLOCATOR, STACKNUMBER),
+   ITOS (REF STACKALLOCATOR, BITNUMBER),
+   UTOS (REF STACKALLOCATOR, BITNUMBER),
+   STOI (REF STACKALLOCATOR),
+   STOU (REF STACKALLOCATOR),
+   FANOUT (REF STACKALLOCATOR, INT)
+FINISH
