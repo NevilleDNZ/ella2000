@@ -1,0 +1,2172 @@
+DECS  kecodegenstacksparc  CONTEXT VOID USE  putstrings, osinterface, basics,
+      kesave, kemassemsparc, kecodegenserversparc:
+
+{  "  Id: kecodegenstacksparc.sta,v 1.1 91/10/14 14:29:31 edcad Exp $ " }
+configinfo A68CONFIG "$Id: kecodegenstacksparc.a68,v 34.2 1995/03/29 13:04:48 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+27:02:89. Created from 68020 version. MDR.
+19:05:89. Fanout change, R4B331. MDR.
+19:05:89. Added FORCENOCALLINST to ensure ADD works correctly. R4B335. MDR.
+19:05:89. Fixed op EQ. R4B334. MDR.
+30:05:89. Made op ADD set condition codes. R4B351. MDR.
+02:06:89. Fixed calculatenewdynaddr. R4B347. MDR.
+06:06:89. Made safe all uses of SIZEOF where size > 2^12. R4B364. MDR.
+21:06:89. Fixed BSTRING. R4B363. MDR.
+25:06:89. Added FORCEINDEPMEM to keep list. R4B363. MDR.
+13:07:89. Fixed op div. R4B387. MDR.
+14:07:89. Removed use of OPERATORS which may generate side-effect code from
+             delay instruction positions. R4B387. MDR.
+15:07:89. Fixed 32 bit, variable offset BSTRING case. R4B387. MDR.
+09:10:89. Corrected use of SAVEWINDOW in DIV and MOD. R4B495. MDR.
+10:10:89. Corrected SAVEWINDOW condition in ADVANCE. R4B495. MDR.
+31:10:89. Ensure no copies are caried over by any forced window save,
+             corrected cast in small variable offset bstring. R4B510. MDR.
+08:12:89  Corrected PUSHCONST for strings 13 <= bit len <= 32. R4B549. MDR.
+04:09:90  Added indirection to FANOUT for monitor optimisations etc.
+             as a bug fix during integration. MDR.
+24:01:91  Fixed shift left and right for shifts > 31 bits. MDR.
+24:05:91  Correct length of stacklocation in PUSHCONST (by adding a
+             generalised PUSHINT).  PAR.
+16:08:93  Bug in stack handler - found during ELLA2000 build for new Ctrans
+             MDR / AAP / DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.020 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{                        SPARC Code Generator Stack                           }
+{ Notes
+  -----
+
+  This module provides all the operations, on the stack allocator class of
+  object which makes up the code generator.
+
+             Tempreg1, used for indexing large & unknown items,
+             Tempreg2, used as temporary when copying large & unknown items,
+             Tempreg3, used for destination address when loading large items.
+
+             Tempreg1 & 2 are default operands returned by LOADOPERANDS,
+             Tempreg3 contains the address in dynamic memory of a location
+             after a CALCULATENEWDYNAMICADDR.
+             Tempreg1 is default destination for SIZEOPERANDS
+
+             I Assume SIZEOF on an unknown will return 0, or size recorder will
+             be wrong after POP.
+
+    }
+
+
+
+{======================================================================}
+MODE STACKALLOCATOR
+{---------------------------------------}
+{ An object to encode abstract machine stack operations. }
+
+{ Note that one principle permeating the stack allocator
+  is that changes to the state of one location on the stack
+  should not affect adjacent locations (immediately above or
+  below on the stack).  This allows much code to be written
+  without fear of side effects and is enabled by ensuring
+  that operations on copy locations do not affect the copied
+  location(s).
+
+  The only time I can think that this is a bit
+  inefficient is where the copied location is a sum constant.
+  In this case it is necessary to evaluate the sum for each
+  copied location (all other symbolic states produce a single
+  operand representing their values). }
+
+
+   = STRUCT ( LOCATIONSTACK location_stack,
+              RMALLOCATOR rm_allocator,
+              SIZERECORDER size_recorder);
+
+STACKNUMBER tos = 0; { The top of stack. }
+STACKNUMBER tos1 = 1; { The top of stack but one. }
+
+   PROC stackallocator = STACKALLOCATOR:
+   {---------------------------------------}
+
+      (locationstack, rmallocator, sizerecorder);
+
+   OP NEW = (REF STACKALLOCATOR s) REF STACKALLOCATOR:
+   {---------------------------------------}
+   { A copy of the value of a stack allocator. }
+
+      HEAP STACKALLOCATOR :=
+         (NEW (location_stack OF s),
+         (rm_allocator OF s),
+         size_recorder OF s);
+
+
+   OP DUMP = (STACKALLOCATOR s, VECTOR [] CHAR indent) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         put (screen, (indent + "STACKALLOCATOR", newline));
+         location_stack OF s DUMP indent + " ";
+         rm_allocator OF s DUMP indent + " ";
+         size_recorder OF s DUMP indent + " "
+      END;
+
+   OP SAVE = (REF STACKALLOCATOR x, FERRYOUTANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't save location_stack }
+         rm_allocator OF x SAVE ff;
+
+         size_recorder OF x SAVE ff
+
+      END;
+
+   OP RESTORE = (REF STACKALLOCATOR x, FERRYINANDFLT ff) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         { Don't restore location_stack }
+         rm_allocator OF x RESTORE ff;
+
+         size_recorder OF x RESTORE ff
+
+      END;
+
+   OP CLEAR = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Remove all items from the stack but don't close down! }
+      BEGIN
+         CLEAR location_stack OF s;
+         CLEAR rm_allocator OF s;
+         CLEAR size_recorder OF s
+      END;
+
+   OP DYNAMICUSAGE = (REF STACKALLOCATOR s) MACHINEOFFSET:
+   {---------------------------------------}
+      MAXSIZE size_recorder OF s;
+
+   OP LENGTH = (REF STACKALLOCATOR s) INT:
+   {---------------------------------------}
+      LENGTH location_stack OF s;
+
+   OP CLEARED = (REF STACKALLOCATOR s) BOOL:
+   {---------------------------------------}
+   { No locations remain. }
+      LENGTH s = 0;
+
+   OP LOCATECOPY = (REF STACKALLOCATOR s, STACKNUMBER o) STACKNUMBER:
+   {---------------------------------------}
+   { Locate the offset of the location which is copied by the location
+     indicated, or if it is not a copy, then return the offset of the
+     current location. }
+
+      CASE location_stack OF s STATEOF o IN
+      (COPY c): s LOCATECOPY (copy_stack_number OF c + o) OUT o
+      ESAC;
+
+   OP RDEST = (REF STACKALLOCATOR stack, STACKNUMBER o) R:
+   {---------------------------------------}
+   { Return the register allocated to location o}
+     BEGIN
+        BIN ((location_stack OF stack REGISTEROF o) + window_offset OF
+             rm_allocator OF stack)
+     END;
+
+   OP RSOURCE = (REF STACKALLOCATOR stack, STACKNUMBER o) R:
+   {---------------------------------------}
+   { Ensure that the (small) location specified is in a register,
+     and return the register number. }
+     BEGIN
+        STACKNUMBER copied = stack LOCATECOPY o;
+        CASE (location_stack OF stack) STATEOF copied IN
+        (INREGISTER ir):
+            IF ircallinst_flag OF ir THEN
+               callinstpointer
+            ELSE
+               stack RDEST copied
+            FI,
+        (CONST c):
+          BEGIN
+             or USING RIR(g0, INTEGER (constant OF c), stack RDEST o);
+             location_stack OF stack CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+             stack RDEST o
+          END,
+        (SUMCONST sc):
+            IF callinst_flag OF sc THEN
+               add USING RIR(callinstpointer, sumconstant OF sc, stack RDEST o);
+               sub USING RRR(stack RDEST o, globalpointer, stack RDEST o);
+               location_stack OF stack CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+               stack RDEST o
+            ELSE
+               add USING RIR(stack RDEST copied, sumconstant OF sc, stack RDEST o);
+               location_stack OF stack CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+               stack RDEST o
+            FI
+        ESAC
+     END;
+
+   OP SOURCE = (REF STACKALLOCATOR stack, STACKNUMBER o) UNION(R,I):
+   {---------------------------------------}
+   { Ensure that the (small) location specified is in a register or a constant,
+     and return the value. }
+     BEGIN
+        STACKNUMBER copied = (stack LOCATECOPY o);
+        CASE (location_stack OF stack) STATEOF copied IN
+        (INREGISTER ir):
+            IF ircallinst_flag OF ir THEN
+               callinstpointer
+            ELSE
+               stack RDEST copied
+            FI,
+        (CONST c): INTEGER constant OF c,
+        (SUMCONST sc):
+            IF callinst_flag OF sc THEN
+               add USING RIR(callinstpointer, sumconstant OF sc, stack RDEST o);
+               sub USING RRR(stack RDEST o, globalpointer, stack RDEST o);
+               location_stack OF stack CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+               stack RDEST o
+            ELSE
+               add USING RIR(stack RDEST copied, sumconstant OF sc, stack RDEST o);
+               location_stack OF stack CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+               stack RDEST o
+            FI
+        ESAC
+     END;
+
+   OP SMALLIND = (REF STACKALLOCATOR stack, STACKNUMBER o) RXR:
+   {---------------------------------------}
+   { Returns operands for use in adressing small stack items,
+     used in global & store operations.}
+    BEGIN
+
+        STACKNUMBER copied = (stack LOCATECOPY o);
+        R dest = stack RDEST o;
+        RXR result =
+           CASE (location_stack OF stack) STATEOF copied IN
+           (INREGISTER ir):
+               IF ircallinst_flag OF ir THEN
+                  RRR (callinstpointer, g0, dest)
+               ELSE
+                  RRR (globalpointer, stack RSOURCE copied, dest)
+               FI,
+           (CONST c):
+               RIR (globalpointer, INTEGER constant OF c, dest),
+           (SUMCONST sc):
+               IF callinst_flag OF sc THEN
+                  RIR (callinstpointer, sumconstant OF sc, dest)
+               ELSE
+                  RRR (globalpointer, stack RSOURCE o, dest)
+               FI
+           ESAC;
+       (location_stack OF stack) CHANGESTATEOF (o GIVEN (inregister(FALSE)));
+       result
+     END;
+
+
+
+   OP LOADOPERANDS = (REF STACKALLOCATOR stack, STACKNUMBER o) RRR:
+   {---------------------------------------}
+   { Returns operands for use in adressing long & unknown stack items,
+     ie [r[allocreg]+r[tempreg1]], r[tempreg2]
+     OR [r[callinst]+r[tempreg1]], r[tempreg2] }
+      BEGIN
+        STACKNUMBER copied = (stack LOCATECOPY o);
+        R rsource =
+           CASE (location_stack OF stack) STATEOF copied IN
+           (INREGISTER ir):
+               IF ircallinst_flag OF ir THEN
+                  callinstpointer
+               ELSE
+                  stack RDEST copied
+               FI,
+           (CONST c):
+                stack RDEST copied,
+           (INDIRECTED in):
+               IF indcallinst_flag OF in THEN
+                  callinstpointer
+               ELSE
+                  stack RDEST copied
+               FI
+           ESAC;
+        RRR(rsource, tempreg1, tempreg2)
+     END;
+
+   OP SIZEOPERANDS = (REF STACKALLOCATOR stack, STACKNUMBER o) RXR:
+   {---------------------------------------}
+   { Return an operand structure which would load the size of an
+     unknown location into tempreg1 }
+
+     BEGIN
+        RIR(stack RDEST o, -4, tempreg1)
+     END;
+
+   OP FORCECONDITION = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force the storage of any stack location whose state is represented in the
+     condition code register of the processor.  This should be called before
+     code generation of all instructions except conditional branches.
+     I assume that a condition, if it exists, could only possibly be the
+     small location at tos.}
+   IF NOT CLEARED s THEN
+      CASE location_stack OF s STATEOF tos IN
+      (CONDITION c):
+         BEGIN
+            b/(condition OF c OR n_a) USING (location + 12);
+            or USING RIR(g0, 1,  s RDEST tos);
+            or USING RRR(g0, g0, s RDEST tos);
+            (location_stack OF s) CHANGESTATEOF (tos GIVEN inregister(FALSE))
+         END
+      OUT SKIP ESAC
+   FI;
+
+   OP FORCENOCALLINST = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Ensure that callinst pointer locations are in the correct state
+     for arithmetic on them. ie remove global pointer bias}
+   CASE (location_stack OF s) STATEOF o IN
+   (INREGISTER ir):
+      IF ircallinst_flag OF ir THEN
+         sub USING RRR(callinstpointer, globalpointer, s RDEST o);
+         (location_stack OF s) CHANGESTATEOF (o GIVEN inregister(FALSE))
+      FI
+   OUT SKIP
+   ESAC;
+
+
+   OP TRANSMUTESMALL = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Make unknown locations into small locations.  This is to allow
+     them to be used as small locations where context demands it.
+     This may seem rather inefficient and I wonder if it would be
+     possible to make them appear to be the same as small locations.
+     It might not prove practical however, since the symbolic states
+     often examined of small locations wouldn't mean the same things
+     for unknown locations. }
+
+      CASE (location_stack OF s) TYPEOF o IN
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            ld USING RRR (s RDEST (s LOCATECOPY o),
+                          g0, s RDEST o);
+            location_stack OF s PUT ((LOCATION (smallstacklocation,
+               inregister (FALSE),
+               location_stack OF s REGISTEROF o,
+               32)) ATT o)
+            { We lose the real bit length at this point.
+              But only a BIOP would be interested in this...
+              And it shouldn't be using this operation. }
+        END
+      OUT SKIP
+      ESAC;
+
+
+   OP MONOP = (REF STACKALLOCATOR stack) RXR:
+   {---------------------------------------}
+   { Return an operand structure with g0 as the first source,
+     a value to be operated upon as the second source (in register or const),
+     and the allocated register as the destination }
+
+     BEGIN
+          stack TRANSMUTESMALL tos;
+
+          RXR result =
+             CASE stack SOURCE tos IN
+             (I i): RIR(g0, i, stack RDEST tos),
+             (R r): RRR(g0, r, stack RDEST tos)
+             ESAC;
+          (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)));
+          result
+     END;
+
+
+   OP POP = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         UNRESERVER rm_allocator OF s;
+         (size_recorder OF s) MINUS BYTESIZE (location_stack OF s SIZEOF tos);
+         POP (location_stack OF s)
+      END;
+
+   OP NONASSOCDYOP = (REF STACKALLOCATOR stack) RXR:
+   {---------------------------------------}
+   { Return an operand structure with alloc reg of tos as the first source,
+     tos1 value  as the second source (in register or const),
+     and the allocated register of tos1 as the destination. This
+     is intended for use with non-associative machine instructions.}
+
+     BEGIN
+          stack TRANSMUTESMALL tos; stack TRANSMUTESMALL tos1;
+
+          RXR result =
+             CASE stack SOURCE tos IN
+             (I i): RIR(stack RSOURCE tos1, i, stack RDEST tos1),
+             (R r): RRR(stack RSOURCE tos1, r, stack RDEST tos1)
+             ESAC;
+          (location_stack OF stack) CHANGESTATEOF (tos1 GIVEN (inregister(FALSE)));
+          result
+     END;
+
+   OP ASSOCDYOP = (REF STACKALLOCATOR stack) RXR:
+   {---------------------------------------}
+   { Return an operand structure with reg of as the first source,
+     a value as the second source (in register or const),
+     and the allocated register of tos1 as the destination.
+     This is used by associative machine instructions, hence, the source
+     operands may be swapped if it would avoid loading a constant
+     into register }
+
+     BEGIN
+          stack TRANSMUTESMALL tos; stack TRANSMUTESMALL tos1;
+
+          RXR result =
+             CASE (location_stack OF stack) STATEOF tos IN
+             (CONST c):
+                RIR(stack RSOURCE tos1, INTEGER constant OF c, stack RDEST tos1)
+             OUT
+                CASE stack SOURCE tos1 IN
+                (I i): RIR(stack RSOURCE tos, i, stack RDEST tos1),
+                (R r): RRR(stack RSOURCE tos, r, stack RDEST tos1)
+                ESAC
+             ESAC;
+          (location_stack OF stack) CHANGESTATEOF (tos1 GIVEN (inregister(FALSE)));
+          result
+     END;
+
+
+   OP CALCULATENEWDYNAMICADDR = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Calculate in the tempreg3 register the address in dynamic memory
+     where the location indicated may store its value.  This will also
+     give the address where the location *one past* the top of stack
+     (-1) will be able to store its value. }
+
+     BEGIN
+        { First we must search down the am stack to find the nearest
+          unknown or large location which uses dynamic memory, summing
+          the sizes of stack items we pass over.
+          The allocated register of the location found, or the dynamic
+          pointer will form the base of the new address. }
+
+        STACKNUMBER bottom = LENGTH s -1;
+
+        INT dist from prev := 0;
+        INT i := o+1;
+        WHILE i <= bottom ANDTH
+           CASE (location_stack OF s TYPEOF i) IN
+           (SMALLSTACKLOCATION):
+              BEGIN
+                 dist from prev +:= 8;
+                 TRUE
+              END,
+           (LARGESTACKLOCATION):
+              CASE (location_stack OF s STATEOF i) IN
+              (INREGISTER):
+                 BEGIN
+                    dist from prev +:=
+                       BYTESIZE (location_stack OF s SIZEOF i) +4;
+                    FALSE
+                 END
+               OUT
+                 BEGIN
+                    dist from prev +:=
+                       BYTESIZE (location_stack OF s SIZEOF i) +4;
+                    TRUE
+                 END
+               ESAC
+            OUT
+               BEGIN
+                 dist from prev +:= 4;
+                 FALSE
+               END
+            ESAC
+         DO i +:= 1 OD;
+
+         R base reg =
+            IF i <= bottom THEN
+               s RDEST i
+            ELSE
+               dist from prev +:= 4; {ignore initial size field}
+               dynamicpointer
+            FI;
+
+         ma add rir (base reg, dist from prev, g0, tempreg3);
+
+         IF i <= bottom THEN
+            CASE (location_stack OF s TYPEOF i) IN
+            (UNKNOWNSTACKLOCATION):
+               BEGIN
+                  {add size rounded up to nearest 32bits}
+                  ld USING (s SIZEOPERANDS i);
+                  add USING RIR (tempreg1, 31, tempreg1);
+                  sra USING RIR (tempreg1, 5, tempreg1);
+                  sll USING RIR (tempreg1, 2, tempreg1);
+                  add USING RRR(tempreg3, tempreg1, tempreg3)
+               END
+            OUT SKIP
+            ESAC
+         FI
+      END;
+
+   OP LOADINDEX = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { An operation to load tempreg1 with the size minus four in
+     bytes of the indicated location, so it can serve as a loop counter. }
+
+      CASE (location_stack OF s) TYPEOF o IN
+      (SMALLSTACKLOCATION):
+         or USING RRR(g0, g0, tempreg1),
+      (LARGESTACKLOCATION):
+         ma mov ir((BYTESIZE (location_stack OF s SIZEOF o)) - 4, tempreg1),
+      (UNKNOWNSTACKLOCATION):
+         BEGIN
+            ld USING (s SIZEOPERANDS o);
+            sub USING RIR(tempreg1, 1, tempreg1);
+            sra USING RIR(tempreg1, 5, tempreg1);
+            sll USING RIR(tempreg1, 2, tempreg1)
+         END
+      ESAC;
+
+   OP LOOPINDEX = (REF STACKALLOCATOR s, MACHINEOFFSET loop) VOID:
+   {---------------------------------------}
+   { End of loop construct, ie loop until tempreg = 0 }
+      BEGIN
+         subcc USING RIR(tempreg1, 4, tempreg1);
+         bd/pos_a USING loop
+      END;
+
+
+   OP ALLOCREGISTERINUSE = (REF STACKALLOCATOR s, STACKNUMBER o) BOOL:
+   {---------------------------------------}
+   { For all locations report whether the allocated register
+     is in use. }
+
+   CASE location_stack OF s TYPEOF o IN
+   (SMALLSTACKLOCATION): ALLOCREGISTERINUSE (location_stack OF s STATEOF o),
+   (LARGESTACKLOCATION):
+      CASE location_stack OF s STATEOF o IN
+      (CONST): TRUE,
+      (INREGISTER): TRUE,
+      (INDIRECTED i): NOT (indcallinst_flag OF i),
+      (COPY c): register_flag OF c
+      ESAC,
+   (UNKNOWNSTACKLOCATION):
+      CASE location_stack OF s STATEOF o IN
+      (INREGISTER ir): NOT (ircallinst_flag OF ir),
+      (COPY c): register_flag OF c
+      ESAC
+   ESAC;
+
+   OP FREECOPY = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { If the location is a copy, make it reflect the *state* of the copied
+     location. ie enable symbolic modelling to continue }
+      BEGIN
+         STACKNUMBER copiedloc := s LOCATECOPY o;
+         CASE location_stack OF s STATEOF o IN
+         (COPY):
+            CASE location_stack OF s TYPEOF o IN
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  IF s ALLOCREGISTERINUSE copiedloc THEN
+                     or USING RRR(s RDEST copiedloc, g0, s RDEST o)
+                  FI;
+                  (location_stack OF s) CHANGESTATEOF
+                              (o GIVEN (location_stack OF s STATEOF copiedloc))
+               END,
+            (LARGESTACKLOCATION):
+               CASE location_stack OF s STATEOF copiedloc IN
+               (INREGISTER):
+                  BEGIN
+                     s LOADINDEX o;
+                     MACHINEOFFSET loop = location;
+                     ld USING (s LOADOPERANDS copiedloc);
+                     st USING RRR(s RDEST o, tempreg1, tempreg2);
+                     s LOOPINDEX loop;
+                     location_stack OF s CHANGESTATEOF
+                                           (o GIVEN inregister(FALSE))
+                  END,
+               (UNION(CONST, INDIRECTED)):
+                  { We know that the allocated register may hold
+                    useful information not just the address of dynamic
+                    memory block. }
+                  BEGIN
+                     IF s ALLOCREGISTERINUSE copiedloc THEN
+                        or USING RRR(s RDEST copiedloc, g0, s RDEST o)
+                     FI;
+                     location_stack OF s CHANGESTATEOF
+                              (o GIVEN (location_stack OF s STATEOF copiedloc))
+                  END
+               ESAC,
+            (UNKNOWNSTACKLOCATION):
+               CASE location_stack OF s STATEOF copiedloc IN
+               (INREGISTER):
+                  BEGIN
+                     s LOADINDEX o;
+                     MACHINEOFFSET loop = location;
+                     ld USING (s LOADOPERANDS copiedloc);
+                     st USING RRR(s RDEST o, tempreg1, tempreg2);
+                     s LOOPINDEX loop;
+                     location_stack OF s CHANGESTATEOF
+                                           (o GIVEN inregister(FALSE))
+                  END
+               ESAC
+            ESAC
+         OUT
+            SKIP
+         ESAC
+      END;
+
+
+
+   OP FORCELOAD = (REF STACKALLOCATOR s, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Force the location into its loaded state.  Do not affect copied locations. }
+
+      BEGIN
+         CASE location_stack OF s TYPEOF o IN
+         (SMALLSTACKLOCATION):
+            IF (s RSOURCE o) /= (s RDEST o) ANDTH
+               (s RSOURCE o) /= callinstpointer
+           THEN
+               or USING RRR(s RSOURCE o, g0, s RDEST o);
+               location_stack OF s CHANGESTATEOF (o GIVEN inregister(FALSE))
+            FI,
+         (UNION (LARGESTACKLOCATION, UNKNOWNSTACKLOCATION)):
+            BEGIN
+               CASE location_stack OF s STATEOF o IN
+               (INREGISTER): SKIP,
+               (COPY):
+                  BEGIN
+                     s LOADINDEX o;
+                     MACHINEOFFSET loop = location;
+                     ld USING (s LOADOPERANDS o);
+                     st USING RRR(s RDEST o, tempreg1, tempreg2);
+                     s LOOPINDEX loop;
+                     location_stack OF s CHANGESTATEOF
+                                              (o GIVEN inregister(FALSE))
+                  END
+               OUT
+                  s LOADINDEX o;
+                  s CALCULATENEWDYNAMICADDR o;
+                  MACHINEOFFSET loop = location;
+                  ld USING (s LOADOPERANDS o);
+                  st USING RRR(tempreg3, tempreg1, tempreg2);
+                  s LOOPINDEX loop;
+                  location_stack OF s CHANGESTATEOF
+                                           (o GIVEN inregister(FALSE));
+                  or USING RRR(tempreg3, g0, s RDEST o)
+
+               ESAC
+            END
+         ESAC
+      END;
+
+   OP FORCEALLLOAD = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force the evaluation of all locations so they are independent of values
+     in memory.  This will be necessary before execution of any store
+     operation, which could potentially affect values on the stack which
+     have not yet been loaded. }
+      FOR i FROM LENGTH s - 1 BY -1 TO tos DO s FORCELOAD i OD;
+
+
+  OP FORCEINDEPMEM = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force the evaluation of all indirect locations so they are independent of
+     values in memory. This is similar to foceallload but preserves copies. }
+      FOR i FROM (LENGTH s) -1 BY -1 TO tos DO
+         CASE location_stack OF s STATEOF i IN
+         (INDIRECTED): s FORCELOAD i
+         OUT SKIP ESAC OD;
+
+   OP CONFORM = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Force stack conformity (needed whereever flows of control converge).
+     Amounts to loading the values of all locations.  The topmost location
+     which uses a specific processor register for its "LOAD" state may
+     use that register.}
+
+      FOR i FROM LENGTH s - 1 BY -1 TO tos DO s FORCELOAD i OD;
+
+   OP MAKEWINDOWPUSHABLE = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Ensure that a push will leave the stack in a tidy state }
+
+         IF WILLSAVEONRESERVER (rm_allocator OF s) THEN
+            FOR i FROM tos+6 TO tos+19 DO
+               CASE location_stack OF s STATEOF i IN
+               (INDIRECTED): s FORCELOAD i
+               OUT SKIP ESAC
+            OD;
+            FOR i FROM tos TO tos+5 DO
+               s FREECOPY i
+            OD
+         FI;
+
+   OP PUSHNEW = (REF STACKALLOCATOR s, BITNUMBER length) VOID:
+   {---------------------------------------}
+   { Create a new stack location with given length and initial state
+     'loaded'. }
+      BEGIN
+         MAKEWINDOWPUSHABLE s;
+         IF BYTESIZE length = 4 THEN
+            location_stack OF s PUSH (LOCATION (smallstacklocation,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length))
+         ELSE
+            location_stack OF s PUSH (LOCATION (largestacklocation,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length))
+         FI;
+         size_recorder OF s PLUS BYTESIZE length
+      END;
+
+   OP PUSHNEWSTACKLOCATION = (REF STACKALLOCATOR s, BITNUMBER length) VOID:
+   {---------------------------------------}
+   { Create a new stack location with given length
+     (small or large as appropriate).  Fix initial state as
+     'loaded'. }
+      BEGIN
+         MAKEWINDOWPUSHABLE s;
+         IF BYTESIZE length = 4 THEN
+            location_stack OF s PUSH (LOCATION (smallstacklocation,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length))
+         ELSE
+            location_stack OF s PUSH (LOCATION (largestacklocation,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s, length));
+            s CALCULATENEWDYNAMICADDR tos;
+            or USING RRR(tempreg3, g0, s RDEST tos)
+         FI;
+         size_recorder OF s PLUS BYTESIZE length
+      END;
+
+
+   OP PUSHNEWUNKNOWNSTACKLOCATION = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Create a new unknown location.}
+
+      BEGIN
+         MAKEWINDOWPUSHABLE s;
+         location_stack OF s PUSH
+            (LOCATION (unknownstacklocation,
+               inregister(FALSE),
+               RESERVER rm_allocator OF s,
+               0));
+         s CALCULATENEWDYNAMICADDR tos;
+         or USING RRR(tempreg3, g0, s RDEST tos)
+      END;
+
+
+
+   OP ADVANCE = (REF STACKALLOCATOR s, REF PARAMS ips) INT:
+   {---------------------------------------}
+   { Force coercion to types specified for the top most stack locations
+     (the parameters).  Everything should be in the loaded state.
+     Return the number of parameters.}
+
+   { I assume:
+     1) Where a bit length is specified by a param, it overrides that
+     of the location itself.
+     2) I never have to coerce an unknown to a fixed location.
+     3) A maximum of 6 parameters will be required.
+
+     Parameter pasing is achieved using out registers 5 - 0.
+     If these are being used as part of the AM stack, a register window
+     SAVE is used to free them. }
+
+    BEGIN
+
+       INT no of params = LENGTH ips;
+       "Implementation Restricted to 6 parameters" ASSERT no of params <= 6;
+
+       {ensure that all memory dependant locations (excluding copies)
+        are independant}
+       FORCEINDEPMEM s;
+
+
+       { we free only the copies which may be affected by the subroutine }
+       FOR i TO no of params DO
+          s FREECOPY (tos + i -1)
+       OD;
+
+       IF ABS (s RDEST tos) < ABS r14 - no of params THEN
+          {advance register window}
+          SAVEWINDOW (rm_allocator OF s)
+       FI;
+
+       {Now coerce the parameters to the specified types and
+        set up parameters in 'out' registers}
+
+       REF PARAMS i := ips;
+       STACKNUMBER n := no of params -1;
+       WHILE i ISNT nilparams DO
+            R outreg = BIN (ABS o5 -(no of params-1) +n);
+            IF sort OF head OF i = unknown THEN
+               CASE location_stack OF s TYPEOF n IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                    s CALCULATENEWDYNAMICADDR n;
+                    R source = s RSOURCE n;
+                    R dest = s RDEST n;
+                    IF source = callinstpointer THEN
+                       sub USING RRR(source, globalpointer, dest);
+                       st USING RRR(tempreg3, g0, dest)
+                    ELSE
+                       st USING RRR(tempreg3, g0, source)
+                    FI;
+                    or USING RRR(tempreg3, g0, dest);
+                    ma mov ir ((location_stack OF s SIZEOF n), tempreg1);
+                    st USING RXR(s SIZEOPERANDS n);
+                    location_stack OF s PUT ((LOCATION (unknownstacklocation,
+                        inregister(FALSE),
+                        location_stack OF s REGISTEROF n, 0)) ATT n);
+                    or USING RRR(dest, g0, outreg)
+                  END,
+               (LARGESTACKLOCATION):
+                  BEGIN
+                    ma mov ir ((location_stack OF s SIZEOF n), tempreg1);
+                    st USING RXR(s SIZEOPERANDS n);
+                    location_stack OF s PUT ((LOCATION (unknownstacklocation,
+                        inregister(FALSE),
+                        location_stack OF s REGISTEROF n, 0)) ATT n);
+                    or USING RRR(s RDEST n, g0, outreg)
+                  END,
+               (UNKNOWNSTACKLOCATION):
+                    or USING RRR(s RSOURCE n, g0, outreg)
+               ESAC
+            ELIF sort OF head OF i = instanceptr THEN
+               CASE location_stack OF s STATEOF n IN
+               (INREGISTER ir):
+                  "Callinst pointer not found as specified on stack advance."
+                     ASSERT ircallinst_flag OF ir = TRUE
+               OUT
+                  simfault(
+                   "Callinst pointer not found as specified on stack advance.")
+               ESAC
+            ELIF sort OF head OF i = fixed THEN
+               CASE location_stack OF s TYPEOF n IN
+               (SMALLSTACKLOCATION):
+                 BEGIN
+                   CASE s SOURCE n IN
+                   (I i): or USING RIR(g0, i, outreg),
+                   (R r):
+                      BEGIN
+                        R aug reg =
+                          IF r = callinstpointer THEN globalpointer ELSE g0 FI;
+                        sub USING RRR(r, aug reg, outreg)
+                      END
+                   ESAC
+                 END,
+               (LARGESTACKLOCATION):
+                    or USING RRR(s RSOURCE n, g0, outreg)
+               OUT
+                  simfault(
+                     "Fixed location not found as specified on stack advance.")
+               ESAC
+            ELIF (sort OF head OF i = boolean) OR (sort OF head OF i = integer)
+               THEN
+               CASE location_stack OF s TYPEOF n IN
+               (SMALLSTACKLOCATION):
+                 BEGIN
+                   CASE s SOURCE n IN
+                   (I i): or USING RIR(g0, i, outreg),
+                   (R r):
+                      BEGIN
+                        R aug reg =
+                          IF r = callinstpointer THEN globalpointer ELSE g0 FI;
+                        sub USING RRR(r, aug reg, outreg)
+                      END
+                   ESAC
+                 END
+               OUT
+                  simfault(
+                     "Small location not found as specified on stack advance.")
+               ESAC
+            FI;
+            i := tail OF i;
+            n := n - 1
+       OD;
+
+       no of params
+    END;
+
+
+
+   OP REPLACE = (REF STACKALLOCATOR s, [] REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Replace the input (1st parameter) representations on the stack with
+     the output (2nd parameter) representations and copy the output
+     parameters into the correct 'in' registers.
+     This is a correction of the abstract machine stack to reflect what will
+     have happened during the subroutine.) }
+
+      BEGIN
+         "Implementation limit of 6 returned parameters" ASSERT
+                           LENGTH p[2] <= 6;
+
+            {The returned parameters are in the 'out' registers.}
+
+         {pop the input parameters & set up a set of empty output parameters}
+          TO LENGTH p[1] - LENGTH p[2] DO POP s OD;
+          TO LENGTH p[2] - LENGTH p[1] DO s PUSHNEW 32 OD;
+
+          {copy the procedure's outputs into the correct am stack registers}
+          FOR i TO LENGTH p[2] DO
+             or USING RRR(BIN(ABS o6 - i), g0, s RDEST(tos + LENGTH p[2]-i))
+          OD;
+
+          IF window_offset OF rm_allocator OF s /= 0 ANDTH
+             ABS (s RDEST tos) > ABS l7   { Order switched: bug: June 1993 }
+          THEN
+             {the stack state is not correct for the number of items
+              it contains. see RMALLOCATOR for more detail}
+             RESTOREWINDOW (rm_allocator OF s)
+          FI;
+
+         REF PARAMS ops := p[2];
+         STACKNUMBER n := tos + LENGTH p[2] -1;
+
+         WHILE ops ISNT nilparams DO
+            IF sort OF head OF ops = unknown THEN
+               location_stack OF s PUT
+                 (LOCATION (unknownstacklocation, inregister(FALSE),
+                    location_stack OF s REGISTEROF n, 0) ATT n)
+            ELIF sort OF head OF ops = instanceptr THEN
+               location_stack OF s PUT
+                 (LOCATION (smallstacklocation, inregister(TRUE),
+                    location_stack OF s REGISTEROF n, 32) ATT n)
+            ELIF sort OF head OF ops = fixed AND size OF head OF ops > 32 THEN
+                  location_stack OF s PUT
+                    (LOCATION (largestacklocation, inregister(FALSE),
+                       location_stack OF s REGISTEROF n, size OF head OF ops)
+                       ATT n)
+            ELSE
+                  location_stack OF s PUT
+                    (LOCATION (smallstacklocation, inregister(FALSE),
+                       location_stack OF s REGISTEROF n, size OF head OF ops)
+                       ATT n)
+            FI;
+            ops := tail OF ops;
+            n -:=1
+         OD
+      END;
+
+
+   OP COMPRESS = (REF STACKALLOCATOR s, INT n) VOID:
+   {---------------------------------------}
+   { At the end of a call or callinst, remove all but the "n" topmost
+     locations from the stack.  All of these remaining locations should
+     assume the loaded state. }
+
+      BEGIN
+         IF n /= 0 THEN
+            "Implementation restriced to 6 returned parameters " ASSERT n <= 6;
+
+            FOR i FROM tos TO n - 1 DO
+               s FORCELOAD i
+            OD;
+
+
+            IF n /= LENGTH s THEN
+
+               {move the top n stack items into the 'in' registers}
+               FOR i TO n DO
+                  or USING RRR(s RDEST (tos + n -i), g0, BIN (ABS i6 - i))
+               OD;
+
+               WHILE window_offset OF rm_allocator OF s /= 0 DO
+                  RESTOREWINDOW (rm_allocator OF s);
+                  FOR i TO n DO
+                     or USING RRR(BIN (ABS o6-i), g0, BIN (ABS i6 - i))
+                  OD
+               OD;
+
+               STACKALLOCATOR olds := s;
+
+               { Restore the stack to initial state. }
+               CLEAR s;
+
+               { and produce the state after the operation. }
+               FOR i FROM n - 1 BY -1 TO tos DO
+                  CASE location_stack OF olds TYPEOF i IN
+                  (SMALLSTACKLOCATION):
+                     BEGIN
+                        s PUSHNEW (location_stack OF olds SIZEOF i);
+                        location_stack OF s CHANGESTATEOF (tos GIVEN (
+                           location_stack OF olds STATEOF i))
+                     END,
+                  (LARGESTACKLOCATION):
+                     BEGIN
+                        s PUSHNEW (location_stack OF olds SIZEOF i);
+
+                        s CALCULATENEWDYNAMICADDR tos;
+                        s LOADINDEX tos;
+                        MACHINEOFFSET loop = location;
+                        ld USING RRR(tempreg3, tempreg1, tempreg2);
+                        st USING RRR(s LOADOPERANDS i);
+                        s LOOPINDEX loop;
+                        or USING RRR(tempreg3, g0, s RDEST i)
+                     END,
+                  (UNKNOWNSTACKLOCATION):
+                     BEGIN
+                        location_stack OF s PUSH
+                           (LOCATION (unknownstacklocation,
+                              inregister(FALSE),
+                              RESERVER (rm_allocator OF s), 0));
+                        s CALCULATENEWDYNAMICADDR tos;
+                        olds LOADINDEX i;
+                        MACHINEOFFSET loop = location;
+                        ld USING RRR(tempreg3, tempreg1, tempreg2);
+                        st USING RRR(s LOADOPERANDS i);
+                        s LOOPINDEX loop;
+                        or USING RRR(tempreg3, g0, s RDEST i);
+                        ld USING RXR(olds SIZEOPERANDS i);
+                        st USING RXR(s SIZEOPERANDS tos)
+                     END
+                  ESAC
+               OD
+            FI
+         FI
+      END;
+
+   OP CREATEPARAMS = (REF STACKALLOCATOR s, REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Add objects representing supplied params to the stack allocator.
+     Their initial state should be loaded.  Generate no code. }
+
+      BEGIN
+         REF PARAMS pc := p;
+         WHILE pc ISNT nilparams DO
+            IF sort OF head OF pc = unknown THEN
+               location_stack OF s PUSH
+                  (LOCATION (unknownstacklocation,
+                  inregister(FALSE),
+                  RESERVER rm_allocator OF s, 0))
+            ELIF sort OF head OF pc = instanceptr THEN
+               s PUSHNEW 32;
+               location_stack OF s CHANGESTATEOF (tos GIVEN inregister (TRUE))
+            ELIF sort OF head OF pc = fixed THEN
+               s PUSHNEW size OF head OF pc;
+               location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE))
+            ELIF sort OF head OF pc = boolean OR
+               sort OF head OF pc = integer THEN
+               s PUSHNEW 32;
+               location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE))
+            FI;
+            pc := tail OF pc
+         OD
+      END;
+
+   OP CREATESPEC = (REF STACKALLOCATOR s, REF PARAMS p) VOID:
+   {---------------------------------------}
+   { Replace the current stack state with items matching the supplied
+     spec. Their initial state should be loaded.  Generate no code. }
+   { Note that the SPEC treats booleans and integers as (small) strings.
+     This is not a problem since the code generator can't distinguish
+     in any case when a SPEC is DERIVEd. }
+
+      BEGIN
+         CLEAR s;
+         REF PARAMS pc := p;
+         WHILE pc ISNT nilparams DO
+            IF sort OF head OF pc = unknown THEN
+               location_stack OF s PUSH
+                  (LOCATION (unknownstacklocation,
+                  inregister(FALSE),
+                  RESERVER rm_allocator OF s, 0))
+            ELIF sort OF head OF pc = instanceptr THEN
+               s PUSHNEW 32;
+               location_stack OF s CHANGESTATEOF (tos GIVEN inregister (TRUE))
+            ELIF sort OF head OF pc = fixed THEN
+               s PUSHNEW size OF head OF pc
+            FI;
+            pc := tail OF pc
+         OD
+      END;
+
+
+   OP DERIVESPEC = (REF STACKALLOCATOR s) REF PARAMS:
+   {---------------------------------------}
+   { Derive the specification of the stack as it is at present. }
+
+      BEGIN
+         REF PARAMS result := NIL;
+            FOR i FROM tos TO (LENGTH s) - 1 DO
+               CASE location_stack OF s TYPEOF i IN
+               (SMALLSTACKLOCATION):
+                  CASE location_stack OF s STATEOF i IN
+                  (INREGISTER ir):
+                     IF ircallinst_flag OF ir THEN
+                        result := HEAP PARAMS := ((instanceptr, 32), result)
+                     ELSE
+                        result := HEAP PARAMS := ((fixed, (location_stack OF s SIZEOF i)), result)
+                     FI
+                  OUT
+                     result := HEAP PARAMS := ((fixed, (location_stack OF s SIZEOF i)), result)
+                  ESAC,
+               (LARGESTACKLOCATION):
+                  result := HEAP PARAMS := ((fixed, (location_stack OF s SIZEOF i)), result),
+               (UNKNOWNSTACKLOCATION):
+                  result := HEAP PARAMS := ((unknown, 0), result)
+               ESAC
+            OD;
+            result
+         END;
+
+   OP LOCAL = (REF STACKALLOCATOR stack, INT n) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+
+         CASE location_stack OF stack TYPEOF n IN
+         (SMALLSTACKLOCATION):
+            BEGIN
+               stack PUSHNEWSTACKLOCATION (location_stack OF stack SIZEOF n);
+               IF CALLINSTPOINTERINUSE (location_stack OF stack STATEOF (n + 1)) THEN
+                  location_stack OF stack CHANGESTATEOF (tos GIVEN (location_stack OF stack STATEOF (n + 1)))
+               ELSE
+                  "The copied location must be in this window" ASSERT
+                       (ABS (stack RDEST (n+1)) <= ABS i5);
+                  location_stack OF stack CHANGESTATEOF (tos GIVEN copy(n + 1, FALSE))
+               FI
+            END,
+
+         (LARGESTACKLOCATION):
+            BEGIN
+               stack FORCELOAD n;
+               stack PUSHNEWSTACKLOCATION (location_stack OF stack SIZEOF n);
+               "The copied location must be in this window" ASSERT
+                    (ABS (stack RDEST (n+1)) <= ABS i5);
+               location_stack OF stack CHANGESTATEOF (tos GIVEN copy (n+1, TRUE))
+            END,
+
+         (UNKNOWNSTACKLOCATION):
+            BEGIN
+               stack FORCELOAD n;
+               location_stack OF stack PUSH
+                  (LOCATION (unknownstacklocation,
+                     copy(n + 1, TRUE),
+                     RESERVER rm_allocator OF stack, 0));
+               "The copied location must be in this window" ASSERT
+                    (ABS (stack RDEST (n+1)) <= ABS i5);
+               stack CALCULATENEWDYNAMICADDR tos;
+               or USING RRR(tempreg3, g0, stack RDEST tos);
+               ld USING (stack SIZEOPERANDS (n+1));
+               st USING (stack SIZEOPERANDS (tos))
+            END
+         ESAC
+      END;
+
+
+   OP GLOBAL = (REF STACKALLOCATOR stack, BYTENUMBER w) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         "Global is restricted to 4 (bytes)" ASSERT w = 4;
+
+         stack TRANSMUTESMALL tos; { Eliminate unknown locations. }
+
+         ld USING (stack SMALLIND tos)
+      END;
+
+
+   OP ATT = (STRUCT (INT off, INT len) ip, INT n) STRUCT (INT w, INT v, a):
+   {---------------------------------------}
+   { A little operation to put together a structure. }
+
+      (len OF ip, off OF ip, n);
+
+   OP STORE = (REF STACKALLOCATOR stack,
+                STRUCT (BYTENUMBER w, STACKNUMBER v,a) ip) VOID:
+   {---------------------------------------}
+   { NB. The locations nominated v and a must be the top two locations
+     on the stack. }
+
+      BEGIN
+
+         FORCEINDEPMEM stack;
+         stack TRANSMUTESMALL (a OF ip);
+
+         IF w OF ip <= 4 THEN
+            { The location is a single longword. }
+
+            RXR ops :=
+               CASE stack SMALLIND (a OF ip) IN
+               (RIR rir): RIR(rs1 OF rir, imm OF rir, stack RSOURCE (v OF ip)),
+               (RRR rrr): RRR(rs1 OF rrr, rs2 OF rrr, stack RSOURCE (v OF ip))
+               ESAC;
+            st USING ops
+         ELSE
+            { make 'a' relative to globalpointer}
+            add USING (stack SMALLIND (a OF ip));
+            stack LOADINDEX (v OF ip);
+            MACHINEOFFSET loop = location;
+            ld USING (stack LOADOPERANDS (v OF ip));
+            st USING RRR(stack RSOURCE (a OF ip), tempreg1, tempreg2);
+            stack LOOPINDEX loop
+         FI;
+
+        POP stack; POP stack
+
+      END;
+
+   OP BSTRING = (REF STACKALLOCATOR stack, BITNUMBER w) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         STACKNUMBER addr = tos, boffset = tos1;
+         stack TRANSMUTESMALL addr; { Eliminate unknown locations. }
+         stack TRANSMUTESMALL boffset;
+         stack FREECOPY addr;
+
+         add USING (stack SMALLIND addr); { Agument address offset using
+                                            globalpointer}
+         R source = stack RSOURCE addr;
+
+         CASE location_stack OF stack STATEOF boffset IN
+         (CONST bc):
+            BEGIN
+            INT offset := INTEGER constant OF bc;
+            IF offset > 31 THEN
+               ma add rir(source, (offset OVER 32)*4, tempreg1, source);
+               offset := offset MOD 32
+            FI;
+
+            R dest = stack RDEST tos1;
+
+            IF w <= 32 THEN
+               {treat as small, load into alloc reg}
+               ld USING RRR(source, g0, dest);
+               IF offset > 0 THEN sll USING RIR(dest, offset, dest) FI;
+               IF w + offset > 32 THEN
+                  ld USING RIR(source, 4, tempreg1);
+                  srl USING RIR(tempreg1, 32-offset, tempreg1);
+                  or USING RRR(tempreg1, dest, dest)
+               FI;
+               IF w /= 32 THEN
+                    or USING RIR(g0, -1, tempreg1);
+                    sll USING RIR(tempreg1, 32 - w, tempreg1);
+                    and USING RRR(dest, tempreg1, dest)
+               FI;
+               POP stack;
+               (location_stack OF stack) CHANGESIZEOF (tos GIVENN w);
+               (location_stack OF stack) CHANGESTATEOF (tos GIVEN inregister(FALSE))
+            ELIF w MOD 32 = 0 ANDTH offset = 0 THEN
+               {treat as large, make state indirected}
+
+               IF source /= callinstpointer THEN
+                  or USING RRR(source, g0, dest)
+               FI;
+               POP stack;
+               (location_stack OF stack) PUT  ((LOCATION (largestacklocation,
+                  indirected(CALLINSTPOINTERINUSE
+                               (location_stack OF stack STATEOF tos)),
+                  location_stack OF stack REGISTEROF tos, w)) ATT tos)
+            ELSE
+               {load bitstring into dynamic memory, make state inregister}
+               MACHINELABEL start;
+
+               stack CALCULATENEWDYNAMICADDR tos1;
+               or USING RRR(tempreg3, g0, dest);
+               ma mov ir((BYTESIZE (w+offset))-4, tempreg1);
+
+               IF offset = 0 THEN
+                  { mask off unwanted least significant bits}
+                  ld USING RRR(source, tempreg1, tempreg2);
+                  or USING RIR(g0, -1, tempreg3);
+                  sll USING RIR(tempreg3, (32 - (w MOD 32)) MOD 32, tempreg3);
+                  and USING RRR(tempreg2, tempreg3, tempreg2);
+
+                  MACHINEOFFSET loop = location;
+                  st USING RRR(dest, tempreg1, tempreg2);
+                  subcc USING RIR(tempreg1, 4, tempreg1);
+                  b/pos_a USING loop;
+                  ld USING RRR(source, tempreg1, tempreg2)
+               ELSE
+                  { mask off unwanted least significant bits}
+                  ld USING RRR(source, tempreg1, tempreg2);
+                  or USING RIR(g0, -1, tempreg3);
+                  sll USING RIR(tempreg3, (32-((offset+w)MOD 32)MOD 32), tempreg3);
+                  and USING RRR(tempreg3, tempreg2, tempreg2);
+                  b/a USING start;
+                  sll USING RIR(tempreg2, offset, tempreg4);
+
+                  MACHINEOFFSET loop = location;
+                  ld USING RRR(source, tempreg1, tempreg2);
+                  sll USING RIR(tempreg2, offset, tempreg4);
+                  or USING RRR(tempreg3, tempreg4, tempreg4);
+
+                  fixmachinelabel(start);
+                  st USING RRR(dest, tempreg1, tempreg4);
+                  subcc USING RIR(tempreg1, 4, tempreg1);
+                  b/pos_a USING loop;
+                  srl USING RIR(tempreg2, 32-offset, tempreg3)
+               FI;
+               POP stack;
+               (location_stack OF stack) PUT
+                  ((LOCATION (largestacklocation, inregister(FALSE),
+                     location_stack OF stack REGISTEROF tos, w)) ATT tos)
+            FI
+            END
+         OUT
+            R offset = stack RSOURCE boffset;
+            srl USING RIR(offset, 5, tempreg1);
+            sll USING RIR(tempreg1, 2, tempreg1);
+            add USING RRR(tempreg1, source, source);
+            {dont need to limit offset as only 5 least sig. bits are
+             used in the shift instructions}
+            IF w <= 32 THEN
+               {treat as small, load into alloc reg}
+               R dest = stack RDEST tos1;
+               MACHINELABEL end;
+               and USING RIR(offset, ABS 16r1f, tempreg1);
+               ld USING RRR(source, g0, dest);
+               sll USING RRR(dest, tempreg1, dest);
+               subcc USING RIR(tempreg1, 32-w, g0);
+               bd/leu_a USING end;
+               ld USING RIR(source, 4, tempreg2);
+               sub USING RRR(g0, tempreg1, tempreg1);  {offset := 32 -offset}
+               srl USING RRR(tempreg2, tempreg1, tempreg2);
+               or USING RRR(tempreg2, dest, dest);
+               fixmachinelabel(end);
+
+               IF w /= 32 THEN
+                  or USING RIR(g0, -1, tempreg1);
+                  sll USING RIR(tempreg1, 32 - w, tempreg1);
+                  and USING RRR(dest, tempreg1, dest)
+               FI;
+               POP stack;
+               (location_stack OF stack) CHANGESIZEOF (tos GIVENN w);
+               (location_stack OF stack) CHANGESTATEOF (tos GIVEN inregister(FALSE))
+            ELSE
+               {load bitstring into dynamic memory, make state inregister}
+               MACHINELABEL start;
+
+               { Need to grab 2 AM stack registers for use as shift counts}
+               stack PUSHNEW 32; stack PUSHNEW 32;
+               R offset = stack RSOURCE (tos+3);
+               R source = stack RSOURCE (tos+2);
+               R rboffset = stack RDEST tos1;
+               R lboffset = stack RDEST tos;
+               R dest = stack RDEST (tos+3);
+               or USING RRR(stack RDEST boffset, g0, lboffset);
+               {rboffset := 32-lboffset, using 5 bit signed arithmetic}
+               sub USING RRR(g0, lboffset, rboffset);
+
+               stack CALCULATENEWDYNAMICADDR tos1;
+               or USING RRR(tempreg3, g0, dest);
+
+               ma mov ir((BYTESIZE w) - 4, tempreg1);
+               ld USING RRR(source, tempreg1, tempreg2);
+               sll USING RRR(tempreg2, lboffset, tempreg4);
+               or USING RIR(g0, -1, tempreg3);
+               sll USING RIR(tempreg3, (32 - (w MOD 32)) MOD 32, tempreg3);
+               b/a USING start;
+               and USING RRR(tempreg4, tempreg3, tempreg4);
+
+               MACHINEOFFSET loop = location;
+               ld USING RRR(source, tempreg1, tempreg2);
+               sll USING RRR(tempreg2, lboffset, tempreg4);
+
+               {only or in previous word if rboffset < 32 }
+               subcc USING RIR(rboffset, 32, g0);
+               b/lu_a USING (location + 12);
+               or USING RRR(tempreg3, tempreg4, tempreg4);
+               or USING RRR(tempreg3, g0, tempreg4);
+
+               fixmachinelabel (start);
+               st USING RRR(dest, tempreg1, tempreg4);
+               subcc USING RIR(tempreg1, 4, tempreg1);
+               b/pos_a USING loop;
+               srl USING RRR(tempreg2, rboffset, tempreg3);
+
+               POP stack; POP stack;
+               POP stack;
+               (location_stack OF stack) PUT
+                  ((LOCATION (largestacklocation, inregister(FALSE),
+                     location_stack OF stack REGISTEROF tos, w)) ATT tos)
+            FI
+         ESAC
+      END;
+
+   OP ADD = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         stack TRANSMUTESMALL tos1; { Eliminate unknown locations. }
+         stack TRANSMUTESMALL tos;
+
+         SYMBOLICSTATE r := (location_stack OF stack STATEOF tos1) +
+                              (location_stack OF stack STATEOF tos);
+         CASE r IN
+         (VOID):
+            BEGIN
+               R t2 = stack RSOURCE tos1;
+               r := (location_stack OF stack STATEOF tos1) +
+                      (location_stack OF stack STATEOF tos)
+            END
+         OUT SKIP
+         ESAC;
+
+         CASE r IN
+         (VOID):
+            BEGIN
+               stack FORCENOCALLINST tos1;
+               stack FORCENOCALLINST tos;
+               addcc USING ASSOCDYOP stack;
+               t/vs USING RI(g0, t_int_overflow);
+               POP stack
+            END
+         OUT
+            BEGIN
+               location_stack OF stack CHANGESTATEOF (tos1 GIVEN r);
+               POP stack
+            END
+         ESAC
+      END;
+
+
+   OP NOT = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         SYMBOLICSTATE r := NOT (location_stack OF stack STATEOF tos);
+         CASE r IN
+         (VOID):
+            xnor USING MONOP stack
+         OUT
+            location_stack OF stack CHANGESTATEOF (tos GIVEN r)
+         ESAC
+      END;
+
+
+
+   OP SHL = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         R rs, rd;
+
+         stack TRANSMUTESMALL tos1; stack TRANSMUTESMALL tos;
+         rs := stack RSOURCE tos1;
+         rd := stack RDEST tos1;
+
+         CASE stack SOURCE tos IN
+         (R r):
+            BEGIN
+               MACHINELABEL fi, fi1, fi2, islessthan32, isinrange;
+
+               subcc USING RIR(r, 32, g0);
+               b/l_a USING islessthan32;
+               subcc USING RIR(r, -32, g0);
+
+               or USING RRR(g0, g0, rd);
+               bd/a USING fi1;
+
+               fixmachinelabel(islessthan32);
+               b/g_a USING isinrange;
+               subcc USING RRR(g0, r, tempreg1);
+
+               addcc USING RRR(rs, rs, g0); {carry := sign bit}
+               subx USING RRR(g0, g0, rd);  {rd := if carry set then -1 else 0}
+               bd/a USING fi2;
+
+               fixmachinelabel (isinrange);
+               b/neg_a USING fi;
+               sll USING RRR(rs, r, stack RDEST tos1);
+               sra USING RRR(rs, tempreg1, stack RDEST tos1);
+               fixmachinelabel (fi);
+               fixmachinelabel (fi1);
+               fixmachinelabel (fi2)
+            END,
+         (I i):
+            IF i > 0 THEN
+               IF i >= 32 THEN
+                  or USING RRR(g0, g0, rd)
+               ELSE
+                  sll USING RIR(rs, i, rd)
+               FI
+            ELSE
+               IF i <= -32 THEN
+                  addcc USING RRR(rs, rs, g0); {carry := sign bit}
+                  subx USING RRR(g0, g0, rd)   {rd := if carry set then -1 else 0}
+               ELSE
+                  sra USING RIR(stack RSOURCE tos1, 32-i, stack RDEST tos1)
+               FI
+            FI
+          ESAC;
+
+         POP stack;
+        (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)))
+
+      END;
+
+
+   OP SHR = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         R rs, rd;
+
+         stack TRANSMUTESMALL tos1; stack TRANSMUTESMALL tos;
+         rs := stack RSOURCE tos1;
+         rd := stack RDEST tos1;
+
+         CASE stack SOURCE tos IN
+         (R r):
+            BEGIN
+               MACHINELABEL fi, fi1, fi2, islessthan32, isinrange;
+
+               subcc USING RIR(r, 32, g0);
+               b/l_a USING islessthan32;
+               subcc USING RIR(r, -32, g0);
+
+               addcc USING RRR(rs, rs, g0); {carry := sign bit}
+               subx USING RRR(g0, g0, rd);  {rd := if carry set then -1 else 0}
+
+               bd/a USING fi1;
+
+
+               fixmachinelabel(islessthan32);
+               b/g_a USING isinrange;
+               subcc USING RRR(g0, r, tempreg1);
+
+               or USING RRR(g0, g0, rd);
+               bd/a USING fi2;
+
+               fixmachinelabel (isinrange);
+               b/neg_a USING fi;
+               sra USING RRR(rs, r, stack RDEST tos1);
+               sll USING RRR(rs, tempreg1, stack RDEST tos1);
+
+               fixmachinelabel (fi);
+               fixmachinelabel (fi1);
+               fixmachinelabel (fi2)
+            END,
+         (I i):
+            IF i > 0 THEN
+               IF i >= 32 THEN
+                  addcc USING RRR(rs, rs, g0); {carry := sign bit}
+                  subx USING RRR(g0, g0, rd)   {rd := if carry set then -1 else 0}
+               ELSE
+                  sra USING RIR(rs, i, rd)
+               FI
+            ELSE
+               IF i <= -32 THEN
+                  or USING RRR(g0, g0, rd)
+               ELSE
+                  sll USING RIR(stack RSOURCE tos1, 32-i, stack RDEST tos1)
+               FI
+            FI
+          ESAC;
+
+         POP stack;
+        (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)))
+      END;
+
+   OP MUL = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         {Need to call a multiply procedure which expects parameters
+          in tempreg1 & tempreg2, and may use some of the other temp
+          registers.  It returns the result in tempreg1}
+
+          stack TRANSMUTESMALL tos; { Eliminate unknown locations }
+          stack TRANSMUTESMALL tos1;
+
+          CASE stack SOURCE tos IN
+          (R r): or USING RRR(g0, r, tempreg1),
+          (I i): or USING RIR(g0, i, tempreg1)
+          ESAC;
+
+          UNION(R,I) ri = stack SOURCE tos1;
+          ma mul;
+
+          CASE ri IN
+          (R r): or USING RRR(g0, r, tempreg2),
+          (I i): or USING RIR(g0, i, tempreg2)
+          ESAC;
+
+          t/nz USING RI(g0, t_int_overflow); {zero flag is cleared on overflow}
+
+          or USING RRR(tempreg1, g0, stack RDEST tos1);
+          POP stack;
+          (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)))
+      END;
+
+   OP DIV = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         {Need to call a divide procedure which expects parameters
+          in i0 & i1, and may use some of the other input registers.
+          It returns the quotient in i0}
+
+          stack TRANSMUTESMALL tos; { Eliminate unknown locations }
+          stack TRANSMUTESMALL tos1;
+
+          BOOL window save needed = ABS (stack RDEST tos) < ABS o4;
+
+          IF window save needed THEN
+             FORCEALLLOAD stack;
+             SAVEWINDOW (rm_allocator OF stack)
+          FI;
+
+          or USING RRR(stack RSOURCE tos, g0, o1);  {divisor}
+          R rstos1 = stack RSOURCE tos1;
+
+
+          ma div;
+          or USING RRR(rstos1, g0, o0);  {dividend}
+          or USING RRR(o0, g0, stack RDEST tos1); {quotient}
+
+          IF window save needed THEN
+             RESTOREWINDOW (rm_allocator OF stack)
+          FI;
+
+          POP stack;
+          (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)) )
+
+      END;
+
+   OP MOD = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         MACHINELABEL l1, l2, l3;
+
+         stack TRANSMUTESMALL tos; { Eliminate unknown locations }
+         stack TRANSMUTESMALL tos1;
+
+
+          BOOL window save needed = ABS (stack RDEST tos) < ABS o4;
+
+          IF window save needed THEN
+             FORCEALLLOAD stack;
+             SAVEWINDOW (rm_allocator OF stack)
+          FI;
+
+          or USING RRR(stack RSOURCE tos, g0, o1);  {divisor}
+          or USING RRR(stack RSOURCE tos1, g0, o0);  {dividend}
+
+         {save the top two stack items}
+         or USING RRR(stack RSOURCE tos, g0, tempreg2);  {divisor}
+
+         R rstos1 = stack RSOURCE tos1;
+         ma div;    {leave result in o0, all other i registers are affected}
+         or USING RRR(rstos1, g0, tempreg3);  {dividend}
+
+         or USING RRR(o0, g0, tempreg1);
+         or USING RRR(tempreg2, g0, o1);         {save divisor}
+
+         ma mul;    {multiply tempreg1 by tempreg2, leave result in tempeg1}
+         or USING RRR(tempreg3, g0, o0);         {save dividend}
+
+         subcc USING RRR(o0, tempreg1, stack RDEST tos1);
+         bd/ge_a USING l2;
+         orcc USING RRR(g0, o1, g0);
+         bd/ge_a USING l1;
+         sub USING RRR(stack RDEST tos1, o1, stack RDEST tos1);
+         b/a USING l3;
+         nop USING IR(0, g0);
+         fixmachinelabel (l1);
+         add USING RRR(stack RDEST tos1, o1, stack RDEST tos1);
+         fixmachinelabel (l2);
+         fixmachinelabel (l3);
+         IF window save needed THEN
+            RESTOREWINDOW (rm_allocator OF stack)
+         FI;
+         POP stack;
+          (location_stack OF stack) CHANGESTATEOF (tos GIVEN (inregister(FALSE)) )
+
+      END;
+
+
+   OP TEST = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+
+      BEGIN
+
+         stack TRANSMUTESMALL tos;
+
+         CASE stack SOURCE tos IN
+         (R r): orcc USING RRR(g0, r, g0),
+         (I i): orcc USING RIR(g0, i, g0)
+         ESAC;
+         location_stack OF stack CHANGESTATEOF (tos GIVEN condition(ne))
+
+      END;
+
+   OP GENERICRELATION = (REF STACKALLOCATOR stack, BITS cc) VOID:
+   {---------------------------------------}
+   { Compares the top 2 AM-stack items & sets the symbolic state at AM-tos to
+     reflect the expected state of the processor's condition flags }
+      BEGIN
+          BITS newcc;
+          stack TRANSMUTESMALL tos; stack TRANSMUTESMALL tos1;
+
+          REF LOCATIONSTACK l = location_stack OF stack;
+          RXR comp =
+             CASE l STATEOF tos1 IN
+             (CONST c):
+                BEGIN
+                  newcc := swapcondition(cc);
+                  RIR(stack RSOURCE tos, INTEGER constant OF c, g0)
+                END
+             OUT
+                BEGIN
+                  newcc := cc;
+                  CASE stack SOURCE tos IN
+                  (I i): RIR(stack RSOURCE tos1, i, g0),
+                  (R r): RRR(stack RSOURCE tos1, r, g0)
+                  ESAC
+                END
+             ESAC;
+          subcc USING comp;
+
+          l CHANGESTATEOF (tos1 GIVEN (condition(newcc)));
+          POP stack
+      END;
+
+   OP EQ = (REF STACKALLOCATOR s) VOID:
+   {---------------------------------------}
+   { Equality on strings and on integers.  Ie small large and unknown locs. }
+
+      BEGIN
+         BOOL done := FALSE;
+
+         CASE location_stack OF s TYPEOF tos IN
+         (SMALLSTACKLOCATION):
+            CASE location_stack OF s TYPEOF tos1 IN
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  { We can compare constant sizes }
+                  IF (location_stack OF s SIZEOF tos) /= (location_stack OF s SIZEOF tos1) THEN
+                     or USING RRR(g0, g0, s RDEST tos1);
+                     location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE));
+                     POP s
+                  ELSE
+                     s GENERICRELATION eq
+                  FI;
+                  done := TRUE
+               END,
+            (LARGESTACKLOCATION):
+               BEGIN
+                  POP s; POP s;
+                  s PUSHNEWSTACKLOCATION 32;
+                  or USING RRR(g0, g0, s RDEST tos);
+                  location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE));
+                  done := TRUE
+               END,
+            (UNKNOWNSTACKLOCATION):
+               BEGIN
+                 ld USING (s SIZEOPERANDS tos1);
+                 ma mov ir(location_stack OF s SIZEOF tos, tempreg2);
+                 subcc USING RRR(tempreg1,  tempreg2, g0)
+               END
+            ESAC,
+         (LARGESTACKLOCATION):
+            CASE location_stack OF s TYPEOF tos1 IN
+            (LARGESTACKLOCATION):
+               IF (location_stack OF s SIZEOF tos) /= (location_stack OF s SIZEOF tos1) THEN
+                  POP s; POP s;
+                  s PUSHNEWSTACKLOCATION 32;
+                  or USING RRR(g0, g0, s RDEST tos);
+                  location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE));
+                  done := TRUE
+               ELSE
+                  orcc USING RRR(g0, g0, g0)
+               FI,
+            (SMALLSTACKLOCATION):
+               BEGIN
+                  POP s; POP s;
+                  s PUSHNEWSTACKLOCATION 32;
+                  or USING RRR(g0, g0, s RDEST tos);
+                  location_stack OF s CHANGESTATEOF (tos GIVEN inregister(FALSE));
+                  done := TRUE
+               END,
+            (UNKNOWNSTACKLOCATION):
+               BEGIN
+                 ld USING (s SIZEOPERANDS tos1);
+                 ma mov ir(location_stack OF s SIZEOF tos, tempreg2);
+                 subcc USING RRR(tempreg1, tempreg2, g0)
+               END
+            ESAC,
+            (UNKNOWNSTACKLOCATION):
+               CASE location_stack OF s TYPEOF tos1 IN
+               (UNKNOWNSTACKLOCATION):
+                  BEGIN
+                     ld USING (s SIZEOPERANDS tos);
+                     ld USING RIR(s RSOURCE tos1, -4, tempreg2);
+                     subcc USING RRR(tempreg1, tempreg2, g0)
+                  END
+               OUT
+                 ld USING (s SIZEOPERANDS tos);
+                 ma mov ir(location_stack OF s SIZEOF tos1, tempreg2);
+                 subcc USING RRR(tempreg1, tempreg2, g0)
+               ESAC
+         ESAC;
+
+         IF NOT done THEN
+
+            MACHINELABEL finished, endloop;
+            bd/ne_a USING finished;
+            {The items are the same length, compare their values}
+
+            s LOADINDEX tos;
+               { Prepare for a loop over the values.
+                 We don't expect popping off the top two locations
+                 and pushing a new small location
+                 to affect the index register (tempdata) }
+
+
+            MACHINEOFFSET loop = location;
+            ld USING (s LOADOPERANDS tos);
+            RRR eq_rrr := (s LOADOPERANDS tos1);
+            rd OF eq_rrr := tempreg3;
+            ld USING eq_rrr;
+            subcc USING RRR(tempreg2, tempreg3, tempreg4);
+            b/ne USING endloop;
+            s LOOPINDEX loop;
+            fixmachinelabel(endloop);
+
+            {match was successful if last comparison gave zero in tempreg4}
+            subcc USING RRR(tempreg4, g0, g0);
+
+            fix machine label (finished);
+            POP s; POP s;
+            s PUSHNEWSTACKLOCATION 32;
+
+         location_stack OF s CHANGESTATEOF (tos GIVEN condition(eq))
+         FI
+
+
+      END;
+
+
+   PROC pushint_general = (REF STACKALLOCATOR stack, INT i, INT len) VOID:
+   {---------------------------------------------------------------------}
+      BEGIN
+         IF i > max imm13 OREL i < min imm13 THEN
+            INT hi = ABS (BIN i SHR 10);
+            stack PUSHNEWSTACKLOCATION len;
+            R allocreg = stack RDEST tos;
+            sethi USING IR(hi, allocreg);
+            add USING RIR(allocreg, ABS (BIN i AND 16r3ff), allocreg)
+         ELSE
+           stack PUSHNEWSTACKLOCATION len;
+           location_stack OF stack CHANGESTATEOF (tos GIVEN const(word(i)))
+         FI
+      END;
+
+
+   OP PUSHINT = (REF STACKALLOCATOR stack, INT i) VOID:
+   {---------------------------------------}
+      pushint_general (stack, i, 32);
+
+
+   OP LEN = (WORD w, INT l) STRUCT (WORD wo, INT len):
+   {---------------------------------------}
+      (w, l);
+
+   OP PUSHCONST = (REF STACKALLOCATOR stack, STRUCT (WORD wo, INT len) x) VOID:
+   {---------------------------------------}
+
+      BEGIN
+         { Set up a string, at least big enough and zero padded. }
+
+         WORD newconst := newword(BYTESIZE len OF x);
+
+         FOR i TO UPB newconst DO
+            IF i - 1 > len OF x OVER 8 THEN
+               newconst[i] := REPR 0
+            ELSE
+               newconst[i] := (wo OF x) [i]
+            FI
+         OD;
+
+         IF len OF x MOD 8 /= 0 THEN
+            newconst[ 1 + (len OF x  OVER  8)] :=
+               REPR ABS ((BIN ABS newconst[1 + (len OF x OVER 8)]
+                  SHR (8 - len OF x MOD 8)) SHL (8 - len OF x MOD 8))
+         FI;
+
+         { Given the word, create the location. }
+
+         IF BYTESIZE (len OF x) <= 4 THEN
+           pushint_general (stack, INTEGER (wo OF x), len OF x)
+         ELSE
+           stack PUSHNEW len OF x;
+
+           CASE location_stack OF stack TYPEOF tos IN
+           (LARGESTACKLOCATION):
+              BEGIN
+                 {use a 'call' to jump over in-line constant &
+                  deposit it's start address in r15, this is then
+                  moved into the allocated register}
+
+                 location_stack OF stack CHANGESTATEOF (tos GIVEN const(newconst));
+                 call USING (location + 8 + UPB newconst);
+                 add USING RIR(r15, 8, stack RDEST tos);
+                 FOR i TO UPB newconst DO
+                    ma put char (newconst[i])
+                 OD
+              END
+           ESAC
+         FI
+      END;
+
+   OP ITOS = (REF STACKALLOCATOR stack, STRUCT(STACKNUMBER o, BITNUMBER bl) ip) VOID:
+   {---------------------------------------}
+   { Convert a signed integer to a string length bl. }
+
+      BEGIN
+         { It is assumed that the location is small. }
+
+         IF bl OF ip = 32 THEN
+            { Location is already a string. }
+            SKIP
+         ELSE
+            sll USING RIR(stack RSOURCE (o OF ip), 32 - bl OF ip,
+                           stack RDEST (o OF ip));
+            location_stack OF stack CHANGESTATEOF (o OF ip GIVEN inregister(FALSE));
+            location_stack OF stack CHANGESIZEOF ip
+         FI
+      END;
+
+   OP UTOS = (REF STACKALLOCATOR stack, STRUCT(STACKNUMBER o, BITNUMBER bl) ip) VOID:
+   {---------------------------------------}
+   { Convert an unsigned integer to a string. }
+
+       stack ITOS ip;
+
+   OP STOI = (REF STACKALLOCATOR stack, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to a signed integer. }
+
+      CASE location_stack OF stack TYPEOF o IN
+      (SMALLSTACKLOCATION):
+
+         IF (location_stack OF stack SIZEOF o) = 32 THEN
+            { Location is already an integer. }
+            SKIP
+         ELSE
+            sra USING RIR(stack RSOURCE o, 32 - (location_stack OF stack SIZEOF o),
+                           stack RDEST o);
+            location_stack OF stack CHANGESTATEOF (o GIVEN inregister(FALSE));
+            location_stack OF stack CHANGESIZEOF (o GIVENN 32)
+         FI,
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            { Calculate the amount to shift. }
+            ld USING (stack SIZEOPERANDS o);
+            subcc USING RRR(g0, tempreg1, tempreg1);
+
+            stack TRANSMUTESMALL o;  { I assume this doesn't use tempdata1 }
+            sra USING RRR(stack RSOURCE o, tempreg1, stack RDEST o)
+         END
+
+      ESAC;
+
+   OP STOU = (REF STACKALLOCATOR stack, STACKNUMBER o) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to an unsigned integer. }
+
+      CASE location_stack OF stack TYPEOF o IN
+      (SMALLSTACKLOCATION):
+         IF (location_stack OF stack SIZEOF o) = 32 THEN
+            { Location is already an integer. }
+            SKIP
+         ELSE
+            srl USING RIR(stack RSOURCE o, 32 - (location_stack OF stack SIZEOF o),
+                           stack RDEST o);
+            location_stack OF stack CHANGESTATEOF (o GIVEN inregister(FALSE));
+            location_stack OF stack CHANGESIZEOF (o GIVENN 32)
+         FI,
+      (UNKNOWNSTACKLOCATION):
+
+         BEGIN
+            { Calculate the amount to shift. }
+            ld USING (stack SIZEOPERANDS o);
+            subcc USING RRR(g0, tempreg1, tempreg1);
+
+            stack TRANSMUTESMALL o;  { I assume this doesn't use tempdata1 }
+            srl USING RRR(stack RSOURCE o, tempreg1, stack RDEST o)
+         END
+
+      ESAC;
+
+   OP ITOS = (REF STACKALLOCATOR stack, BITNUMBER w) VOID:
+   {---------------------------------------}
+   { Convert a signed integer to a string length w. }
+
+      stack ITOS (tos GIVENN w);
+
+   OP UTOS = (REF STACKALLOCATOR stack, BITNUMBER w) VOID:
+   {---------------------------------------}
+   { Convert an unsigned integer to a string. }
+
+       stack UTOS (tos GIVENN w);
+
+   OP STOI = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to a signed integer. }
+
+      stack STOI tos;
+
+   OP STOU = (REF STACKALLOCATOR stack) VOID:
+   {---------------------------------------}
+   { Convert a bitstring to a unsigned integer. }
+
+      stack STOU tos;
+
+   OP DROP = (REF STACKALLOCATOR stack, INT n) VOID:
+   {---------------------------------------}
+
+      TO n DO POP stack OD;
+
+   OP FANOUT = (REF STACKALLOCATOR stack, INT offset) VOID:
+   {---------------------------------------}
+   { Go to each of the addresses in a list and thereby locate a word to set
+     to 1. The address of a pointer to the list is the top 2 items of the
+     abstract machine stack. }
+
+      BEGIN
+         stack PUSHINT offset; ADD stack;
+         CASE stack SOURCE tos IN
+         (R r): add USING RRR(globalpointer, r, tempreg1),
+         (I i): add USING RIR(globalpointer, i, tempreg1)
+         ESAC;
+         ld USING RRR(tempreg1, g0, tempreg1);
+         add USING RRR(globalpointer, tempreg1, tempreg1);
+
+         ld USING RRR(tempreg1, g0, tempreg2);
+         sll USING RIR(tempreg2, 2, tempreg2);
+
+         or USING RIR(g0, 1, tempreg3);
+
+         MACHINEOFFSET loop = location;
+         ld USING RRR(tempreg1, tempreg2, tempreg4);
+         subcc USING RIR(tempreg2, 4, tempreg2);
+         b/pos_a USING loop;
+         st USING RRR(globalpointer, tempreg4, tempreg3);
+
+         POP stack
+      END;
+
+     SKIP
+
+KEEP
+STACKALLOCATOR,
+   tos, tos1,
+   stackallocator,
+   NEW (REF STACKALLOCATOR),
+   DUMP (STACKALLOCATOR, VECTOR [] CHAR),
+   SAVE (REF STACKALLOCATOR, FERRYOUTANDFLT),
+   RESTORE (REF STACKALLOCATOR, FERRYINANDFLT),
+   CLEAR (REF STACKALLOCATOR),
+   DYNAMICUSAGE (REF STACKALLOCATOR),
+   LENGTH (REF STACKALLOCATOR),
+   CLEARED (REF STACKALLOCATOR),
+   LOCATECOPY (REF STACKALLOCATOR, STACKNUMBER),
+   RDEST (REF STACKALLOCATOR, STACKNUMBER),
+   RSOURCE (REF STACKALLOCATOR, STACKNUMBER),
+   SOURCE (REF STACKALLOCATOR, STACKNUMBER),
+   SMALLIND (REF STACKALLOCATOR, STACKNUMBER),
+   LOADOPERANDS (REF STACKALLOCATOR, STACKNUMBER),
+   SIZEOPERANDS (REF STACKALLOCATOR, STACKNUMBER),
+   FORCECONDITION (REF STACKALLOCATOR),
+   TRANSMUTESMALL (REF STACKALLOCATOR, STACKNUMBER),
+   MONOP (REF STACKALLOCATOR),
+   NONASSOCDYOP (REF STACKALLOCATOR),
+   ASSOCDYOP (REF STACKALLOCATOR),
+   CALCULATENEWDYNAMICADDR (REF STACKALLOCATOR, STACKNUMBER),
+   LOADINDEX (REF STACKALLOCATOR, STACKNUMBER),
+   LOOPINDEX (REF STACKALLOCATOR, MACHINEOFFSET),
+   POP (REF STACKALLOCATOR),
+   PUSHNEW (REF STACKALLOCATOR, BITNUMBER),
+   PUSHNEWSTACKLOCATION (REF STACKALLOCATOR, BITNUMBER),
+   PUSHNEWUNKNOWNSTACKLOCATION (REF STACKALLOCATOR),
+   ALLOCREGISTERINUSE (REF STACKALLOCATOR, STACKNUMBER),
+   FREECOPY (REF STACKALLOCATOR, STACKNUMBER),
+   FORCELOAD (REF STACKALLOCATOR, STACKNUMBER),
+   FORCEALLLOAD (REF STACKALLOCATOR),
+   FORCEINDEPMEM (REF STACKALLOCATOR),
+   CONFORM (REF STACKALLOCATOR),
+   ADVANCE (REF STACKALLOCATOR, REF PARAMS),
+   REPLACE (REF STACKALLOCATOR, [] REF PARAMS),
+   COMPRESS (REF STACKALLOCATOR, INT),
+   CREATEPARAMS (REF STACKALLOCATOR, REF PARAMS),
+   CREATESPEC (REF STACKALLOCATOR, REF PARAMS),
+   DERIVESPEC (REF STACKALLOCATOR),
+   LOCAL (REF STACKALLOCATOR, INT),
+   GLOBAL (REF STACKALLOCATOR, BYTENUMBER),
+   ATT (STRUCT (INT off, INT len), INT),
+   STORE (REF STACKALLOCATOR, STRUCT (BYTENUMBER w, STACKNUMBER v, a)),
+   BSTRING (REF STACKALLOCATOR, BITNUMBER),
+   ADD (REF STACKALLOCATOR),
+   NOT (REF STACKALLOCATOR),
+   SHL (REF STACKALLOCATOR),
+   SHR (REF STACKALLOCATOR),
+   MUL (REF STACKALLOCATOR),
+   DIV (REF STACKALLOCATOR),
+   MOD (REF STACKALLOCATOR),
+   TEST (REF STACKALLOCATOR),
+   GENERICRELATION (REF STACKALLOCATOR, BITS),
+   EQ (REF STACKALLOCATOR),
+   LEN (WORD, INT),
+   PUSHCONST (REF STACKALLOCATOR, STRUCT (WORD wo, INT len)),
+   PUSHINT (REF STACKALLOCATOR, INT),
+   ITOS (REF STACKALLOCATOR, STRUCT(STACKNUMBER o, BITNUMBER bl)),
+   UTOS (REF STACKALLOCATOR, STRUCT(STACKNUMBER o, BITNUMBER bl)),
+   STOI (REF STACKALLOCATOR, STACKNUMBER),
+   STOU (REF STACKALLOCATOR, STACKNUMBER),
+   ITOS (REF STACKALLOCATOR, BITNUMBER),
+   UTOS (REF STACKALLOCATOR, BITNUMBER),
+   STOI (REF STACKALLOCATOR),
+   STOU (REF STACKALLOCATOR),
+   DROP (REF STACKALLOCATOR, INT),
+   FANOUT (REF STACKALLOCATOR, INT)
+FINISH
