@@ -1,0 +1,1166 @@
+DECS kesymbols CONTEXT VOID  USE  putstrings, basics, kebasics, kesave:
+
+{ " Id: kesymbols.sta,v 2.1 91/02/22 18:35:30 edcad Exp$" }
+configinfo A68CONFIG "$Id: kesymbols.a68,v 34.2 1995/03/29 13:04:56 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement tables of symbolic
+              information in the kernel of the new simulator
+23:11:88  `add function' changed to initialise `last input offset'
+              to 0 rather than -1.  This change is required because
+              compound functions have their own instances now
+24:11:88  `raw lookup function' and `raw lookup rnode' no longer
+              returns references to original symbol and node table data
+24:11:88  `input aliases' added to symbol table
+01:12:88  `add expansion' caters for levels of instantiation.  Bug
+22.  Alias array set by `add input sizes' instead of
+              `add function.  BJE
+08:12:88  `input upbs' added to symbol table along with `add input
+              upbs' and `lookup input slice'.  BJE.  Bug 45.
+09:12:88  Disambiguating changed, 'outer' gives the closureno
+              of the enclosing OUTERFN, and 'version' completes it.
+12:12:88  `add shape' added as part of fix for Bug 57.  BJE
+16:12:88  `output' field added to symbol table.  Bug 6.  BJE
+16:12:88  `save tables' brought up to date with symbol table
+              structure.  Bug 63.  BJE.
+16:12:88  `update binding' added.  Bug 66.  BJE.
+21:12:88  `expansions' array split into `expansions' and `constant nos'
+              array in symbol table with corresponding changes to access
+              functions as preparation for fixing bugs 64 and 76.  BJE
+29:12:88  `input fanouts' array added to symbol table. Bug 64.  BJE.
+30:12:88  Corrections to save/restore mechanism.  Bug 86.  BJE.
+17:01:89  `raw list simulatable functions' changed to avoid listing
+              internally generated functions.  EPI Bug 88.  BJE.
+18:01:89  Comment changes and enhancement to `lookup name'.
+              Bug 120.  BJE.
+19:01:89  'lookup user parent' defined to assist diagnostics (bug 124). PAR.
+10:01:89  Extra 'sort's added.  Bug 95.  PAR.
+19:01:89  Corrected 'read tables'. Bug 86. R4B034.  MDR.
+02:02:89  More functionality for `lookup name'.  R4B066.  BJE.
+02:02:89  Mode change to ferry procedures.  Arch design CR 33.  PAR.
+16:03:89  Table cleanup operations provided.  R4B135.  PAR.
+22:02:90  Now keep `last symbol' & rely on it to be the next fnno
+              returned by `add function'.
+              See callinst generation in keinstance & keamstandard. MDR.
+13:03:90  Hierarchic Timescaling :                              MHC
+                  - Added & exported PROC add timescale.
+                  - Added & exported PROC lookup timescale.
+                  - Mode FNENTRY now has INT scaletime field.
+                  - PROC add function sets scaletime to default of 1.
+                  - PROCs save tables &  restore tables include scaletime.
+                  - PROC lookup name finds only simulateable fns (in search 4).
+25:11:92  Changes made to hash type. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.026 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Useful Constants }
+VECTOR [0] INT null rvi;
+VECTOR [0] BLOCK null rvb;
+
+{ TYPE TABLE }
+{ ========== }
+
+
+{ The type table is implemented as a row of BUCKETs, each of which
+  contains a row of STYPE.  The first level row is used for hashing
+  to reduce search time.
+}
+INT hash size = 51;
+
+MODE
+    TYPEENTRY = STRUCT (STYPE type, INT machine size),
+    BUCKET = STRUCT (REF VECTOR [] TYPEENTRY types, INT last type),
+    TYPES = VECTOR [hash size] BUCKET;
+
+TYPES type table;
+
+
+{ Insertion Procedures }
+{ -------------------- }
+
+
+{ The buckets of the hash table can be extended by the following procedure
+}
+PROC extend bucket = (INT hash value) VOID:
+BEGIN
+    INT old size = UPB types OF type table [hash value];
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] TYPEENTRY new table;
+    new table [ : old size] := types OF type table [hash value];
+    types OF type table [hash value] := new table
+END;
+
+
+{ Searching the type table by STYPE is made rather faster by a simple
+  hashing scheme.  This function returns an integer in the range
+  1 to 'hash size', according to rather superficial features of the
+  STYPE it is given.
+}
+PROC hash type = (STYPE type) INT:
+    CASE type IN
+        (SNULL):  1,
+        (SVOID):  2,
+        (REF SINT int):  (lwb OF int MOD 37 + upb OF int MOD 37) MOD 7  +  3,
+        (REF SCHAR char):  UPB char OF char MOD 7  +  10,
+        (REF SSTRING str):  no OF str MOD 7  +  17,
+        (REF SENUM enum):  ABS (id OF enum) [1] MOD 7  +  24,
+        (REF SFN fn):  (hash type (from OF fn) +
+                        hash type (to OF fn)) MOD 7  +  31,
+        (REF SST st): hash type (t OF st) MOD 7  + 38,
+        (REF SROW row):  no OF row MOD 7  +  45
+    ESAC;
+
+
+{ A new type may be added to the type table.  It is added only if
+  it is not already present.  In either case, an integer identifying
+  the entry is returned.
+}
+PROC add type = (STYPE type, PROC (STYPE) INT machine width) INT:
+BEGIN
+    INT hash = hash type (type);
+    INT found := 0;
+    REF BUCKET bucket = type table [hash];
+    FOR entry FROM 1 TO last type OF bucket WHILE found = 0 DO
+        IF type OF (types OF bucket) [entry] = type THEN  found := entry  FI
+    OD;
+    IF found = 0 THEN
+        { Not found, so add it }
+        IF last type OF bucket >= UPB types OF bucket THEN
+            extend bucket (hash)
+        FI;
+        (types OF bucket) [last type OF bucket +:= 1]
+            := (type, machine width (type));
+        found := last type OF bucket
+    FI;
+    found * hash size + hash
+END;
+
+
+{ Lookup Functions }
+{ ---------------- }
+
+
+{ 'lookup type entry' simply returns the TYPEENTRY corresponding to
+  the given integer (which should be the index returned by a previous
+  call to 'add type'.
+}
+PROC lookup type entry = (INT index) REF TYPEENTRY:
+BEGIN
+    INT bucket = (index - 1) MOD hash size + 1,
+        entry  = (index - 1) % hash size;
+    (types OF type table [bucket]) [entry]
+END;
+
+
+{ 'lookup type' returns the STYPE, given the index
+}
+PROC lookup type = (INT index) STYPE:  type OF lookup type entry (index);
+
+
+{ 'lookup type size' returns the machine size corresponding to the
+  type entry.
+}
+PROC lookup type size = (INT index) INT:
+    machine size OF lookup type entry (index);
+
+
+{ SYMBOL TABLE }
+{ ============ }
+
+
+{ The symbol table is implemented as an array of entries, each of which
+  describes a function and the names accessible within it.
+
+  The 'name' field gives its name as declared by the user.  This need
+  not be unique because two functions of the same name may be
+  declared in different scopes.
+
+  `outer' and `version' together form a unique key for the symbol table.
+  Their significance depends upon whether the function is inner or outer.
+
+  If inner then `outer' is the symbol table index for the immediately enclosing
+  function and `version' is the index into the functions in the assembler
+  environment of that function.  Both numbers are positive.
+
+  If outer then `outer' is the outer function number and `version' is the
+  negative of the macclosureno.  'outer' is positive and `version' is
+  negative.
+
+  `outer' = 0, `version' = -1 is used for functions generated by the simulator
+  for its own use.
+
+  The 'fn' and 'nodes' fields have an obvious external meaning.
+  'expansion' is provided for the translators own use, and is
+  never seen outside.
+
+  'input sizes' is a set of machine sizes for the flattened inputs to
+  the function.  `input aliases' holds onward pointers from the inputs
+  to those inputs of component function that they connect to. `input
+  upbs' is primarily used for function sets, in which case element [i]
+  contains the index of the last input associated with the i'th member
+  of the set for all elements except the last.  For consistency an
+  ordinary function is regarded as a function set with 1 element so
+  this array is empty.
+
+  `input fanouts' contain information derivable from `input aliases'.
+  They exist only to optimise the calculation of the maximum size of
+  the fanout list of the change parameters instance.  Each entry
+  contains the number of input pointers that must be set up for a
+  primitive input to the function, ie 1 (for the input itself) +
+  #aliases + #aliases of aliases + ...  The separate numbers are
+  needed for the interim calculations, which are done during `add
+  input alias' although it is only the total, as returned by `lookup
+  total input fanout' that is ultimately of interest.
+
+  It is an unfortunate but unavoidable fact that we have to keep two
+  descriptions of the outputs.  `outputs' describes the outputs as
+  used for establishing connectivity including any outputs generated
+  as a result of the function type transformation while `outputs OF fn'
+  describes the outputs as seen by user monitoring, without generated
+  components.
+
+  'shape' is used to hold the total size (less fanout list), and
+  output offset for an instance of a primitive function (ie one whose
+  'expansion' is empty), as well as the type of the function.
+
+  'an instance' is the absolute instance number of the first primitive
+  instance of some instance of the function, and 'last instance offset'
+  is the relative offset of the last primitive instance within the
+  group (and this is independent of 'last expansion', because connections
+  are also recorded in the 'expansion').  The 'last instance offset' is
+  negative for a primitive function.
+
+  Becauses network hierarchies are flattened, the input to a function
+  may need to be connected up more than once.  This is sorted out
+  during the normal course of instantiation but needs to be remembered
+  in the symbol table in order to change the simulated function.  `input
+  aliases' does this.  If input aliases [i][j] = k then input number i
+  needs to be connected to offset k within any instance of this
+  function.
+
+  Note that when an RNODE is a BOX, the instance number is a relative
+  offset within the instances making up the function (necessarily compound)
+  being described.  Such relative instance offsets start from zero (for the
+  first instance of the group.  The node indices within the bindings are
+  indices into a globally constructed node table.
+}
+
+MODE
+    ALIAS = STRUCT (INT inst offset, ip no, REF ALIAS next),
+    FNENTRY = STRUCT (ID name, INT outer, version, FN function, INT last binding,
+                      REF VECTOR [] INT expansion, INT last expansion,
+                      REF VECTOR [] INT constant nos, INT last constant no,
+                      REF VECTOR [] INT input sizes,
+                      REF VECTOR [] INT input upbs,
+                      REF VECTOR [] REF ALIAS input aliases,
+                      REF VECTOR [] INT input fanouts,
+                      INT an instance, last instance offset,
+                      WIRE outputs,
+                      STRUCT (INT size, offset, BITS sort) shape,
+                      STRUCT (INT workspace, history, declid) alien shape,
+                      INT seedtype{2 = circuit, 3 = probe, 4 = both},
+                      INT scaletime),
+    SYMBOLS = REF VECTOR [] FNENTRY,
+    NODES = REF VECTOR [] RNODE;
+
+REF ALIAS nil alias = NIL;
+VECTOR [0] REF ALIAS null rva;
+
+{ 'sort's in 'shape' fields
+}
+BITS compound                 = 16r0,
+     combinatorial            = 16r1,
+     event setting            = 16r2,
+     event handling           = 16r4,
+     initialised              = 16r8,
+     query set                = 16r10,
+     generic id               = 16r20,
+     alien sort               = 16r40,
+     saved                    = 16r80,
+     restored                 = 16r100,
+     terminated               = 16r200,
+     combinatorial loop break = generic id OR query set OR combinatorial,
+     event loop break         = generic id OR combinatorial,
+     unit delay               = initialised OR event handling,
+     general delay            = initialised OR event setting OR event handling;
+
+
+NODES nodes;
+INT last node;
+
+SYMBOLS symbol table;
+INT last symbol;
+
+
+{ Insertion procedures }
+{ -------------------- }
+
+
+PROC extend nodes = VOID:
+BEGIN
+    INT old size = UPB nodes;
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] RNODE new table;
+    new table [ : old size] := nodes;
+    nodes := new table
+END;
+
+
+PROC extend symbol table = VOID:
+BEGIN
+    INT old size = UPB symbol table;
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] FNENTRY new table;
+    new table [ : old size] := symbol table;
+    symbol table := new table
+END;
+
+
+PROC extend bindings = (REF FNENTRY entry) VOID:
+BEGIN
+    INT old size = UPB body OF function OF entry;
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] BINDING new bindings;
+    new bindings [ : old size] := body OF function OF entry;
+    body OF function OF entry := new bindings
+END;
+
+
+PROC extend expansion = (REF FNENTRY entry) VOID:
+BEGIN
+    INT old size = UPB expansion OF entry;
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] INT new expansion;
+    new expansion [ : old size] := expansion OF entry;
+    expansion OF entry := new expansion
+END;
+
+
+PROC extend constant nos = (REF FNENTRY entry) VOID:
+BEGIN
+    INT old size = UPB constant nos OF entry;
+    INT new size = 2 * old size + 1;
+    HEAP VECTOR [new size] INT new constant nos;
+    new constant nos [ : old size] := constant nos OF entry;
+    constant nos OF entry := new constant nos
+END;
+
+
+{ The function should be supplied with correct ram data, outputs and
+  number of inputs, but the bindings and expansion are added later.
+  Similarly, the outputs supplied will not usually have a valid
+  location, but will give the correct type.  The location will be
+  set by a later call to 'add output location'.
+
+  There are two outputs descriptors: `moutputs' describes the outputs
+  for the purposes of monitoring; `coutputs' describes them for the
+  purposes of connectivity.  The two will differ if and only if the
+  function has function type inputs.
+
+  As part of the hierarchic timescaling enhancements the value of
+  the scaletime field in the new symbol table entry is set to one
+  (the default).
+}
+PROC add function = (ID name, INT outer, version, no inputs,
+                     WIRE moutputs, coutputs, REF SRAM ramdata,
+                     STRUCT (INT size, offset, BITS sort) shape,
+                     STRUCT (INT workspace, history, declid) alien shape) INT:
+BEGIN
+    IF last symbol >= UPB symbol table THEN  extend symbol table  FI;
+    symbol table [last symbol +:= 1] :=
+        (name,
+         outer,
+         version,
+         FN (ramdata, moutputs, no inputs, HEAP VECTOR [0] BINDING), 0,
+         null rvi, 0,
+         null rvi, 0,
+         null rvi,
+         null rvi,
+         null rva,
+         null rvi,
+         0, 0,
+         coutputs,
+         shape,
+         alien shape,
+         -1,
+         1);
+    last symbol
+END;
+
+
+{ `update binding' updates the node corresponding to an existing
+   binding that matches the given names (`nilid' performs a wild card
+   match).  If more than one entry matches, the last is updated.
+
+   Note that we have to be careful to avoid trying to update a binding
+   which was never added.
+}
+PROC update binding = (INT fnno, ID ucname, lcname, RNODE node) VOID:
+BEGIN
+    BOOL transient =
+        ((ucname ISNT nilid) ANDTH (ucname /= nullid) ANDTH (ucname [1] = "_")
+            ANDTH
+            ((lcname IS nilid) OREL (lcname = nullid) OREL (lcname [1] = "_")))
+        OREL
+        ((lcname ISNT nilid) ANDTH (lcname /= nullid) ANDTH (lcname [1] = "_")
+            ANDTH
+            ((ucname IS nilid) OREL (ucname = nullid) OREL (ucname [1] = "_")));
+    IF NOT transient THEN
+        REF FNENTRY entry = symbol table [fnno];
+        REF VECTOR [] BINDING body = body OF function OF entry;
+        INT node ix := 0;
+        INT body ix := UPB body + 1;
+        WHILE node ix = 0 DO
+            BINDING bind = body [body ix -:= 1];
+            IF ((ucname IS nilid) OREL
+                ((uname OF bind ISNT nilid) ANDTH (ucname = uname OF bind))) ANDTH
+               ((lcname IS nilid) OREL
+                ((lname OF bind ISNT nilid) ANDTH (lcname = lname OF bind))) THEN
+               node ix := node OF bind
+            FI
+        OD;
+        nodes [node ix] := node
+    FI
+END;
+
+
+{ Note that bindings with names which cannot be accessed are never added.
+  This is safe, because bindings are never looked up during translation,
+  and the names would be invisible to the shell.
+}
+PROC add binding = (INT fnno, ID ucname, lcname, RNODE node) VOID:
+BEGIN
+    BOOL transient =
+        ((ucname ISNT nilid) ANDTH (ucname /= nullid) ANDTH (ucname [1] = "_")
+            ANDTH
+            ((lcname IS nilid) OREL (lcname = nullid) OREL (lcname [1] = "_")))
+        OREL
+        ((lcname ISNT nilid) ANDTH (lcname /= nullid) ANDTH (lcname [1] = "_")
+            ANDTH
+            ((ucname IS nilid) OREL (ucname = nullid) OREL (ucname [1] = "_")));
+    IF NOT transient THEN
+        REF FNENTRY entry = symbol table [fnno];
+        IF last binding OF entry >= UPB body OF function OF entry THEN
+            extend bindings (entry)
+        FI;
+        IF last node >= UPB nodes THEN
+            extend nodes
+        FI;
+        nodes [last node +:= 1] := node;
+        (body OF function OF entry) [last binding OF entry +:= 1]
+            := (ucname, lcname, last node)
+    FI
+END;
+
+{
+  `next instance' advances the last instance offset according to the
+  component instance and all its sub instances and returns the
+  instance for the component
+}
+PROC next instance = (INT fnno, component) INT:
+BEGIN
+    REF FNENTRY entry = symbol table [fnno];
+    INT ans = last instance offset OF entry + 1;
+    last instance offset OF entry +:=
+         (last instance offset OF symbol table [component] + 1);
+    ans
+END;
+
+
+{ 'add expansion' adds an integer to the table of expansions.  This is for the
+  translator's use and indexes a table of MAKE desciptors
+}
+PROC add expansion = (INT fnno, component) VOID:
+BEGIN
+    REF FNENTRY entry = symbol table [fnno];
+    IF last expansion OF entry >= UPB expansion OF entry THEN
+        extend expansion (entry)
+    FI;
+    (expansion OF entry) [last expansion OF entry +:= 1] := component
+END;
+
+
+{ 'add constant no' adds an integer to the table of constant nos.  This is
+  for the translator's use and indexes a table of constant desciptors
+}
+PROC add constant no = (INT fnno, constant no) VOID:
+BEGIN
+    REF FNENTRY entry = symbol table [fnno];
+    IF last constant no OF entry >= UPB constant nos OF entry THEN
+        extend constant nos (entry)
+    FI;
+    (constant nos OF entry) [last constant no OF entry +:= 1] := constant no
+END;
+
+
+{ As soon as we add the input sizes we know the number of primitive inputs
+  and can initialise the alias and fanouts arrays.
+}
+PROC add input sizes = (INT fnno, REF VECTOR [] INT sizes) VOID:
+BEGIN
+    input sizes OF symbol table [fnno] := sizes;
+    input aliases OF symbol table [fnno] := HEAP VECTOR [UPB sizes] REF ALIAS;
+    FORALL alias IN input aliases OF symbol table [fnno] DO
+        alias := nil alias
+    OD;
+    input fanouts OF symbol table [fnno] := HEAP VECTOR [UPB sizes] INT;
+    FORALL fanout IN input fanouts OF symbol table [fnno] DO
+        fanout := 1
+    OD
+END;
+
+PROC add input upbs = (INT fnno, REF VECTOR [] INT upbs) VOID:
+    input upbs OF symbol table [fnno] := upbs;
+
+PROC add input alias = (INT fnno, src ipno, inst offset, dest ipno,
+                            component fnno) VOID:
+BEGIN
+    (input aliases OF symbol table [fnno]) [src ipno] :=
+        HEAP ALIAS := (inst offset, dest ipno,
+                      (input aliases OF symbol table [fnno]) [src ipno]);
+    (input fanouts OF symbol table [fnno]) [src ipno] +:=
+        (input fanouts OF symbol table [componentfnno]) [dest ipno]
+END;
+
+PROC add shape = (INT fnno, STRUCT (INT size, offset, BITS sort) shape) VOID:
+    shape OF symbol table [fnno] := shape;
+
+
+{ Two output locations are required: one for monitoring and the
+  other for connectivity
+}
+PROC add output location = (INT fnno, REF VECTOR [] BLOCK mloc, cloc) VOID:
+BEGIN
+    blocks OF outputs OF function OF symbol table [fnno] := mloc;
+    blocks OF outputs OF symbol table [fnno] := cloc
+END;
+
+PROC add example instance = (INT fnno, instance) VOID:
+    an instance OF symbol table [fnno] := instance;
+
+PROC add seedtype = (INT fnno, seedtype) VOID:
+    seedtype OF symbol table [fnno] := seedtype;
+
+PROC add scaletime = (INT fnno, scaletime value) VOID:
+    scaletime OF symbol table [fnno] := scaletime value;
+
+
+{ Lookup Procedures }
+{ ----------------- }
+
+
+{ A unique textual name for a function can be derived from the its
+  declared name, its outer function number and its version.
+}
+PROC unique id = (ID name, INT outer, version) ID:
+    MAKEID (name + "@" + intchars (outer) + "/" + intchars (version));
+
+
+{ `lookup name' is designed to perform four sorts of search:
+
+  1.  Search for outer fn by name and version.  In this case outer
+      is 0 and version is negative and name and version are matched.
+      This sort of search is required by the "simulate" command and
+      during assembly to find the generic id function.
+
+  2.  Search for outer fn by name, outer and version.  In this case outer is
+      positive and version is negative.  name is not strictly required but it
+      is used anyway and all three fields are matched in a simple
+      search.  This sort of search is required during translation when
+      an outer function MAKE is required.
+
+  3.  Search for inner function.  In this case version is positive and a search
+      is carried out up the declaration hierarchy.  This sort of
+      search is required during translation when an outer function
+      MAKE is required.
+
+  4.  Search for an inner or outer function by name only, finding the
+      last declared (highest symbol table index) option if there is more
+      than one.  In this case version is zero.  This sort of search is
+      required (for historical reasons) by the "simulatefn" command.
+      The 'outer' parameter is used to separate out probe functions
+      from the circuit functions, it takes the values 'firstseed',
+      'subsequentseed' or 'firstandsubsequentseed' from libinterface.
+      Functions that are found to be timescaled are only picked if they
+      are of a simulateable nature. (see keinstance)
+
+  At a glance:
+
+  Search Type:    1    2    3    4
+  Outer      :    0   >0
+  Version    :   <0   <0   >0    0
+
+  Discerning readers will realise that this is a right hotchpotch.  If
+  we had realised at the outset that there were so may different sorts
+  of lookup we would probably have set up separate lookup routines.
+  This may still be worthwhile at some later stage.
+
+  It is also not good to have the form of the "simulatefn" search
+  hidden so deep.  It would be better to, say, return a vector of
+  matched functions in case of ambiguity and let higher-level code
+  decide, if there is more than one option, which to pick or indeed
+  whether to fault.
+}
+PROC lookup name = (ID name, INT outer, version) INT:
+BEGIN
+    INT found := 0;
+    IF version < 0 THEN
+        FOR i TO last symbol WHILE found = 0 DO
+            FNENTRY fn entry = symbol table [i];
+            IF
+                (outer OF fn entry = outer OREL outer = 0) ANDTH
+                version OF fn entry = version ANDTH
+                name OF fn entry = name
+            THEN
+                found := i
+            FI
+        OD
+    ELIF version > 0 THEN
+        INT context := outer;
+        WHILE
+            FOR i TO last symbol WHILE found = 0 DO
+                FNENTRY fn entry = symbol table [i];
+                IF
+                    outer OF fn entry = context ANDTH
+                    version OF fn entry = version ANDTH
+                    name OF fn entry = name
+                THEN
+                    found := i
+                FI
+            OD;
+            FNENTRY context fn = symbol table [context];
+            context := outer OF context fn;
+            (found = 0) ANDTH (version OF context fn > 0)
+        DO SKIP OD
+    ELSE { version = 0 => search 4,
+           outer distinguishes probes from circuit fns}
+           FOR i FROM last symbol BY -1 TO 1 WHILE found = 0 DO
+              IF seedtype OF symbol table[i] = outer ANDTH
+                 name OF symbol table [i] = name ANDTH
+                 (scaletime OF symbol table [i] /= 0)
+              THEN found := i FI
+           OD
+    FI;
+    found
+END;
+
+
+PROC raw lookup function = (INT fnno) FN:
+BEGIN
+    FN fn := function OF symbol table [fnno];
+    INT upb body = last binding OF symbol table [fnno];
+    IF ram OF fn ISNT nil sram THEN ram OF fn := HEAP SRAM := ram OF fn FI;
+    body OF fn := HEAP VECTOR [upb body] BINDING := (body OF fn) [ : upb body];
+    INT upb wire = UPB blocks OF outputs OF fn;
+    blocks OF outputs OF fn := HEAP VECTOR [upb wire] BLOCK :=
+        blocks OF outputs OF fn;
+    fn
+END;
+
+
+PROC raw lookup rnode = (INT node) RNODE:
+    CASE nodes [node] IN
+        (WIRE w): WIRE (type OF w,
+                        HEAP VECTOR [UPB blocks OF w] BLOCK := blocks OF w),
+        (BOX b): b
+    ESAC;
+
+
+PROC lookup user id = (INT fnno) ID:
+    name OF symbol table [fnno];
+
+
+PROC lookup id = (INT fnno) ID:
+    unique id (name OF symbol table [fnno],
+               outer OF symbol table [fnno],
+               version OF symbol table [fnno]);
+
+
+PROC lookup expansion = (INT fnno) REF VECTOR [] INT:
+BEGIN
+    REF VECTOR [] INT exp = expansion OF symbol table [fnno];
+    exp [ : last expansion OF symbol table [fnno]]
+END;
+
+
+PROC lookup constant nos = (INT fnno) REF VECTOR [] INT:
+BEGIN
+    REF VECTOR [] INT exp = constant nos OF symbol table [fnno];
+    exp [ : last constant no OF symbol table [fnno]]
+END;
+
+
+PROC lookup input sizes = (INT fnno) REF VECTOR [] INT:
+    input sizes OF symbol table [fnno];
+
+
+{ For the convenience of the user the `input upbs' array is processed
+  to yield the input slice corresponding to the function set index
+}
+PROC lookup input slice = (INT fnno, fsindex) STRUCT (INT lwb, upb):
+BEGIN
+    REF VECTOR [] INT upbs = input upbs OF symbol table [fnno];
+    INT lwb = IF fsindex = 1 THEN 1 ELSE upbs [fsindex - 1] + 1 FI;
+    INT upb = IF fsindex > UPB upbs THEN
+                  UPB (input sizes OF symbol table [fnno])
+              ELSE
+                  upbs [fs index]
+              FI;
+    (lwb, upb)
+END;
+
+PROC lookup input aliases = (INT fnno, ipno)
+REF VECTOR [] STRUCT (INT inst offset, ip no):
+BEGIN
+    REF ALIAS list = (input aliases OF symbol table [fnno])[ipno];
+    REF ALIAS alias := list;
+    INT i := 0;
+    WHILE alias ISNT nil alias DO i +:= 1; alias := next OF alias OD;
+    HEAP VECTOR [i] STRUCT (INT inst offset, ipno) ans;
+    alias := list;
+    i := 0;
+    WHILE alias ISNT nil alias DO
+        i +:= 1;
+        ans [i] := (inst offset OF alias, ip no OF alias);
+        alias := next OF alias
+    OD;
+    ans
+END;
+
+PROC lookup total input fanout = (INT fnno) INT:
+BEGIN
+    INT ans := 0;
+    FORALL fanout IN input fanouts OF symbol table [fnno] DO
+        ans +:= fanout
+    OD;
+    ans
+END;
+
+PROC lookup shape = (INT fnno) STRUCT (INT size, offset, BITS sort):
+    shape OF symbol table [fnno];
+
+PROC lookup alien shape = (INT fnno) STRUCT (INT workspace, history, declid):
+    alien shape OF symbol table [fnno];
+
+
+PROC lookup an instance = (INT fnno) INT:
+    an instance OF symbol table [fnno];
+
+PROC lookup outputs = (INT fnno) WIRE:
+BEGIN
+    WIRE ans = outputs OF symbol table [fnno];
+    INT upb = UPB blocks OF ans;
+    blocks OF ans := HEAP VECTOR [upb] BLOCK := blocks OF ans;
+    ans
+END;
+
+
+{ 'lookup last instance' returns the offset within the group of the
+  last instance comprising a function.  It is careful to return
+  zero for a function which is primitive.
+}
+PROC lookup last instance = (INT fnno) INT:
+    BEGIN
+        INT raw = last instance offset OF symbol table [fnno];
+        IF raw < 0 THEN  0
+        ELSE  raw
+        FI
+    END;
+
+
+{ 'lookup user parent' searches outwards from the current function to the
+  find one whose name does not start with an underscore.  This is deemed
+  to be the nearest enclosing user defined function for diagnostic
+  purposes (currently only in loop breaks).  If the outer level is
+  reached without a user defined name beinf found, an empty identifier
+  is returned.
+}
+PROC lookup user parent = (INT fnno) ID:
+BEGIN
+    ID name = name OF symbol table [fnno];
+    IF (name IS nil id) OREL name = null id THEN  null id
+    ELIF name [1] /= "_" THEN  name
+    ELIF version OF symbol table [fnno] > 0 THEN
+        lookup user parent (outer OF symbol table [fnno])
+    ELSE  null id
+    FI
+END;
+
+PROC lookup scaletime = (INT fnno) INT:
+    scaletime OF symbol table [fnno];
+
+
+
+{ INITIALISATION  AND TERMINATION }
+{ =============================== }
+
+
+{ This procedure sets up the tables, and adds a (largely dummy) entry
+  for the generic identity function.
+}
+PROC initialise tables = VOID:
+BEGIN
+    FOR i TO UPB type table DO
+        type table [i] := (HEAP VECTOR [0] TYPEENTRY, 0)
+    OD;
+    nodes := HEAP VECTOR [100] RNODE;
+    last node := 0;
+    symbol table := HEAP VECTOR [100] FNENTRY;
+    last symbol := 0;
+    add function (MAKEID "$Genericid", 0, -1, 0,
+                  WIRE (LOC SNULL, null rvb),
+                  WIRE (LOC SNULL, null rvb),
+                  nil sram,
+                  (0, 0, combinatorial),
+                  SKIP)
+END;
+
+
+PROC remove tables = VOID:
+BEGIN
+    FOR i TO UPB type table DO
+        type table [i] := (NIL, 0)
+    OD;
+    nodes := NIL;
+    symbol table := NIL
+END;
+
+
+{ LOOKUP INPUTS DESCRIPTION }
+{ ========================= }
+
+
+PROC raw inputs = (FN fn) WIRE:
+BEGIN
+    REF SST type := nil sst;
+    REF REF SST end type := type;
+    INT no blocks := 0;
+    REF VECTOR [] BLOCK blocks := null rvb;
+    FOR i TO no inputs OF fn DO
+        WIRE ip = CASE nodes [node OF (body OF fn) [i]] IN (WIRE w): w ESAC;
+        blocks := blocks + blocks OF ip;
+        REF REF SST (end type) := HEAP SST := (type OF ip, nil sst);
+        end type := rest OF end type
+    OD;
+    WIRE (type, blocks)
+END;
+
+
+{ LIST SIMULATABLE FUNCTIONS }
+{ ========================== }
+
+{
+  The symbol table contains entries relating to internally generated functions
+  which must not be listed.  We currently use a heuristic for deciding whether
+  a function is internal or not.  If the name has one of the initial characters
+  allowed by the language syntax at release 4 then it is assumed to be external.
+  This is completely reliable although it would need updating if ELLA's syntax
+  changed.  Perhaps a flag in the symbol table would be better.  This wants
+  some more leisured consideration
+}
+PROC raw list simulatable functions = (PROC (REF VECTOR[] CHAR)BOOL p) VOID:
+BEGIN
+    PROC legal first = (CHAR c) BOOL:
+    BEGIN
+        VECTOR [] CHAR list = "ABCDEFGHIJKLMNOPQRSTUVWXYZ+-*/%<>=:.^|";
+        BOOL ans := FALSE;
+        FOR i TO UPB list WHILE NOT ans DO ans := (c = list [i]) OD;
+        ans
+    END;
+
+    FOR i TO UPB symbol table WHILE
+        REF VECTOR [] CHAR name = name OF symbol table [i];
+        UPB name = 0 OREL NOT legal first (name[1]) OREL p (name)
+    DO SKIP OD
+END;
+
+
+{ REMOVE TEMPORARY STUFF FROM TABLES }
+{ ================================== }
+
+
+{ The purpose of the procedures given here is to remove transient
+  information from the symbol and type tables.
+
+  At the end of translation, the expansion information may be removed
+  from all symbol table entries, as may the constant information.
+  'input fanouts' and 'input upbs' are also no longer required.
+  Also the type table may be cleared.  These services are performed
+  by 'final table cleanup'.
+}
+
+
+{ The last cleaned function entry:
+}
+INT last clean entry := 0;
+
+
+{ Cleanup all above the last cleaned entry, while remaining in translation.
+  There is currentlu no significant action here.
+}
+PROC incremental table cleanup = VOID:
+BEGIN
+    last clean entry := last symbol
+END;
+
+
+{ Cleanup everything not required once translation is finished
+}
+PROC final table cleanup = VOID:
+BEGIN
+    last clean entry := 0;
+    FORALL entry IN symbol table DO
+        expansion OF entry := null rvi;
+        last expansion OF entry := 0;
+        constant nos OF entry := null rvi;
+        last constant no OF entry := 0;
+        input upbs OF entry := null rvi;
+        input fanouts OF entry := null rvi
+    OD;
+    FORALL bucket IN type table DO
+        bucket := (NIL, 0)
+    OD
+END;
+
+
+{ SAVING AND RESTORING }
+{ ==================== }
+
+
+PROC save tables = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferry,
+                    FLTPROC flt) VOID:
+BEGIN
+    { First save the type table }
+    FOR i TO hash size DO
+        BUCKET bucket = type table [i];
+        write int (last type OF bucket, ferry, flt);
+        FOR j TO last type OF bucket DO
+            TYPEENTRY type entry = (types OF bucket) [j];
+            write stype (type OF type entry, ferry, flt);
+            write int (machine size OF type entry, ferry, flt)
+        OD
+    OD;
+
+    { Now save the node table }
+    write int (last node, ferry, flt);
+    FOR i TO last node DO
+        write rnode (nodes [i], ferry, flt)
+    OD;
+
+    { Finally, write the symbol table itself }
+    write int (last symbol, ferry, flt);
+    FOR i TO last symbol DO
+        FNENTRY fn entry = symbol table [i];
+        write id (name OF fn entry, ferry, flt);
+        write int (outer OF fn entry, ferry, flt);
+        write int (version OF fn entry, ferry, flt);
+        write fn (function OF fn entry, ferry, flt);
+        write int (last binding OF fn entry, ferry, flt);
+        write int (last expansion OF fn entry, ferry, flt);
+        REF VECTOR [] INT expansion = expansion OF fn entry;
+        FOR j TO last expansion OF fn entry DO
+            write int (expansion [j], ferry, flt)
+        OD;
+        write int (last constant no OF fn entry, ferry, flt);
+        REF VECTOR [] INT constant nos = constant nos OF fn entry;
+        FOR j TO last constant no OF fn entry DO
+            write int (constant nos [j], ferry, flt)
+        OD;
+        REF VECTOR [] INT input sizes = input sizes OF fn entry;
+        write int (UPB input sizes, ferry, flt);
+        FOR j TO UPB input sizes DO
+            write int (input sizes [j], ferry, flt)
+        OD;
+        REF VECTOR [] INT input upbs = input upbs OF fn entry;
+        write int (UPB input upbs, ferry, flt);
+        FOR j TO UPB input upbs DO
+            write int (input upbs [j], ferry, flt)
+        OD;
+        REF VECTOR [] REF ALIAS input aliases = input aliases OF fn entry;
+        write int (UPB input aliases, ferry, flt);
+        FOR j TO UPB input aliases DO
+            REF VECTOR [] STRUCT (INT inst offset, ip no) aliases =
+                 lookup input aliases (i, j);
+            write int (UPB aliases, ferry, flt);
+            FOR k TO UPB aliases DO
+                write int (inst offset OF aliases [k], ferry, flt);
+                write int (ip no OF aliases [k], ferry, flt)
+            OD
+        OD;
+        REF VECTOR [] INT input fanouts = input fanouts OF fn entry;
+        write int (UPB input fanouts, ferry, flt);
+        FOR j TO UPB input fanouts DO
+            write int (input fanouts [j], ferry, flt)
+        OD;
+        write int (an instance OF fn entry, ferry, flt);
+        write int (last instance offset OF fn entry, ferry, flt);
+        write wire (outputs OF fn entry, ferry, flt);
+        write int (size OF shape OF fn entry, ferry, flt);
+        write int (offset OF shape OF fn entry, ferry, flt);
+        write int (ABS sort OF shape OF fn entry, ferry, flt);
+        write int (seedtype OF fn entry, ferry, flt);
+        write int (scaletime OF fn entry, ferry, flt);
+        write int (workspace OF alien shape OF fn entry, ferry, flt);
+        write int (history OF alien shape OF fn entry, ferry, flt);
+        write int (declid OF alien shape OF fn entry, ferry, flt)
+    OD
+END;
+
+
+PROC restore tables = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    { First restore the type table }
+    FOR i TO hash size DO
+        REF BUCKET bucket := type table [i];
+        INT upb = read int (ferry, flt);
+        HEAP VECTOR [upb] TYPEENTRY types;
+        types OF bucket := types;
+        last type OF bucket := upb;
+        FOR j TO upb DO
+            REF TYPEENTRY type entry := types [j];
+            type OF type entry := read stype (ferry, flt);
+            machine size OF type entry := read int (ferry, flt)
+        OD
+    OD;
+
+    { Now restore the node table }
+    last node := read int (ferry, flt);
+    nodes := HEAP VECTOR [last node] RNODE;
+    FOR i TO last node DO
+        nodes [i] := read rnode (ferry, flt)
+    OD;
+
+    { Finally, get the symbol table itself }
+    last symbol := read int (ferry, flt);
+    symbol table := HEAP VECTOR [last symbol] FNENTRY;
+    FOR i TO last symbol DO
+        REF FNENTRY fn entry = symbol table [i];
+        name OF fn entry := read id (ferry, flt);
+        outer OF fn entry := read int (ferry, flt);
+        version OF fn entry := read int (ferry, flt);
+        function OF fn entry := read fn (ferry, flt);
+        last binding OF fn entry := read int (ferry, flt);
+        INT upb = read int (ferry, flt);
+        HEAP VECTOR [upb] INT expansion;
+        expansion OF fn entry := expansion;
+        last expansion OF fn entry := upb;
+        FOR j TO upb DO
+            expansion [j] := read int (ferry, flt)
+        OD;
+        INT upb1 = read int (ferry, flt);
+        HEAP VECTOR [upb1] INT constant nos;
+        constant nos OF fn entry := constant nos;
+        last constant no OF fn entry := upb1;
+        FOR j TO upb1 DO
+            constant nos [j] := read int (ferry, flt)
+        OD;
+        INT upb2 = read int (ferry, flt);
+        HEAP VECTOR [upb2] INT input sizes;
+        input sizes OF fn entry := input sizes;
+        FOR j TO upb2 DO
+            input sizes [j] := read int (ferry, flt)
+        OD;
+        INT upb3 = read int (ferry, flt);
+        HEAP VECTOR [upb3] INT input upbs;
+        input upbs OF fn entry := input upbs;
+        FOR j TO upb3 DO
+            input upbs [j] := read int (ferry, flt)
+        OD;
+        INT upb4 = read int (ferry, flt);
+        HEAP VECTOR [upb4] REF ALIAS input aliases;
+        input aliases OF fn entry := input aliases;
+        FOR j TO upb4 DO
+            input aliases [j] := nil alias;
+            REF REF ALIAS tail := input aliases [j];
+            INT upb5 = read int (ferry, flt);
+            FOR k TO upb5 DO
+                INT inst offset = read int (ferry, flt);
+                INT ip no = read int (ferry, flt);
+                REF REF ALIAS (tail) := HEAP ALIAS :=
+                    (inst offset, ip no, nil alias);
+                tail := next OF tail
+            OD
+        OD;
+        INT upb5 = read int (ferry, flt);
+        HEAP VECTOR [upb5] INT input fanouts;
+        input fanouts OF fn entry := input fanouts;
+        FOR j TO upb5 DO
+            input fanouts [j] := read int (ferry, flt)
+        OD;
+        an instance OF fn entry := read int (ferry, flt);
+        last instance offset OF fn entry := read int (ferry, flt);
+        outputs OF fn entry := read wire (ferry, flt);
+        size OF shape OF fn entry := read int (ferry, flt);
+        offset OF shape OF fn entry := read int (ferry, flt);
+        sort OF shape OF fn entry := BIN read int (ferry, flt);
+        seedtype OF fn entry := read int (ferry, flt);
+        scaletime OF fn entry := read int (ferry, flt);
+        workspace OF alien shape OF fn entry := read int(ferry, flt);
+        history OF alien shape OF fn entry := read int(ferry, flt);
+        declid OF alien shape OF fn entry := read int(ferry, flt)
+    OD
+END
+
+
+KEEP
+    initialise tables, remove tables,
+
+    add type, lookup type, lookup type size,
+
+    compound, combinatorial, event setting, event handling, query set,
+    initialised, generic id, combinatorial loop break, event loop break,
+    unit delay, general delay, alien sort, saved, restored, terminated,
+
+    last symbol,
+    add function, add binding, update binding, next instance, add expansion,
+    add constant no, add input sizes, add input upbs,
+    add input alias, add shape, add output location, add example instance,
+    add scaletime, add seedtype, unique id,
+    lookup name, raw lookup function, raw lookup rnode,
+    lookup user id, lookup id, lookup expansion, lookup constant nos,
+    lookup input sizes, lookup input slice, lookup input aliases,
+    lookup total input fanout, lookup outputs, lookup shape, lookup alien shape,
+    lookup an instance, lookup last instance, lookup user parent,
+    lookup scaletime,
+    raw inputs,
+
+    raw list simulatable functions,
+
+    incremental table cleanup, final table cleanup,
+
+    save tables, restore tables
+FINISH
