@@ -1,0 +1,587 @@
+DECS keamram CONTEXT VOID USE putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{ " Id: keamram.sta,v 2.1 91/02/22 18:34:15 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamram.a68,v 34.2 1995/03/29 13:04:37 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+24:10:88  Module created to implement RAM atomic functions
+24:11:88  Bug 35. Fixed various oddities. MDR.
+12:12:88  `translate ram' has SRAM return.  Bug 32.  BJE.
+14:01:89  Bug 119, 112.
+06:02:89  R4B080.  Sanity checks on RAM bounds introduced.  BJE.
+23:05:89  R4B340.  Push string misuse.  SPT.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+24:08:89  Parameters to 'translate copy inputs' changed.  R4B150.  PAR.
+27:08:89  Correction to initial character value used as enable.  PAR.
+11:05:90  Removed 'temporary!?!' fix, which always left the eval
+             flag set. See bug 95 in keamdelay.
+             Added next event setting. MDR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedure `translate ram' that generates
+   code to simulate generic RAMs.
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{ This procedure continues until the very end of the module.  The
+  sub-routines that it uses are nested within it so that they have
+  easy access to the various constants that desribe the RAM and its
+  environment.  `sram' is updated to describe the RAM
+}
+PROC translate ram = (RAM body, ID name, FNDEC declaration,
+                      VECTOR [] INT input types, INT output type,
+                      ENVIRON environ, CLOSURE closure,
+                      REF REF SRAM sram, FLTPROC flt)
+STRUCT (INT size, offset, BITS sort):
+BEGIN
+   { Environment Data }
+   { ================ }
+
+   { A RAM has four inputs: data, write address, read address and enable.
+     For the purposes of this comment I will assume that the data signal
+     is D bytes wide and that the combined width of the four inputs is I
+     bytes.   I will also assume that there are M cells in the RAM.  So
+     the RAM memory array is M cells *long* by D bytes *wide*.
+
+     The RAM environment has two areas of  function-specific environment
+     data.  Firstly a copy of all the inputs at the end of the previous
+     C-L evaluation is maintained by the event setting phase in a holding
+     area.  Secondly we keep the RAM contents array.
+
+     The following diagram illustates the complete environment data.  The
+     function specific data is between double bars.
+
+              +---------------------------+
+              |    Evaluation flag        |          (size unit)
+              +---------------------------+
+              |    Number of inputs (N)   |          (ws)
+              +---------------------------+
+              +    N * ptrs to inputs     +          (N of ws)
+              +                           +
+              +---------------------------+
+              ||   Holding area for      ||          (I)
+              ||   previous inputs       ||
+              +---------------------------+
+              ||   Contents              ||          (M*D)
+              ||                         ||
+              +---------------------------+
+              |    Outputs                |          (D)
+              |                           |
+              +---------------------------+
+              |    Size of Fanout list (F)|          (ws)
+              +---------------------------|
+              +    Fanout list ptrs       +          (F of ws)
+              +                           +
+              +---------------------------+
+
+   The following identity declarations reflect this diagram.
+   }
+
+   { First calculate the signal types }
+   STYPE data type = lookup type (output type);
+   REF SINT address type =
+      CASE lookup type (input types[UPB input types - 1])
+      IN (REF SINT i): i
+      ESAC;
+   STYPE enable type = lookup type (input types[UPB input types]);
+   REF SST input type = LOC SST :=
+      (data type,    LOC SST :=
+      (address type, LOC SST :=
+      (address type, LOC SST :=
+      (enable type,  nil sst))));
+
+   INT data size = machine width (data type);                         { (D) }
+   INT input size = machine width (input type);                       { (I) }
+   INT upb = upb OF address type;
+   INT lwb = lwb OF address type;
+   IF (upb OVER 2) - (lwb OVER 2) >= (maxint OVER (4*datasize)) THEN
+      flt ("Unreasonable RAM range")
+   FI;
+   INT ram length = (upb - lwb) + 1;  { (M) }
+   INT input offset = size unit + ws;
+   INT hold offset = input offset + UPB input types * ws;
+   INT wr ip offset = hold offset - 3 * ws;
+   INT rd ip offset = hold offset - 2 * ws;
+   INT enable ip offset = hold offset - ws;
+   INT data offset = hold offset;
+   INT wr addr offset = hold offset + input size - 5 * ws;
+   INT rd addr offset = hold offset + input size - 3 * ws;
+   INT enable offset = hold offset + input size - ws;
+   INT contents offset = hold offset + input size;
+   INT output offset = contents offset + ram length * data size;
+   INT fixed part size = output offset + data size;
+
+
+   { Code sequences }
+   { ============== }
+
+   { RAMs are active during combinatorial logic evaluation and at time
+     update.  Their behaviour at these two points is entirely separate:
+     during the former, the outputs may change but the contents cannot;
+     during the latter the contents may change but the outputs may not.
+     Note that a change in the RAM inputs can only stimulate activity
+     at the next time update, never later.  This is simpler than
+     general delays and means that there is no need for data to hold
+     the next event time, event handling can be handled by direct
+     manipulation of the evaluation flag.
+
+     This is implemented with three calls. C-L updates the output; event
+     setting maintains the input copy data and resets the evaluation flag
+     if the inputs have not changed.  Event handling updates the RAM
+     contents.
+
+     There is also an initialisation call.
+   }
+
+   { Initialisation
+     --------------
+
+     This function calculates and sets an initial value for both the holding
+     area in the RAM environment and the RAM contents.  Any value with
+     enable Off will do for the holding area as this will ensure that the
+     decision to omit the event handling phase in the case that the first
+     inputs supplied match those in the holding area is safe.  In fact we
+     choose (?,?,?,Off).
+
+
+   }
+   PROC ram initialiser = (SVALUE data init, STYPE data type,
+                                             REF SINT address type,
+                                             STYPE enable type) VOID:
+   BEGIN
+       translate start initialiser (name);                { (cp: s) }
+
+       HEAP SQUERY qdata;
+       type OF qdata := data type;
+       translate output constant
+         (qdata, output type, wr addr offset, leave flag, 1);
+
+       HEAP SQUERY qwadd;
+       type OF qwadd := address type;
+       translate output constant
+         (qwadd, input types[UPB input types -1], wr addr offset, leave flag, 1);
+
+       HEAP SQUERY qradd;
+       type OF qradd := address type;
+       translate output constant
+         (qradd, input types[UPB input types-1], rd addr offset, leave flag, 1);
+
+       SVALUE fenable =
+          CASE enable type IN
+            (REF SENUM e): HEAP SVENUM := (e, 2, null svalue),
+            (REF SCHAR c): HEAP SVCHAR := (c, (char OF c) [UPB char OF c])
+          ESAC;
+
+       translate output constant
+         (fenable, input types[UPB input types], enable offset, leave flag, 1);
+
+       translate set replicated constant
+          ( data init, data type, leave flag, contents offset, ram length, 1);
+       am ret (0)                                           { (cp: s) }
+   END;
+
+   { Combinatorial Logic
+     -------------------
+
+     The outputs of the RAM may be calculated from the following table:
+
+     ADDRESSES                                ENABLE
+
+                                 Unknown       On        Off
+
+     Both unknown                  ?           ?          ?
+     Write only unknown            ?           ?          c
+     Read only unknown             ?           ?          ?
+     Both known and equal          ?           i          c
+     Both known and unequal        c           c          c
+
+     Where Off =2, On =1, (?) means unknown, (c) means calculate using the read
+     address to index the contents array and (i) means equal to the current
+     data input.
+
+     The algorithm for this is as follows:
+
+     IF read address flag = 0 THEN output query
+     ELIF enable = 2 THEN output contents cell
+     ELIF write address flag = 0 THEN output query
+     ELIF read address value /= write address value THEN output contents cell
+     ELIF enable = 0 THEN output query
+     ELSE output data input
+     FI
+
+     A note on the evaluation flag
+     -----------------------------
+
+     Because RAM event setting must always be called and because it is
+     not possible to know during C-L whether the next phase will be
+     C-L or event setting, C-L must always leave the evaluation flag
+     set.  This could mean that unnecessary C-L evaluation of the RAM
+     would be performed but there would be no further knock on as the
+     fanout is only performed if the outputs change.
+   }
+   PROC ram body = VOID:
+   BEGIN
+      INT data bit size = bits per byte * data size;
+
+      LABEL output query = new label;
+      LABEL output contents cell = new label;
+      LABEL end = new label;
+
+      translate start function (name);          { (cp: s) }
+
+      { Is read address known? }
+      am local (0);
+      am pushint (rd ip offset);
+      am add;
+      am global (ws, indirect);
+      am global (size unit, indirect);            { (ra flag: cp: s) }
+      am test;                                    { (ra /= ?: cp : s) }
+      am jumpno (0, output query);                { (cp: s) }
+
+      { Collect read address }
+      am local (0);
+      am pushint (rd ip offset);
+      am add;
+      am global (ws, indirect);
+      am pushint (ws);
+      am add;
+      am global (ws, indirect);            { (ra : cp: s) }
+
+      { Is enable Off or unknown? }
+      am local (1);
+      am pushint (enable ip offset);
+      am add;
+      am global (ws, indirect);
+      am global (size unit, indirect);            { (e: ra: cp: s) }
+      am local (0);
+      am pushint (2);
+      am neq;                                     { (e /= off: e: ra: cp: s) }
+      am jumpno (1, output contents cell);        { (e: ra: cp: s) }
+
+      { Is write address known? }
+      am local (2);
+      am pushint (wr ip offset);
+      am add;
+      am global (ws, indirect);
+      am global (size unit, indirect);            { (wa flag: e: ra: cp: s) }
+      am test;                                    { (wa /= ?: e: ra: cp : s) }
+      am jumpno (2, output query);                { (e: ra: cp: s) }
+
+      { Are the two addresses equal? }
+      am local (2);
+      am pushint (wr ip offset);
+      am add;
+      am global (ws, indirect);
+      am pushint (ws);
+      am add;
+      am global (size unit, indirect);            { (wa : e: ra: cp: s) }
+      am local (2);
+      am eq;                                      { (wa = ra: e: ra: cp: s) }
+      am jumpno (1, output contents cell);        { (e: ra: cp: s) }
+
+      { Is enable On? }
+      am test;                                    { (e = on: ra: cp: s) }
+      am jumpno (1, output query);                { (ra: cp: s) }
+      am drop (1);                                { (cp: s) }
+
+      { Output data input }
+      translate copy inputs (input types[:UPB input types -3], input offset,
+                             data type, output offset, reset flag, 1);
+      am jump (end);
+
+      { Output query }
+      am label (1, output query);                 { (cp: s)}
+      INT data size = lookup type size (output type);
+      am pushint (output offset);
+      am pushint (data size);
+      am call (3, label ("Genericquery"));
+      am drop (2);
+      am jump (end);
+
+      { Calculate output address (oa) }
+      am label (2, output contents cell);         { (ra: cp: s) }
+      am local (1);
+      am pushint (output offset);
+      am add;                                     { (oa: ra: cp: s) }
+
+      { Calculate address of contents cell from
+           ca = (ra-lwb) * data size + contents offset + cp
+        and collect cell data (d).
+        The zero on the stack is a bit offset
+      }
+      IF data size /= ws THEN
+         am pushint (0)                           { ([0: ]oa: ra: cp: s)}
+      FI;
+      am local (IF data size = ws THEN 1 ELSE 2 FI);
+      am pushint (lwb OF address type);
+      am sub;
+      am pushint (data size);
+      am mul;
+      am pushint (contents offset);
+      am add;
+      am local (IF data size = ws THEN 3 ELSE 4 FI);
+      am add;                                     { (ca: [0: ]oa: ra: cp: s) }
+      IF data size = ws THEN
+         am global (data size, indirect)
+      ELSE
+         am bstring (data bit size, data bit size, indirect)
+      FI;                                         { (d: oa: ra: cp: s) }
+
+      { Check against old output value (d')}
+      translate compare and set flag (data size, 1, reset flag, 4);
+                                                  { (d: oa: ra: cp: s) }
+
+      { Output contents cell }
+      IF data size = ws THEN
+         am store (data size, indirect)
+      ELSE
+         am bstore (data bit size, indirect)
+      FI;                                         { (cp: s) }
+
+      am drop (1);
+
+      { Check and reset evaluation flag and perform fanout }
+      am label (1, end);                          { (cp: s) }
+      am local (0);                               { (cp: cp: s) }
+      am global (size unit, indirect);            { (eval flag: cp: s) }
+      am test;                                    { (ef /= 0: cp: s) }
+      am not;                                     { (ef = 0: cp: s) }
+
+      { Perfrom fanout iff outputs have changed }
+      am jump no (0, unchanged output label);     { (cp: s) }
+      am local (0);                               { (cp: cp: s) }
+      am fanout (fixed part size);                { (cp: s) }
+
+      am label (1, unchanged output label);       { (cp: s) }
+      am pushint (1);
+      am store (size unit, indirect);
+      am ret (0)                                  { (s) }
+
+   END;
+
+   { Event Setting
+     -------------
+
+     Copy inputs into holding area, setting the evaluation flag if this
+     changes the holding area and clearing it if it doesn't.
+   }
+
+   PROC ram setter = VOID:
+   BEGIN
+      translate start event setter (name);                { (cp: s) }
+
+      { Reset evaluation flag, for now }
+      am local (0);
+      am pushint (0);
+      am store (ws, indirect);                              { (cp: s) }
+
+      am local(0);                                          { (cp: cp: s) }
+      { Copy inputs, setting flag if necessary }
+      translate copy inputs (input types, input offset,
+                             input type, hold offset, set flag, 2);
+                                                            { (cp: cp: s) }
+
+      {Ensure the event handling phase is enabled when the eval flag
+       is set.}
+      am global(size unit, indirect);
+      am global(ws, global unit del event label);
+      am or;
+      am store(ws, global unit del event label);
+
+      { Return with no further processing }
+      am ret (0)                                            { (s) }
+   END;
+
+
+   { Event Handling
+     --------------
+
+     The effect on the RAM may be calculated from the following table:
+
+     WRITE ADDRESS                              ENABLE
+
+                                 Unknown         On         Off
+
+     Unknown                       ??            ??
+     Known                         ?              u
+
+     Where (??) means clear the entire contents array to unknown data
+     values, (?) means clear the cell indexed by the write address to an
+     unknown value, (u) means update this cell with the data input value
+     and On =1, Off =2.
+
+     All the input values concerned must be taken from the holding
+     area.  Because this routine is guaranteed to leave the RAM
+     outputs unchanged it is possible to clear the evaluation flag
+     without worrying about fanout at all.
+
+     The algorithm for handling this is as follows:
+
+        IF enable /= 2 THEN { enable unknown or On }
+           IF write address flag = 0 THEN { write address unknown }
+              clear contents array
+           ELSE {write address known }
+              IF enable = 0 THEN { enable unknown }
+                 clear contents cell
+              ELSE { enable On }
+                 update contents cell
+              FI
+           FI
+        FI
+   }
+   PROC ram handler = VOID:
+   BEGIN
+      SQUERY data query;
+      type OF data query := data type;
+      VECTOR [data size] CHAR flat data query;
+      FORALL c IN flat data query DO c := REPR 0 OD;
+      INT data bit size = bits per byte * data size;
+
+      LABEL wr addr known = new label;
+      LABEL enable unknown = new label;
+      LABEL end = new label;
+
+      translate start event handler (name);     { (cp: s) }
+
+      {Test enable value/query flag and keep for future use }
+      am local (0);
+      am pushint (enable offset);
+      am add;
+      am global (size unit, indirect);            { (e : cp: s) }
+      am local (0);                               { (e: e: cp: s) }
+      am pushint (2);
+      am neq;                                     { (e /= off: e: cp: s) }
+      am jump no (1, end);                        { (e: cp: s) }
+
+      { Retrieve held write address query flag and test }
+      am local (1);
+      am pushint (wr addr offset);
+      am add;
+      am global (size unit, indirect);            { (wa flag: e: cp: s) }
+      am test;                                    { (wa /= ?: e: cp : s) }
+      am not;                                     { (wa = ?: e: cp : s) }
+      am jumpno (0, wr addr known);               { (e: cp: s)  }
+
+      am drop (1);                                { (cp: s) }
+
+      { Write address unknown and enable On or unknown so clear
+        contents array }
+      translate set replicated constant
+         (data query, data type, leave flag, contents offset,
+          ram length, 1);
+      am jump (end);
+
+      { The write address is known so test enable Off}
+
+      { Write address known and enable not Off so decode and
+        calculate cell address from:
+           ca = (wa-lwb) * data size + contents offset + cp }
+      am label (2, wr addr known);                { (e: cp: s) }
+      am local (1);
+      am pushint (wr addr offset + ws);
+      am add;
+      am global (size unit, indirect);            { (wa : e: cp: s) }
+      am pushint (lwb OF address type);
+      am sub;                                     { (wa - lwb): e: cp: s) }
+      am pushint (data size);
+      am mul;
+      am pushint (contents offset);
+      am add;
+      am local (2);
+      am add;                                     { ca: e: cp: s) }
+
+      { Write address known and enable not Off, so is it On or unknown }
+      am local (1);                               { (e: ca: e: cp: s) }
+      am test;                                    { (e = On: ca: e: cp: s) }
+      am jumpno (0, enable unknown);              { (ca: e: cp: s) }
+
+      { Write address known and enable On so update one cell }
+      am pushint (0);                             { (0: ca: e: cp: s) }
+      am local (3);
+      am pushint (data offset);
+      am add;
+      am bstring (data bit size, data bit size, indirect);
+                                                  { (data: ca: e: cp: s) }
+      am bstore (data bit size, indirect);        { (e: cp: s) }
+      am drop (1);                                { (cp: s) }
+      am jump (end);
+
+      { Write address known and enable unknown so clear one cell }
+      am label (1, enable unknown);               { (ca: e: cp: s) }
+       { Note there is not problem over ordering because all bytes
+         are zero.  One end is the same as another. }
+      am pushstring (data bit size, flat data query);
+      am bstore (data bit size, indirect);        { (e: cp: s) }
+      am drop (1);                                { (cp: s) }
+
+      { Clear evaluation flag }
+      am label (1, end);                          { (cp: s) }
+      am pushint (0);
+      am store (ws, indirect);                    { (s) }
+      am ret (0)                                  { (s) }
+   END;
+
+   { body of `translate ram' }
+   SVALUE data init = convert const (init OF body, environ, closure);
+   ram initialiser (data init, data type, address type, enable type);
+   ram body;
+   ram setter;
+   ram handler;
+
+   HEAP VECTOR [1] BLOCK block := BLOCK (0, contents offset, data size);
+   WIRE first cell = (data type, block);
+   sram := HEAP SRAM :=
+      (first cell, lwb OF address type, ram length, data size);
+
+   (fixed part size, output offset, combinatorial OR general delay)
+END; { translate ram }
+
+SKIP
+
+KEEP
+    translate ram
+
+FINISH
