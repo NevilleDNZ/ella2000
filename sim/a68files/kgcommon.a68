@@ -1,0 +1,266 @@
+DECS kgcommon CONTEXT VOID  USE  putstrings:
+
+{ " Id: kgcommon.sta,v 2.1 91/02/22 18:35:37 edcad Exp$" }
+configinfo A68CONFIG "$Id: kgcommon.a68,v 34.2 1995/03/29 13:04:58 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+27:10:87 BH  Redefined mode BLOCK to be a VECTOR
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+ *******************************************************************************
+				Praxis Systems plc
+
+MODULE NAME : 	kgcommon
+REFERENCE :	Refer to procedures
+FILE NAME : 	KGCOMMON.STA
+
+DESCRIPTION : 	Holds the data definitions for the Key Generator
+		(note: also used by the Key Checker).
+
+		This module supersedes three previous KG modules, viz:
+		kgplaintextdat, kgcyphertextdat and seccommondef (Ref:
+		Event record #11).
+
+VERSION : 	1.1
+DATE :		27-OCT-87
+AUTHOR : 	B.Holmes
+
+AMENDMENT HISTORY :-
+
+CHANGE NO.      BY      DATE       	REASON
+
+1		BH	27-OCT-87	Redefined mode BLOCK to be a VECTOR
+					(Ref: Event Record #13).
+
+ *******************************************************************************
+}
+
+{ +++++++++++++++ Seccommondef : Global constants and modes ++++++++++++++++++ }
+
+{ General }
+
+INT
+   bitswidth                    = 32,
+   num of bits in block         = 64;           { Size of block }
+
+MODE
+   BLOCK                        = VECTOR [num of bits in block] BOOL,
+   STR                          = VECTOR [0] CHAR,
+   RVC                          = REF VECTOR [] CHAR;
+
+CHAR
+   space char                   = REPR 32,      { ASCII characters }
+   beep                         = REPR 7,
+   tab char                     = REPR 9;
+
+{ Encryption details }
+
+VECTOR []CHAR
+   key string 1                 = "%2#@";       { First part of Key string
+						  converted to row of bits
+					  	  and used in encrypt. }
+{ Keyfile details }
+
+INT
+   max line length              = 132,          { Keyfile line length max }
+   num of keyfile fields        = 10,           { Number of keyfile fields }
+   num of licence details fields = 7,           { Number of fields in Licence
+						  Details section of keyfile }
+   customer name field          = 1,            { Field indices.. }
+   archive num field            = 2,
+   keyfile name field           = 3,
+   licence class field          = 4,
+   licence expiry date field    = 5,
+   licenced num of users field  = 6,
+   licenced mids field          = 7,
+   last date and time field     = 8,
+   current num of users field   = 9,
+   current pids field           = 10,
+
+   item to comment gap          = 1;            { Number of spaces between end
+						  of largest item with comment
+						  and beginning of comment -
+						  used when writing keyfiles }
+CHAR
+   field start char             = "=",          { Marks start of keyfile field }
+   comment start char           = "(",          { Marks start of comment }
+   comment end char             = ")",          { Marks end of comment }
+   date separator               = " ",          { Separator used in dates }
+   pid separator                = "/",          { Separator used in pids }
+   time separator               = ":",          { Separator used on times }
+   continuation marker          = ",";          { Indicates field continues }
+
+VECTOR [] CHAR
+keyfile title 1 =
+"                 Computer General Electronic Design Limited ",
+keyfile title 2 =
+"                              ELLA Customer File",
+licence details title =
+"------------------------------- Licence Details --------------------------------",
+current status title =
+"------------------------------- Current Status ---------------------------------",
+section separator =
+"--------------------------------------------------------------------------------",
+field 1 annot =
+"Customer name                   ",
+field 2 annot =
+"Archive number                  ",
+field 3 annot =
+"Customer file name              ",
+field 4 annot =
+"Licence class                   ",
+field 5 annot =
+"Licence expiry date             ",
+field 6 annot =
+"Licenced number of users        ",
+field 7 annot =
+"Licenced machine identifiers    ",
+field 8 annot =
+"Date and time of last change    ",
+field 9 annot =
+"Current number of users         ",
+field 10 annot 1 =
+"Current process identifiers     ",
+field 10 annot 2 =
+"(with network id)               ",
+cyphertext annot =
+"Checksum                        ",
+continuation line indent =
+"                                  ",
+initial keyfile message =
+"This is an initial file.",
+warning message 1 =
+"Warning: Information contained in this file should not be changed without ",
+warning message 2 =
+"         prior consultation with Computer General ED Ltd or their representative.",
+warning message 3 =
+"	 Unauthorised modification may render ELLA unusable.",
+empty list message =
+"None";
+
+{ Encryption details }
+
+VECTOR[]CHAR
+   key string 2                 = "bgh%";       { Second part of Key string
+						  converted to row of bits
+					  	  and used in encrypt. }
+
+{ +++++++++++++++++++ Plaintext Table data area (KG.D1) ++++++++++++++++++++++ }
+
+{
+   Plaintext table
+  -----------------         --------------         ------------------
+  | Field #1      | ---->   | Item #1    | ---->   | String         |
+  -----------------         --------------         ------------------
+  |               |         | Comment    | --
+         .                  --------------  |      ------------------
+         .            ----- | Next       |  --->   | String         |
+         .            |     --------------         ------------------
+         .            .           .
+         .            .           .
+         .            |     --------------         ------------------
+         .            -->   | Item #n    | ---->   | String         |
+         .                  --------------         ------------------
+         .                  | Comment    | --
+         .                  --------------  |      ------------------
+         .                  |     0      |  --->   | String         |
+         .                  --------------         ------------------
+         .
+
+}
+
+MODE
+   FIELDITEM = STRUCT(REF VECTOR [] CHAR
+                        item,                   { Field item string }
+                        comment,                { Field item comment string }
+                      REF FIELDITEM
+                        next);                  { Next field item }
+
+REF FIELDITEM
+   endlist = NIL;                               { Marks end of item list }
+
+REF VECTOR [] CHAR
+   empty = NIL;                                 { Identifies empty string }
+
+
+{ Variables which constitute the Plaintext Table
+  data area (KG.D1) }
+
+[num of keyfile fields]REF FIELDITEM            { Plaintext table }
+   plaintext table;
+
+INT largest item with comment := 0;             { Number of characters in
+						  the largest item with a
+						  comment - used for output }
+
+
+{ ++++++++++++++++++++++ Cyphertext data area (KG.D2) ++++++++++++++++++++++++ }
+
+{ Variables which constitute the Cyphertext
+  data area (KG.D2) }
+
+REF VECTOR [] CHAR
+   cyphertext string                            { Keyfile cyphertext }
+
+
+KEEP
+
+   { Modes }
+   BLOCK, RVC, STR, FIELDITEM,
+
+   { Constants }
+   space char, beep, tab char, num of keyfile fields, max line length,
+   customer name field, archive num field, keyfile name field,
+   licence class field, licence expiry date field, licenced num of users field,
+   licenced mids field, last date and time field, current num of users field,
+   current pids field, num of licence details fields, field start char,
+   comment start char, comment end char, date separator, continuation marker,
+   keyfile title 1,
+   keyfile title 2, licence details title, field 1 annot, field 2 annot,
+   field 3 annot, field 4 annot, field 5 annot, field 6 annot,
+   field 7 annot, field 8 annot, field 9 annot,
+   field 10 annot 1, field 10 annot 2, current status title,
+   initial keyfile message, section separator, cyphertext annot,
+   warning message 1, warning message 2, warning message 3,
+   continuation line indent, num of bits in block, key string 1,
+   key string 2, time separator, empty list message, item to comment gap,
+   pid separator, bitswidth, endlist, empty,
+
+   { Variables }
+   plaintext table, largest item with comment, cyphertext string
+
+FINISH
