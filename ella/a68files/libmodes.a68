@@ -1,0 +1,362 @@
+DECS libmodes  CONTEXT VOID  USE  putstrings,  basics,  messageproc,
+      testmode,  osinterface, databasebuffers:
+
+{ " Id: libmodes.sta,v 1.1 91/10/14 14:30:25 edcad Exp $" }
+configinfo A68CONFIG "$Id: libmodes.a68,v 34.2 1995/03/29 13:03:29 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:07:90  Created from LIBINTERFACE to include only modes and simple procs
+             on modes. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+23:11:90  Printing of the library version number prevented in testmode.  DJS
+28:11:90  Inhibitted automatic increase library removed.  DCT
+10:01:91  R6B3:  Incremental compilation error - bits wrong.  JIT
+20:02:91  KEEPSAKE now only accessed through KEEPSAKEBUFFERS.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+23:01:92  *********** markno increased to 11 *************** EVW
+24:02:93  kattr / sort_id moved in from libinterface.  DCT
+24:03:93  new IL for fnspecs
+                *********** markno increased to 12 *************** EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ List of current status of all attribute classes }
+
+MODE CLASSES = STRUCT (ID name, password, INT key, BOOL login,
+                       REF CLASSES rest);
+
+REF CLASSES nilclasses = NIL;
+
+
+{ List of declaration attributes }
+
+MODE DECLATTRIBUTES = STRUCT (INT key, BOOL changed,
+                              REF VECTOR [] INT version,
+                              REF VECTOR [] DISCPTR data,
+                              REF DECLATTRIBUTES rest);
+
+REF DECLATTRIBUTES nildeclattributes = NIL;
+
+
+MODE  SOURCE = STRUCT (ID name, INT date),
+
+        USES = STRUCT (INT sort,  ID name,  INT version,  REF USES rest),
+        DECL = STRUCT (INT sort,  ID name,  BOOL export, import,
+                       REF VECTOR [] BOOL assemble,
+                       INT status, version,  REF VECTOR [] CHAR  il,
+                       REF USES uses),
+
+     BINDING = STRUCT (CTNAME ctn, ID name, rename, INT sort, DISCPTR info),
+     IMPORTS = STRUCT (BINDING binding,  REF IMPORTS rest),
+
+      REGION = STRUCT (ID name, INT ctno, REF IMPORTS imports),
+     REGIONS = STRUCT (REGION region, REF REGIONS rest),
+
+      CONTXT = STRUCT (ID name, DISCPTR val, BOOL loadable, changed,
+                       REF VECTOR [] DECL decls,
+                       REF DECLATTRIBUTES declattributes,
+                       REF REGIONS regions),
+    CONTEXTS = STRUCT (CONTXT context, REF CONTEXTS rest),
+
+     LIBRARY = STRUCT (ID name, FILE file, REF DISCFILE discfile,
+                       CTNAME currentct,  ID libprompt, BOOL libchanged,
+                       VECTOR [6] DISCPTR rootptrs,
+                       INT version, ID datecleared, timecleared,
+                       datelastwritten, timelastwritten,
+                       VECTOR [3] INT keys, REF CLASSES classes,
+                       REF CONTEXTS contexts);
+
+
+REF SOURCE nilsource = NIL;
+REF BINDING nilbinding = NIL;
+REF IMPORTS nilimports = NIL;
+REF USES  niluses = NIL;
+DECL nulldecl = (0, NIL, FALSE, FALSE, NIL, 0, 0, NIL, niluses);
+VECTOR [0] DECL nodecls;              {{ no declarations in context }}
+REF VECTOR [] DECL nildecls = NIL;    {{ declarations not read in   }}
+VECTOR [0] CHAR nospecs;
+REF REGION nilregion = NIL;
+REF REGIONS nilregions = NIL;
+REF CONTXT nilcontxt = NIL;
+REF CONTEXTS nilcontexts = NIL;
+
+MODE CREGION = STRUCT (REF CONTXT context, REF REGION region);
+
+
+{ Status of a declaration }
+BITS new_mask = 16r1, body_mask = 16r2, spec_mask = 16r4, imports_mask = 16r8;
+
+
+{ Sorts }
+INT  ktype = 65,  kint = 66,  kfn = 67,  kconst = 68,  kattr = 69, kmac = 70;
+
+PROC sort_id = (INT sort) STR:
+   CASE  sort - 64 IN "TYPE", "INT", "FN", "CONST", "ATTR", "MAC" OUT "?" ESAC;
+
+
+INT  identification = 18882,  markno = 12;
+
+{ Naming of parts of the Library mode }
+
+CTNAME  defaultct = (HEAP VECTOR [4] CHAR := "ella", HEAP VECTOR [0] CHAR);
+
+VECTOR [5] CHAR  us:= "unset";
+
+HEAP LIBRARY library:=
+    (us, NIL, HEAP DISCFILE := (NIL, HEAP VECTOR [7] CHAR := "Library"),
+     defaultct, us, FALSE, (nilptr, nilptr, nilptr, nilptr, nilptr, nilptr),
+     -1, us, us, us, us, (-1, -1, -1), nilclasses, nilcontexts);
+
+REF ID libprompt = libprompt OF library;
+REF DISCFILE discfile = discfile OF library;
+
+REF VECTOR [] DISCPTR rootptrs = rootptrs OF library;
+REF DISCPTR  ptrlibinfo = rootptrs[1],        ptrcontexts = rootptrs[2],
+             ptrimpinfo = rootptrs[3],        ptrctvalues = rootptrs[4],
+             ptrattinfo = rootptrs[5],        ptrattributes = rootptrs[6];
+
+{ Keys used by system attributes }
+
+REF INT body_key = (keys OF library)[1],
+        info_key = (keys OF library)[2],
+        spacemap_key = (keys OF library)[3];
+
+
+
+
+OP = = (CTNAME p1, p2) BOOL:
+       ( context OF p1 = context OF p2  ANDTH  import OF p1 = import OF p2 );
+
+OP = = (CREGION cr1, cr2) BOOL:
+       (name OF context OF cr1 = name OF context OF cr2)
+       ANDTH
+       (name OF region OF cr1 = name OF region OF cr2);
+
+
+OP CTOS = (CTNAME ctn) ID:
+BEGIN
+   ID a = context OF ctn,  b = import OF ctn;
+   ID s = HEAP VECTOR [UPB a + UPB b + 1] CHAR;
+   IF b = nullid
+   THEN  a
+   ELSE  s[1:UPB a]:= a;  s[UPB a+1]:= "/";  s[UPB a+2:UPB s]:= b;  s
+   FI
+END;
+
+OP CTOS = (CREGION cr) ID:
+BEGIN
+   ID a = name OF context OF cr,  b = name OF region OF cr;
+   ID s = HEAP VECTOR [UPB a + UPB b + 1] CHAR;
+   IF b = nullid
+   THEN  a
+   ELSE  s[1:UPB a]:= a;  s[UPB a+1]:= "/";  s[UPB a+2:UPB s]:= b;  s
+   FI
+END;
+
+OP CTN = (CREGION cr) CTNAME:  (name OF context OF cr, name OF region OF cr);
+
+
+PROC lib_size = INT:  discfile_size(database OF discfile);
+
+PROC lib_free = INT:  size_of_free_space(database OF discfile);
+
+PROC lib_version = INT:
+   ( version OF library + IF libchanged OF library THEN 1 ELSE 0 FI );
+
+PROC no_text = (REF CONTXT ct, MESSAGEPROC  msg) BOOL:
+BEGIN
+   DISCPTR dp = val OF ct;
+   IF decls OF ct ISNT nildecls
+   THEN  UPB (decls OF ct) = 0
+   ELIF isnilptr(discfile, dp)
+   THEN  TRUE
+   ELSE  INT array_size = ndiscptrs(discfile, dp, msg);
+         VECTOR [array_size] DISCPTR dps;
+         myreaddiscptrs(discfile, dps, dp, msg);
+         nchars(discfile, dps[1], msg) = 1  {{{ zero specs }}}
+   FI
+END;
+
+
+{{ ************ Marking library as changed ************* }}
+{{ ----------------------------------------------------- }}
+
+PROC printversion = (MESSAGEPROC msg) VOID:
+BEGIN
+   msg(lib_msg(2), nullmsg {newline} );
+   msg(lib_msg(30) {"    *  Ella library:  *,  Version: *  *"},
+       ("****", name OF library, version_str(lib_version), "****") )
+END;
+
+PROC resetlibchanged = (MESSAGEPROC msg) VOID:
+BEGIN
+   libchanged OF library := FALSE;
+   msg(lib_msg(25), "F" {"Change state of library is now *"} );
+   printversion(msg)
+END;
+
+PROC set time date = (REF ID  timeid, dateid) VOID:
+BEGIN
+   dateid:= MAKEID date(seconds);
+   timeid:= MAKEID time(seconds)
+END;
+
+PROC setlibchanged = (MESSAGEPROC msg) VOID:
+BEGIN
+   libchanged OF library := TRUE;
+   msg(lib_msg(25), "T" {"Change state of library is now *"} );
+   set time date(timelastwritten OF library,  datelastwritten OF library)
+END;
+
+
+{{ ******  Procedures which deliver library modes ****** }}
+{{ ----------------------------------------------------- }}
+
+
+PROC get_library = REF LIBRARY: library;
+
+PROC get_context = (ID name) REF CONTXT:
+BEGIN
+   REF CONTEXTS c := contexts OF library;
+   WHILE (c ISNT nilcontexts) ANDTH NOT (name OF context OF c = name)
+     DO c := rest OF c OD;
+   IF c IS nilcontexts THEN  nilcontxt  ELSE  context OF c FI
+END;
+
+PROC get_region = (REF CONTXT ct, ID region) CREGION:
+BEGIN
+   IF ct IS nilcontxt
+   THEN  (nilcontxt, nilregion)
+   ELSE  REF REGIONS r := regions OF ct;
+         WHILE (r ISNT nilregions) ANDTH NOT (name OF region OF r = region)
+           DO r := rest OF r OD;
+         (ct, IF r IS nilregions THEN nilregion ELSE region OF r FI)
+   FI
+END;
+
+PROC get_imports = (CREGION cr) REF IMPORTS:
+BEGIN
+   IF region OF cr IS nilregion THEN nilimports ELSE imports OF region OF cr FI
+END;
+
+PROC get_binding = (CREGION cr, ID rename) REF BINDING:
+BEGIN
+   REF IMPORTS i := get_imports(cr);
+   WHILE (i ISNT nilimports)  ANDTH  rename OF binding OF i /= rename
+     DO  i:= rest OF i  OD;
+   IF i IS nilimports THEN nilbinding ELSE binding OF i FI
+END;
+
+
+{{ ******  Procedures which deliver and check library modes ****** }}
+{{ --------------------------------------------------------------- }}
+
+PROC check_text = (REF CONTXT ct, MESSAGEPROC msg) BOOL:
+BEGIN
+   IF no_text(ct, msg)
+   THEN  msg(lib_msg(14) {"Context * is empty"}, name OF ct); FALSE
+   ELSE  TRUE
+   FI
+END;
+
+PROC check_context = (ID name, MESSAGEPROC msg) REF CONTXT:
+BEGIN
+   REF CONTXT ct = get_context(name);
+   IF ct IS nilcontxt
+   THEN  msg(lib_msg(15) {"I can't find a context called *"}, name)
+   FI;
+   ct
+END;
+
+PROC check_region = (REF CONTXT ct, ID region, MESSAGEPROC msg) CREGION:
+BEGIN
+   CREGION cr = get_region(ct, region);
+   IF region OF cr IS nilregion
+   THEN  msg({"I can't find an imports region called /* in context *"}
+             lib_msg(16), (region, name OF ct))
+   FI;
+   cr
+END;
+
+PROC check_selected = (CTNAME ctname, MESSAGEPROC msg) CREGION:
+BEGIN
+   REF CONTXT ct = check_context(context OF ctname, msg);
+   CREGION cr = get_region(ct, import OF ctname);
+   IF region OF cr IS nilregion
+   THEN  IF import OF ctname = nullid
+         THEN  msg({"No imports region has been selected in context *"}
+                   lib_msg(17), context OF ctname)
+         ELSE  msg({"I can't find an imports region called /* in context *"}
+                   lib_msg(16), (import OF ctname, context OF ctname))
+         FI
+   FI;
+   cr
+END;
+
+
+PROC check_binding = (CREGION cr, ID rename, MESSAGEPROC msg) REF BINDING:
+BEGIN
+   REF BINDING b = get_binding(cr, rename);
+   IF b IS nilbinding
+   THEN  msg(lib_msg(19) {I can't find an import called *"}, rename)
+   FI;
+   b
+END;
+
+
+SKIP
+KEEP  DISCFILE, DISCPTR, nilptr, isnilptr, nildb, lib_msg,
+
+      CLASSES, nilclasses, DECLATTRIBUTES, nildeclattributes,
+      USES,  DECL,  BINDING,  IMPORTS,  REGION,  REGIONS,  CONTXT,  CONTEXTS,
+      LIBRARY,  CREGION,  SOURCE,
+      nilsource,  nilbinding,  nilimports,  niluses,  nulldecl,  nodecls,
+      nildecls,  nospecs, nilregion,  nilregions,  nilcontxt,  nilcontexts,
+      new_mask, body_mask, spec_mask, imports_mask,
+      ktype,  kint,  kfn,  kmac, kconst,  kattr,  sort_id,
+      library,  defaultct,  libprompt,  body_key, info_key, spacemap_key,
+      discfile,  rootptrs,  identification,  markno,
+      ptrlibinfo,  ptrcontexts,  ptrimpinfo,  ptrctvalues,
+      ptrattinfo,  ptrattributes,
+      =(CTNAME, CTNAME),  =(CREGION, CREGION),  CTOS(CTNAME),  CTOS(CREGION),
+      CTN(CREGION),
+      lib_size,  lib_free,  lib_version, no_text,
+      printversion,  resetlibchanged,  set time date, setlibchanged,
+
+      get_library,  get_context,  get_region,  get_imports,  get_binding,
+      check_text,  check_context,  check_region,  check_selected,
+      check_binding
+FINISH

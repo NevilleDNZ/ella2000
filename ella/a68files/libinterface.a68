@@ -1,0 +1,1000 @@
+DECS  libinterface  CONTEXT VOID  USE  testmode,  basics,  putstrings,
+      messageproc,  osinterface,  databasebuffers,  libmodes,  attrlevel1,
+      attrdecls:
+
+{ " Id: libinterface.sta,v 1.1 91/10/14 14:30:21 edcad Exp $" }
+configinfo A68CONFIG "$Id: libinterface.a68,v 34.2 1995/03/29 13:03:28 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1985
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:07:85  created as a common interface to the ELLA library file.
+30:07:85  adamshell added
+02:10:85  root OF discfile used as flag to see whether library opened
+23:10:85  prompt renamed libprompt because of name clash with vaxinterface
+04:11:85  /? added to prompt for a context with no selected imports region.
+08:11:85  ********* New ELLA markno = 6. **********
+             new library structure incorporating attribute hooks.
+             automatic updating now occurs in new module callled LIBUPDATE.
+20:11:85  Updated for Perq FLEX,  1906 removed
+26:02:86  Release 2 Bug 014 (update from old library leads to Adam
+             fault) cleared.
+01:07:86  Proc no_text added since empty context no longer represented just
+             by nilptr.
+15:10:86  Updated for new os interface  DCT
+04:11:86  "readspec" not reset in start assembly  DCT
+21:01:87  ********* New ELLA markno = 7. **********
+             changes to intermediate language require an updater.  EVW
+18:05:87  CR255  discriminate assembly - expand_uses, generate_decslist and
+                    nextdeclaration added. KEPT, USES, integer, inkepts,
+                    inspecs moved from LIBPROCS.  EVW
+01:09:87  Storage of source text filenames redesigned  CR124/146.  Some
+             changes for the new updater and insufficient space to finish CR162.
+             "reopenlibrary" for CR155.  DCT
+29:09:87  CR093  Make renamelibrary obsolete.  EVW
+06:10:87  CR436  "forgotten" removed.  EVW
+05:11:87  R3B057.  Correct spelling of 'inconsistAncy'.  MPH
+07:12:87  Add setup_declaration. EVW
+02:02:88  Remove closure and closed from being stored in library.  EVW
+09:05:88  Move ADAM buffering procedures to a new module - ADAMBUFFERS. EVW
+14:07:88  Modified for use with EPI: sorttoclass added, calls to epi_notify
+             added.  BGH
+09:09:88  ********* New ELLA markno = 8. **********
+             Changes to IL format. Addition of CONSTs. MGH/EVW
+04:10:88  CR 155  PROC reopenlibrary did extra call of garbagecollect.  EVW
+15:11:88  In creating Closure IMPORT uses are now traced.  EVW
+23:11:88  sorttoclass modified for const. BGH
+27:07:89  R4B???. Set assemble OF KEPTs to FALSE before assembly. EVW
+14:08:89  Updated for kernel interface (CR642).  EVW
+16:10:89  ********* New ELLA markno = 9. **********
+             CR 636. Uses su_keepsake etc. in place of adam. JIT
+31:10:89  CR 638. Change in handling implicit/explicit macparams.  MGH
+29:01:90  CR ???. Changes mode to closures for probes. EVW
+             CR ???. Empty OUTERFNS added to closure for timescaling. EVW
+06:02:90  changes to inkepts for explicit macro parameters. MGH
+01:03:90  The keepsake filename must not include a directory name.  DCT
+20:03:90  Changes to IL format. Addition of CONST macro parameters. MGH
+15:06:90  get_filename renamed file_name.  DCT
+10:07:90  Modes and simple procs moved to LIBMODES, closure procs to
+             ASSCLOSURE. EVW
+08:08:90  Unnecessary items removed from keep list. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+23:11:90  Incorporate testmode, dont print version numbers if in
+             test mode.    DJS
+27:11:90  New FILE interface for KEEPSAKE; increase_library now automatic
+             (compact_library added to libprocs).  DCT
+10:01:91  R6B3:  incremental comp:  status od decl initialised to 0.  DCT
+17:01:91  Libmessages renumber prior to EPI update.  DCT
+20:02:91  Attribute version numbers now written using keepsakebuffers.  DCT
+22:04:91  R6B17:  Ctrans side effects removed.  DCT
+02:07:91  R6B52:  Wrong offset in PROC newcontextptr. EVW
+02:08:91  Extension to macro TYPE parameters. JIT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+23:10:91  Updated for new assembler modes. JIT
+19:03:92  Attribute declaration and use added. JIT
+23:03:92  Constant string can now be a series of strings. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+10:02:93  find_maxctno added. EVW
+24:02:93  Updated for OSIF level 1 - KEEPSAKE interface now uses msg.  DCT
+24:03:93  new IL for fnspecs. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.054 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+PROC change currentct = (CTNAME ctn) VOID:
+BEGIN
+   libprompt := ( CTOS(currentct OF library := ctn) );
+   IF import OF ctn = "?" THEN import OF currentct OF library := nullid  FI
+END;
+
+PROC makeprompt = (CREGION cr) CTNAME:
+BEGIN
+   IF region OF cr IS nilregion
+   THEN (name OF context OF cr, MAKEID "?")
+   ELSE CTN cr
+   FI
+END;
+
+
+
+{{ ****** Read and Writing procedures to the database  ****** }}
+{{ ---------------------------------------------------------- }}
+
+PROC putlibinfo = (INT version, MESSAGEPROC msg) VOID:
+BEGIN
+   VECTOR [block_size] CHAR discbuff;
+   BUFFER buffer := start write(discfile, discbuff);
+   outint2(identification*100 + markno, buffer, msg);
+   outint2(version, buffer, msg);
+   outid2(datecleared OF library, buffer, msg);
+   outid2(timecleared OF library, buffer, msg);
+   outid2(datelastwritten OF library, buffer, msg);
+   outid2(timelastwritten OF library, buffer, msg);
+   outid2(context OF currentct OF library, buffer, msg);
+   IF libprompt[UPB libprompt] = "?"
+   THEN  outid2(MAKEID"?", buffer, msg)
+   ELSE  outid2(import OF currentct OF library, buffer, msg)
+   FI;
+   ptrlibinfo := end write(buffer, msg)
+END;
+
+PROC getlibinfo = VOID:
+BEGIN
+   BUFFER buffer := read buffer(discfile, ptrlibinfo);
+   INT mark = in2(buffer);
+   version OF library := in2(buffer);
+   datecleared OF library := inid2(buffer);
+   timecleared OF library := inid2(buffer);
+   datelastwritten OF library := inid2(buffer);
+   timelastwritten OF library := inid2(buffer);
+   context OF currentct OF library:= inid2(buffer);
+   import OF currentct OF library:= inid2(buffer);
+   libchanged OF library := FALSE;
+   change currentct(currentct OF library)
+END;
+
+
+PROC writedecls = (REF VECTOR [] DECL decls, MESSAGEPROC msg) DISCPTR:
+BEGIN
+   VECTOR [block_size] CHAR discbuff;
+   BUFFER buffer := start write(discfile, discbuff);
+   outint2(UPB decls, buffer, msg);
+   FORALL decl IN decls
+   DO  outbool(export OF decl, buffer, msg);
+       outint2(UPB il OF decl, buffer, msg);
+       outchars(il OF decl, buffer, msg)
+   OD;
+   end write(buffer, msg)
+END;
+
+PROC putcontext = (REF CONTXT ct, MESSAGEPROC msg) DISCPTR:
+BEGIN
+   { Writes the DECLs to disc, DISCPTR then written by PROC putcontexts }
+   REF VECTOR [] DECL decls = decls OF ct;
+   IF changed OF ct ANDTH (decls ISNT nildecls)
+   THEN VECTOR [ndiscptrs(discfile, val OF ct, msg)] DISCPTR dps;
+        myreaddiscptrs(discfile, dps, val OF ct, msg);
+        dps[1] := writedecls(decls, msg);
+        val OF ct := mywritediscptrs(discfile, dps, msg);
+        write_declattributes(ct, (body_key, info_key, spacemap_key), msg)
+       {{?? needs to optimise read and writes?}}
+   FI;
+   val OF ct
+END;
+
+
+INT  end = 0,  more = 1,  notownval = 2,  moreclosure = 3;
+
+PROC putcontexts = (REF DISCPTR  pcts, pvals, pinfo,  MESSAGEPROC msg) VOID:
+BEGIN
+   PROC outct = (CONTXT ct,  PROC (DISCPTR) VOID next_info, BUFFER buffer,
+                 MESSAGEPROC  msg) VOID:
+   (  outint2(more, buffer, msg);
+      outid2(name OF ct, buffer, msg);
+      outint2(( loadable OF ct | 1 | 0 ), buffer, msg);
+      REF REGIONS r := regions OF ct;
+      WHILE r ISNT nilregions
+      DO outint2(more, buffer, msg);
+         outid2(name OF region OF r , buffer, msg);
+         REF IMPORTS  ips:= imports OF region OF r;
+         WHILE ips ISNT nilimports
+         DO  REF BINDING b = binding OF ips;
+             outint2((sort OF b-60), buffer, msg);
+             outid2(context OF ctn OF b, buffer, msg);
+             outid2(import OF ctn OF b, buffer, msg);
+             outid2(name OF b, buffer, msg);
+             outid2(rename OF b, buffer, msg);
+             next_info(info OF b);
+             ips:= rest OF ips
+         OD;
+         outint2(end, buffer, msg);
+         r := rest OF r
+      OD;
+      outint2(end, buffer, msg)
+   );
+
+   VECTOR [block_size] CHAR discbuff;
+   BUFFER buffer := start write(discfile, discbuff);
+   IF contexts OF library  IS nilcontexts
+   THEN  pcts:= pvals:= nilptr
+   ELSE  REF CONTEXTS  c:= contexts OF library;
+         INT  nocts:= 0,  noimps:= 0;
+         WHILE c ISNT nilcontexts
+         DO  REF REGIONS rs := regions OF context OF c;
+             WHILE rs ISNT nilregions
+             DO  REF IMPORTS  p:= imports OF region OF rs;
+                 WHILE p ISNT nilimports
+                 DO  noimps PLUSAB 1;  p:= rest OF p  OD;
+                 rs := rest OF rs
+             OD;
+             nocts PLUSAB 1;  c:= rest OF c
+         OD;
+         VECTOR [nocts] DISCPTR  dps;  INT dpsind:= 0;
+         VECTOR [noimps] DISCPTR  info;  INT  infoind:= 0;
+         PROC  next_info = (DISCPTR  dp) VOID: info[infoind PLUSAB 1]:= dp;
+         c := contexts OF library;
+         WHILE c ISNT nilcontexts
+         DO  dps[dpsind PLUSAB 1]:= putcontext(context OF c, msg);
+             outct(context OF c, next_info, buffer, msg);
+             c:= rest OF c
+         OD;
+         pvals:= mywritediscptrs(discfile, dps, msg);
+         outint2(end, buffer, msg);
+         pcts := end write(buffer, msg);
+         pinfo:= mywritediscptrs(discfile, info, msg)
+   FI
+END;
+
+PROC getcontexts = (MESSAGEPROC  msg) REF CONTEXTS:
+BEGIN
+ IF isnilptr(discfile, ptrcontexts)
+   THEN  nilcontexts
+   ELSE  { Note: imports source information is not needed by the assembler }
+         REF VECTOR [] DISCPTR vals;  INT valsind;
+         VECTOR [ndiscptrs(discfile, ptrimpinfo, msg)] DISCPTR  info ptrs;
+         myreaddiscptrs(discfile, info ptrs, ptrimpinfo, msg);
+         INT  ind:= 0;
+         BUFFER ctinfo := read buffer(discfile, ptrcontexts);
+         IF NOT isnilptr(discfile, ptrctvalues)
+         THEN  vals:=
+                   HEAP VECTOR [ndiscptrs(discfile, ptrctvalues, msg)] DISCPTR;
+               valsind:= 0;
+               myreaddiscptrs(discfile, vals, ptrctvalues, msg)
+         FI;
+
+         PROC imports = (BUFFER buffer) REF IMPORTS:
+         (  INT c = in2(buffer);
+            IF c = end
+            THEN  nilimports
+            ELSE  ID  ctn = inid2(buffer),  imp = inid2(buffer),
+                      name = inid2(buffer),  rename = inid2(buffer);
+                  HEAP IMPORTS:= ( ( (ctn, imp), name, rename, c+60,
+                                     info ptrs[ind PLUSAB 1] ),
+                                   imports(buffer) )
+            FI
+         );
+
+         PROC regions = (BUFFER buffer) REF REGIONS:
+         (  IF in2(buffer) = end
+            THEN  nilregions
+            ELSE  ID  name = inid2(buffer);
+                  REF IMPORTS  import = imports(buffer);
+                  HEAP REGIONS := ((name, 0, import), regions(buffer))
+            FI
+         );
+
+         PROC contexts = (BUFFER buffer) REF CONTEXTS:
+         (  IF in2(buffer) = end
+            THEN  nilcontexts
+            ELSE  ID  name = inid2(buffer);
+                  BOOL  loadable = in2(buffer) = 1;
+                  REF REGIONS  region = regions(buffer);
+                  HEAP CONTEXTS:=
+                     ( ( name, vals[valsind PLUSAB 1], loadable,
+                         FALSE, nildecls, nildeclattributes, region ),
+                       contexts(buffer) )
+            FI
+         );
+
+         contexts(ctinfo)
+   FI
+END;
+
+PROC refreshcontexts = (MESSAGEPROC msg) VOID:
+BEGIN
+   VECTOR [ndiscptrs(discfile, ptrctvalues, msg)] DISCPTR vals;
+   myreaddiscptrs(discfile, vals, ptrctvalues, msg);
+   INT valsind := 0;
+   VECTOR [ndiscptrs(discfile, ptrimpinfo, msg)] DISCPTR infoptrs;
+   myreaddiscptrs(discfile, infoptrs, ptrimpinfo, msg);
+   INT ind := 0;
+   REF REGIONS r;  REF IMPORTS i;
+   REF CONTEXTS c := contexts OF library;
+   WHILE c ISNT nilcontexts
+   DO  val OF context OF c := vals[valsind PLUSAB 1];
+       decls OF context OF c := nildecls;
+       r := regions OF context OF c;
+       WHILE r ISNT nilregions
+       DO  i := imports OF region OF r;
+           WHILE i ISNT nilimports
+           DO  info OF binding OF i := infoptrs[ind PLUSAB 1];
+               i := rest OF i
+           OD;
+           r := rest OF r
+       OD;
+       c := rest OF c
+    OD;
+    IF ind /= UPB infoptrs OREL valsind /= UPB vals
+    THEN  sys fault("incorrect refresh")
+    FI
+END;
+
+
+
+INT idef = 122, ibracket = 84, tbracket = 85, tstring = 138, typename = 48,
+    pidalts = 50, prange = 51, pstring = 128,
+    attrname = 151, intname = 121, constname = 140, fnstart = 43,
+    end_tok = 42, attid = 152, attdata = 153, attbracket = 154, attstr = 155,
+    zero = 0;
+
+PROC integer = (BUFFER buffer) VOID:  {{ used to skip over integers }}
+   CASE INT ii := in2(buffer) ;ii IN
+      { Iconst }  in2(buffer),
+      { Iname  }  in2(buffer),
+      { Idop   }  ( in2(buffer); integer(buffer); integer(buffer) ),
+      { Imop   }  ( in2(buffer); integer(buffer) ),
+      { Icond  }  ( integer(buffer); integer(buffer); integer(buffer) ),
+      { Iparam }  in2(buffer),
+      { Ivarmult } in2(buffer),
+      { Icheck } ( in2(buffer); integer(buffer); integer(buffer) ),
+      { Iconsttext} ( in2(buffer); inid2(buffer) )
+       OUT IF ii = idef
+              THEN in2(buffer)
+              ELIF ii = ibracket
+                   THEN integer(buffer)
+                   ELSE SKIP
+           FI
+   ESAC;
+
+{{?? need to add more for macro types }}
+
+PROC type = (BUFFER buffer) BOOL:   {{ Used to skip over types }}
+BEGIN
+  BOOL endfound := FALSE;
+  CASE INT ii := in2(buffer); ii - 9 IN
+  { tnull  } SKIP,
+  { tnamed } in2(buffer),
+  { trow   } (integer(buffer); type(buffer)),
+  { tst    } (BOOL stop := FALSE;
+              WHILE NOT stop DO stop := type(buffer) OD),
+  { tparam } in2(buffer),
+  { tfn    } (type(buffer); type(buffer))
+  OUT IF ii = tbracket
+      THEN type(buffer)
+      ELIF ii = tstring
+      THEN integer(buffer); type(buffer)
+      ELIF ii = pidalts
+      THEN BOOL stop := FALSE;
+           WHILE NOT stop
+           DO stop := type(buffer);
+              IF NOT stop THEN inid2(buffer) FI
+           OD
+      ELIF ii = prange
+      THEN inid2(buffer); integer(buffer); integer(buffer)
+      ELIF ii = pstring
+      THEN inid2(buffer); in2(buffer);
+           BOOL stop := FALSE;
+           WHILE NOT stop
+           DO INT charsort = in2(buffer);
+              CASE charsort - pstring IN
+              { pchar     } inid2(buffer),
+              { pcharange } (inid2(buffer); inid2(buffer))
+              OUT { end   } stop := TRUE
+              ESAC
+           OD
+      ELIF ii = end_tok
+      THEN endfound := TRUE
+      ELSE { tvoid } SKIP
+      FI
+  ESAC;
+  endfound
+END;
+
+PROC skipattrs = (BUFFER buffer) VOID:
+BEGIN
+   PROC skipdata = (BUFFER buffer) VOID:
+   (  inid2(buffer);
+      INT nostrings = in2(buffer);
+      TO nostrings DO inid2(buffer) OD
+   );
+   INT attsort = in2(buffer);
+   IF attsort = attid
+   THEN in2(buffer)
+   ELIF attsort = attdata
+   THEN skipdata(buffer)
+   ELIF attsort = attbracket
+   THEN skipattrs(buffer)
+   ELIF attsort = attstr
+   THEN WHILE INT sort = in2(buffer); sort /= zero DO skipattrs(buffer) OD
+   ELSE {attnull} SKIP
+   FI
+END;
+
+PROC (BUFFER) VOID skipmacspec;
+
+PROC fnspec = (BUFFER buffer, REF INT sort) ID:
+BEGIN
+   ID id = inid2(buffer);
+   in2(buffer); {sort}
+   IF (in2(buffer)=1) THEN sort := kmac FI;
+   skipmacspec(buffer);
+   skipattrs(buffer);
+   in2(buffer); {normal}
+   WHILE NOT type(buffer)   {ie. until end found}
+     DO WHILE in2(buffer) /= zero DO inid2(buffer) OD OD;
+   WHILE NOT type(buffer)
+     DO WHILE in2(buffer) /= zero DO inid2(buffer) OD OD;
+   id
+END;
+
+skipmacspec := (BUFFER buffer) VOID:
+BEGIN
+   TO in2(buffer)
+   DO in2(buffer); {sort}
+      INT macsort := in2(buffer);
+      IF macsort = attrname
+      THEN inid2(buffer); in2(buffer); in2(buffer)
+      ELIF macsort = intname
+      THEN inid2(buffer); in2(buffer); in2(buffer); in2(buffer)
+      ELIF macsort = typename
+      THEN inid2(buffer); in2(buffer); in2(buffer); type(buffer)
+      ELIF macsort = constname
+      THEN inid2(buffer); in2(buffer); in2(buffer);
+           in2(buffer); {cnullt} type(buffer)
+      ELIF macsort = fnstart
+      THEN in2(buffer); {fnno}  fnspec(buffer, macsort);  in2(buffer) {fnend}
+      FI
+   OD
+END;
+
+
+PROC indecls = (REF VECTOR [] DECL decls) VOID:
+BEGIN
+   REF USES  u;
+
+   PROC inuses = (BUFFER buffer, INT  s, REF USES  u) REF USES:
+   (  INT sort := s;
+      INT v; ID id;
+      IF (sort /= kfn)
+      THEN  id := inid2(buffer);
+            IF id = nullid
+            THEN  u
+            ELSE  in2(buffer);
+                  v:= in2(buffer);
+                  IF sort = ktype
+                  THEN type(buffer);
+                       in2(buffer) { zero }
+                  FI;
+                  HEAP USES:= (sort, id, v, inuses(buffer, s, u))
+             FI
+       ELSE IF in2(buffer) = zero { else fnstart }
+            THEN u
+            ELSE in2(buffer); {fnno}
+                 id := fnspec(buffer, sort);
+                 in2(buffer); v := in2(buffer); in2(buffer); {import}
+                 HEAP USES:= (sort, id, v, inuses(buffer, s, u))
+            FI
+       FI
+   );
+
+   FORALL decl IN decls
+   DO  VECTOR [UPB il OF decl] CHAR discbuff;
+       discbuff := il OF decl;
+       BUFFER buffer := start write(discfile, discbuff);
+       sort OF decl := in2(buffer);
+       import OF decl := FALSE;   assemble OF decl := NIL;
+       status OF decl := 0;
+
+       uses OF decl :=
+         CASE sort OF decl-64 IN
+         CO ktype CO
+            (  name OF decl := inid2(buffer);
+               version OF decl:= in2(buffer);
+               in2(buffer); in2(buffer); in2(buffer);
+               u:= inuses(buffer, kattr, NIL);
+               u:= inuses(buffer, kint, u);
+               inuses(buffer, ktype, u)
+            ) ,
+         CO kint CO
+            (  name OF decl := inid2(buffer);
+               version OF decl:= in2(buffer);
+               in2(buffer); in2(buffer);
+               u:= inuses(buffer, kattr, NIL);
+               inuses(buffer, kint, u)
+            ),
+         CO kfn CO
+            ( TO in2(buffer) * 3 DO in2(buffer) OD;  { SKIP inds }
+              in2(buffer); {zero}
+              in2(buffer); in2(buffer); in2(buffer); in2(buffer);
+              u:= inuses(buffer, kattr, NIL);
+              u:= inuses(buffer, kint, u);
+              u:= inuses(buffer, ktype, u);
+              u:= inuses(buffer, kconst, u);
+              u := inuses(buffer, kfn, u);
+              name OF decl := fnspec(buffer, sort OF decl);
+              version OF decl := in2(buffer);
+              import OF decl := in2(buffer) = 1;
+              u
+            ) ,
+         CO kconst CO
+            (  name OF decl := inid2(buffer);
+               version OF decl:= in2(buffer);
+               in2(buffer); in2(buffer);  in2(buffer);  in2(buffer);
+               u:= inuses(buffer, kattr, NIL);
+               u:= inuses(buffer, kint, u);
+               u:= inuses(buffer, ktype, u);
+               inuses(buffer, kconst, u)
+             ),
+         CO kattr CO
+             (  name OF decl := inid2(buffer);
+                version OF decl:= in2(buffer);
+                in2(buffer);
+                inuses(buffer, kattr, NIL)
+             )
+         ESAC
+   OD
+END;
+
+PROC readdecls = (REF CONTXT ct, MESSAGEPROC msg) REF VECTOR [] DECL:
+   IF no_text(ct, msg)
+   THEN  nodecls
+   ELSE  VECTOR [ndiscptrs(discfile, val OF ct, msg)] DISCPTR  dps;
+         myreaddiscptrs(discfile, dps, val OF ct, msg);
+
+         BUFFER buffer := read buffer(discfile, dps[1]);
+         HEAP VECTOR [in2(buffer)] DECL decls;
+
+         FORALL decl IN decls
+         DO  export OF decl := readbool(buffer);
+             HEAP VECTOR [in2(buffer)] CHAR il;
+             readchars(buffer, il);
+             il OF decl := il
+         OD;
+         indecls(decls);
+         decls
+   FI;
+
+
+{{ ******  Procedures which handle DECL mode ****** }}
+{{ ------------------------------------------------ }}
+
+PROC get_decls = (REF CONTXT ct, MESSAGEPROC msg) REF VECTOR [] DECL:
+BEGIN
+   IF decls OF ct IS nildecls
+   THEN  decls OF ct := readdecls(ct, msg)
+   FI;
+   decls OF ct
+END;
+
+PROC get_decl = (REF CONTXT ct, ID declname, MESSAGEPROC msg) INT:
+BEGIN
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   INT  ans:= 0;
+   FOR i TO UPB decls  WHILE ans = 0
+     DO IF name OF decls[i] = declname THEN ans:= i FI OD;
+   ans
+END;
+
+PROC get_decl_source = (REF CONTXT ct, INT declno) REF SOURCE:
+BEGIN
+   PROC msg = (MSGNO no, VECSTR params) VOID: sys fault(params[1]);
+   REF DECLATTRIBUTES infoset := get_declattribute(ct, info_key, msg);
+   DISCPTR infoptr = (data OF infoset)[declno];
+   BUFFER  buffer = read buffer(discfile, infoptr);
+   INT ella_date = in2(buffer);
+   ID  name = inid2(buffer);
+   HEAP SOURCE := (name, ella_date)
+END;
+
+PROC get_binding_source = (CREGION cr, ID rename) REF SOURCE:
+BEGIN
+   REF BINDING b = get_binding(cr, rename);
+   IF b IS nilbinding
+   THEN  nilsource
+   ELSE  DISCPTR infoptr = info OF b;
+         BUFFER  buffer = read buffer(discfile, infoptr);
+         INT ella_date = in2(buffer);
+         ID  name = inid2(buffer);
+         HEAP SOURCE := (name, ella_date)
+   FI
+END;
+
+PROC check_decl = (REF CONTXT ct, ID declname, MESSAGEPROC msg) INT:
+BEGIN
+   IF check_text(ct, msg)
+   THEN  INT declno = get_decl(ct, declname, msg);
+         IF declno = 0
+         THEN  msg(lib_msg(18) {"I can't find *"}, declname); 0
+         ELSE  declno
+         FI
+   ELSE 0
+   FI
+END;
+
+
+{{ ***** Procedures used for opening ELLA librarys ***** }}
+{{ ----------------------------------------------------- }}
+
+PROC  read rootptrs = (BOOL refresh, MESSAGEPROC msg) VOID:
+BEGIN
+   noncompacting_garbage_collect(database OF discfile);
+   DISCPTR root = get_root(database OF discfile);
+   myreaddiscptrs(discfile, rootptrs OF library, root, msg);
+   IF refresh
+   THEN  refreshcontexts(msg)
+   ELSE  contexts OF library := getcontexts(msg);
+         getlibinfo
+   FI
+END;
+
+
+PROC check_ella_library = (REF DISCFILE df,
+                           PROC (INT, INT, MESSAGEPROC) VOID  updater,
+                           MESSAGEPROC msg) VOID:
+BEGIN
+   INT rootsize = UPB (rootptrs OF library);
+   DISCPTR root = get_root(database OF df);
+   IF discptr_data(database OF df, root) = 6 { discptrs } ANDTH
+      ndiscptrs(df, root, msg) = rootsize
+   THEN VECTOR [rootsize] DISCPTR ptrs;
+        myreaddiscptrs(df, ptrs, root, msg);
+        IF discptr_data(database OF df, ptrs[1]) = 3  { charsdps }
+        THEN BUFFER buffer := read buffer(df, ptrs[1]);
+             INT name = in2(buffer);
+             INT  ident = name OVER 100,
+                  mark  = name MOD 100;
+             IF ident /= identification
+             THEN  msg(lib_msg(33), nullmsg {"This isn't an ELLA library"})
+             ELIF mark /= markno
+             THEN  msg(lib_msg(34), (intchars(markno), intchars(mark)) );
+                       {"ELLA mark no currently = *, the library mark no = *"}
+                   updater(mark, markno, msg)
+             FI
+        ELSE msg(lib_msg(33), nullmsg {"This isn't an ELLA library"})
+        FI
+   ELSE msg(lib_msg(33), nullmsg {"This isn't an ELLA library"})
+   FI
+END;
+
+*3 INT  lib_dictionary;
+
+PROC  null updater = (INT  old, new, MESSAGEPROC  msg) VOID:
+      msg(lib_msg(31), nullmsg {"Your library is out of date"});
+
+PROC  open_library = ( VECTOR [] CHAR db_filename,
+                       PROC (INT, INT, MESSAGEPROC) VOID  updater,
+                       MESSAGEPROC msg
+                     ) VOID:    { Note - "msg" is not expected to return }
+BEGIN
+   FILENAME  libname = parse_filename(db_filename, library_type, msg);
+   FILE  db_file = open_file(filename OF libname, block_update_access, msg);
+   database OF discfile := HEAP DATABASE := open_db(db_file, TRUE { write });
+   check_ella_library(discfile, updater, msg);
+   FILE file = database_file(database OF discfile);
+   file OF library := file;
+   name OF library := name OF libname;
+   read rootptrs(FALSE, msg);
+   get_classes(FALSE);
+   body_key := login_class("_body", "_RSREbody", msg);
+   info_key := login_class("_info", "_RSREinfo", msg);
+   spacemap_key := login_class("_spacemap", "_RSREspacemap", msg)
+END;
+
+PROC  reopen_library = (MESSAGEPROC  msg) VOID:
+BEGIN
+   { Provided to enable library space used during a failed compilation to be
+     recovered.  It must not be used after the library structure has changed.
+     (PROC read rootptrs calls garbage collect) }
+   WHILE NOT can_finish(database OF discfile)
+   DO  increase_library(discfile, msg)  OD;
+   finish(database OF discfile, get_root(database OF discfile));
+{{?? do I need to do anything for classes }}
+   read rootptrs(TRUE, msg)
+END;
+
+
+PROC savelib = (BOOL close, MESSAGEPROC msg) VOID:
+BEGIN
+   DISCPTR  discptr;
+   libchanged OF library := TRUE;
+   set time date(timelastwritten OF library,  datelastwritten OF library);
+   putcontexts(ptrcontexts, ptrctvalues, ptrimpinfo, msg);
+   putlibinfo(version OF library + 1, msg);
+   put_classes(msg);
+   discptr:= mywritediscptrs(discfile, rootptrs OF library, msg);
+   WHILE NOT can_finish(database OF discfile)
+   DO  increase_library(discfile, msg)  OD;
+   IF close
+   THEN finish_and_close(database OF discfile, discptr, msg)
+   ELSE finish(database OF discfile, discptr)
+   FI;
+   version OF library PLUSAB 1
+END;
+
+PROC finish_library = (MESSAGEPROC msg) VOID:
+   IF libchanged OF library
+   THEN  savelib(TRUE, msg);
+         resetlibchanged(msg)
+   ELSE  quit(database OF discfile OF library, msg)
+   FI;
+
+PROC  save_library = (MESSAGEPROC msg) BOOL:
+BEGIN
+   IF libchanged OF library
+   THEN  savelib(FALSE, msg);
+         read rootptrs(TRUE, msg);
+         resetlibchanged(msg);
+         TRUE
+   ELSE  FALSE
+   FI
+END;
+
+
+{{ ***** ***** }}
+
+PROC finddecl = (ID id, REF VECTOR [] DECL decls) INT:
+BEGIN
+   INT  ans:= 0;
+   FOR i TO UPB decls  WHILE ans = 0
+     DO IF name OF decls[i] = id THEN ans:= i FI OD;
+   ans
+END;
+
+PROC loadable = (REF CONTXT ct, REF VECTOR [] DECL decls, INT explain,
+                                              MESSAGEPROC msg) BOOL:
+BEGIN
+   BOOL  ans:= TRUE,  first:= TRUE,  continue:= TRUE;
+   REF USES  u;     INT v, index;
+
+   FOR i TO UPB decls  WHILE continue
+   DO  u:= uses OF decls[i];
+       WHILE (u ISNT niluses) ANDTH continue
+       DO  index := finddecl(name OF u, decls[:i-1]);
+           v := version OF decls[index];
+           IF v /= version OF u
+           THEN  ans:= FALSE;
+                 CASE explain IN
+                 continue := FALSE,
+
+                 ( IF first
+                   THEN  first:= FALSE;
+                         msg(lib_msg(57), nullmsg) {"You need to recompile "}
+                   ELSE  msg(lib_msg(1), nullmsg {",   "})
+                   FI;
+                   msg(lib_msg(23) {"Context *"}, name OF ct);
+                   msg(lib_msg(24) {"Version *"},
+                          version_str(version OF decls[i]) );
+                   msg(lib_msg(58) {"* *"},
+                          (sort_id(sort OF decls[i]), name OF decls[i]) );
+                   continue := FALSE
+                 ) ,
+
+                 ( msg(lib_msg(23) {"Context *"}, name OF ct);
+                   msg(lib_msg(24) {"Version *"},
+                            version_str(version OF decls[i]));
+                   msg(lib_msg(59) {"      * * uses old specification of * *"},
+                            (sort_id(sort OF decls[i]), name OF decls[i],
+                             sort_id(sort OF u), name OF u) )
+                 )
+                 ESAC
+           FI;
+           u:= rest OF u
+       OD;
+       ( explain = 2 | continue := TRUE )
+   OD;
+   ( explain = 2 | msg(lib_msg(2), nullmsg {newline}) );
+   ans
+END;
+
+PROC find_maxctno = INT:
+BEGIN
+   INT maxctno := 0;
+   REF CONTEXTS  c := contexts OF library;
+   WHILE c ISNT nilcontexts
+   DO  REF REGIONS r := regions OF context OF c;
+       WHILE r ISNT nilregions
+       DO  IF ctno OF region OF r > maxctno
+           THEN maxctno := ctno OF region OF r
+           FI;
+           r:= rest OF r
+       OD;
+       c:= rest OF c
+   OD;
+   maxctno
+END;
+
+
+PROC ctno_region = (INT ctno) CREGION:
+BEGIN
+   REF CONTEXTS  c:= contexts OF library;
+   REF REGIONS r;
+   BOOL continue := TRUE;
+   WHILE (c ISNT nilcontexts) ANDTH continue
+   DO  r := regions OF context OF c;
+       WHILE (r ISNT nilregions)  ANDTH continue
+       DO  IF ctno OF region OF r = ctno  THEN continue := FALSE
+           ELSE r := rest OF r
+           FI
+       OD;
+       IF continue THEN c:= rest OF  c FI
+   OD;
+   ( IF c ISNT nilcontexts THEN context OF c ELSE nilcontxt FI,
+     IF r ISNT nilregions THEN region OF r ELSE nilregion FI )
+END;
+
+
+PROC zero_ctnos = VOID:
+BEGIN
+   REF CONTEXTS  c := contexts OF library;
+   WHILE c ISNT nilcontexts
+   DO  REF REGIONS r := regions OF context OF c;
+       WHILE r ISNT nilregions DO  ctno OF region OF r:= 0;  r:= rest OF r  OD;
+       c:= rest OF c
+   OD
+END;
+
+PROC add_close = (CREGION crg) INT:
+BEGIN    {{{ no of contexts in closure }}}
+   {{ Note adds closure of ctn to any existing closures. Call zero_ctnos
+      first if this is not what is ddesired }}
+   INT  closureno:= 0;
+   REF CONTEXTS c := contexts OF library;
+   WHILE c ISNT nilcontexts
+   DO  REF REGIONS r := regions OF context OF c;
+       WHILE r ISNT nilregions
+       DO IF ctno OF region OF r > closureno
+          THEN closureno := ctno OF region OF r
+          FI;
+          r := rest OF r
+       OD;
+       c := rest OF c
+   OD;
+
+   PROC close1 = (CREGION cr) VOID:
+   BEGIN  {{ modifies ctno OF regions OF contexts OF library }}
+      IF region OF cr ISNT nilregion
+      THEN  IF ctno OF region OF cr = 0
+            THEN  REF IMPORTS is := get_imports(cr);
+                  CTNAME ctn;  REF CONTXT ct;
+                  WHILE is ISNT nilimports
+                  DO  ctn := ctn OF binding OF is;
+                      ct := get_context(context OF ctn);
+                      close1(get_region(ct, import OF ctn));
+                      is:= rest OF is
+                  OD;
+                  ctno OF region OF cr := closureno PLUSAB 1
+            FI
+      FI
+   END;
+
+   close1(crg);  closureno
+END;
+
+PROC close = (CREGION crg) INT:
+BEGIN
+   zero_ctnos;
+   add_close(crg)
+END;
+
+
+PROC checkimports = (CREGION cr, BOOL explain, MESSAGEPROC msg) BOOL:
+BEGIN
+   REF IMPORTS  i:= get_imports(cr);
+   BOOL ans:= TRUE;
+   WHILE i ISNT nilimports
+   DO  IF name OF binding OF i = nullid
+       THEN  ans:= FALSE;
+             IF explain
+             THEN msg(lib_msg(23) {"Context *"}, CTOS cr);
+                  msg(lib_msg(129) {"      * * needs importing"},
+                       (sort_id(sort OF binding OF i), rename OF binding OF i))
+             FI
+       FI;
+       i:= rest OF i
+   OD;
+   ans
+END;
+
+
+PROC next_closure_details = (CREGION crg, BOOL recompile, importing, explain,
+                                                     MESSAGEPROC msg) INT:
+BEGIN
+   { BOOL recompile = TRUE                                                  }
+   {   outputs messages in PROC loadable if declarations need recompiling   }
+   { BOOL importing = TRUE                                                  }
+   {   outputs messages in PROC checkimports if declarations need importing }
+   { BOOL explain = TRUE outputs all messages                               }
+   CREGION cr;  CONTXT ct;
+   INT closureno = add_close(crg);
+   BOOL  ok, ans:= TRUE;
+   IF explain
+   THEN  msg(lib_msg(130) {"Closure of * contains:"}, CTOS (crg))
+   FI;
+   FOR i FROM closureno BY -1 TO 1
+   DO  cr := ctno_region(i);  ok:= TRUE;
+       ct := context OF cr;
+       IF explain
+       THEN  msg(lib_msg(131) {"   context *"}, CTOS cr)
+       FI;
+       IF no_text(ct, msg)
+       THEN  IF explain THEN  msg(lib_msg(132), nullmsg {"      empty"})  FI;
+             ok:= ans:= FALSE
+       ELIF NOT loadable OF ct
+       THEN  loadable( ct, get_decls(ct, msg), (recompile OREL explain |3|1),
+                       msg );
+             ok:= ans:= FALSE
+       FI;
+       IF NOT checkimports(cr, importing OREL explain, msg)
+       THEN  ok:= ans:= FALSE
+       FI;
+       IF ok  ANDTH  explain THEN  msg(lib_msg(133), nullmsg {"      ok"})  FI
+   OD;
+   IF explain
+   THEN  msg(lib_msg(134), nullmsg {"End of closure"});
+         msg(lib_msg(2), nullmsg {newline} )
+   FI;
+   ( ans | closureno | - closureno )
+END;
+
+PROC closure_details = (CREGION crg, BOOL recompile, importing, explain,
+                                                     MESSAGEPROC msg) INT:
+BEGIN
+   zero_ctnos;
+   next_closure_details(crg, recompile, importing, explain, msg)
+END;
+
+
+PROC newcontextptr = (MESSAGEPROC msg) DISCPTR:
+BEGIN
+   IF NOT isnilptr(discfile, ptrattributes)
+   THEN INT no_atts = ndiscptrs(discfile, ptrattributes, msg) - 1;
+        VECTOR [no_atts + 2] DISCPTR contextptrs;
+        BUFFER  buffer = make buffer(discfile, block_size, validwrite);
+        TO no_atts DO  outint2(version OF library, buffer, msg)  OD;
+        contextptrs[1] := mywritechars(discfile, nospecs, msg);
+        contextptrs[2] := end write(buffer, msg);
+        IF no_atts > 0
+        THEN  FORALL dps IN contextptrs[3:] DO dps := nilptr OD
+        FI;
+        mywritediscptrs(discfile, contextptrs, msg)
+   ELSE nilptr
+   FI
+END;
+
+SKIP
+KEEP  change currentct,  makeprompt,
+      putlibinfo,  getlibinfo,  putcontexts,  getcontexts,  writedecls,
+      readdecls,  indecls,
+      get_decls,  get_decl,  get_decl_source,  get_binding_source,
+      check_decl,
+*3    lib_dictionary,
+      null updater,  read rootptrs,  check_ella_library,  savelib,
+      open_library,  reopen_library,  finish_library,  save_library,
+      finddecl,  loadable,
+      ctno_region,  find_maxctno, zero_ctnos,  close,  next_closure_details,
+      closure_details,  newcontextptr
+
+FINISH
