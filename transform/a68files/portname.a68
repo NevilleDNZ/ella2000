@@ -1,0 +1,79 @@
+DECS  portname  CONTEXT VOID  USE  putstrings,  messageproc,  assmodes,
+      modeprocs, transformprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: portname.a68,v 34.2 1995/03/29 13:03:03 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+24:12:91   Transforms out portnames. EVW
+15:06:92   Handles single portnames. EVW
+27:07:92   UTERMINDEX changed to UPORTNAME. JIT
+16:02:93   Uses uportname_index from modeprocs. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC transform_portnames = (CLOSURE oldclosure, MESSAGEPROC msg) CLOSUREC:
+BEGIN
+
+PROC  sys fault = (STR  s) VOID:  msg(system, s);
+
+PROC unit_port = (UNIT u, TRANSFORMPROCS tprocs, REF ENVIRON env) UNITC:
+   CASE u IN
+   (REF UPORTNAME uti)
+      ( INT index = uportname_index(uti, env);
+        IF   index = -1 THEN sysfault("uportname"); (u, FALSE)
+        ELIF index = 0  THEN (unit OF uti, TRUE)
+        ELSE (HEAP UINDEX := (unit OF uti, MAKEFINT index), TRUE)
+        FI
+      )
+   OUT (unit OF nulltprocs)(u, tprocs)
+   ESAC;
+
+PROC outer_port = (OUTER o, TRANSFORMPROCS tprocs) OUTERC:
+BEGIN
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+    ( (UNIT u, TRANSFORMPROCS tp) UNITC: unit_port(u, tp, environ OF o) ));
+   (outer OF nulltprocs)(o, newtprocs)
+END;
+
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (outer_port));
+   (closure OF nulltprocs)(oldclosure, newtprocs, msg)
+END
+
+KEEP transform_portnames
+FINISH
+
