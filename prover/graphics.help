@@ -1,0 +1,126 @@
+                         ELLA Prover commands
+                         --------------------
+
+The commands for the graphical version of the prover are listed in the order they appear on the four menus.
+
+
+File Menu
+---------
+
+Load
+A pop-up, pinable window is produced which lists all the files in the current directory with a name ending in .elp. If one of these files is selected and then the `Load' button is selected, the prover will attempt to read the file. The parent directory (..) and sub-directories are also included in the list and, if selected in the same way as a file name, will produce the same sort of list for the selected directory. If the default file extension (.elp) has not been used for the required file its name can be typed.
+
+Write
+A window very similar to the `Load' command window is produced and a file can be selected in the same way into which the definitions currently known to the prover can be written. However, BE CAREFUL, as anything already in the file will be over-written. If a file name is typed which does not include an extension, .elp will be added.
+
+Re-run
+A window very similar to the `Load' command window is produced but with file names ending in .log. A log file is produced automatically during a prover session and contains most successfully completed commands in textual form. The re-run command will read the commands and attempt to repeat them.
+ 
+Restart
+A pop-up notice window warns that all existing work will be lost and gives the choice of `Continue working' or `Restart Prover'.
+
+Quit
+A pop-up notice window asks for conformation, giving the choice of `Continue' or `Quit'.
+
+
+Proof Menu
+----------
+
+Prove
+A pop-up, pinable window is produced which lists all the conjectures known to the prover which are available for proof. If one is selected and then the `Prove conjecture' button is selected, the body of the conjecture is displayed in the prover window. More than one conjecture can be stacked awaiting proof. 
+
+Save theorem
+During a `valid by construction' proof the current state of the conjecture can be saved as a theorem. A pop-up window is produced for the user to type in a name.
+
+Display
+A pop-up, pinable window is produced which lists all the theorems and axioms known to the prover. The one selected is displayed in full on the console.
+
+
+Actions Menu
+------------
+
+Apply
+A selected expression is needed for this command which aims to apply a theorem or axiom to it. In addition to selecting the name of the theorem or axiom from the list provided in the pop-up window, two other pieces of information have to be supplied. The hypothesis of the axiom below is in two parts, one for indexing and one for trimming. Selecting `Use term 1' will use the indexing part, while `Use term 2' will be needed for the trimming part.
+ 
+AXIOM INDEX_TRIM = FORALL _any: tp, tp: x, _const: n j k 
+                   WHERE (1 <= j) /\ (j <= k) /\ (k <= n)
+                   |- (([n]x)[j] = x) /\ (([n]x)[j..k] = [k-j+1]x).
+
+Theorems of the form A = B are usually intended to rewrite an expression matching the left hand side for one matching the right hand side but they can be applied in reverse by selecting `Right rewritten as Left'. Theorems of the form A ==> B cannot be applied in reverse. A third possibility is that the whole of the term matches the selected expression, in which case the selected expression can be replaced by true.
+
+If when matching the selected expression to part of the hypothesis of a theorem a variable cannot be assigned a value, the user will be prompted to supply one even if the variable is not relevant in the current situation. In the axiom above, this will happen when the indexing term is used since the value of k will be unknown. Any value which makes the predicate true can be supplied.
+
+Predicate
+A selected expression is needed for this command which aims to apply one of the predicate terms to it. There are two ways of indicating which predicate term is to be used. The first is to leave `Part' as 0 and set `Term' to the number of the predicate term counting from the beginning of the conjecture, and this is usually the easiest method. However, for a complicated conjecture with predicate terms in a number of sections, `Part' can be used to indicate the section and `Term' to indicate the predicate term counting from the beginning of that section. Predicates of the form A = B can be applied `Left as Right' or `Right as Left' and all predicates can be `Selected as TRUE'.
+
+Case split
+This command creates a daughter conjecture for every possible value of the expression typed in the pop-up window, provided that there are not more than 256 values. If the conjecture contains any delay elements, the expression must include time (e.g. a@t1). Also, the expression must not contain any existential variables (i.e. any introduced by EXISTS).
+
+Induction
+This command is used to instigate a proof by induction for a variable which has type _integer. The conjecture must not contain any delay elements or existential variables. The user supplies the variable name and the direction of the induction in the pop-up window. Two conjectures are created, one for the base case (variable = 1) and one for the induction step. 
+
+Open
+A selected expression is needed for this command which aims to replace a function or macro instance by its output expression or replace a locally named variable by its definition. DELAY and ARITH functions cannot be opened. If an error message `Cannot open following expression:-' is produced with the `following expression' different from the selected expression, an automatically called `Simplify' command has altered the selected expression before it was passed to the `Open' command. The user must call the `Simplify' command directly if this change is required.
+
+Push time
+This command can be applied to a selected expression or the whole conjecture. It aims to move any applications of the time function within the selected expression to a lower level. For example, (a, b, c)@t1 is changed to (a@t1, b@t1, c@t1) and (F(a, b))@t1 is changed to F(a@t1, b@t1) if function F is combinatorial. When applied to the whole conjecture it will push time as far as possible.
+
+Simplify
+This command can be applied to a selected expression or the whole conjecture. The prover has functions for simplifying the in-built functions and features such as CASE clauses where some or all of the inputs are constants. Instances of user functions and macros will be simplified if all their inputs are constant.
+
+Split hypothesis
+If the hypothesis of the conjecture currently displayed is of the form A /\ B /\ C ... or (A1,B1,C1...) = (A2,B2,C2...), this command will create separate conjectures with hypotheses A, B, C ... or A1=A2, B1=B2, C1=C2 ... which inherit all the information held by the parent conjecture. If all the separate conjectures are proved, the parent conjecture will be considered proved.
+
+Assert
+This command is used to supply a value for an existential variable. The user must supply an expression in the form `variable = value' in the pop-up window, where value is an expression of the correct type, not necessarily a constant.
+
+Use existential
+This command substitutes the values of any existential variables which have been set by the `Assert' command. It can be applied to a selected expression or the whole conjecture.
+
+Undo action
+This command will undo the last operation on the current conjecture provided that there has been one since the conjecture was added to the stack. (i.e. `History', shown at the bottom right of the prover window, is reduced by 1 unless it is already 1)
+
+Abandon
+This command removes the current conjecture from the stack. Depending on the sort of conjecture and whether it is `valid by construction', earlier conjectures may also be removed. For example, if a `Case split' daughter conjecture is abandoned, all the daughter conjectures will be abandoned unless the parent was a `valid by construction' proof.
+
+Drop
+This command will return the current conjecture to the state it was in when added to the stack. (i.e. `History', shown at the bottom right of the prover window, is returned to 1)
+
+
+Properties Menu
+---------------
+
+Display style
+This command allows the user to set a number of options, mainly to do with how the conjecture is displayed in the prover window.
+ 
+The first option indicates whether automatic simplification is to be done or not. Turning the simplifier off will allow more intermediate steps to be viewed.
+
+The second option indicates how contexts are to be displayed in the prover window. For example, 'DESIGN(a, loadval)' is a context shown in full, as it must be for the prover reader. However, by default contexts are not shown during proof as this generally makes the conjecture more readable. If an expression reduces to x = x but this does not simplify to true, displaying the contexts will indicate that the x's are different. Choosing the `Brief' option numbers the contexts so that the x = x example may become '1'x = '2'x for this option.
+
+The other options can be used to change the look and size of the font used in the prover window.
+
+Show / Hide associations
+By default predicate terms are shown separated by /\ symbols, but internally they are held as instances of the /\ function which has two parameters. The `Show associations' command will add extra brackets to the predicate and hypothesis expression where necessary to show clearly the binding of this and other functions. `Hide associations removes these extra brackets. For example:-
+ (n >= 1) /\ (m >= 0) /\ (m < n) can be displayed as ((n >= 1) /\ (m >= 0)) /\ (m < n)
+
+List existentials
+This command lists the current values of any existential variables on the console.
+
+Size
+This command gives the amount of memory used in words. The value can be displayed on the console or written as a comment in the log file.
+
+Note
+Any message typed in the pop-up window will be placed in the log file following the keyword `note'. During a re-run of a log file, any note messages found will be copied to the new log file.
+
+Resources
+This command produces diagnostic information, some of which may be of interest to a user. Try selecting `All' and `Write to console' to see what is produced. The information can also by placed in the log file as comments.
+
+About prover
+This command produces the same pop-up notice window as at start-up.
+
+
+
+                         Crown Copyright, (c)   1995
+
+                             All rights reserved.
+

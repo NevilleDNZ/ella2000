@@ -1,0 +1,156 @@
+                         ELLA Prover commands
+                         --------------------
+
+Valid user commands for the non-graphical version are:-
+
+------------------------- Basic operations -------------------------------------
+
+  help              On screen help
+  read   <file>     Add the definitions in the file             (default .elp)
+  write  <file>     List all the definitions made to the file   (default .elp)
+  re_run <file>     Re-run a LOG file                           (default .log)
+  restart           Clear all definitions
+  quit              Leave prover
+
+----------------------------- Diagnostics --------------------------------------
+
+  note <message>       Add message to the LOG file (terminated by `;' or EOL)
+
+  size [/screen|/log]  Show how much memory has been used (on screen or in LOG)
+                       By default to screen.
+
+  diag [/ident] [/buffer] [/exp] [/object] [/conj] [/proof] [/screen] [/log]   
+                       Print diagnostic information from the appropriate 
+                       packages. By default to screen. If no packages are
+                       explicitly selected (eg diag/log), all information is
+                       printed.
+
+
+-------------------------- Proof operations ------------------------------------
+
+
+prove <name>           Start proving named conjecture
+display <name>         Display named theorem/axiom/conjecture on the console
+undo                   Undo last proof step, never removes conjecture from stack
+drop                   Return current conjecture to its original state 
+abandon                Drop current conjecture, and rewind stack
+
+split                  Split a conjecture of the form a /\ b /\ c ... into parts
+                       Similarly: (a,b,c) = (x,y,z) is split into 3
+
+save_theorem  <upper_case_name>
+       If the current conjecture is correct by construction, save as a theorem
+       with name shown. 
+
+cases_of  <expression> ;
+       Concider all possible values of the expression.
+
+induct_on <variable> ;
+       Start proof by induction on the named variable.
+
+assert  <x> = <expression> ; 
+       Assert that some existential variable <x> should be considered to have
+       value <expression>.
+
+
+apply [/use | /reverse | /sub [ = <number>]]   [/pred [ = <number> ]] 
+      [/[default=]left|right|nodefault]  <theoremname>  [TO <var> IN <exp>] 
+      [WHERE <name> = <exp> [, <name> = <exp>]* ] ;
+
+       The named theorem is to be used to rewrite the current conjecture.
+       if `use = <number>' present, the indicated expression pair is selected
+       from a theorem of the form El1=Er1 /\ El2=Er2 /\ ...   
+          (default is /use=0 i.e. the whole hypothesis)
+       if `reverse', the named theorem is used right to left, else left to right
+       if `sub', the term that matches the theorem is replaced by _true.
+       If `left' or `right' are present, the conjecture is of the form:- 
+          E1 = E2 and the appropriate half is to be updated. By default the 
+          direction set for the conjecture is used (set by `default =' ), if 
+          `nodefault' the user must supply all the expression.
+       If `pred = <number>', the selected predicate is modified, not the
+       hypothesis
+       If the `TO ...' clause is absent, "TO ^a IN ^a" is assumed.
+       `WHERE' clauses can set unset free variables in the named theory.
+
+
+predicate [/use | /reverse | /sub [= <number>]]  [/pred [ = <number>]] 
+          [/[default=]left|right|nodefault] [TO <var> IN <expression>] ;
+
+       Use one of the predicates of the current conjecture to rewrite part of 
+       the conjecture. All fields have the same meanings as in apply.
+       (default is /use=1.1 i.e. first term in first section)
+
+
+push_time [[/pred [ = <number> ]] [/[default=]left|right|nodefault] 
+          [TO <var> IN <expression>] ;]
+
+       `Push' times in the selected expression. The expression selection is as 
+       for `apply'. If no parameters, push time as far as possible in the 
+       hypothesis. Note: /use /reverse and /sub are ignored.
+
+
+open [/pred [ = <number>]] [/[default=]left|right|nodefault] 
+     [TO <var> IN <expression>] ;
+
+     `Open' the indicated expression, ie:-
+           replace a function by its output expression 
+           replace a named local definition by its equivalent expression
+           replace an input or macro-parameter by its actual value.
+      Parameters as in apply.
+
+
+use_existential [/pred [ = <number> ]] [/[default=]left|right|nodefault] 
+                [TO <var> IN <expression>] ;
+
+     Any existentials with `known' values are rewritten in the selected exp.
+
+
+simplify [[/pred [ = <number> ]] [/[default=]left|right|nodefault] 
+          [TO <var> IN <expression>] ;]
+
+     Forces the simplification of part of the current conjecture. The expression
+     selection is as for `apply'. If no parameters, simplify both hypothesis 
+     and all predicates. 
+
+
+simplify/ [on | off]   Change the `full-simplify' flag. If off, stop function
+                       simplification (except = and /\)
+
+
+show <p>, where   <p> = /hypothesis  Show latest hypothesis (only)
+                  <p> = /conjecture  Show all of conjecture
+                  <p> = /no_assoc    Toggle between showing complete binding or
+                                     not, for example:-
+                                     "(a AND b) AND c" <--> "a AND b AND c" 
+                  <p> = /on          Show conjectures when changed
+                  <p> = /off         Reverse above 
+                  <p> = /existential Show the values associate with any 
+                                     existentials in the current conjecture
+
+
+     
+context [/full | /brief | /off]  Set level of detail for display of contexts
+
+
+--------------------------------------------------------------------------------
+
+  If the input is none of the above, it is examined to see if it is the start of
+  an ELLA definition (ie TYPE, INT, FN, MAC) or AXIOM or CONJECTURE. If it is 
+  the definition is read in.
+  Note: THEOREMs cannot be added from the command line.
+
+
+                         Crown Copyright, (c)   1995
+
+                             All rights reserved.
+
+
+
+
+
+
+
+
+
+
+
