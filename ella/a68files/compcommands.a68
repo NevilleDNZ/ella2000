@@ -1,0 +1,198 @@
+DECS  compcommands  CONTEXT VOID  USE  putstrings,  messageproc,  basics,
+      osinterface, databasebuffers, libmodes,  libprocs,  compshell,  ioprocs,
+      commandsyntax,  command,  kernelreader,  compmessages,  libmessages,
+      testmode:
+
+{ " Id: compcommands.sta,v 1.1 91/10/14 14:26:17 edcad Exp $" }
+configinfo A68CONFIG "$Id: compcommands.a68,v 34.2 1995/03/29 13:03:19 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+23:02:89  Created to contain main compile procedure plus commands.  EVW
+01:11:89  CR 636. Adam replaced by su_keepsake. JIT
+17:07:90  LIBINTERFACE replaced by LIBMODES. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+20:02:91  KEEPSAKE now accessed through KEEPSAKEBUFFERS only.  DCT
+27:03:91  New command 'compileg' added. JIT
+11:04:91  Command 'compileg' moved to new module graphicscommands. JIT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+23:02:93  Updated for new OSIF level 1.  DCT
+28:06:93  Updated for new OSIF level 2.  DCT
+16:08:93  End condition for interactive wrong.  DCT
+28:09:93  Now using "FINISH" to terminate interactive.  DCT
+29:09:93  "IMPORTS" left out of the imports command.  DCT
+11:10:93  text prompt changed to Text. EVW
+28:10:93  Format of compiler error messages changed.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.015 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC  compile = (STR  filename,  BOOL  print_text,  MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTXT  ct = get_context(context OF currentct OF library);
+   CREGION  cr = get_region(ct, import OF currentct OF library);
+
+   FILE  comp_file = open_file(filename, read_access, msg);
+   STR  fname = testmode_file_name(comp_file);
+   RVC  qname = concat(("""", name OF comp_file, """"));
+
+   PROC  flt = (MSGNO  no,  VECSTR  params) VOID:
+      IF cli_msg(no)  OREL  abort_msg(no)  { NOT error_msg }
+      THEN  put(screen, ("Closing file ", fname, newline));
+            close_file(comp_file, msg);
+            msg(no, params)
+      ELIF NOT print_text  ANDTH  UPB params >= 3  ANDTH
+           error_msg(no)  ANDTH  is_comp_msg(no)
+      THEN  { Output error in standard edit error message format }
+            VECTOR [UPB params] RVC  allp:= VSTRTOVRVC params;
+            allp[1]:= qname;
+            allp[2]:= concat((params[1], ": (", params[2], ")"));
+            allp[3]:= nullstr;       { discard error number }
+            msg(no, VRVCTOVSTR allp)
+      ELSE  msg(no, params)
+      FI;
+
+   DISCPTR  ptrlastcomp = ella_shell(print_text, cr, comp_file, flt);
+   merge_compiled(cr, ptrlastcomp, flt);
+   close_file(comp_file, msg)
+END;
+
+
+PROC  imports = (STR  line,  MESSAGEPROC  msg) VOID:
+BEGIN
+   REF CONTXT  ct = get_context(context OF currentct OF library);
+   CREGION  cr = get_region(ct, import OF currentct OF library);
+
+   BOOL  first_call:= TRUE;
+   STR  imp = "IMPORTS ";
+
+   PROC  reader = (REF RVC  buffer,  REF INT  tend, MESSAGEPROC  msg) BOOL:
+   BEGIN
+      INT  l = UPB line + UPB imp + 1;
+      IF UPB buffer < l
+      THEN  buffer:= HEAP VECTOR [l] CHAR  { room for sp at end }
+      FI;
+      buffer[: UPB imp]:= imp;
+      buffer[UPB imp + 1 : tend:= UPB line + UPB imp]:= line;
+      IF first_call THEN  first_call:= FALSE;  TRUE  ELSE  FALSE  FI
+   END;
+
+   DISCPTR ptrlastcomp = ella_shell(TRUE, cr, reader, msg);
+   merge_imports(cr, ptrlastcomp, msg)
+END;
+
+
+PROC  interactive = (MESSAGEPROC  msg) VOID:
+BEGIN
+   BOOL  more_input:= TRUE;
+
+   PROC  reader = (REF RVC  buffer,  REF INT  tend,  MESSAGEPROC  msg) BOOL:
+   BEGIN
+      INT  leng:= 0;   IOSTATUS  reply;
+      tend:= 0;
+      IF more_input
+      THEN  write_buffer(stdout, "Text <- ", msg);
+            WHILE
+               reply:= read_line(stdin, buffer[tend + 1 :], leng, msg);
+               tend PLUSAB leng;
+               reply = io_partline
+            DO  HEAP VECTOR [UPB buffer + 512] CHAR  new;
+                new[: UPB buffer]:= buffer;
+                buffer:= new
+            OD;
+            { io_error handled by msg, therefore the alternatives are
+              io_ok & io_eof.
+              Assume NOT eof if io_ok  OREL  leng > 0   16:08:93  DCT
+              Problems with <EOF> - use FINISH as pragmatic solution  28:09:93
+            }
+            IF (reply = io_eof  ANDTH  leng = 0)  OREL
+               buffer[: tend] = "FINISH"
+            THEN  more_input:= FALSE
+            FI
+      FI;
+      more_input
+   END;
+
+   put(screen, ( "Supply lines of text terminating with ""FINISH"""
+                 " on a newline", newline ));
+   REF CONTXT ct = get_context(context OF currentct OF library);
+   CREGION cr = get_region(ct, import OF currentct OF library);
+   DISCPTR  ptrlastcomp = ella_shell(TRUE, cr, reader, msg);
+   merge_compiled(cr, ptrlastcomp, msg)
+END;
+
+
+
+PROC make_compcommands = COMMANDVEC:  MAKECOMMANDS VECTOR [] COMMAND
+BEGIN
+   HEAP SIMPLE :=
+   ( MAKERVC "INTERACTIVE", MAKERVC "IV",
+     no parameters, normal access, continue,
+     MAKERVC "Compiles lines of ELLA text into the declarations region of the "
+             "selected context.  This command takes input directly from "
+             """stdin"", bypassing the normal EASE reading mechanism.",
+     (VALUES  params,  MESSAGEPROC  msg) VOID:  interactive(msg)
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "IMPORTS", nullstr, text_syntax, normal access, continue, MAKERVC
+       "Compiles the IMPORTS statement provided into the current context",
+     (VALUES  params,  MESSAGEPROC  msg) VOID:
+        imports(get_text(params[1], msg), msg)
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "COMPILE", MAKERVC "C", filename_syntax, normal access, continue,
+     MAKERVC "Compiles a file of ELLA text into the declarations region of "
+             "the selected context.",
+     (VALUES params, MESSAGEPROC msg) VOID:
+         compile( filename OF get_filename(params[1], source_type, msg),
+                  TRUE { standard print text error format }, msg )
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "ECOMPILE", nullstr, filename_syntax, hidden access, continue,
+     MAKERVC "Compiles a file of ELLA text into the declarations region of "
+             "the selected context.  Error messages are generated in a "
+             "standardised form to assist editing the source file.",
+     (VALUES params, MESSAGEPROC msg) VOID:
+         compile( filename OF get_filename(params[1], source_type, msg),
+                  FALSE { edit error format }, msg )
+   )
+END
+
+
+KEEP  compile,  make_compcommands
+FINISH

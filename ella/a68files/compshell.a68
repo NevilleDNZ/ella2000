@@ -1,0 +1,419 @@
+DECS  compshell  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      testmode,  basics,  charset,  libinterface,  libmodes,  compile,
+      compmessages,  databasebuffers,  ioprocs:
+
+{ " Id: compshell.sta,v 1.1 91/10/14 14:26:35 edcad Exp $" }
+configinfo A68CONFIG "$Id: compshell.a68,v 34.2 1995/03/29 13:03:23 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+   History of module "reader" up to 23:02:93:
+02:09:85  Changes made to interface to make ELLA a one core image.
+08:11:85  Changes made due to new library structure
+19:11:85  Updated for Perq FLEX
+22:11:85  1906 removed
+01:07:86  empty context check replaced by call of PROC no_text
+16:10:86  Updated for new osinterface  DCT
+11:05:88  CR 596  Modules renamed  JER
+15:07:88  Modified for use with EPI: call to epi_send_message added
+             to compflt and input. BGH
+20:07:88  Allow compiler input not from file (PROC rdchars).  EVW
+04:10:88  CR 270  Error bang pointing at tab.  EVW
+08:02:89  CR 642. Updated to kernel, epi removed.  EVW
+27:10:89  CR 636. Adam replaced by su_keepsake. JIT
+22:11:89  inkeptchar replaced by inkeptid. EVW
+17:07:90  LIBINTERFACE replaced by LIBMODES and KEEPSAKEBUFFERS. EVW
+23:11:90  Updated for declaration attributes.  DCT
+20:02:91  KEEPSAKE now accessed through KEEPSAKEBUFFERS only.  DCT
+27:03:91  Major change to the way error messages are handled. JIT
+26:04:91  R6B64 If error number = 0 in compflt, sys fault is called. JIT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+
+   History of module "compshell"
+14:02:84  Taken from :ellasystem.normshell(39) on 14 February 1984
+19:04:84  Updated to use new  "ella_reader"  segment and to interface to
+             the library system on FLEX and VAX
+22:08:84  renamed, DJS FN mod made permanent
+07:09:84  FLEX keeps Edfile
+02:09:85  Changes made to interface to make ELLA a one core image.
+20:11:85  Updated for Perq FLEX, 1906 removed
+30:04:86  Can now compile files with <> in their name (bug 142)
+23:09:86  Updated for FLEX  DCT
+06:10:86  CR 180.  Sequences.  seqvarmult added. EVW
+16:10:86  Updated for new osinterface  DCT
+31:10:86  Updated for break-in  DCT
+27:01:87  CR 205. i[4] removed after fnstart as fnsetsize now integer. EVW
+09:02:87  CR 408. vthen, velse , seqthen amd seqelse added.  EVW
+30:07:87  CR 406. Limit on number of keeps removed.  DCT
+05:08:87  CR 124. Source file information stored more generally.  DCT
+29:09:87  Porting change integrated.  JER
+06:01:88  R3B138: referenced procedure 'when_created'
+                     renamed 'when_modified'. BGH
+20:07:88  Compiler input no longer restricted to FILEs.  EVW
+02:02:89  CR 642. Savelibrary moved from command, close_file to command. EVW
+27:10:89  CR 636. Adam replaced by su_keepsake. Keepsakebuffers added. JIT
+30:11:89  inkeptchar replaced by inkeptid.  EVW
+15:06:90  get_filename renamed file_name.  DCT
+17:07:90  LIBMODES added, spacemap nilptr added. EVW
+08:08:90  Keepsakebuffer calls now keep track of charcount. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+23:11:90  Printing of file name suppressed in test mode.  DJS
+21:02:91  KEEPSAKE now interfaced through KEEPSAKEBUFFERS.  DCT
+26:02:91  Error message removed from call of compile, PROCs xcompflt and
+             xinput changed and ella_shell takes a bool parameter. JIT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+23:02:93  OSIF level 1 changes - "reader.sta" merged in.  DCT
+18:03:93  Tidy up of unused parts e.g charcount. new position for inds.  EVW
+29:06:93  file_name now delivers STR.  DCT
+16:08:93  End condition for interactive wrong.  DCT
+31:08:93  Output name of compiled file using 'testmode_file_name'.  DJS
+28:10:93  Format of compiler error messages changed.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.054 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+BOOL  initialise:= TRUE;   { To avoid rebuilding charset and lookup tables }
+
+PROC (REF VECTOR [] CHAR, BOOL) INT  lookup;
+REF [] CHARSET  charset;
+RVC  bangs:= LOC VECTOR [0] CHAR;
+STR  online = "direct input";
+
+
+{ Procedure shared between ella_shell and ptil }
+
+MODE  COMPINPUT = UNION ( FILE,  PROC (REF RVC, REF INT, MESSAGEPROC) BOOL );
+
+PROC  compile_shell = ( BOOL  print_text,  CREGION cr,
+                        COMPINPUT  compinput,
+                        PROC (VECTOR [] INT) VOID  outints,
+                        PROC (ID) VOID  outid,
+                        PROC (RVC) VOID  outstring,
+                        PROC (ID, ID, CTNAME) VOID  outimport,
+                        PROC (ID) VOID  mname,
+                        REF BOOL  compilation_failed,
+                        MESSAGEPROC msg ) VOID:
+BEGIN
+
+   { text input and error reporting procedures }
+
+   BOOL  errorinline:= FALSE;
+   INT  lineno:= 0,  lastline:= lineno,   finishlisting:= lineno - 1;
+   FORALL bc IN bangs DO  bc:= " "  OD;
+   compilation_failed:= FALSE;
+
+   CHAR  tab = 16r"9";       { ASCII Horizontal tab }
+   STR  sp = " ";
+
+   PROC  input = (REF RVC  t,  REF INT tend) BOOL:
+   BEGIN
+      INT  l;  IOSTATUS  reply;
+      IF print_text
+      THEN  IF finishlisting > lineno
+            THEN  IF errorinline
+                  THEN  IF UPB bangs < tend
+                        THEN  bangs:= HEAP VECTOR [UPB t] CHAR
+                        FI;
+                        FORALL  in IN t[: tend],  b IN bangs[: tend]
+                        DO  IF in = tab  ANDTH  b /= "!" THEN  b:= tab  FI  OD;
+                        msg(comp_msg(231), bangs[: tend]);
+                        FORALL c IN bangs[: tend] DO  c:= " "  OD
+                   FI;
+                   msg( comp_msg(IF errorinline THEN 232 ELSE 233 FI),
+                        t[: tend] );
+                   errorinline:= FALSE
+            ELIF finishlisting = lineno
+            THEN  msg(comp_msg(234), nullmsg  { "...................." })
+            FI
+      FI;
+      lineno PLUSAB 1;
+      BOOL  not_eof =
+         CASE compinput IN
+            (PROC (REF RVC, REF INT, MESSAGEPROC) BOOL  reader)
+               reader(t, tend, msg),
+            (FILE  file)
+               ( { arbitary length input currently implemented by arbitary
+                   extension to the input buffer.  23:02:93  DCT }
+                 tend:= l:= 0;
+                 WHILE
+                    reply:= read_line(file, t[tend + 1 : UPB t - 1], l, msg);
+                    tend PLUSAB l;
+                    reply = io_partline
+                 DO  HEAP VECTOR [UPB t + 512] CHAR  new;
+                     new[: UPB t]:= t;
+                     t:= new
+                 OD;
+                 { io_error handled by msg, therefore the alternative is io_eof
+                   Assume NOT eof if l > 0   16:08:93  DCT
+                 }
+                 reply = io_ok  OREL  l > 0
+               )
+         ESAC;
+      t[tend + 1]:= " ";  { newline_char when read from file - overwrite }
+      IF UPB bangs < UPB t
+      THEN  bangs:= HEAP VECTOR [UPB t] CHAR;
+            FORALL c IN bangs DO  c:= " "  OD
+      FI;
+      not_eof
+   END;
+
+
+   PROC  compflt = (INT tind, no, VECSTR params) VOID:
+   BEGIN
+      BOOL fault = (no < 242 OREL no > 245);
+      IF fault THEN compilation_failed:= TRUE FI;
+      IF no = 0
+      THEN  msg(system, params[1])
+      ELIF NOT fault
+      THEN  msg(comp_msg(no), params)
+      ELSE  IF print_text
+            THEN  IF NOT errorinline
+                  THEN  errorinline:= TRUE;
+                        finishlisting:= lineno + 5
+                  FI;
+                  IF tind > 0 THEN  bangs[tind]:= "!"  FI
+            FI;
+            { This object must not be passed out of scope }
+            VECTOR [UPB params + 3] RVC  allp;
+            allp[1]:= STRTORVC intchars(lineno);
+            allp[2]:= STRTORVC IF print_text THEN sp ELSE intchars(tind) FI;
+            allp[3]:= STRTORVC IF print_text THEN sp ELSE intchars(no) FI;
+            allp[4:]:= VSTRTOVRVC params;
+            msg(comp_msg(no), VRVCTOVSTR allp)
+      FI
+   END;
+
+
+   { section for reading specifications from a context in the library }
+
+   BUFFER  specs;    INT  nextdecl,  ndecls,  declsi;
+   INT  nomore = 0,  normal = 1,  exported = 3;  {{ see compmodes }}
+
+   PROC nextkept = INT:
+   BEGIN  { specs :- ndecls << exported size spec >>*  }
+      IF (declsi PLUSAB 1) > ndecls
+      THEN  specs:= NIL;
+            nomore
+      ELSE  REF INT (index OF specs):= nextdecl;
+            BOOL  export = in2(specs) = 1;
+            { Does the compiler sometimes skip part of a spec ? }
+            nextdecl:= in2(specs);   { Size of this spec }
+            nextdecl PLUSAB index OF specs; { Now points to start of next spec }
+            IF export THEN exported ELSE normal FI
+      FI
+   END;
+
+   PROC in kept id = ID: ( inid2(specs) );
+
+   PROC in kept int = INT: ( in2(specs) );
+
+   PROC setctfromct = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+   BEGIN
+      IF no_text(ct, msg)
+      THEN  ndecls:= 0
+      ELSE  VECTOR [ndiscptrs(discfile, val OF ct, msg)] DISCPTR  ptrs;
+            myreaddiscptrs(discfile, ptrs, val OF ct, msg);
+            specs:= read buffer(discfile, ptrs[1]);
+            ndecls:= in2(specs);
+            nextdecl:= index OF specs
+      FI;
+      declsi:= 0
+   END;
+
+   PROC setctfromctn = (CTNAME ctn, MESSAGEPROC  msg) BOOL:
+   BEGIN
+      REF CONTXT ct = get_context(context OF ctn);
+      IF ct ISNT nilcontxt
+      THEN  setctfromct(ct, msg);  TRUE
+      ELSE  FALSE
+      FI
+   END;
+
+
+   { main body of compile_shell }
+
+   IF initialise
+   THEN  initialise:= FALSE;        {{{ Avoid re-creating hash table &c }}}
+         lookup:= make lookup;
+         charset:= make charset
+   FI;
+
+   save_library(msg);
+
+   setctfromct(context OF cr, msg);
+
+   INT version = lib_version;
+
+   PROC  ctfromctn = (CTNAME  name) BOOL:  setctfromctn(name, msg);
+
+   msg( comp_msg(250) { "Compiling from  *" },
+        CASE compinput IN (FILE  file)  testmode_file_name(file)
+                      OUT               online
+        ESAC );
+
+   PROC  fail = VOID:  ( compilation_failed:= TRUE;  GOTO endcomp );
+
+   compile( outints, outid, outstring, fail, mname, version,
+            nextkept, inkeptint, inkeptid, outimport, ctfromctn,
+            input, compflt, lookup, charset );
+
+endcomp:  SKIP
+END;
+
+
+
+
+
+PROC  ella_shell = ( BOOL print_text,  CREGION cr,
+                     COMPINPUT  compinput,
+                     MESSAGEPROC msg ) DISCPTR:
+BEGIN
+   BOOL  compilation_failed:= FALSE;
+
+   {{{  Output section unique to ELLASHELL  (cf PTCOMP)  }}}
+
+   INT keepstep = 200;
+   REF VECTOR [] DISCPTR  keeps:= HEAP VECTOR [keepstep] DISCPTR;
+   INT  keepsind:= 0;
+
+   PROC  next_keep = REF DISCPTR:
+   BEGIN
+      IF (keepsind PLUSAB 1) > UPB keeps
+      THEN  HEAP VECTOR [UPB keeps + keepstep] DISCPTR new;
+            new[: UPB keeps]:= keeps;
+            keeps:= new
+      FI;
+      keeps[keepsind]
+   END;
+
+   VECTOR [block_size] CHAR buffer;
+   BUFFER discbuff = start write(discfile, buffer);
+   DISCPTR discptr := nilptr;
+
+   PROC out compid = (ID id) VOID: outid2(id, discbuff, msg);
+
+   PROC out compint = (INT i) VOID: out char(REPR i, discbuff, msg);
+
+   PROC out compint2 = (INT i) VOID: outint2(i, discbuff, msg);
+
+   PROC out compints = (VECTOR [] INT vi) VOID:
+   FORALL i IN vi DO  out compint2(i)  OD;
+
+   PROC out compints2 = (VECTOR [] INT vi) VOID:
+   ( out char(REPR vi[1], discbuff, msg);
+     IF UPB vi > 1 THEN FOR j FROM 2 TO UPB vi DO out compint2(vi[j]) OD FI
+   );
+
+
+  MODE INDS = STRUCT (INT fnno, names, stack, REF INDS rest);
+  REF INDS  nilinds = NIL;
+  REF INDS  inds:= nilinds;
+
+
+   PROC shellints = (VECTOR [] INT i) VOID:
+   BEGIN
+      IF NOT compilation_failed
+      THEN
+         IF i[1] = kfn
+         THEN  discptr := end write(discbuff, msg);
+               reset buffer(discbuff);
+               out compints2(i);
+               WHILE inds ISNT nilinds
+               DO out compints((names OF inds, stack OF inds, fnno OF inds));
+                  inds:= rest OF inds
+               OD;
+               out compints2(zero)
+         ELIF i[1] = kend
+         THEN  out compints2(i);
+               next_keep:= end write(discbuff, msg);  { spec discptr }
+               reset buffer(discbuff);
+               next_keep:= discptr;                   { body discptr }
+               discptr:= nilptr;
+               next_keep:= nilptr                     { spacemap discptr }
+         ELIF i[1] = fnend
+         THEN  IF i[2] > -1 THEN out compint(fnend) FI;
+               IF i[2] /= 0 { no inds for external fns in kfn }
+               THEN inds := HEAP INDS := (ABS i[2], i[3], i[4], inds)
+               FI
+         ELIF i[1] = dummy THEN  out compints(i[2: ])
+         ELSE  out compints2(i)
+         FI
+      FI
+   END;
+
+   PROC mname = (ID m) VOID:
+   BEGIN
+       discptr:= nilptr;
+       keepsind:= 0
+   END;
+
+
+   PROC  dumpsourceinfo = DISCPTR:
+   BEGIN
+      BUFFER  buffer = start write(discfile, HEAP VECTOR [block_size] CHAR);
+      CASE compinput IN
+         (FILE  file)
+            ( outint2( SHORTEN data_modified OF get_file_details(file, msg),
+                       buffer, msg );
+              outid2(STRTORVC file_name(file), buffer, msg)
+            )
+      OUT   ( outint2(seconds, buffer, msg);
+              outid2(STRTORVC online, buffer, msg)
+            )
+      ESAC;
+      { Permit further information to be stored later if desired }
+      outchars(16r"0 0 0 0 0", buffer, msg);
+      end write(buffer, msg)
+   END;
+
+
+   PROC  import = (ID  rename, name, CTNAME  ctn) VOID:
+   ( out compid(rename);  out compid(name);
+     out compid(context OF ctn);  out compid(import OF ctn) );
+
+
+   compile_shell( print_text, cr, compinput, shellints, out compid,
+                  out compid, import, mname, compilation_failed, msg );
+
+   IF compilation_failed
+   THEN  nilptr
+   ELSE  next_keep:= dumpsourceinfo;
+         next_keep:= end write(discbuff, msg); {{{ imports }}}
+         mywritediscptrs(discfile, keeps[1:keepsind], msg)
+   FI
+END
+
+
+KEEP  compile_shell,  ella_shell
+FINISH

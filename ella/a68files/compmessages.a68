@@ -1,0 +1,410 @@
+DECS  compmessages  CONTEXT VOID  USE  putstrings, messageproc:
+
+configinfo A68CONFIG "$Id: compmessages.a68,v 34.2 1995/03/29 13:03:22 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1991
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+19:02:91  Created. JIT
+26:03:91  Modified for more general form of MSGNO. JIT
+14:04:91  R6B21. Alter wording of error message for illegal use of const.EVW
+27:06:91  R6B50 Initialise vector of messages in comp_facility to put NIL
+             into the references.  DJS
+17:07:91  Message 230 added for outputing of general message.  MGH
+02:08:91  Extension to macro TYPE parameters. JIT
+05:08:91  Messages 213 - 227 added. JIT
+22:11:91  Removed a spurious "*2" from in front of mess 110 ????.  DCT
+19:03:92  Attribute declaration and use added. JIT
+24:03:92  FNSETs removed. JIT
+11:06:92  Portname messages added (246, 247).  MGH
+24:06:92  IO error message added (248).  MGH
+01:07:92  Extra REPLACE message added (249). JIT
+29:03:93  R6B150. implicit parameter message altered (153). EVW
+22:06:93  Updated to new OSIF.  DCT
+22:09:93  Unused error messages removed. EVW
+28:10:93  Colon added after line number.  DCT
+
+   In general messages are passed through from the operating system dependent
+   procedures below OSINTERFACE.  This Module may be used to identify which
+   OSINTERFACE procedure was called but not which particular O/S failure
+   occured.  Some O/S failures may affect several OSINTERFACE procedures - for
+   example, access violation on VMS.  These might need trapping specifically.
+   This would probably require changes to Modules beneath OSINTERFACE which may
+   not be desirable (?).  Alternatively, particular strings may be tested for
+   in PROC comp_msg (in OSINTERFACE) - efficiency should not be important after
+   a failure.  In principle, this Module is O/S dependent but it is hoped that
+   this single file will siffice.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.017 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+INT max_comp_messages = 250;
+
+FACILITY comp_facility = ( "compiler",
+                           LOC VECTOR [max_comp_messages] MESSAGE,
+                           LOC BOOL := FALSE,
+                          (  { Vector of messages }
+(  1, outerr_class, "*: * *  * won't fit here"),
+(  2, outerr_class, "*: * *  * won't fit here  * would"),
+(  3, outerr_class, "*: * *  * and * are different types"),
+(  4, outerr_class, "*: * *  INDEXIO"),
+(  5, outerr_class, "*: * *  PRIMSETNO"),
+(  6, outerr_class, "*: * *"), { Re-use this space }
+(  7, outerr_class, "*: * *"), { Re-use this space }
+(  8, outerr_class, "*: * *  You can't use a visible space in a symbolic "
+                    "name "),
+(  9, outerr_class, "*: * *  You are using * for something else"),
+( 10, outerr_class, "*: * *  You haven't defined *"),
+( 11, outerr_class, "*: * *  * can't be used until its definition is "
+                    "complete"),
+( 12, outerr_class, "*: * *  * can't be accessed from here"),
+( 13, outerr_class, "*: * *  Boolean expected here"),
+( 14, outerr_class, "*: * *  Integer expected here"),
+( 15, outerr_class, "*: * *  Type expected here"),
+( 16, outerr_class, "*: * *  Constant expected here"),
+( 17, outerr_class, "*: * *  Type, constant or attribute expected here"),
+( 18, outerr_class, "*: * *  Parameter can only be an ELLA integer"),
+( 19, outerr_class, "*: * *  You are using * for something else in the "
+                    "context"),
+( 20, outerr_class, "*: * *  / integer needed here"),
+( 21, outerr_class, "*: * *  & needed here"),
+( 22, outerr_class, "*: * *  / not needed here"),
+( 23, outerr_class, "*: * *  & not needed here"),
+( 24, outerr_class, "*: * *  Wrong sort of element in multiple"),
+( 25, outerr_class, "*: * *  You can't have a function_type here"),
+( 26, outerr_class, "*: * *  * needs two parameters"),
+( 27, outerr_class, "*: * *  * is not recognised"),
+( 28, outerr_class, "*: * *  Parameter of * should be *, not *"),
+( 29, outerr_class, "*: * *  * needs only one parameter"),
+( 30, outerr_class, "*: * *  Second parameter of * should be *, not *"),
+( 31, outerr_class, "*: * *  First parameter of * should be *, not *"),
+( 32, outerr_class, "*: * *  Alternatives should have the same type, but here "
+                    "you have * and *"),
+( 33, outerr_class, "*: * *  * is not an integer"),
+( 34, outerr_class, "*: * *  You can't have a function here"),
+( 35, outerr_class, "*: * *  [*] ?  this index is too small"),
+( 36, outerr_class, "*: * *"), { Re-use this space }
+( 37, outerr_class, "*: * *"), { Re-use this space }
+( 38, outerr_class, "*: * *"), { Re-use this space }
+( 39, outerr_class, "*: * *"), { Re-use this space }
+( 40, outerr_class, "*: * *"), { Re-use this space }
+( 41, outerr_class, "*: * *  [*] ?  This index can't exceed  *"),
+( 42, outerr_class, "*: * *"), { Re-use this space }
+( 43, outerr_class, "*: * *"), { Re-use this space }
+( 44, outerr_class, "*: * *"), { Re-use this space }
+( 45, outerr_class, "*: * *"), { Re-use this space }
+( 46, outerr_class, "*: * *  There isn't anything after *"),
+( 47, outerr_class, "*: * *  You can't assign to VAR * here"),
+( 48, outerr_class, "*: * *  You have already defined *"),
+( 49, outerr_class, "*: * *  * needs parameters"),
+( 50, outerr_class, "*: * *  * hasn't this many parameters"),
+( 51, outerr_class, "*: * *  Integer needed here"),
+( 52, outerr_class, "*: * *  You can't have a function here"),
+( 53, outerr_class, "*: * *  * needs more parameters"),
+( 54, outerr_class, "*: * *  * needs a * parameter, not *"),
+( 55, outerr_class, "*: * *"), { Re-use this space }
+( 56, outerr_class, "*: * *  Index can only be an ELLA integer"),
+( 57, outerr_class, "*: * *  Indexing gives an unknown type"),
+( 58, outerr_class, "*: * *  * cannot be indexed"),
+( 59, outerr_class, "*: * *  [*..*] ?  The lower limit is too small"),
+( 60, outerr_class, "*: * *  [*..*] ?  The upper limit can't exceed  *"),
+( 61, outerr_class, "*: * *  [*..*] ?  You must trim at least one item"),
+( 62, outerr_class, "*: * *  Input of * can't be supplied inside IF.... FI"),
+( 63, outerr_class, "*: * *  Trimming gives an unknown type"),
+( 64, outerr_class, "*: * *  * can't be trimmed"),
+( 65, outerr_class, "*: * *  * and * can't be concatenated"),
+( 66, outerr_class, "*: * *  You can't JOIN * to *"),
+( 67, outerr_class, "*: * *  [*] ?  You must have at least one item"),
+( 68, outerr_class, "*: * *  The test should be of type *, not *"),
+( 69, outerr_class, "*: * *  * and * are incompatible alternatives of CASE"),
+( 70, outerr_class, "*: * *  THEN delivers type * and ELSE delivers type *, "
+                    "these should be the same"),
+( 71, outerr_class, "*: * *  Parameter and result of DELAY must have same "
+                    "type"),
+( 72, outerr_class, "*: * *  DELAY initialisation should be *, not *"),
+( 73, outerr_class, "*: * *  * ?  Time to intermediate value of DELAY mustn't "
+                    "be negative"),
+( 74, outerr_class, "*: * *  * ?  Second integer of DELAY mustn't be smaller "
+                    "than first: *"),
+( 75, outerr_class, "*: * *  * ?  Parameter of IDELAY must be greater than "
+                    "zero"),
+( 76, outerr_class, "*: * *  * ?  Time to output of DELAY must be greater "
+                    "than zero"),
+( 77, outerr_class, "*: * *  Input and output of RAM must have the same type"),
+( 78, outerr_class, "*: * *  RAM initialisation should be *, not *"),
+( 79, outerr_class, "*: * *  You can't have a locally declared type in "
+                    "OUTPUT, but here you have *"),
+( 80, outerr_class, "*: * *  Second parameter of RAM is not of correct type "
+                    "for write address"),
+( 81, outerr_class, "*: * *  Not enough parameters for RAM"),
+( 82, outerr_class, "*: * *"), { Re-use this space }
+( 83, outerr_class, "*: * *  Wrong type for write enable of RAM"),
+( 84, outerr_class, "*: * *  Only one alternative for write enable of RAM"),
+( 85, outerr_class, "*: * *  Too many alternatives for write enable of RAM"),
+( 86, outerr_class, "*: * *  Fourth parameter of RAM is not of correct type "
+                    "for write enable"),
+( 87, outerr_class, "*: * *  Too many parameters for RAM"),
+( 88, outerr_class, "*: * *  Not enough parameters for RAM?"),
+( 89, outerr_class, "*: * *"), { Re-use this space }
+( 90, outerr_class, "*: * *"), { Re-use this space }
+( 91, outerr_class, "*: * *"), { Re-use this space }
+( 92, outerr_class, "*: * *"), { Re-use this space }
+( 93, outerr_class, "*: * *  You can't have * * *"),
+( 94, outerr_class, "*: * *"), { Re-use this space }
+( 95, outerr_class, "*: * *  The type of the repeated part mustn't depend on "
+                    "the multiplier variable"),
+( 96, outerr_class, "*: * *  * is exported and this would change it from * to "
+                    "*"),
+( 97, outerr_class, "*: * *  I can't find * in context *"),
+( 98, outerr_class, "*: * *  ; not needed here"),
+( 99, outerr_class, "*: * *  * doesn't need importing"),
+(100, outerr_class, "*: * *  * hasn't been exported"),
+(101, outerr_class, "*: * *  * is * but you are importing *"),
+(102, outerr_class, "*: * *  I can't find context *"),
+(103, outerr_class, "*: * *  I can't find * in the importing context"),
+(104, outerr_class, "*: * *  A FN / MAC declared inside another can't be an "
+                    "IMPORT"),
+(105, outerr_class, "*: * *  *"), { Re-use this space }
+(106, outerr_class, "*: * *  Ambiguity value should be *, not *"),
+(107, outerr_class, "*: * *  RAM read range */(*..*) and write range "
+                    "*/(*..*) must be the same"),
+(108, outerr_class, "*: * *  Third parameter of RAM is not of correct type "
+                    "for read address"),
+(109, outerr_class, "*: * *  This expression will cause arithmetic overflow"),
+(110, outerr_class, "*: * *  INT  * = *..* ?  You must have a range of at "
+                    "least one"),
+(111, outerr_class, "*: * *  (*..*) ?  You must have a range of at least one"),
+(112, outerr_class, "*: * *  */* ?  This is outside the range  */(*..*)"),
+(113, outerr_class, "*: * *  */(*..*) ?  This is outside the range  */(*..*)"),
+(114, outerr_class, "*: * *  */(*..*) ?  This isn't a valid range"),
+(115, outerr_class, "*: * *  You need a VAR name here."),
+(116, outerr_class, "*: * *  You can't REFORM * to *"),
+(117, outerr_class, "*: * *  You must show the order of the calculation of * "
+                    "and * by bracketing"),
+(118, outerr_class, "*: * *  You can't have * overlapping with *"),
+(119, outerr_class, "*: * *  * is a MAC parameter.."),
+(120, outerr_class, "*: * *  * is a named integer.."),
+(121, outerr_class, "*: * *  * is a type name.."),
+(122, outerr_class, "*: * *  * is a name defined by LET.."),
+(123, outerr_class, "*: * *  * is a formal parameter.."),
+(124, outerr_class, "*: * *  * is a name defined by MAKE.."),
+(125, outerr_class, "*: * *  You need a basic value, type name, named "
+                    "integer, attribute name or MAC parameter here."),
+(126, outerr_class, "*: * *  You can't use it to form an ELLA * "),
+(127, outerr_class, "*: * *  You can't use it to form an associated value."),
+(128, outerr_class, "*: * *  You need a basic value, formal parameter, LET, "
+                    "MAKE or VAR name here."),
+(129, outerr_class, "*: * *  You can't use it to recover an associated "
+                    "value."),
+(130, outerr_class, "*: * *  * is a basic value.."),
+(131, outerr_class, "*: * *  You can't start a word with a visible space."),
+(132, outerr_class, "*: * *  The two versions of * are different"),
+(133, outerr_class, "*: * *"), { Re-use this space }
+(134, outerr_class, "*: * *"), { Re-use this space }
+(135, outerr_class, "*: * *  * is an attribute name.."),
+(136, outerr_class, "*: * *  * is a name defined by VAR.."),
+(137, outerr_class, "*: * *  This expression gives a negative square root."),
+(138, outerr_class, "*: * *  You can only use this constant in a CASE "
+                    "chooser."),
+(139, outerr_class, "*: * *  Output can only be ELLA integer, character or "
+                    "non-associated enumerated type"),
+(140, outerr_class, "*: * *"), { Re-use this space }
+(141, outerr_class, "*: * *"), { Re-use this space }
+(142, outerr_class, "*: * *  Character * already defined"),
+(143, outerr_class, "*: * *  Character range must be defined sequentially"),
+(144, outerr_class, "*: * *  You can't have * in a range"),
+(145, outerr_class, "*: * *  ' not needed here"),
+(146, outerr_class, "*: * *  "" not needed here"),
+(147, outerr_class, "*: * *  * not defined for *"),
+(148, outerr_class, "*: * *  ' character needed here"),
+(149, outerr_class, "*: * *  STRING must be composed of single ELLA "
+                    "characters"),
+(150, outerr_class, "*: * *  You must have a printable character here"),
+(151, outerr_class, "*: * *  Tab cannot be used here"),
+(152, outerr_class, "*: * *  Input incompatible with macro function"),
+(153, outerr_class, "*: * *  Implicit parameter only allowed in input OF MAC "
+                    "declarations"),
+(154, outerr_class, "*: * *  Implicit parameters of * must be supplied in a "
+                    "MAKE"),
+(155, outerr_class, "*: * *  * is a constant name"),
+(156, outerr_class, "*: * *  You can't have a ?type here"),
+(157, outerr_class, "*: * *  * is not a subrange of *"),
+(158, outerr_class, "*: * *  Left hand side should have * elements"),
+(159, outerr_class, "*: * *  * can only appear once in any multiple "
+                    "assignment statement"),
+(160, outerr_class, "*: * *  You cannot have all null names in left hand "
+                    "side"),
+(161, outerr_class, "*: * *  You can only have a row or structure here"),
+(162, outerr_class, "*: * *  * ?  interval of SAMPLE must be greater than "
+                    "zero"),
+(163, outerr_class, "*: * *  * ?  skew of SAMPLE must be between -(*) and *"),
+(164, outerr_class, "*: * *  Parameter and result of SAMPLE must have same "
+                    "type"),
+(165, outerr_class, "*: * *  SAMPLE initialisation should be *, not *"),
+(166, outerr_class, "*: * *  * ?  scale of timescaling must be greater than "
+                    "zero"),
+(167, outerr_class, "*: * *  * ?  skew of timescaling must be between -(*) "
+                    "and *"),
+(168, outerr_class, "*: * *  Implicit parameters of * must be supplied in "
+                    "timescaling"),
+(169, outerr_class, "*: * *  Specification and body of * must have the same "
+                    "type, but you have * and *"),
+(170, outerr_class, "*: * *  Timescaling initialisation should be *, not *"),
+(171, outerr_class, "*: * *"), { Re-use this space }
+(172, outerr_class, "*: * *"), { Re-use this space }
+(173, outerr_class, "*: * *"), { Re-use this space }
+(174, outerr_class, "*: * *  You have already joined to parts of the output"),
+(175, outerr_class, "*: * *  OUTPUT statement needed here"),
+(176, outerr_class, "*: * *"), { Re-use this space }
+(177, outerr_class, "*: * *  An input to * needs to be joined to"),
+(178, outerr_class, "*: * *  An output of * needs joining"),
+(179, outerr_class, "*: * *  Both an input and output of * need joining"),
+(180, outerr_class, "*: * *  You have already joined to an element here"),
+(181, outerr_class, "*: * *  You have already joined to a function-type here"),
+(182, outerr_class, "*: * *  You have already supplied part or all of the "
+                    "input here"),
+(183, outerr_class, "*: * *"), { Re-use this space }
+(184, outerr_class, "*: * *  Implicit parameters of * must be supplied in a "
+                    "macro parameter"),
+(185, outerr_class, "*: * *  Specification of * is *, but parameter "
+                    "requires *"),
+(186, outerr_class, "*: * *  FN parameter needed here"),
+(187, outerr_class, "*: * *  * does not need parameters here"),
+(188, outerr_class, "*: * *  MAC parameter needed here"),
+(189, outerr_class, "*: * *  * is * but parameter requires *"),
+(190, outerr_class, "*: * *  * is * and parameter requires * but the macro "
+                    "parameters do not match"),
+(191, outerr_class, "*: * *  Parameter and result of SAMPLE cannot be void"),
+(192, outerr_class, "*: * *  Result for FASTER cannot be void"),
+(193, outerr_class, "*: * *  Parameter for SLOWER cannot be void"),
+(194, outerr_class, "*: * *"), { Re-use this space }
+(195, outerr_class, "*: * *"), { Re-use this space }
+(196, outerr_class, "*: * *"), { Re-use this space }
+(197, outerr_class, "*: * *"), { Re-use this space }
+(198, outerr_class, "*: * *  Compilation abandoned - too many errors"),
+(199, outerr_class, "*: * *  Character not recognised"),
+(200, outerr_class, "*: * *  Illegal radix"),
+(201, outerr_class, "*: * *  Integer too large"),
+(202, outerr_class, "*: * *  Illegal symbol after r"),
+(203, outerr_class, "*: * *  String goes over newline"),
+(204, outerr_class, "*: * *"), { Re-use this space }
+(205, outerr_class, "*: * *  You can't start a comment with MOC"),
+(206, outerr_class, "*: * *  This sort of comment can't go over more than one "
+                    "line"),
+(207, outerr_class, "*: * *  Reached end of file while still inside comment"),
+(208, outerr_class, "*: * *  Wrong sort of terminator for comment"),
+(209, outerr_class, "*: * *  You cannot index this function"),
+(210, outerr_class, "*: * *  You cannot replicate a function type"),
+(211, outerr_class, "*: * *  You cannot replicate an IO"),
+(212, outerr_class, "*: * *"), { Re-use this space }
+(213, outerr_class, "*: * *  A function cannot be equivalent to a macro"),
+(214, outerr_class, "*: * *"), { Re-use this space }
+(215, outerr_class, "*: * *  The inputs do not match"),
+(216, outerr_class, "*: * *  The outputs do not match"),
+(217, outerr_class, "*: * *  The numbers of macro parameters do not match"),
+(218, outerr_class, "*: * *  There is a mis-match in the sorts of macro "
+                    "parameters"),
+(219, outerr_class, "*: * *  There is an implicit/explicit macro parameter "
+                    "mis-match"),
+(220, outerr_class, "*: * *  The details of the macro parameter declarations "
+                    "do not match"),
+(221, outerr_class, "*: * *  The macro parameters of macro parameters do not "
+                    "match"),
+(222, outerr_class, "*: * *  * cannot be substituted for the macro "
+                    "parameter *"),
+(223, outerr_class, "*: * *  First parameter of REPLACE must be a row"),
+(224, outerr_class, "*: * *  Second parameter of REPLACE must be an ELLA "
+                    "integer"),
+(225, outerr_class, "*: * *  Third parameter of REPLACE must match the "
+                    "element "
+                    "TYPE of the first parameter"),
+(226, outerr_class, "*: * *  Lower bound of ELLA integer used for the index "
+                    "must be >= *"),
+(227, outerr_class, "*: * *  Upper bound of ELLA integer used for the index "
+                    "must be <= *"),
+(228, outerr_class, "*: * *  Implicit parameter must be supplied separately "
+                    "to explicit parameters"),
+(229, outerr_class, "*: * *  You need an attribute name here"),
+
+(230, outerr_class, "*: * *  *"),   {Can be used to display any message}
+
+{ The following 4 messages are used to print the !'s, error line, lines after
+  the error line and a line of dots. They are only used in module reader.
+}
+
+(231, outerr_class, "*"), { !'s }
+(232, outerr_class, "*"), { error line }
+(233, outerr_class, "*"), { non-error line }
+(234, outerr_class, "...................."),
+
+{ The following 4 message numbers are reserved for use by ELLAGRAPHICS }
+
+(235, outerr_class, "Compilation has failed"),
+(236, outerr_class, "Current context has been updated"),
+(237, outerr_class, "Compilation has been ignored"),
+(238, outerr_class, "Current context has been updated"),
+
+(239, outerr_class, "*: * *  Incorrect use of bracketing in an attribute"),
+(240, outerr_class, "*: * *  Attribute needed here"),
+(241, outerr_class, "*: * *  Brackets needed here"),
+
+{ The following 4 messages are used to output a list of attribute class names
+  used in the current compilation. PROC compflt in module reader does not count
+  them as error messages
+}
+
+(242, outpart_class, "Attribute class names used:  "),
+(243, outpart_class, ",  "),
+(244, outpart_class, "*"),
+(245, output_class, ""), {newline}
+
+(246, outerr_class, "*: * * Portname * cannot be accessed from here "),
+(247, outerr_class, "*: * * You cannot use a portname here "),
+(248, outerr_class, "*: * * You cannot have IO of * here "),
+(249, outerr_class, "*: * * You cannot have a row of a function type in "
+                    "REPLACE"),
+(250, log_class, "Compiling from  *")
+
+   {{ If you add a new message do not forget to alter INT max_comp_messages }}
+  ) );
+
+PROC  comp_msg = (INT  number) MSGNO:  make_msgno(number, comp_facility);
+PROC  is_comp_msg = (MSGNO  msgno) BOOL: is_facility_msg(msgno, comp_facility);
+
+FORALL message IN messages OF comp_facility
+DO  message := ( ( 0, NIL, 2r0 ), NIL )  OD
+
+
+KEEP  comp_msg, is_comp_msg
+FINISH
