@@ -1,0 +1,4403 @@
+DECS getnetwork CONTEXT VOID USE basics, messageproc, assmodes, import,
+     fntype, sequence, modeprocs, macro, timescale, joins, multimakes,
+     transformprocs, options, closureprocs, libmodes, libinterface,
+     assclosure, netputpkd, putstrings, dumpattr:
+
+{ "  Id: getnetwork.sta,v 2.6 91/06/06 12:57:38 aap Exp $" }
+configinfo A68CONFIG "$Id: getnetwork.a68,v 34.2 1995/03/29 13:03:25 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+   Changes History:
+
+01:12:88  Apollo dependent code corrected. BGH
+10:01:89  Buffer module getnetworkosif used to remove problem of
+             too many modes introduced when osinterface was used directly. BGH
+13.02.89  Fix FNSET component ranges: getfnsetdata, dump_fnsetdatavec. DJD
+16:02:89  Fix R4B098 by making `build_fndec' recursive.  TK
+06:03:89  Fix R4B182 by rectifying omission in build_body.  TK
+06:04:89  Fix R4B272 by dumping title components separately.  DD
+07:04:89  R4B285. Stand-alone dumper has all attrib classes opened
+                     for it.  TK
+18:04:89  Fix R4B277 by correcting typo in `dyassign_port'.  TK
+28:04:89  Fix R4B319 sigstruct error by correcting `rename_port'.   TK
+05:05:89  Fix R4B230 by modifying `portrow' to circumvent Apollo C bug.   TK
+15:08:89  Fix R4B435 by traversing FN bodies to order local decs.   DD
+18:08:89  Fix R4B450 by saving mapping from untransformed type decs.   DD
+18:08:89  Fix R4B437 by correcting fix for R4B098, re-enabling output.   DD
+21:08:89  Fix R4B456 by saving environment of ELLAFN.   DD
+22:08:89  Fix R4B286 by correcting indexing in `fnsetrow_ports'.   DD
+07:09:89  Fix R4B480 by correcting `dyassign' I/O.   DD
+08:09:89  Fix R4B391 (b) by dumping `fnref' with `sigstruct'.   DD
+12:09:89  Fix R4B475 by correcting build_charbv.   DD
+13:09:89  Fix R4B473 by re-establishing types environment for macros.   DD
+15:09:89  Fix R4B431 by keeping hierarchy of type declrns (+new sig).   DD
+22:09:89  Fix R4B478 by distinction of query from 0 in `get_bv'.   DD
+17:12:89  Updated to various mode changes. EVW
+04:12:89  Fix R4B484 by correcting transformed SEQCASE assignments.   SJG
+07:12:89  Fix R4B545 by adding to cases TNAME, TBRACKET in has_tyfn.  SJG
+08:12:89  Fix R4B539 by changing build_typedec; gettypedec to use
+             'is_same_typedec' instead of pointer comparison. SJG
+15:12:89  Fix R4B567 by correcting r4b545 fix to use find_typedec. SJG
+31:01:90  Fix R4B606 in emake_ports by adding struct info. SJG
+31:01:90  Fix R4B604 in sequence_port, and conv_let. SJG
+28:02:90  Fix R4B641 by pruning closure in GETNETWORK/assemble_ellanet,
+             and allowing for null declarations in FNTYPE/typedec_fntype. DD
+11:05:90  Fix R4B645 by correcting misunderstanding of multiple letnames
+             (see 'add_let', and the new procedure 'indextype').  PAR.
+23:08:90  Correct stupid error in "get_int" in "dump_title_data".  PAR.
+12:10:90  Use 'generate_closure' instead on 'declaration_closure' or
+             'context_closure'. MDR
+15:10:90  Correction to imports pruning in assemble_ellanet to allow for
+             empty row of OUTERFNS.  PAR.
+29:11:90  Added check for empty context. MDR.
+07:02:91  Call "expand" a second time (now needed by transformations).  PAR.
+28:05:91  Insert an ugly and risky kludge to preserve the information that
+             a function is in fact a transformed macro.  00158.  PAR.
+29:05:91  Correct sort of macro parameters (including CONST).  PAR.
+29:05:91  Make build_decl tolerate contextno=0 (for _DELAY).  PAR.
+30:05:91  Further handling of CONST macro parameters.  PAR.
+30:05:91  Change dump file signature for the above changes.  PAR.
+06:06:91  Signature changed back for compatibility with LOCAM.  AAP
+25:01:90  CR 642. Updated to RSRE kernel.  EVW
+17:12:89  Updated to various mode changes. EVW
+27:02:90  Temporary fix to ignore import bodies. EVW
+11:04:90  Added timescaling + 2nd macro transformation. EVW
+11:04:90  Added SAMPLE and CONST and FN parameters to macros. EVW
+26:06:90  CR 643. Updated to fntype mode changes. EVW
+17:07:90  LIBMODES and ASSCLOSURE added to USE list. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+07:12:90  assemble_ellanet could not cope with an empty outerfns.  DCT
+08:04:91  Call of get_allimports now needed after call of get_allbodies. JIT
+02:09:91  R6B67.  Add joins and mulitmakes transforms. EVW
+02:10:91  Updated to version 7 of assembler modes. EVW
+16:12:91  BODYDATA removed. EVW
+17:03:92  Multiple strings added to CQUOTE. EVW
+ 5:05:92  Remove type_source type_sink calls, new spec fo fndec_tfn. DJS
+29:07:92  Changes made for CONST / UNIT mode change. JIT
+10:11:92  Updated for 'chars' mode changes. JIT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.058 14:01:93  {outerattr} arm
+                                  added to two CASE clauses. JIT 08:02:93 
+                                  Merged assembling of specs and bodies. EVW
+                                  10:02:93  Remove check for empty context -
+                                  caught elsewhere. EVW 13:05:93  Handling of
+                                  replicators altered. EVW 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+COMMENT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  The following need to be handled by ELLANET.
+
+  FNSET specs and fntypes in specs  - Look for ??
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! COMMENT
+{***************************************************************************
+                            ----------------------
+                           |                      |
+                           |      THE MODES       |
+                           |                      |
+                            ----------------------
+ ***************************************************************************}
+
+
+MODE ELLACT = STRUCT(ID declname, importsname),
+     DECL = STRUCT(ID name, INT num, enclfn, ELLACT context),
+
+{******* Integers and Formulas *******}
+
+     EARITH,
+     ARMOP = STRUCT(INT mop, REF EARITH operand),
+       {mop - 1: mopplus, 2: mopminus, 3: not, 4: inot, 5: sqrt, 6: abs}
+
+     ARDYOP = STRUCT(INT dyop, REF EARITH left, right),
+       {dyop - 1: dyplus, 2: dyminus, 3: mult, 4: idiv, 5: eq, 6: ne,
+               7: le, 8: ge, 9: lth, 10: gth, 11: and, 12: or, 13:sl,
+               14: sr, 15: iand, 16: ior, 17: mod}
+
+     ACOND = STRUCT(REF EARITH cond, t, f),
+
+     INSTMPAR, SIGSOURCE, ALIAS,
+
+     EARITH = UNION(INT {ar_int}, REF ALIAS {ar_inp},
+                    REF ARMOP, REF ARDYOP, REF ACOND),
+
+     ERANGE = STRUCT(INT lwb, upb),
+
+{****** Macros ******}
+
+     MACDEC,
+     EMACPARAM = STRUCT(ID name,
+                        INT mode {1 - mptype, 2 - mpint, 3 - mpconst, 4 - mpfn},
+                        REF MACDEC macdec),
+
+     FNVEC,
+     MACDEC = STRUCT(DECL dec,
+                     INT vspec, vbody,
+                     REF VECTOR[]EMACPARAM params,
+                     REF FNVEC fns),
+     MACDECVEC = STRUCT(REF MACDEC elem, REF MACDECVEC rest),
+
+     ELLATYPE, CONSTVAL, ELLAFN,
+     CONSTMPAR = STRUCT (CONSTVAL const),
+     INSTMPARMODE = UNION(REF ELLATYPE, INT, CONSTMPAR, REF ELLAFN),
+     INSTMPAR = STRUCT(REF EMACPARAM mpar, INSTMPARMODE mode),
+
+{****** Types ******}
+
+     BVMODE = UNION(REF ELLATYPE {bvenum}, INT {bvint}, CHAR {bvchar}),
+     BV = STRUCT(ID name, REF ELLATYPE type, BVMODE bvmode),
+     TYPEVEC = STRUCT(REF ELLATYPE elem, REF TYPEVEC rest),
+
+     TYROW = STRUCT(INT size, REF ELLATYPE rowelem),
+     TYFN = STRUCT(REF ELLATYPE from, to),
+     TYDEC,
+     TYPEMODE = UNION(INT
+                    {1 - tyenum, 2 - tyint, 3 - assoc, 4 - tychar, 5 - tyvoid},
+                      REF TYDEC, REF TYROW, REF TYPEVEC {tystr}, REF TYFN),
+     BVRANGE = STRUCT(BV lwb, upb),
+     VALUE = UNION(REF BV, REF BVRANGE),
+     ELLATYPE = STRUCT(REF VECTOR[]VALUE values, TYPEMODE mode, REF TYDEC dec),
+
+     TYDEC = STRUCT(DECL dec, REF ELLATYPE type,
+                    REF TYPEDEC assemdec, REF ENVIRON environ
+                     {corresponding assembler dec and environ}),
+     TYPEDECVEC = STRUCT(REF TYDEC elem, REF TYPEDECVEC rest),
+
+{****** Signals ******}
+
+     EMAKE, SIGDEST, ALIASVEC, SDVEC,
+     SSINPUT = STRUCT(REF ELLAFN fn, INT num),
+     SSOUTPUT = STRUCT(REF EMAKE make, INT num),
+     SSMODE = UNION(REF SSINPUT, REF SSOUTPUT, REF BV {ssbv}),
+     SIGSOURCE = STRUCT(SSMODE ssmode, REF ELLATYPE type,
+                        REF ALIASVEC aliases),
+     SSVEC = STRUCT(REF SIGSOURCE elem, REF SSVEC rest),
+
+     SDCASE = STRUCT(REF EMAKE casemake, INT limb),
+     SDMODE = UNION(REF ELLAFN {sdoutput}, REF EMAKE {sdinput}, REF SDCASE),
+     SIGSTRUCT, SEQSTEPVEC,
+     SIGDEST = STRUCT(SDMODE sdmode,
+                      INT num,
+                      REF ELLATYPE type,
+                      REF ALIAS source),
+
+     SDVEC = STRUCT(REF SIGDEST elem, REF SDVEC rest),
+     PORT,
+     PORTROW = STRUCT(REF VECTOR[]PORT row),
+     PORTREF = STRUCT(REF PORT ref),
+     PORT = UNION(REF ALIAS, REF SIGDEST, REF PORTROW, PORTREF),
+
+     SIGSTRUCT = STRUCT(INT num, REF ELLATYPE type, REF PORT ports,
+                        REF ELLAFN withinfn, REF SEQSTEPVEC seqbody),
+
+     ALIAS = STRUCT(ID name,
+                    REF SIGSTRUCT struct,
+                    REF SDVEC dests,
+                    REF SIGSOURCE sigsource),
+      {the `sigstructvec' can be calculated as required from the sigstruct}
+
+     ALIASVEC = STRUCT(REF ALIAS elem, REF ALIASVEC rest),
+
+{****** Functions ******}
+
+     SPEC, SPECVEC, MAKEVEC,
+     INPAR = STRUCT(ID name, REF ELLATYPE type, untranstype),
+     SPNORMAL = STRUCT(REF VECTOR[]INPAR inparams,
+                       REF ELLATYPE outtype, untransouttype),
+     EFNSETROW = STRUCT(INT size, REF SPNORMAL elem),
+     SPEC = UNION(REF SPNORMAL {normal},
+                  REF EFNSETROW {isfnsetrow},
+                  REF SPECVEC {isfnsetstr}),
+     SPECVEC = STRUCT(REF SPNORMAL elem, REF SPECVEC rest),
+
+     EIMPORT = STRUCT(ID impname, ELLACT impcontext),
+     SIMPLEFN = STRUCT(INT simplefn),
+        {1 - emptyfn, 2 - unit, 3 - macleaffn, 4 - reform}
+
+     DELAYINFO, SAMPLEINFO,
+
+     EBIOP = STRUCT(ID name, REF VECTOR[]INT pars),
+     LEAFSETFN = STRUCT(INT leaftype),
+
+     EFNBODY = UNION(REF SIMPLEFN,
+                     REF EBIOP {biop},
+                     REF LEAFSETFN,  {unused until dump file goes}
+                     REF EARITH,
+                     REF EIMPORT {import},
+                     REF DELAYINFO {delay},
+                     CONSTVAL {ramfn},
+                     REF SAMPLEINFO {sample}),
+
+     FNMODEINFO = STRUCT(INT macexpmode {unused until dump file goes},
+                         REF VECTOR[]INSTMPAR mpars, REF MACDEC macdec),
+     FNMODE = UNION(VOID {function}, REF FNMODEINFO {macro}),
+     FNSETDATA = STRUCT(INT il, iu, ol, ou, REF FNSETDATA rest),
+     FTINFO = STRUCT(INT lwb, upb, REF FTINFO rest),
+
+     ELLAFN = STRUCT(DECL dec,
+                     REF FNVEC fndecs,
+                     REF MACDECVEC macdecs,
+                     REF TYPEDECVEC typedecs,
+                     INT nins, nouts, vspec, vbody,
+                     SPEC spec,
+                     REF FNSETDATA fnsetdata,
+                     REF FTINFO inftinfo, outftinfo,
+                     REF ELLATYPE intype, outtype,
+                     FNMODE mode,
+                     EFNBODY body,
+                     REF VECTOR[] REF SIGSOURCE inputs,
+                     REF VECTOR[] REF SIGDEST outputs,
+                     REF MAKEVEC makesof, uses,
+                     INT nmakesof,
+                     REF VECTOR[]PORT namedoutputs, {named drivers}
+                                      namedinputs, {inputs of named makes}
+                     REF VECTOR[] REF TYDEC env_tydecs, {environment types}
+                     REF FNDEC assemdec {corresponding assembler dec}),
+
+     FNVEC = STRUCT(REF ELLAFN elem, REF FNVEC rest),
+
+{****** Function Instances ******}
+
+     CASECHOICEVEC,
+     MAKEMODE = UNION(INT, {1 - normalmake, 2 - transparent,
+                            3 - assocmake, 4 - extractmake, 5 - concmake,
+                            6 - dyindexmake, 7 - dyassignmake}
+                      REF CASECHOICEVEC {casemake}),
+
+     EMAKE = STRUCT(ID name, REF IDS attnames, INT num, index,
+                    REF ELLAFN fnmade, withinfn,
+                    REF VECTOR[]REF SIGDEST inputs,
+                    REF VECTOR[]REF SIGSOURCE outputs,
+                    {REF INSTLIST instances; needed when dump file goes}
+                    REF BV bv,  {for assoc, extract operations}
+                    MAKEMODE makemode),
+     MAKEVEC = STRUCT(REF EMAKE elem, REF MAKEVEC rest),
+
+{****** Constant Values ******}
+
+     CVVEC,
+     CAVAL = STRUCT(REF BV bv, CONSTVAL assoc),
+     CONQUERY = STRUCT(REF ELLATYPE type),
+     CRVAL = STRUCT(REF ELLATYPE type, ERANGE range),
+     CRCHAR = STRUCT(REF ELLATYPE type, CHAR lwb, upb),
+     CVROW = STRUCT(INT size, CONSTVAL item),
+     CVSTR = STRUCT(REF CVVEC cvstr),
+     CVALTS = STRUCT(REF CVVEC cvalts),
+     CVVOID = STRUCT(INT cvoid),
+
+     CONSTVAL = UNION(REF ELLATYPE {ctval}, REF BV {ccval},
+                      REF CRVAL, REF CVROW,
+                      REF CAVAL, REF CONQUERY, REF CRCHAR,
+                      REF CVSTR, REF CVALTS, REF CVVOID, VOID {cnull}),
+     CVVEC = STRUCT(CONSTVAL elem, REF CVVEC rest),
+
+{****** Delays ******}
+
+     SIMPLEDEL = STRUCT(INT simpledel), {1 - pure, 2 - inertial}
+     AMBIG = STRUCT(INT risetime, CONSTVAL xstate),
+     DELAYMODE = UNION(REF SIMPLEDEL, REF AMBIG),
+     DELAYINFO = STRUCT(CONSTVAL initstate, INT totaltime,
+                        DELAYMODE mode),
+
+{******* Sample *****}
+
+     SAMPLEINFO = STRUCT(INT intervaltime, CONSTVAL initstate, INT skewtime),
+
+{****** Sequences ******}
+
+     LETINFO = STRUCT(ID name, REF PORT sources, BOOL isvar),
+     PVAR = STRUCT(ID name, CONSTVAL init),
+     ASSIGN = STRUCT(REF PORT lhs, rhs),
+     SEQDEC = STRUCT(INT sort, num),
+     SQSTEP,
+     SEQCHOICE = STRUCT(CONSTVAL select, SQSTEP out,
+                        INT mode {1 - seqof, 2 - seqelseof,
+                                  3 - seqelse, 4 - seqdefelse}),
+     SEQCHOICEVEC = STRUCT(SEQCHOICE elem, REF SEQCHOICEVEC rest),
+     SQCASE = STRUCT(REF PORT chooser, REF SEQCHOICEVEC choices),
+     SEQSTEPVEC = STRUCT(SQSTEP elem, REF SEQSTEPVEC rest),
+
+     SQSTEP = UNION( REF LETINFO, REF PVAR, REF ASSIGN,
+                     REF SQCASE, VOID {seqnull},
+                     REF SEQDEC, REF SEQSTEPVEC {seqgroup}),
+
+{****** CASE Statements ******}
+
+     CASECHOICE = STRUCT(CONSTVAL selector, REF VECTOR[]REF SIGDEST dests,
+                         INT mode {1 - of, 2 - elseof, 3 - else, 4 - implicit}),
+     CASECHOICEVEC = STRUCT(CASECHOICE elem, REF CASECHOICEVEC rest);
+
+{****** Null Constants ******}
+
+REF ALIAS nilalias = NIL;
+REF ALIASVEC nilaliasvec = NIL;
+HEAP VECTOR[0]VALUE nilvaluevec;
+REF BV nilbv = NIL;
+REF CASECHOICEVEC nilcasechoicevec = NIL;
+REF CVVEC nilcvvec = NIL;
+REF ELLAFN nilellafn = NIL;
+REF ELLATYPE nilellatype = NIL;
+REF FNSETDATA nilfnsetdata = NIL;
+REF FNVEC nilfnvec = NIL;
+REF FTINFO nilftinfo = NIL;
+REF MACDECVEC nilmacdecvec = NIL;
+HEAP VECTOR[0]EMACPARAM nilmacparamvec;
+REF MAKEVEC nilmakevec = NIL;
+REF PORT nilport = NIL;
+REF SDVEC nilsdvec = NIL;
+REF SEQCHOICEVEC nilseqchoicevec = NIL;
+REF SEQSTEPVEC nilseqstepvec = NIL;
+REF SIGSTRUCT nilsigstruct = NIL;
+REF SPECVEC nilspecvec = NIL;
+REF SSVEC nilssvec = NIL;
+REF TYDEC niltydec = NIL;
+REF TYPEVEC niltypevec = NIL;
+REF TYPEDECVEC niltypedecvec = NIL;
+
+
+
+{***************************************************************************
+                        ----------------------
+                        |  THE SYSTEM STATE  |
+                        ----------------------
+ **************************************************************************}
+
+{***** Globals which indicate the EASE commands used prior to dumping *****}
+
+BOOL att_set, {true if `setxtractattributes' called}
+     imp_set, {true if `setxtractimports' called}
+     seq_set; {true if `setxtractsequence' called}
+
+CREGION cr; {indicates the context and region being dumped }
+ID rootfn;  {holds the function name nominated by `setxtractfn'}
+RCH outfile;  {channel number of dump file}
+BOOL dumpdiag;  {if TRUE, puts dumper diagnostics in dump file}
+
+{                     ***************************                  }
+
+{***** The following lists hold the network declarations and are intended
+       to be returned by `allconstants', etc *****}
+
+REF FNVEC ellafunctions;                {top-level fn decs}
+REF MACDECVEC ellamacros;               {top-level macro decs}
+REF TYPEDECVEC ellatypes;               {top-level type decs}
+
+REF SSVEC basicdrivers;                 {constant signals of circuit}
+
+CLOSURE closure;        {The assembler closure}
+REF ENVIRON environ;    {The current assembler environment}
+
+INT ntypedecs,  {number of type decs processed so far}
+    nmacdecs,   {number of macro decs processed so far}
+    nfndecs,    {number of function decs processed so far}
+    nbasicdrivers;  {number of basic drivers processed so far}
+
+MESSAGEPROC msg;
+FLTPROC flt;   {the global saves having to put `flt' as an argument everywhere}
+
+PROC bv_queryname = ID: MAKEID " ?";
+
+
+{*********************** Appending procedures ********************************}
+
+{  These append items to lists}
+
+PROC appmacdec = (REF MACDEC macdec, REF REF MACDECVEC vec) VOID:
+BEGIN
+   REF REF MACDECVEC temp := vec;
+   WHILE temp ISNT nilmacdecvec DO temp := rest OF temp OD;
+   REF REF MACDECVEC(temp) := HEAP MACDECVEC := (macdec, nilmacdecvec)
+END;
+
+PROC appfn = (REF ELLAFN fn, REF REF FNVEC vec) VOID:
+BEGIN
+   REF REF FNVEC temp := vec;
+   WHILE temp ISNT nilfnvec DO temp := rest OF temp OD;
+   REF REF FNVEC(temp) := HEAP FNVEC := (fn, nilfnvec)
+END;
+
+PROC apptypedec = (REF TYDEC tydec, REF REF TYPEDECVEC vec) VOID:
+BEGIN
+   REF REF TYPEDECVEC temp := vec;
+   WHILE temp ISNT niltypedecvec DO temp := rest OF temp OD;
+   REF REF TYPEDECVEC(temp) := HEAP TYPEDECVEC := (tydec, niltypedecvec)
+END;
+
+PROC appsigsource = (REF SIGSOURCE ss, REF REF SSVEC vec) VOID:
+BEGIN
+   REF REF SSVEC temp := vec;
+   WHILE temp ISNT nilssvec DO temp := rest OF temp OD;
+   REF REF SSVEC(temp) := HEAP SSVEC := (ss, nilssvec)
+END;
+
+PROC appmake = (REF EMAKE make, REF REF MAKEVEC vec) VOID:
+BEGIN
+   REF REF MAKEVEC temp := vec;
+   WHILE temp ISNT nilmakevec DO temp := rest OF temp OD;
+   REF REF MAKEVEC(temp) := HEAP MAKEVEC := (make, nilmakevec)
+END;
+
+PROC appsigdest = (REF SIGDEST sd, REF REF SDVEC vec) VOID:
+BEGIN
+   REF REF SDVEC temp := vec;
+   WHILE temp ISNT nilsdvec DO temp := rest OF temp OD;
+   REF REF SDVEC(temp) := HEAP SDVEC := (sd, nilsdvec)
+END;
+
+PROC appalias = (REF ALIAS alias, REF REF ALIASVEC vec) VOID:
+BEGIN
+   REF REF ALIASVEC temp := vec;
+   WHILE temp ISNT nilaliasvec DO temp := rest OF temp OD;
+   REF REF ALIASVEC(temp) := HEAP ALIASVEC := (alias, nilaliasvec)
+END;
+
+
+{***** The Relationship between the ELLANET and Assembler Environments ******}
+
+{ procedures to compare Assembler TYPEs, TYPEDECs }
+
+PROC (TYPE, TYPE, REF ENVIRON, REF ENVIRON)BOOL is_same_type;
+
+PROC is_same_typebody = (TYPEBODY typebody1, typebody2, REF ENVIRON env1, env2)
+                                                                          BOOL:
+BEGIN
+
+   PROC is_same_alternatives = (REF VECTOR [] ALTERNATIVE alt1, alt2) BOOL:
+      BEGIN
+         BOOL same_so_far := (UPB alt1 = UPB alt2);
+         FOR i TO UPB alt1 WHILE same_so_far
+         DO
+            same_so_far :=
+               altname OF alt1[i] = altname OF alt2[i] ANDTH
+                is_same_type(assoc OF alt1[i], assoc OF alt2[i], env1, env2)
+         OD;
+         same_so_far
+      END;
+
+   PROC is_same_newints = (REF NEWINTS int1, int2) BOOL:
+      tagname OF int1 = tagname OF int2
+      ANDTH formula_int(lwb OF range OF int1,flt) =
+            formula_int(lwb OF range OF int2,flt)
+      ANDTH formula_int(upb OF range OF int1,flt) =
+            formula_int(upb OF range OF int2,flt);
+
+   PROC is_same_newchars = (REF NEWCHARS char1, char2) BOOL:
+   BEGIN
+      BOOL same_so_far := (tagname OF char1 = tagname OF char2) ANDTH
+                          (UPB chars OF char1 = UPB chars OF char2);
+      IF same_so_far
+      THEN REF VECTOR [] CHAR chars1 = chars OF char1,
+                              chars2 = chars OF char2;
+           FOR i TO UPB chars1 WHILE same_so_far
+           DO IF chars1[i] /= chars2[i] THEN same_so_far := FALSE FI OD
+      FI;
+      same_so_far
+   END;
+
+   PROC is_same_typetag = (REF TYPETAG typetag1, typetag2) BOOL:
+      is_same_type(tag OF typetag1,tag OF typetag2,env1,env2);
+
+   CASE typebody1 IN
+   (REF VECTOR []ALTERNATIVE alt1)
+      CASE typebody2 IN
+      (REF VECTOR []ALTERNATIVE alt2) is_same_alternatives(alt1,alt2)
+      OUT FALSE
+      ESAC
+  ,(REF NEWINTS int1)
+      CASE typebody2 IN
+      (REF NEWINTS int2) is_same_newints(int1,int2)
+      OUT FALSE
+      ESAC
+  ,(REF NEWCHARS char1)
+      CASE typebody2 IN
+      (REF NEWCHARS char2) is_same_newchars(char1,char2)
+      OUT FALSE
+      ESAC
+  ,(REF TYPETAG typetag1)
+      CASE typebody2 IN
+      (REF TYPETAG typetag2) is_same_typetag(typetag1,typetag2)
+      OUT FALSE
+      ESAC
+   ESAC
+END; { is_same_typebody }
+
+PROC is_same_typedec = (TYPEDEC typedec1, typedec2, REF ENVIRON env1, env2)BOOL:
+   typename OF typedec1 = typename OF typedec2
+   ANDTH is_same_typebody(body OF typedec1,body OF typedec2,env1,env2);
+
+is_same_type := (TYPE type1,type2, REF ENVIRON env1, env2) BOOL:
+   CASE type1 IN
+   (REF TNAME tname1)
+      CASE type2 IN
+      (REF TNAME tname2)
+         is_same_typedec((types OF env1)[typeno OF tname1],
+                         (types OF env2)[typeno OF tname2], env1, env2)
+      OUT FALSE
+      ESAC
+  ,(REF TMACPAR tmacpar1)
+      CASE type2 IN
+      (REF TMACPAR tmacpar2)
+          (macparno OF tmacpar1 = macparno OF tmacpar2)
+      OUT FALSE
+      ESAC
+  ,(REF TROW trow1)
+      CASE type2 IN
+      (REF TROW trow2)
+         formula_int(size OF trow1,msg) = formula_int(size OF trow2,msg)
+         ANDTH is_same_type(elem OF trow1,elem OF trow2, env1,env2)
+      OUT FALSE
+      ESAC
+  ,(REF TSTR tstr1)
+      CASE type2 IN
+      (REF TSTR tstr2)
+         (tstr1 IS niltstr) AND (tstr2 IS niltstr)
+         OREL (is_same_type(elem OF tstr1,elem OF tstr2,env1,env2)
+               ANDTH is_same_type(rest OF tstr1,rest OF tstr2,env1,env2))
+      OUT FALSE
+      ESAC
+  ,(REF TFN tfn1)
+      CASE type2 IN
+      (REF TFN tfn2)
+         is_same_type(from OF tfn1,from OF tfn2,env1,env2) ANDTH
+         is_same_type(to OF tfn1,to OF tfn2,env1,env2)
+      OUT FALSE
+      ESAC
+  ,(REF TSTRING tstring1)
+      CASE type2 IN
+      (REF TSTRING tstring2)
+         formula_int(size OF tstring1,msg)=formula_int(size OF tstring2,msg)
+         ANDTH is_same_type(char OF tstring1,char OF tstring2,env1,env2)
+      OUT FALSE
+      ESAC
+  ,(REF TBRACKET tbracket1)
+      CASE type2 IN
+      (REF TBRACKET tbracket2)
+         is_same_type(type OF tbracket1,type OF tbracket2,env1,env2)
+      OUT FALSE
+      ESAC
+  ,(REF TVOID)
+      CASE type2 IN
+      (REF TVOID) TRUE
+      OUT FALSE
+      ESAC
+  ,(REF TNULL)
+      CASE type2 IN
+      (REF TNULL) TRUE
+      OUT FALSE
+      ESAC
+   ESAC; { end of is_same_type }
+
+
+{ Procs which return already-existing ELLANET decs, given assembler
+  dec numbers }
+
+{{added by EVW to cope with outputs which have several terminals }}
+PROC output_type = (REF FNDEC fndec) TYPE:
+BEGIN
+REF TFN tf = fndec_tfn(fndec);
+  to OF tf
+END;
+
+PROC get_context = (INT contextno) ELLACT:
+BEGIN
+   CTNAME ctname = CTN ctno_region(contextno);
+   (context OF ctname, import OF ctname)
+END;
+
+MODE   TYDECS = REF VECTOR[] REF TYDEC;
+TYDECS niltydecs = NIL;
+TYDECS   environ_tydecs;
+
+PROC gettypedec = (INT decno) REF TYDEC:
+BEGIN
+   REF TYDEC result := IF   environ_tydecs IS niltydecs THEN   NIL
+                       ELSE   environ_tydecs[decno]
+                       FI;
+
+   IF result IS niltydec
+   THEN
+      REF TYPEDEC assemdec = (types OF environ)[decno];
+
+      REF TYPEDECVEC mapping := ellatypes;
+
+      WHILE (result IS niltydec) ANDTH (mapping ISNT niltypedecvec)
+      DO IF is_same_typedec(assemdec OF elem OF mapping, assemdec,
+                            environ OF elem OF mapping, environ)
+         THEN result := elem OF mapping
+         FI;
+         mapping := rest OF mapping
+      OD
+   FI;
+
+   IF   result IS niltydec THEN    flt("type declaration missing") FI;
+   result
+END;
+
+PROC getfndec = (INT decno) REF ELLAFN:
+BEGIN
+   REF FNDEC assemdec = (fns OF environ)[decno];
+
+   REF ELLAFN result;
+   BOOL found := FALSE;
+
+   REF FNVEC mapping := ellafunctions;
+   WHILE (mapping ISNT nilfnvec) ANDTH NOT found
+   DO REF FNDEC mapdec = assemdec OF elem OF mapping;
+      found :=
+         IF sort OF assemdec = outerdec
+         THEN sort OF mapdec = outerdec ANDTH
+               (closureno OF usage OF assemdec = closureno OF usage OF mapdec)
+         ELSE assemdec IS mapdec
+         FI;
+      IF found
+      THEN result := elem OF mapping
+      FI;
+      mapping := rest OF mapping
+   OD;
+
+   IF NOT found THEN flt("function declaration missing") FI;
+   result
+END;
+
+PROC get_attrids = (ATTR attr) REF IDS:
+BEGIN
+   REF IDS ans := nilids;
+   REF REF IDS ansptr := ans;
+   CASE attr IN
+   (REF ATTRNAME an)
+      ( REF ATTRDEC adec = (attrs OF environ)[attrno OF an];
+        REF REF IDS (ansptr) := HEAP IDS := (attrname OF adec, nilids);
+        ansptr := rest OF ansptr
+      ),
+   (REF ATTRSTR as)
+      ( REF ATTRSTR ats := as;
+        WHILE ats ISNT nilattrstr
+        DO  REF REF IDS (ansptr) := get_attrids(elem OF ats);
+            WHILE ansptr ISNT nilids DO ansptr := rest OF ansptr OD;
+            ats := rest OF ats
+        OD
+      ),
+   (REF ATTRBRACKET ab) ans := get_attrids(attr OF ab)
+   OUT SKIP
+   ESAC;
+   ans
+END;
+
+PROC get_char = (REF ELLATYPE etype, INT charno) CHAR:
+CASE (values OF etype)[charno] IN
+(REF BV bv) CASE bvmode OF bv IN
+            (CHAR c) c
+            OUT flt("char not found in get_char"); "?"
+            ESAC
+OUT flt("char not found in get_char"); "?"
+ESAC;
+
+
+{****************************************************************************
+          ------------------------------------------------------
+          |  THE STORAGE OF THE UNTRANSFORMED FUNCTION SPECS   |
+          ------------------------------------------------------
+ ****************************************************************************}
+
+{ Before the fntypes are transformed, the function specs must be saved if
+  they contain function types.
+  Any types associated with function specs which contain function types are
+  stored in `savedtypes';
+  copies are made because the original types will be lost when `closure'
+  is overwritten as a result of the application of `transform_fntypes'.
+
+  The fndecs are processed by taking each outer fndec in turn.
+  Each fndec in the environment corresponding to the outer fndec is processed
+  and then the outer fndec itself is processed.
+}
+
+REF TSTR  savedtypes;
+MODE FNDECVEC = STRUCT(REF FNDEC fndec, REF FNDECVEC rest);
+REF FNDECVEC nilfndecvec = NIL;
+REF FNDECVEC savedfndecs;
+
+PROC appfndec = (REF FNDEC fndec) VOID:
+BEGIN
+   REF REF FNDECVEC vec := savedfndecs;
+   WHILE vec ISNT nilfndecvec
+   DO vec := rest OF vec OD;
+   REF REF FNDECVEC (vec) := HEAP FNDECVEC := (fndec, nilfndecvec)
+END;
+
+PROC fndecnotdone = (REF FNDEC fndec) BOOL:
+BEGIN
+   BOOL found := FALSE;
+   REF FNDECVEC vec := savedfndecs;
+   WHILE (vec ISNT nilfndecvec) ANDTH NOT found
+   DO found := fndec OF vec IS fndec;
+      vec := rest OF vec
+   OD;
+   NOT found
+END;
+
+PROC copytype = (TYPE type) TYPE:
+BEGIN
+   PROC copytstr = (REF TSTR tstr) REF TSTR:
+      IF tstr IS niltstr THEN niltstr
+      ELSE HEAP TSTR := (copytype(elem OF tstr), copytstr(rest OF tstr))
+      FI;
+
+   CASE type IN
+   (REF TNAME tname) HEAP TNAME := tname
+  ,(REF TMACPAR tmacpar)  MAKETMACPAR(macparno OF tmacpar)
+  ,(REF TSTRING tstring)
+        HEAP TSTRING := (HEAP FINT := CASE size OF tstring IN
+                                      (REF FINT fint) fint
+                                      ESAC,
+                         copytype(char OF tstring)
+                        )
+  ,(REF TROW trow)
+      HEAP TROW := (HEAP FINT := CASE size OF trow IN (REF FINT fint) fint ESAC,
+                    copytype(elem OF trow))
+  ,(REF TSTR tstr) copytstr(tstr)
+  ,(REF TFN tfn) HEAP TFN := (copytype(from OF tfn), copytype(to OF tfn))
+  ,(REF TVOID) tvoid
+   OUT flt("Unexpected type in copytype"); type
+   ESAC
+END;
+
+{ Detects function types in an assembler type }
+
+PROC has_tyfn = (TYPE type) BOOL:
+   CASE type IN
+   (REF TNAME tname)
+      CASE body OF (types OF environ)[typeno OF tname] IN
+      (REF TYPETAG typetag) has_tyfn(tag OF typetag)
+      OUT FALSE
+      ESAC
+  ,(REF TROW trow) has_tyfn(elem OF trow)
+  ,(REF TSTR tstr)
+      IF tstr IS niltstr THEN FALSE
+      ELSE has_tyfn(elem OF tstr) OREL has_tyfn(rest OF tstr)
+      FI
+  ,(REF TFN) TRUE
+  ,(REF TBRACKET tbracket) has_tyfn(type OF tbracket)
+   OUT FALSE
+   ESAC;
+
+{Appends type to `savedtypes'}
+
+PROC apptype = (TYPE type) VOID:
+BEGIN
+   REF REF TSTR typelist := savedtypes;
+   WHILE typelist ISNT niltstr DO typelist := rest OF typelist OD;
+   REF REF TSTR(typelist) := HEAP TSTR := (type,niltstr)
+END;
+
+{ `getspec' stores the spec of a fndec in `savedtypes' }
+
+PROC (REF FNDEC)VOID getspec;
+
+PROC process_decl = (DECLARATION declaration) VOID:
+   CASE declaration IN
+   (FNNAME fnname)
+      (REF FNDEC fndec = (fns OF environ)[fnno OF fnname];
+       getspec(fndec)
+      )
+   OUT SKIP
+   ESAC;
+
+PROC process_unit = (UNIT unit) VOID:
+BEGIN
+   PROC process_series = (REF SERIES series) VOID:
+      IF series ISNT nilseries
+      THEN CASE step OF series IN
+           (DECLARATION dec) process_decl(dec)
+          ,(REF LET let) process_unit(unit OF let)
+          ,(REF JOIN join) process_unit(from OF join)
+           OUT SKIP
+           ESAC;
+           process_series(rest OF series)
+      FI;
+
+   PROC process_sequence = (REF SEQUENCE sequence) VOID:
+   BEGIN
+      PROC process_seqstep = (SEQSTEP seqstep) VOID:
+         CASE seqstep IN
+         (DECLARATION dec) process_decl(dec)
+        ,(REF SEQLET seqlet) process_unit(unit OF seqlet OF seqlet)
+        ,(REF SEQVAR seqvar) process_unit(unit OF seqvar OF seqvar)
+        ,(REF SEQASSIGN seqassign)
+            (process_unit(from OF seqassign);
+             process_unit(to OF seqassign))
+        ,(REF SEQCASE seqcase)
+            (process_unit(input OF seqcase);
+             PROC process_choices = (REF SEQCHOICES choices) VOID:
+                IF choices ISNT nilseqchoices
+                THEN process_seqstep(output OF choices);
+                     process_choices(rest OF choices)
+                FI;
+             process_choices(choices OF seqcase)
+            )
+        ,(REF SEQREPL seqrepl) process_seqstep(body OF seqrepl)
+        ,(REF SEQROW seqrow) process_seqstep(elem OF seqrow)
+        ,(REF SEQUENCE seq) process_sequence(seq)
+         OUT SKIP
+         ESAC;
+
+      IF sequence ISNT nilsequence
+      THEN process_seqstep(step OF sequence);
+           process_sequence(rest OF sequence)
+      FI
+   END;
+
+   {Body of process_unit follows!}
+   CASE unit IN
+   (REF UASSOC uassoc) process_unit(assoc OF uassoc)
+  ,(REF UEXTRACT uextract) process_unit(extract OF uextract)
+  ,(REF UPORTNAME uterm)  process_unit(unit OF uterm)
+  ,(REF UINDEX uindex) process_unit(unit OF uindex)
+  ,(REF UTRIM utrim) process_unit(unit OF utrim)
+  ,(REF UDYINDEX udyindex)
+      (process_unit(index OF udyindex); process_unit(unit OF udyindex))
+  ,(REF UREPLACE ureplace)
+      (process_unit(unit OF ureplace); process_unit(index OF ureplace);
+       process_unit(from OF ureplace) )
+  ,(REF UROW urow) process_unit(elem OF urow) {only needs to be done once}
+  ,(REF USTR ustr)
+      (REF USTR str := ustr;
+       WHILE str ISNT ustr
+       DO process_unit(elem OF str); str := rest OF str OD
+      )
+  ,(REF USTRING ustring) process_unit(char OF ustring)
+  ,(REF UCONC uconc)
+      (process_unit(left OF uconc); process_unit(right OF uconc))
+  ,(REF UMINST uminst) process_unit(right OF uminst)
+  ,(REF UDINST udinst)
+      (process_unit(left OF udinst); process_unit(right OF udinst))
+  ,(REF UCASE ucase)
+      (process_unit(input OF ucase);
+       PROC process_choices = (REF UCHOICES uchoices) VOID:
+          IF uchoices ISNT niluchoices
+          THEN IF sort OF uchoices /= 4
+               THEN process_unit(output OF uchoices)
+               FI;
+               process_choices(rest OF uchoices)
+          FI;
+       process_choices(choices OF ucase)
+      )
+  ,(REF USEQUENCE usequence)
+      (process_sequence(body OF usequence); process_unit(output OF usequence))
+  ,(REF USERIES useries)
+      (process_series(body OF useries); process_unit(output OF useries))
+  ,(REF UBRACKET ub) process_unit(unit OF ub)
+  ,(REF UATTR uattr) process_unit(unit OF uattr)
+   OUT SKIP
+   ESAC
+END;
+
+getspec := (REF FNDEC fndec) VOID:
+BEGIN
+   IF fndecnotdone(fndec)
+   THEN
+      CASE fnbody OF fndec IN
+      (REF UNITTAG tag) process_unit(tag OF tag)
+      OUT SKIP
+      ESAC;
+
+      REF VECTOR[]NAMETYPE nametypes = nametypes OF fndec;
+
+      PROC fnspectypes = VOID:
+      BEGIN
+         REF NAMES terms := inputs OF fndec;
+         WHILE terms ISNT nilnames
+         DO  apptype(IF has_tyfn(type OF nametypes[nameno OF terms])
+                     THEN copytype(type OF nametypes[nameno OF terms])
+                     ELSE tnull
+                     FI);
+             terms := rest OF terms
+         OD;
+
+         TYPE outtype = output_type(fndec);
+         apptype(IF has_tyfn(outtype)
+                 THEN copytype(outtype)
+                 ELSE tnull
+                 FI)
+      END;
+
+      IF inputs OF fndec ISNT nilnames
+      THEN fnspectypes
+      ELSE flt("FNSET not yet handled")
+      FI;
+{{??
+      CASE iospec OF fndec IN
+      (REF FNSPEC fnspec) fnspectypes(fnspec)
+     ,(REF FNSETROW fnsetrow) fnspectypes(elem OF fnsetrow)
+     ,(REF FNSETSTR fnsetstr)
+           (REF FNSETSTR fnset := fnsetstr;
+            WHILE fnset ISNT nilfnsetstr
+            DO fnspectypes(elem OF fnset);
+               fnset := rest OF fnset
+            OD)
+      ESAC;
+}}
+      appfndec(fndec)
+   FI
+END;
+
+
+
+{****************************************************************************
+                -------------------------------------
+                |  THE CONSTRUCTION OF THE NETWORK  |
+                -------------------------------------
+ ****************************************************************************}
+
+{*****************  Ports  ****************************************}
+
+{Ports are structures of sigdests or aliases which are used to connect nodes
+ together.  The mode PORTROW is necessary for indexing and trimming of units.
+ The mode PORTREF is usd to differentiate between a REF PORT and a
+ REF SIGDEST or REF ALIAS. }
+
+OP CE = (REF VECTOR[]PORT row) REF PORTROW:
+   (PORTROW r; row OF r := row; HEAP PORTROW := r);
+OP CE = (REF PORT ref) PORTREF: (PORTREF r; ref OF r := ref; r);
+
+OP DEREF = (REF PORT p) REF PORT:
+BEGIN
+   REF PORT pp := p;
+   WHILE CASE pp IN
+         (PORTREF rp) (pp := ref OF rp; TRUE)
+         OUT FALSE
+         ESAC
+   DO SKIP OD;
+   pp
+END;
+
+{ Procedure to find the type obtained by statically indexing an object
+  of the given type.
+}
+PROC indextype = (INT index, REF ELLATYPE type) REF ELLATYPE:
+    CASE mode OF type IN
+        (REF TYROW tr): rowelem OF tr,
+        (REF TYPEVEC tstr):
+            BEGIN
+                REF TYPEVEC scan := tstr;
+                TO index - 1 DO scan := rest OF scan OD;
+                elem OF scan
+            END,
+        (REF TYDEC td): indextype (index, type OF td)
+    OUT flt ("Indexing non row type"); SKIP
+    ESAC;
+
+
+PROC indexport = (INT n, REF PORT p) REF PORT:
+    CASE DEREF p IN
+    (REF PORTROW row) (row OF row)[n]
+    OUT flt( "Indexing of a non row" ); SKIP
+    ESAC;
+
+PROC like port = (REF PORT master, PROC (INT, REF ALIAS)PORT action ) REF PORT:
+BEGIN
+   INT no := 0;
+   PROC copy = (REF PORT mm )REF PORT:
+      CASE DEREF mm IN
+      (REF PORTROW row)
+         (INT upb = UPB row OF row;
+          REF VECTOR [] PORT qrow = HEAP VECTOR[ upb ]PORT ;
+          FOR j TO upb DO qrow[ j ] := copy ( (row OF row)[ j ] ) OD;
+          HEAP PORT := CE qrow
+         )
+     ,(REF ALIAS alias) HEAP PORT := action(no PLUSAB 1, alias)
+     ,(REF SIGDEST) HEAP PORT := action(no PLUSAB 1, NIL)
+      ESAC;
+
+   copy( master )
+END;
+
+PROC make port = (REF ELLATYPE spec, PROC(INT,REF ELLATYPE)PORT action)REF PORT:
+BEGIN
+   INT no := 0;
+   PROC copy = (REF ELLATYPE cp )REF PORT:
+      CASE mode OF cp IN
+      (INT) HEAP PORT := action( no PLUSAB 1, cp)
+     ,(REF TYDEC tydec) copy(type OF tydec)
+     ,(REF TYROW row)
+          (REF VECTOR [] PORT prow = HEAP VECTOR[ size OF row ] PORT;
+           FOR j TO UPB prow DO prow[ j ] := copy(rowelem OF row) OD;
+           HEAP PORT := CE prow
+          )
+     ,(REF TYPEVEC str)
+          (INT nelem := 0;
+           REF TYPEVEC vec := str;
+           WHILE vec ISNT niltypevec DO nelem PLUSAB 1; vec := rest OF vec OD;
+           REF VECTOR [] PORT prow = HEAP VECTOR[nelem] PORT;
+           vec := str;
+           FOR j TO nelem
+           DO
+             prow[ j ] := copy(elem OF vec);
+             vec := rest OF vec
+           OD;
+           HEAP PORT := CE prow
+          )
+      OUT flt( "error in make port" ); SKIP
+      ESAC;
+
+   copy( spec )
+END;
+
+PROC make in port = (REF ELLATYPE spec, REF VECTOR[]REF SIGDEST dests) REF PORT:
+BEGIN
+   PROC getdest = (INT no, REF ELLATYPE type)PORT: dests[ no ];
+   make port( spec, getdest)
+END;
+
+PROC make out port = (REF ELLATYPE spec, REF VECTOR[]REF ALIAS sources)REF PORT:
+BEGIN
+   PROC getsource =(INT no, REF ELLATYPE type)PORT: sources[ no ];
+   make port( spec, getsource)
+END;
+
+PROC portsize = (REF PORT pm )INT :
+BEGIN
+    INT size := 0;
+    CASE DEREF pm IN
+    (REF PORTROW row )
+        FOR j TO UPB row OF row DO size PLUSAB portsize((row OF row)[ j ]) OD
+    OUT size := 1
+    ESAC;
+    size
+END;
+
+PROC getportrow = (REF PORT p) REF VECTOR[]PORT:
+    CASE DEREF p IN
+    (REF PORTROW row ) row OF row
+    OUT flt( "PORTROW expected" ); NIL
+    ESAC;
+
+PROC copypvec = (REF VECTOR [] PORT left, right) REF VECTOR [] PORT:
+BEGIN
+    INT size = UPB right;
+    IF UPB left /= size THEN flt( "sizes do not match at copypvec" ) FI;
+    FOR j TO size DO left[ j ] := CE right[ j ] OD;
+    left
+END;
+
+PROC scanport = (REF PORT port, PROC(REF PORT)VOID action) VOID:
+BEGIN
+   REF PORT par = DEREF port;
+   CASE par IN
+   (REF PORTROW prow)
+      (FOR j TO UPB row OF prow DO scanport((row OF prow)[j], action) OD)
+   OUT action(par)
+   ESAC
+END;
+
+PROC flattenport = (REF PORT port) REF VECTOR[]PORT:
+BEGIN
+   INT size = portsize(port);
+   REF VECTOR[]PORT result := HEAP VECTOR[size]PORT;
+   INT k := 0;
+   PROC action = (REF PORT port) VOID: result[k PLUSAB 1] := port;
+
+   scanport(port, action);
+   result
+END;
+
+{ Connects two ports.  The ports are first flattened, as it's not important
+  for connection purposes to retain the structured ports.}
+
+PROC join = (REF PORT left, right)VOID:
+BEGIN
+   VECTOR [] CHAR bad selector = "unexpected selector in mode PORT",
+                  no match = "left and right of join do not match";
+
+   PROC joinone = (REF PORT from, to) VOID:
+   BEGIN
+      CASE to IN
+      (REF ALIAS) flt( "ALIAS on right of a join" )
+     ,(REF SIGDEST sd)
+         CASE from IN
+         (REF ALIAS alias) (appsigdest(sd, dests OF alias);
+                            source OF sd := alias)
+         OUT flt( bad selector )
+         ESAC
+      OUT flt( bad selector )
+      ESAC
+   END;
+
+   REF VECTOR[]PORT fromvec = flattenport(left),
+                    tovec = flattenport(right);
+   IF UPB fromvec /=  UPB tovec THEN flt(no match) FI;
+   FOR i TO UPB fromvec DO joinone(DEREF fromvec[i], DEREF tovec[i]) OD
+END;
+
+{****************** CONVERSION PROCS *******************************
+                    ================}
+
+{ These procs convert assembler structures to ELLANET structures and
+  add the declaration to the system state.  We must first check if the
+  declaration is already held in the system state, as the assembler
+  environments may hold duplicates of the declaration.}
+
+PROC build_decl = (ID name, INT decnum, INT contextno) DECL:
+   (name, decnum, 0,
+    IF contextno = 0 THEN (nullid, nullid)
+    ELSE  get_context(contextno)
+    FI
+   );
+
+{******************** PROCS FOR INTEGERS ************************}
+
+PROC form_int = (FORMULA formula) INT:
+   CASE formula IN (REF FNULL) 0, (REF FINT fint) int OF fint ESAC;
+
+{************* PROCS FOR TYPES *****************************}
+
+PROC build_charbv = (REF ELLATYPE type, INT altno) REF BV:
+BEGIN
+   {Constructs an ELLA-character basic value}
+   IF altno <= 0 THEN HEAP BV := (bv_queryname, type, "?")
+   ELSE INT pos := 1;
+        BOOL found := FALSE;
+        HEAP BV result;
+        FOR i TO UPB values OF type WHILE NOT found
+        DO CASE (values OF type)[i] IN
+           (REF BV bv) IF altno = pos THEN found := TRUE; result := bv
+                       ELSE pos PLUSAB 1
+                       FI
+          ,(REF BVRANGE bvrange)
+              (INT lwb = CASE bvmode OF lwb OF bvrange IN (CHAR c) ABS c ESAC,
+                   upb = CASE bvmode OF upb OF bvrange IN (CHAR c) ABS c ESAC;
+               found := altno >= pos ANDTH altno <= pos + upb -lwb;
+               IF found
+               THEN result :=
+                        (name OF lwb OF bvrange, type, REPR ((lwb+altno)-pos))
+               ELSE pos PLUSAB (upb-lwb+1)
+               FI
+              )
+           ESAC
+        OD;
+        result
+   FI
+END;
+
+PROC get_bv = (REF ELLATYPE type, UNION(INT, VOID) altno) REF BV:
+BEGIN
+   {Returns a bv from `basic_drivers', given its type and altno
+    (altno = EMPTY represents an unknown signal).
+    If the bv is not already in `basic_drivers', an entry is created for
+    it before it is returned.
+   }
+   BOOL isinttype = CASE mode OF type IN (INT int) int = 2 OUT FALSE ESAC,
+        ischartype = CASE mode OF type IN (INT int) int = 4 OUT FALSE ESAC,
+        isunknown = CASE altno IN (VOID) TRUE   OUT FALSE   ESAC;
+
+   PROC same_bv = (REF BV bv1, bv2) BOOL:
+           (name OF bv1 = name OF bv2) ANDTH
+           (type OF bv1 IS type OF bv2) ANDTH
+           CASE bvmode OF bv1 IN
+           (REF ELLATYPE)
+              (CASE bvmode OF bv2 IN (REF ELLATYPE) TRUE OUT FALSE ESAC)
+          ,(INT int1)
+              (CASE bvmode OF bv2 IN (INT int2) int1 = int2 OUT FALSE ESAC)
+          ,(CHAR char1)
+              (CASE bvmode OF bv2 IN (CHAR char2) char1 = char2 OUT FALSE ESAC)
+           ESAC;
+
+   {Create the required bv}
+   REF BV bv = IF isinttype
+               THEN HEAP BV := (IF isunknown THEN bv_queryname
+                                ELSE CASE (values OF type)[1] IN
+                                     (REF BVRANGE range) name OF lwb OF range
+                                     ESAC
+                                FI,
+                                type,
+                                CASE altno IN
+                                (INT int) int
+                               ,(VOID) 0   {Arbitrary value in query case}
+                                ESAC
+                               )
+               ELIF ischartype
+               THEN HEAP BV :=
+                  build_charbv(type,
+                               CASE altno IN (INT int) int, (VOID) 0   ESAC)
+               ELIF isunknown
+               THEN HEAP BV := (bv_queryname, type, nilellatype)
+               ELSE CASE (values OF type)[CASE altno IN (INT int) int ESAC] IN
+                    (REF BV bvt) bvt
+                    ESAC
+               FI;
+
+   {If the required bv is not in `basicdrivers', then add it }
+   REF BV result;
+   BOOL found := FALSE;
+   REF SSVEC drivers := basicdrivers;
+   WHILE (drivers ISNT nilssvec) ANDTH NOT found
+   DO REF SIGSOURCE ss = elem OF drivers;
+      REF BV ssbv = CASE ssmode OF ss IN (REF BV bv) bv ESAC;
+      IF found := same_bv(bv, ssbv) THEN result := ssbv FI;
+      drivers := rest OF drivers
+   OD;
+   IF found THEN result
+   ELSE HEAP SIGSOURCE ss := (bv,type,nilaliasvec);
+        HEAP ALIAS alias := (nullid, nilsigstruct, nilsdvec, ss);
+        appalias(alias, aliases OF ss);
+        nbasicdrivers PLUSAB 1;
+        appsigsource(ss, basicdrivers);
+        bv
+   FI
+END;
+
+PROC conv_type = (TYPE type) REF ELLATYPE:
+BEGIN
+   PROC conv_tstr = (REF TSTR tstr) REF TYPEVEC:
+      IF tstr IS niltstr THEN niltypevec
+      ELSE HEAP TYPEVEC := (conv_type(elem OF tstr), conv_tstr(rest OF tstr))
+      FI;
+
+   REF ELLATYPE result;
+   CASE type IN
+   (REF TNAME tname)   result := HEAP ELLATYPE :=
+          (nilvaluevec, gettypedec(typeno OF tname), niltydec)
+  ,(REF TSTRING tstring)
+       (HEAP TYROW tyrow := (int(size OF tstring), conv_type(char OF tstring));
+        result := HEAP ELLATYPE := (nilvaluevec, tyrow, niltydec)
+       )
+  ,(REF TROW trow)
+       (REF TYROW tyrow = HEAP TYROW
+                        := (int(size OF trow), conv_type(elem OF trow));
+        result := HEAP ELLATYPE := (nilvaluevec, tyrow, niltydec)
+       )
+  ,(REF TSTR tstr)
+       result := HEAP ELLATYPE := (nilvaluevec, conv_tstr(tstr), niltydec)
+  ,(REF TFN tfn)
+       (REF TYFN tyfn = HEAP TYFN
+            := (conv_type(from OF tfn), conv_type(to OF tfn));
+        result := HEAP ELLATYPE := (nilvaluevec, tyfn, niltydec)
+       )
+  ,(REF TVOID) result := HEAP ELLATYPE := (nilvaluevec, 5, niltydec)
+  ,(REF TNULL) result := nilellatype
+   OUT flt("Unexpected type in conv_type")
+   ESAC;
+   result
+END;
+
+{Creates a new type for a type declaration }
+
+PROC conv_typebody = (TYPEBODY typebody) REF ELLATYPE:
+   CASE typebody IN
+   (REF VECTOR[]ALTERNATIVE alts)
+      (HEAP ELLATYPE etype;
+       dec OF etype := niltydec;
+       mode OF etype := 1;  {assume not an associated type}
+       values OF etype := HEAP VECTOR[UPB alts]VALUE;
+       FOR ialt TO UPB alts
+       DO (values OF etype)[ialt] := HEAP BV
+             := (altname OF alts[ialt], etype, conv_type(assoc OF alts[ialt]));
+          CASE assoc OF alts[ialt] IN
+          (REF TNULL) SKIP OUT mode OF etype := 3
+          ESAC
+       OD;
+       etype
+      )
+  ,(REF NEWINTS newints)
+      (HEAP ELLATYPE etype;
+       dec OF etype := niltydec;
+       mode OF etype := 2;
+       BV bv1 = (tagname OF newints, etype,
+                 formula_int(lwb OF range OF newints,msg));
+       BV bv2 = (tagname OF newints, etype,
+                 formula_int(upb OF range OF newints,msg));
+       values OF etype := HEAP VECTOR[1]VALUE := HEAP BVRANGE := (bv1,bv2);
+       etype
+      )
+  ,(REF NEWCHARS newchars)
+      (HEAP ELLATYPE etype;
+       dec OF etype := niltydec;
+       mode OF etype := 4;
+       INT nvalues := 0;
+       REF VECTOR [] CHAR chars := chars OF newchars;
+       values OF etype := HEAP VECTOR[UPB chars]VALUE;
+
+       FOR i TO UPB chars
+       DO (values OF etype)[nvalues PLUSAB 1] := HEAP BV
+                          := (tagname OF newchars, etype, chars[i])
+       OD;
+       etype
+      )
+  ,(REF TYPETAG typetag) conv_type(tag OF typetag)
+   ESAC;
+
+PROC build_typedec = (REF TYPEDEC typedec) VOID:
+BEGIN
+   { first check that the same typedec hasn't already been built -
+     if it has then do nothing. }
+   REF REF TYPEDECVEC temp := ellatypes;
+   WHILE (temp ISNT niltypedecvec) ANDTH
+      NOT is_same_typedec(typedec,assemdec OF elem OF temp,
+                          environ, environ OF elem OF temp)
+   DO temp := rest OF temp OD;
+   IF temp IS niltypedecvec { didn't find typedec } THEN
+   INT contextno = IF usage OF typedec IS nilusage
+                   THEN contextno OF usage OF (types OF environ)[1] {{??EVW}}
+                   ELSE contextno OF usage OF typedec
+                   FI;
+   DECL decl = build_decl(typename OF typedec, ntypedecs PLUSAB 1, contextno);
+   REF TYDEC dec = HEAP TYDEC
+           := (decl, conv_typebody(body OF typedec), typedec, environ);
+   dec OF type OF dec := dec;
+   apptypedec(dec, ellatypes)
+   FI
+END;
+
+PROC typesize = (REF ELLATYPE type) INT:
+IF type IS nilellatype
+THEN 0
+ELSE
+   CASE mode OF type IN
+   (INT) 1
+  ,(REF TYDEC tydec) typesize(type OF tydec)
+  ,(REF TYROW tyrow) size OF tyrow * typesize(rowelem OF tyrow)
+  ,(REF TYPEVEC typevec)
+      (REF TYPEVEC vec := typevec;
+       INT size := 0;
+       WHILE vec ISNT niltypevec
+       DO size PLUSAB typesize(elem OF vec); vec := rest OF vec OD;
+       size
+      )
+  ,(REF TYFN tyfn) typesize(from OF tyfn) + typesize(to OF tyfn)
+   ESAC
+FI;
+
+PROC flattentype = (REF ELLATYPE type) REF VECTOR[]ELLATYPE:
+BEGIN
+   INT size = typesize(type);
+   REF VECTOR[]ELLATYPE result := HEAP VECTOR[size]ELLATYPE;
+   INT k := 0;
+
+   PROC scantype = (REF ELLATYPE type) VOID:
+   BEGIN
+      CASE mode OF type IN
+      (INT) result[k PLUSAB 1] := type
+     ,(REF TYDEC tydec) scantype(type OF tydec)
+     ,(REF TYROW tyrow) FOR j TO size OF tyrow DO scantype(rowelem OF tyrow) OD
+     ,(REF TYPEVEC typevec)
+         (REF TYPEVEC vec := typevec;
+          WHILE vec ISNT niltypevec
+          DO scantype(elem OF vec); vec := rest OF vec OD
+         )
+      OUT flt("Unexpected mode in flatten_type")
+      ESAC
+   END;
+
+   scantype(type);
+   result
+END;
+
+PROC get_unittype = (UNIT unit, REF FNDEC fndec) REF ELLATYPE:
+   conv_type(unit_type(unit, fndec, environ));
+
+
+{ **************** PROCS FOR CONSTANTS *************************}
+
+PROC conv_const = (UNIT const) CONSTVAL:
+BEGIN
+   CONSTVAL constval :=
+     CASE const IN
+     (REF CTYPE ctype)
+        CASE type OF ctype IN
+        (REF TNAME tname) type OF gettypedec(typeno OF tname)
+        OUT sys fault("Complicated ctype"); SKIP  { only typeno at present }
+        ESAC
+    ,(REF CPRIM cprim)
+        get_bv(type OF gettypedec(typeno OF cprim), primno OF cprim)
+    ,(REF CINT cint) get_bv(type OF gettypedec(typeno OF cint),
+                            int(index OF cint) )
+    ,(REF CRANGE crange)
+        HEAP CRVAL := (type OF gettypedec(typeno OF crange),
+                       (int(lwb OF range OF crange),
+                        int(upb OF range OF crange)))
+    ,(REF UASSOC cassoc)
+       (REF ELLATYPE type = type OF gettypedec(typeno OF cassoc);
+        HEAP CAVAL := (get_bv(type, altno OF cassoc),
+                       conv_const(assoc OF cassoc) )
+       )
+    ,(REF UROW crow)
+        HEAP CVROW := (int(size OF crow), conv_const(elem OF crow))
+    ,(REF USTR cstr)
+        (REF CVVEC cvstr := nilcvvec;
+         REF REF CVVEC cvvec := cvstr;
+         REF USTR ccstr := cstr;
+         WHILE ccstr ISNT nilustr
+         DO REF REF CVVEC(cvvec) := HEAP CVVEC
+                  := (conv_const(elem OF ccstr), nilcvvec);
+            ccstr := rest OF ccstr;
+            cvvec := rest OF cvvec
+         OD;
+         REF CVSTR result = HEAP CVSTR;
+         cvstr OF result := cvstr;
+         result
+        )
+    ,(REF UALTS calts)
+        (REF CVVEC cvalts := nilcvvec;
+         REF REF CVVEC cvvec := cvalts;
+         REF UALTS ccalts := calts;
+         WHILE ccalts ISNT nilualts
+         DO REF REF CVVEC(cvvec) := HEAP CVVEC
+                  := (conv_const(alt OF ccalts), nilcvvec);
+            ccalts := rest OF ccalts;
+            cvvec := rest OF cvvec
+         OD;
+         REF CVALTS result = HEAP CVALTS;
+         cvalts OF result := cvalts;
+         result
+        )
+    ,(REF CQUERY cquery)
+        (REF CONQUERY result = HEAP CONQUERY;
+         type OF result := conv_type(querytype OF cquery);
+         result
+        )
+    ,(REF CQUOTE cquote)
+        (REF CVVEC cvvec := nilcvvec;
+         REF REF CVVEC endcvvec := cvvec;
+         REF VECTOR [] INT string := string OF cquote;
+         FOR i TO UPB string
+         DO HEAP CPRIM char := (typeno OF cquote, string[i]);
+            REF REF CVVEC(endcvvec) := HEAP CVVEC
+                                    := (conv_const(char), nilcvvec);
+            endcvvec := rest OF endcvvec
+         OD;
+         HEAP CVSTR result;
+         cvstr OF result := cvvec;
+         result
+        )
+    ,(REF USTRING cstring)
+        HEAP CVROW := (int(size OF cstring), conv_const(char OF cstring))
+    ,(REF CPRIMRANGE cprimrange)
+        (REF ELLATYPE etype = type OF gettypedec(typeno OF cprimrange);
+         HEAP CRCHAR := (etype,
+                         get_char(etype, firstno OF cprimrange),
+                         get_char(etype, lastno OF cprimrange)))
+    ,(REF CVOID) (CVVOID cvoid;  cvoid OF cvoid := -99; cvoid)
+    ,(REF UNULL) EMPTY
+     OUT flt("Unexpected constant value in conv_const"); EMPTY
+     ESAC;
+   constval
+END;
+
+PROC constval_type = (CONSTVAL constval) REF ELLATYPE:
+BEGIN
+   PROC cvvec_typevec = (REF CVVEC cvvec) REF TYPEVEC:
+      IF cvvec IS nilcvvec THEN niltypevec
+      ELSE HEAP TYPEVEC := (constval_type(elem OF cvvec),
+                            cvvec_typevec(rest OF cvvec) )
+      FI;
+
+   CASE constval IN
+   (REF ELLATYPE ctval) ctval
+  ,(REF BV bv) type OF bv
+  ,(REF CRVAL crval) type OF crval
+  ,(REF CRCHAR crchar) type OF crchar
+  ,(REF CVROW cvrow)
+      HEAP ELLATYPE :=
+        (nilvaluevec,
+         HEAP TYROW := (size OF cvrow, constval_type(item OF cvrow)),
+         niltydec)
+  ,(REF CAVAL caval) type OF bv OF caval
+  ,(REF CVSTR cvstr)
+       HEAP ELLATYPE := (nilvaluevec, cvvec_typevec(cvstr OF cvstr), niltydec)
+  ,(REF CONQUERY conquery) type OF conquery
+  ,(REF CVVOID) HEAP ELLATYPE := (nilvaluevec, 5, niltydec)
+  ,(VOID) nilellatype
+   OUT flt("Unexpected mode in constval_type"); nilellatype
+   ESAC
+END;
+
+{********************* PROCS FOR MACROS ***************************}
+
+PROC build_macdec = (REF FNDEC fndec, INT vspec) REF MACDEC:
+BEGIN
+   INT contextno = IF usage OF fndec IS nilusage
+                   THEN contextno OF usage OF (fns OF environ)[1] {{??EVW}}
+                   ELSE contextno OF usage OF fndec
+                   FI;
+   HEAP MACDEC currentmacdec
+      := (build_decl(fnname OF fndec, nmacdecs PLUSAB 1, contextno),
+          vspec, 0, nilmacparamvec, nilfnvec);
+
+   params OF currentmacdec := HEAP VECTOR[UPB macspecs OF fndec]EMACPARAM;
+   FOR i TO UPB macspecs OF fndec
+   DO MACSPEC mspec = (macspecs OF fndec)[i];
+      ID name := nullid;
+      INT sort =
+        CASE spec OF mspec IN
+        (FNAME fn)
+           ( name := intname OF (ints OF environ)[intno OF fn]; 2 ),
+        (TNAME tn)
+           ( name := typename OF (types OF environ)[typeno OF tn]; 1 ),
+        (CNAME cn)
+           ( name := constname OF (consts OF environ)[constno OF cn]; 3 ),
+        (FNNAME fnn)
+           ( name := fnname OF (fns OF environ)[fnno OF fnn]; 4 )
+        ESAC;
+      (params OF currentmacdec)[i]
+          := HEAP EMACPARAM
+          := (name, sort, currentmacdec)
+   OD;
+   appmacdec(currentmacdec, ellamacros);
+   currentmacdec
+END;
+
+PROC build_fnmode =
+      (REF MACDEC macdec, REF VECTOR[]MACSPEC macspecs) REF FNMODEINFO:
+BEGIN
+   HEAP VECTOR[UPB macspecs]INSTMPAR impars;
+   FOR i TO UPB macspecs
+   DO INSTMPARMODE imode := -1;
+      CASE spec OF macspecs[i] IN
+      (FNAME fn)
+         ( REF INTDEC idec = (ints OF environ)[intno OF fn];
+           CASE value OF idec IN
+           (FORMULA f) imode := int(f)
+           OUT SKIP
+           ESAC
+         ),
+      (TNAME tn)
+         ( REF TYPEDEC tdec = (types OF environ)[typeno OF tn];
+           CASE body OF tdec IN
+           (REF TYPETAG tag) imode := conv_type(tag OF tag)
+           OUT SKIP
+           ESAC
+         ),
+      (CNAME cn)
+         ( REF CONSTDEC cdec = (consts OF environ)[constno OF cn];
+           CONSTMPAR c;
+           const OF c := conv_const(value OF cdec);
+           imode := c
+         ),
+      (FNNAME fnn)
+         ( REF FNDEC fdec = (fns OF environ)[fnno OF fnn];
+           CASE fnbody OF fdec IN
+           (REF UNITTAG ut)
+              CASE tag OF ut IN
+              (REF UMINST um) imode := getfndec(fnno OF inst OF um)
+              OUT SKIP
+              ESAC
+           OUT SKIP
+           ESAC
+         )
+      ESAC;
+      impars[i] := ((params OF macdec)[i], imode)
+   OD;
+
+   HEAP FNMODEINFO := (0 {dummy}, impars, macdec)
+END;
+
+PROC findfn = (INT int) REF ELLAFN:
+BEGIN
+   {Returns the fn in the `int'th position in `ellafunctions'}
+   INT pos := 0;
+   REF FNVEC fnvec := ellafunctions;
+   WHILE (fnvec ISNT nilfnvec) ANDTH (int /= (pos PLUSAB 1))
+   DO fnvec := rest OF fnvec OD;
+   elem OF fnvec
+END;
+
+PROC build_macros = VOID:
+BEGIN
+   {Fills in fnmodes of functions which are macro expansions and sets other
+    macro-related fields.  This couldn't be done earlier because expansions
+    of internally-declared macros aren't tidily grouped together as they are
+    for top-level macros.  }
+
+   REF FNVEC fnvec := ellafunctions;
+   WHILE fnvec ISNT nilfnvec
+   DO REF ELLAFN fn = elem OF fnvec;
+      REF FNDEC fndec = assemdec OF fn;
+      IF macro OF fndec ANDTH
+         CASE mode OF fn IN (VOID) TRUE OUT FALSE ESAC
+      THEN {first occurrence of expansion of this macro}
+         {Build the `macdec' for this macro}
+         environ_tydecs := env_tydecs OF fn;   {re-establish types environment}
+         REF MACDEC macdec = build_macdec(fndec, vspec OF fn);
+         INT enclfn = enclfn OF dec OF fn;
+         enclfn OF dec OF macdec := enclfn;
+         vbody OF macdec := vbody OF fn;
+         IF enclfn /= 0 THEN appmacdec(macdec, macdecs OF findfn(enclfn)) FI;
+
+         {Process all functions which are expansions of this macro}
+         REF FNVEC fnvec_dup := fnvec;
+         WHILE fnvec_dup ISNT nilfnvec
+         DO REF ELLAFN elemfn = elem OF fnvec_dup;
+            IF name OF dec OF elemfn = name OF dec OF macdec ANDTH
+                  enclfn OF dec OF elemfn = enclfn
+            THEN environ_tydecs := env_tydecs OF elemfn;
+                 mode OF elemfn :=
+                    build_fnmode(macdec, macspecs OF assemdec OF elemfn);
+                 appfn(elemfn, fns OF macdec)
+            FI;
+            fnvec_dup := rest OF fnvec_dup
+         OD
+      FI;
+      fnvec := rest OF fnvec
+   OD
+END;
+
+{*************** PROCS FOR FUNCTIONS **************************}
+
+{ Build procs for functions }
+
+{ Evaluates spec of function }
+
+PROC process_spec = (REF ELLAFN currentfn) VOID:
+BEGIN
+   REF FNDEC fndec = assemdec OF currentfn;
+   REF VECTOR[]NAMETYPE nametypes = nametypes OF fndec;
+
+   PROC build_spnormal = REF SPNORMAL:
+   BEGIN
+      INT no_terminals := names_size(inputs OF fndec);
+
+      HEAP VECTOR[no_terminals]INPAR inparams;
+
+      REF NAMES terms := inputs OF fndec;
+      WHILE terms ISNT nilnames
+      DO INPAR inpar = (name OF nametypes[nameno OF terms],
+                        conv_type(type OF nametypes[nameno OF terms]),
+                        conv_type(elem OF savedtypes));
+         savedtypes := rest OF savedtypes;
+         inparams[nameno OF terms] := inpar;
+         terms := rest OF terms
+      OD;
+
+      TYPE outputtype = output_type(fndec);
+      REF ELLATYPE outtype = conv_type(outputtype),
+                   untransouttype = conv_type(elem OF savedtypes);
+      savedtypes := rest OF savedtypes;
+      HEAP SPNORMAL := (inparams, outtype, untransouttype)
+   END;
+
+   IF inputs OF fndec ISNT nilnames
+   THEN spec OF currentfn := build_spnormal
+   ELSE flt("FNSET not currently handled")
+   FI
+{{??
+  ,(REF FNSETROW fnsetrow)
+      (INT rowsize = int(size OF fnsetrow);
+       spec OF currentfn := HEAP EFNSETROW
+                         := (rowsize, build_spnormal(elem OF fnsetrow))
+      )
+  ,(REF FNSETSTR fnsetstr)
+      (PROC copystr = (REF FNSETSTR str) REF SPECVEC:
+         IF str IS nilfnsetstr THEN nilspecvec
+         ELSE HEAP SPECVEC :=
+                (build_spnormal(elem OF str), copystr(rest OF str))
+         FI;
+       spec OF currentfn := copystr(fnsetstr)
+      )
+}}
+END;
+
+MODE INOUTTYPES = STRUCT(REF ELLATYPE intype, outtype);
+
+{Constructs the input and output types for a function}
+
+PROC make_iotypes = (SPEC spec) INOUTTYPES:
+BEGIN
+   PROC make_normaltypes = (REF SPNORMAL spnormal) INOUTTYPES:
+   BEGIN
+      REF VECTOR[]INPAR inpars = inparams OF spnormal;
+      REF ELLATYPE intype;
+      IF UPB inpars = 1
+      THEN intype := type OF inpars[1]
+      ELSE REF TYPEVEC vec := niltypevec;
+           REF REF TYPEVEC endvec := vec;
+           FOR j TO UPB inpars
+           DO REF REF TYPEVEC(endvec) := HEAP TYPEVEC
+                                      := (type OF inpars[j], niltypevec);
+              endvec := rest OF endvec
+           OD;
+           intype := HEAP ELLATYPE := (nilvaluevec, vec, niltydec)
+      FI;
+      (intype, outtype OF spnormal)
+   END;
+
+   CASE spec IN
+   (REF SPNORMAL spnormal) make_normaltypes(spnormal)
+{{??
+  ,(REF EFNSETROW efnsetrow)
+      (INOUTTYPES elemtypes = make_normaltypes(elem OF efnsetrow);
+       (HEAP ELLATYPE :=
+           (nilvaluevec,
+            HEAP TYROW := (size OF efnsetrow, intype OF elemtypes),
+            niltydec),
+        HEAP ELLATYPE :=
+           (nilvaluevec,
+            HEAP TYROW := (size OF efnsetrow, outtype OF elemtypes),
+            niltydec) )
+      )
+  ,(REF SPECVEC specvec)
+      (REF TYPEVEC ivec := niltypevec, ovec := niltypevec;
+       REF REF TYPEVEC endivec := ivec, endovec := ovec;
+       REF SPECVEC endspecvec := specvec;
+       WHILE endspecvec ISNT nilspecvec
+       DO INOUTTYPES elemtypes = make_normaltypes(elem OF endspecvec);
+          REF REF TYPEVEC(endivec) := HEAP TYPEVEC
+                                   := (intype OF elemtypes, niltypevec);
+          REF REF TYPEVEC(endovec) := HEAP TYPEVEC
+                                   := (outtype OF elemtypes, niltypevec);
+          endivec := rest OF endivec;
+          endovec := rest OF endovec;
+          endspecvec := rest OF endspecvec
+       OD;
+       (HEAP ELLATYPE := (nilvaluevec,ivec,niltydec),
+        HEAP ELLATYPE := (nilvaluevec,ovec,niltydec))
+      )
+}}
+   ESAC
+END;
+
+{Constructs function set information}
+
+PROC getfnsetdata = (REF ELLAFN fn) REF FNSETDATA:
+BEGIN
+   INT il := 1, ol := 1;
+   REF FNSETDATA result := nilfnsetdata;
+   REF REF FNSETDATA fdata := result;
+
+   PROC add_fnsetdata = (INT isize, osize) VOID:
+   BEGIN
+      INT iu = il + isize -1,
+          ou = ol + osize -1;
+      REF REF FNSETDATA(fdata) := HEAP FNSETDATA := (il,iu,ol,ou,nilfnsetdata);
+      il PLUSAB isize;
+      ol PLUSAB osize;
+      fdata := rest OF fdata
+   END;
+
+   CASE spec OF fn IN
+   (REF SPNORMAL) SKIP
+  ,(REF EFNSETROW efnsetrow)
+      (REF TYROW intyrow =
+                CASE mode OF intype OF fn IN (REF TYROW row) row ESAC;
+       INT isize = typesize(rowelem OF intyrow);
+       REF TYROW outtyrow =
+                CASE mode OF outtype OF fn IN (REF TYROW row) row ESAC;
+       INT osize = typesize(rowelem OF outtyrow);
+       FOR i TO size OF efnsetrow DO add_fnsetdata(isize,osize) OD
+      )
+  ,(REF SPECVEC specvec)
+      (REF TYPEVEC intypevec :=
+         CASE mode OF  intype OF fn IN (REF TYPEVEC tvec) tvec ESAC;
+       REF TYPEVEC outtypevec :=
+         CASE mode OF outtype OF fn IN (REF TYPEVEC tvec) tvec ESAC;
+       WHILE intypevec ISNT niltypevec
+       DO add_fnsetdata(typesize(elem OF intypevec),
+                        typesize(elem OF outtypevec) );
+          intypevec := rest OF intypevec;
+          outtypevec := rest OF outtypevec
+       OD
+      )
+   ESAC;
+   result
+END;
+
+{Fills in function sigsources, establishes aliases for them, and places
+ ports in relevant parts of local environment }
+
+PROC spnormal_ports = (REF SPNORMAL spnormal, REF ELLAFN fn,
+                       REF INT inparno, n_ss) VOID:
+BEGIN
+   FOR i_inpar TO UPB inparams OF spnormal
+   DO REF INPAR inpar = (inparams OF spnormal)[i_inpar];
+      REF VECTOR[]ELLATYPE flatpar = flattentype(type OF inpar);
+      VECTOR[UPB flatpar]REF ALIAS aliases;
+      REF PORT ports := HEAP PORT;
+      BOOL needstruct = typesize(type OF inpar) > 1;
+      FOR i_ss FROM n_ss TO n_ss + UPB flatpar - 1
+      DO INT i_alias = i_ss - n_ss + 1;
+         (inputs OF fn)[i_ss] := HEAP SIGSOURCE
+               := (HEAP SSINPUT := (fn,i_ss), flatpar[i_alias], nilaliasvec);
+         REF SIGSTRUCT struct =
+            IF needstruct
+            THEN HEAP SIGSTRUCT :=
+               (i_alias, type OF inpar, ports, fn, nilseqstepvec)
+            ELSE nilsigstruct
+            FI;
+         aliases[i_alias] := HEAP ALIAS
+                := (name OF inpar, struct, nilsdvec, (inputs OF fn)[i_ss]);
+         appalias(aliases[i_alias], aliases OF (inputs OF fn)[i_ss])
+      OD;
+      n_ss PLUSAB UPB flatpar;
+      (namedoutputs OF fn)[inparno PLUSAB 1] :=
+                                make out port(type OF inpar, aliases);
+      IF needstruct
+      THEN REF PORT(ports) := (namedoutputs OF fn)[inparno]
+      FI
+   OD
+END;
+
+{Same as spnormal_ports, but for fnset rows.  These have to be treated
+ differently, as the sigsources corresponding to a particular name
+ of an input parameter are not contiguous in the vector of input sigsources
+ for the function.}
+
+PROC fnsetrow_ports =
+        (REF EFNSETROW efnsetrow, REF ELLAFN fn, REF INT inparno) VOID:
+BEGIN
+   INT jump = typesize(intype OF fn) OVER (size OF efnsetrow);
+   INT i_ss_elem1 := 0;   {Index of sig source in flattened inputs of FNSET[1]}
+   REF VECTOR[]INPAR inparams = inparams OF elem OF efnsetrow;
+   FOR i TO UPB inparams
+   DO INT isize = typesize(type OF inparams[i]);
+      REF ELLATYPE newtype := HEAP ELLATYPE :=
+        (nilvaluevec,
+         HEAP TYROW := (size OF efnsetrow, type OF inparams[i]),
+         niltydec);
+      REF VECTOR[]ELLATYPE flatpar = flattentype(newtype);
+      VECTOR[UPB flatpar]REF ALIAS aliases;
+      REF PORT ports := HEAP PORT;
+      BOOL needstruct = UPB flatpar > 1;
+      INT i_alias := 0;
+      FOR j TO isize
+      DO i_ss_elem1 PLUSAB 1;
+         FOR k TO size OF efnsetrow
+         DO INT i_ss = i_ss_elem1 + jump*(k-1);
+            (inputs OF fn)[i_ss] := HEAP SIGSOURCE
+                                 := (HEAP SSINPUT := (fn,i_ss),
+                                     flatpar[i_alias PLUSAB 1],
+                                     nilaliasvec);
+            REF SIGSTRUCT struct =
+                IF needstruct
+                THEN HEAP SIGSTRUCT :=
+                   (i_alias, newtype, ports, fn, nilseqstepvec)
+                ELSE nilsigstruct
+                FI;
+            aliases[i_alias] := HEAP ALIAS
+                := (name OF inparams[i],struct,nilsdvec,(inputs OF fn)[i_ss]);
+            appalias(aliases[i_alias], aliases OF (inputs OF fn)[i_ss])
+         OD
+      OD;
+      (namedoutputs OF fn)[inparno PLUSAB 1] := make out port(newtype,aliases);
+      IF needstruct THEN REF PORT(ports) := (namedoutputs OF fn)[inparno] FI
+   OD
+END;
+
+{ **************** Procs for constructing special function bodies *********** }
+
+PROC make_biop = (REF ALIENCODE fnbiop) REF EBIOP:
+BEGIN
+   HEAP EBIOP result;
+   name OF result := name OF fnbiop;
+   HEAP VECTOR[UPB macparams OF fnbiop]INT pars;
+   FOR i TO UPB pars
+   DO pars[i] := CASE param OF (macparams OF fnbiop)[i] IN
+                 (FORMULATAG tag) int(tag OF tag)
+                 OUT -1
+                 ESAC
+   OD;
+   pars OF result := pars;
+   result
+END;
+
+PROC make_arith = (REF ARITH arith, REF VECTOR[]PORT namedoutputs) REF EARITH:
+BEGIN
+   PROC build_arith = (FORMULA formula) REF EARITH:
+   BEGIN
+      HEAP EARITH result;
+      CASE formula IN
+      (REF FINT fint) result := int OF fint
+     ,(REF FARITH farith)
+         result :=
+            CASE namedoutputs[nameno OF farith] IN (REF ALIAS alias) alias ESAC
+     ,(REF FDOP fdop)
+        (INT sort =
+              IF sort OF fdop < 13 THEN sort OF fdop ELSE sort OF fdop - 1 FI;
+         result := HEAP ARDYOP
+                := (sort, build_arith(left OF fdop), build_arith(right OF fdop))
+        )
+     ,(REF FMOP fmop)
+        (INT sort =
+              IF sort OF fmop < 4 THEN sort OF fmop ELSE sort OF fmop - 1 FI;
+         result := HEAP ARMOP
+                := (sort, build_arith(right OF fmop))
+        )
+     ,(REF FCOND fcond)
+         result := HEAP ACOND
+                := (build_arith(cond OF fcond),
+                    build_arith(true OF fcond),
+                    build_arith(false OF fcond))
+      OUT flt("Unexpected mode in make_arith")
+      ESAC;
+      result
+   END;
+
+   build_arith(output OF arith)
+END;
+
+PROC make_simplefn = (INT num) REF SIMPLEFN:
+BEGIN
+   HEAP SIMPLEFN result;
+   simplefn OF result := num;
+   result
+END;
+
+PROC make_import = (REF IMPORT import) REF EIMPORT:
+   HEAP EIMPORT := (name OF import, get_context(contextno OF import));
+
+PROC make_simpledel = (INT num) REF SIMPLEDEL:
+BEGIN
+   HEAP SIMPLEDEL result;
+   simpledel OF result := num;
+   result
+END;
+
+PROC make_adelay = (REF ADELAY adelay) REF DELAYINFO:
+BEGIN
+   HEAP DELAYINFO result;
+   initstate OF result := conv_const(init OF adelay);
+   totaltime OF result := int(delaytime OF adelay);
+   INT ambigtime = int(ambigtime OF adelay);
+
+   mode OF result :=
+       IF totaltime OF result = ambigtime
+       THEN make_simpledel(1)
+       ELSE HEAP AMBIG := (ambigtime, conv_const(ambig OF adelay))
+       FI;
+   result
+END;
+
+PROC make_idelay = (REF IDELAY idelay) REF DELAYINFO:
+   HEAP DELAYINFO := (conv_const(init OF idelay),
+                      formula_int(delaytime OF idelay, msg),
+                      make_simpledel(2) );
+
+PROC make_ram = (REF RAM ram) CONSTVAL: conv_const(init OF ram);
+
+PROC make_sample = (REF SAMPLE sample) REF SAMPLEINFO:
+   HEAP SAMPLEINFO := (formula_int(interval OF sample, msg),
+                       conv_const(init OF sample),
+                       formula_int(skew OF sample, msg) );
+
+{                  **************************************              }
+
+{Returns the port associated with the driver of the basic value}
+
+PROC bv_port = (REF BV bv) REF PORT:
+BEGIN
+   {Gets the port of the first (unnamed) alias of a basic driver}
+   REF PORT result;
+   BOOL found := FALSE;
+   REF SSVEC drivers := basicdrivers;
+   WHILE (drivers ISNT nilssvec) AND NOT found
+   DO REF SIGSOURCE ss = elem OF drivers;
+      IF found := (bv IS CASE ssmode OF ss IN (REF BV bv) bv ESAC)
+      THEN result := HEAP PORT := elem OF aliases OF ss
+      FI;
+      drivers := rest OF drivers
+   OD;
+   IF NOT found THEN flt("bv not found in bv_port") FI;
+   result
+END;
+
+{******************** Instances **************************************}
+
+MODE INOUTPORTS = STRUCT(REF PORT in, out);
+
+{Constructs an EMAKE and returns its input and output ports}
+
+PROC emake_ports = (ID name, REF IDS attnames, INT index,
+                    REF ELLAFN fnmade, withinfn, REF BV bv,
+                    REF ELLATYPE intype, outtype, MAKEMODE mode) INOUTPORTS:
+BEGIN
+   HEAP EMAKE make := (name, attnames, nmakesof OF withinfn PLUSAB 1, index,
+                       fnmade, withinfn, NIL, NIL, bv, mode);
+   appmake(make, makesof OF withinfn);
+   IF fnmade ISNT nilellafn THEN appmake(make, uses OF fnmade) FI;
+   REF VECTOR[]ELLATYPE flatins = flattentype(intype),
+                        flatouts = flattentype(outtype);
+   inputs OF make := HEAP VECTOR[UPB flatins]REF SIGDEST;
+   outputs OF make := HEAP VECTOR[UPB flatouts]REF SIGSOURCE;
+   VECTOR[UPB outputs OF make]REF ALIAS aliases;
+   FOR i TO UPB inputs OF make
+   DO (inputs OF make)[i] := HEAP SIGDEST := (make,i,flatins[i],nilalias) OD;
+   FOR i TO UPB outputs OF make
+   DO (outputs OF make)[i] := HEAP SIGSOURCE :=
+        (HEAP SSOUTPUT := (make,i),
+         flatouts[i],
+         HEAP ALIASVEC := (HEAP ALIAS := (nullid, nilsigstruct, nilsdvec, NIL),
+                           nilaliasvec)
+        );
+      REF ALIAS alias = elem OF aliases OF (outputs OF make)[i];
+      sigsource OF alias := (outputs OF make)[i];
+      aliases[i] := alias
+   OD;
+
+   REF PORT outport = make out port(outtype, aliases);
+   INT structnum := 0;
+   PROC add_sigstructs = (REF PORT port) VOID:
+      CASE port IN
+      (REF ALIAS alias)
+         struct OF alias := HEAP SIGSTRUCT :=
+            ( structnum PLUSAB 1,outtype,outport,withinfn,nilseqstepvec)
+      OUT
+         flt("Unexpected mode in add_sigstructs")
+      ESAC;
+
+   IF portsize(outport) > 1 THEN scanport( outport, add_sigstructs ) FI;
+   (make in port(intype, inputs OF make),outport)
+END;
+
+PROC instance_ports = (ID name, INT index, INSTANCE instance,
+                       REF ELLAFN withinfn) INOUTPORTS:
+BEGIN
+   REF ELLAFN fnmade = getfndec(fnno OF instance);
+   REF IDS attids = get_attrids(attr OF instance);
+   emake_ports(name, attids, index, fnmade, withinfn, nilbv,
+               intype OF fnmade, outtype OF fnmade, 1)
+END;
+
+PROC specialmake_ports = (REF ELLAFN withinfn, REF BV bv,
+                          REF ELLATYPE intype, outtype, MAKEMODE mode)
+                         INOUTPORTS:
+   emake_ports(nullid, nilids,0,nilellafn, withinfn, bv, intype, outtype, mode);
+
+{***************************** New aliases of ports ***********************}
+
+PROC common_sigstruct = (REF PORT port) BOOL:
+BEGIN
+   {Determines if the aliases of a port possess a common sigstruct}
+   IF portsize(port) = 1 THEN TRUE
+   ELSE REF VECTOR[]PORT ports = flattenport(port);
+        REF SIGSTRUCT struct =
+                struct OF CASE ports[1] IN (REF ALIAS al) al ESAC;
+        BOOL common := TRUE;
+        FOR i FROM 2 TO UPB ports
+        DO IF struct ISNT struct OF CASE ports[i] IN (REF ALIAS ali) ali ESAC
+           THEN common := FALSE
+           FI
+        OD;
+        common
+   FI
+END;
+
+PROC rename_port =
+   (REF PORT oldport, REF ELLATYPE newtype, ID name, REF ELLAFN fn) REF PORT:
+BEGIN
+   {The new port is like the old one, but with new name and possibly new
+    sigstruct.
+    The new aliases must be added to the corresponding sigsources.}
+
+   REF PORT ports := HEAP PORT;
+   INT tsize = typesize(newtype);
+
+   PROC action = (INT int, REF ALIAS alias) PORT:
+   BEGIN
+      HEAP ALIAS newalias :=
+        (name,
+         IF tsize = 1 THEN nilsigstruct
+         ELSE HEAP SIGSTRUCT := (int, newtype, ports, fn, nilseqstepvec)
+         FI,
+         nilsdvec, sigsource OF alias);
+      appalias(newalias, aliases OF sigsource OF alias);
+      newalias
+   END;
+
+   REF PORT(ports) := like port(oldport, action);
+   ports
+END;
+
+{************************** Ports of units ***************************}
+
+PROC conquery_port = (REF ELLATYPE ctype) REF PORT:
+BEGIN
+   PROC action = (INT int, REF ELLATYPE type) PORT:
+      bv_port(get_bv(type,EMPTY));
+   make port(ctype, action)
+END;
+
+PROC constval_port = (CONSTVAL constval, REF ELLAFN fn) REF PORT:
+BEGIN
+   CASE constval IN
+   (REF BV bv) bv_port(bv)
+  ,(REF CVROW cvrow)
+      (HEAP VECTOR[size OF cvrow]PORT prow;
+       FOR j TO UPB prow DO prow[j] := constval_port(item OF cvrow, fn) OD;
+       HEAP PORT := CE prow
+      )
+  ,(REF CVSTR cvstr)
+      (INT nelem := 0;
+       REF CVVEC str := cvstr OF cvstr;
+       WHILE str ISNT nilcvvec DO nelem PLUSAB 1; str := rest OF str OD;
+       HEAP VECTOR[nelem]PORT prow;
+       str := cvstr OF cvstr;
+       FOR j TO nelem
+       DO prow[j] := constval_port(elem OF str, fn); str := rest OF str OD;
+       HEAP PORT := CE prow
+      )
+  ,(REF CAVAL caval)
+      (REF PORT inport = constval_port(assoc OF caval, fn);
+       REF ELLATYPE intype = constval_type(constval),
+                    outtype = type OF bv OF caval;
+       INOUTPORTS makeports =
+             specialmake_ports(fn, bv OF caval, intype, outtype, 3);
+       join(inport, in OF makeports);
+       out OF makeports
+      )
+  ,(REF CONQUERY conquery) conquery_port(type OF conquery)
+   OUT flt("Unexpected mode in constval_port"); nilport
+   ESAC
+END;
+
+PROC cvoid_port = REF PORT:
+  conquery_port(HEAP ELLATYPE := (nilvaluevec, 5, niltydec));
+
+
+PROC cprim_port = (INT typeno, altno) REF PORT:
+BEGIN
+   REF ELLATYPE type = type OF gettypedec(typeno);
+   bv_port(get_bv(type,altno))
+END;
+
+PROC cquery_port = (TYPE ctype) REF PORT:
+   conquery_port(conv_type(ctype));
+
+PROC cquote_port = (REF CQUOTE cquote, REF ELLAFN fn,
+                    PROC (UNIT, REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF VECTOR [] INT string = string OF cquote;
+   INT size := UPB string;
+   HEAP VECTOR[size]PORT result;
+   FOR i TO size
+   DO HEAP CPRIM char := (typeno OF cquote, string[i]);
+      result[i] := CE unit_port(char, fn)
+   OD;
+   HEAP PORT := CE result
+END;
+
+PROC assoc_port = (REF UASSOC uassoc, REF ELLAFN fn, REF PORT inport) REF PORT:
+BEGIN
+   REF ELLATYPE outtype = type OF gettypedec(typeno OF uassoc);
+   REF BV bv = get_bv(outtype, altno OF uassoc);
+   REF ELLATYPE intype = CASE bvmode OF bv IN (REF ELLATYPE type) type ESAC;
+   INOUTPORTS makeports = specialmake_ports(fn,bv,intype,outtype,3);
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC extract_port =
+       (REF UEXTRACT uextract, REF ELLAFN fn, REF PORT inport) REF PORT:
+BEGIN
+   REF ELLATYPE intype = type OF gettypedec(typeno OF uextract);
+   REF BV bv = get_bv(intype, altno OF uextract);
+   REF ELLATYPE outtype = CASE bvmode OF bv IN (REF ELLATYPE type) type ESAC;
+   INOUTPORTS makeports = specialmake_ports(fn,bv,intype,outtype,4);
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC trim_port = (REF UTRIM utrim, REF PORT inport) REF PORT:
+BEGIN
+   INT lwb = int(lwb OF range OF utrim),
+       upb = int(upb OF range OF utrim);
+   REF VECTOR[]PORT slice = (getportrow(inport))[lwb:upb];
+   HEAP VECTOR[UPB slice]PORT newrow;
+   copypvec(newrow,slice);
+   HEAP PORT := CE newrow
+END;
+
+PROC dyindex_port = (REF UDYINDEX udyindex, REF ELLAFN fn,
+                     PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF ELLATYPE indextype = get_unittype(index OF udyindex, assemdec OF fn),
+                indexedtype = get_unittype(unit OF udyindex, assemdec OF fn);
+   HEAP ELLATYPE intype :=
+      (nilvaluevec,
+       HEAP TYPEVEC := (indextype, HEAP TYPEVEC := (indexedtype, niltypevec)),
+       niltydec);
+   REF ELLATYPE outtype = CASE mode OF indexedtype IN
+                          (REF TYROW tyrow) rowelem OF tyrow
+                          ESAC;
+   REF PORT indexport = unit_port(index OF udyindex, fn);
+   REF PORT indexedport = unit_port(unit OF udyindex, fn);
+   VECTOR[2]PORT inrow;
+   inrow[1] := indexport;
+   inrow[2] := indexedport;
+   HEAP PORT inport := CE inrow;
+   INOUTPORTS makeports = specialmake_ports(fn,nilbv,intype,outtype,6);
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC dyassign_port = (REF UREPLACE ureplace, REF ELLAFN fn,
+                      PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF ELLATYPE assigntype = get_unittype(from OF ureplace, assemdec OF fn);
+   REF ELLATYPE outtype = get_unittype(index OF ureplace, assemdec OF fn);
+   HEAP ELLATYPE intype :=
+         (nilvaluevec, HEAP TYPEVEC :=
+             (assigntype, HEAP TYPEVEC := (assigntype,niltypevec)),
+          niltydec);
+   REF PORT fromport = unit_port(from OF ureplace, fn);
+   UNIT indexedunit := HEAP UDYINDEX := (unit OF ureplace, index OF ureplace);
+   REF PORT toport = unit_port(indexedunit, fn);
+   VECTOR[2]PORT inrow;
+   inrow[1] := toport;
+   inrow[2] := fromport;
+   HEAP PORT inport := CE inrow;
+   INOUTPORTS makeports = specialmake_ports(fn,nilbv,intype,outtype,7);
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC row_port = (REF UROW urow, REF ELLAFN fn,
+                 PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   HEAP VECTOR[int(size OF urow)]PORT row;
+   FOR i TO UPB row
+   DO row[i] := CE unit_port(elem OF urow, fn) OD;
+   HEAP PORT := CE row
+END;
+
+PROC str_port = (REF USTR ustr, REF ELLAFN fn,
+                 PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF USTR str := ustr;
+   INT nstr := 0;
+   WHILE str ISNT nilustr DO nstr PLUSAB 1; str := rest OF str OD;
+   HEAP VECTOR[nstr]PORT result;
+   str := ustr;
+   FOR i TO nstr
+   DO result[i] := CE unit_port(elem OF str, fn);
+      str := rest OF str
+   OD;
+   HEAP PORT := CE result
+END;
+
+PROC conc_port = (REF UCONC uconc, REF ELLAFN fn,
+                  PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF PORT leftport = unit_port(left OF uconc, fn);
+   REF PORT rightport = unit_port(right OF uconc, fn);
+   INT sort = sort OF uconc;
+   BOOL leftisrow = (sort=1 OR sort=3),
+        rightisrow = (sort=2 OR sort=3);
+   REF VECTOR[]PORT lrow, rrow;
+   INT leftsize := 1, rightsize := 1;
+   IF leftisrow THEN lrow := getportrow(leftport); leftsize := UPB lrow FI;
+   IF rightisrow THEN rrow := getportrow(rightport); rightsize := UPB rrow FI;
+   INT upb = leftsize + rightsize;
+   HEAP VECTOR[upb]PORT newrow;
+   IF leftisrow THEN copypvec(newrow[1:leftsize],lrow)
+   ELSE newrow[1] := CE leftport
+   FI;
+   IF rightisrow THEN copypvec(newrow[leftsize+1:upb],rrow)
+   ELSE newrow[leftsize+1] := CE rightport
+   FI;
+   HEAP PORT := CE newrow
+END;
+
+PROC minst_port = (REF UMINST uminst, REF ELLAFN fn, REF PORT inport) REF PORT:
+BEGIN
+   INOUTPORTS makeports = instance_ports(nullid, 0, inst OF uminst, fn);
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC dinst_port = (REF UDINST udinst, REF ELLAFN fn,
+                   PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   INOUTPORTS makeports = instance_ports(nullid, 0, inst OF udinst, fn);
+   VECTOR[2]PORT inport;
+   inport[1] := unit_port(left OF udinst, fn);
+   inport[2] := unit_port(right OF udinst, fn);
+   join(HEAP PORT := CE inport, in OF makeports);
+   out OF makeports
+END;
+
+PROC attr_port =
+   (REF UATTR uattr, REF ELLATYPE type, REF PORT inport, REF ELLAFN fn)
+      REF PORT:
+BEGIN
+   REF PORT result;
+   REF IDS attrids := get_attrids(attr OF uattr);
+   WHILE attrids ISNT nilids
+   DO result := rename_port(inport, type, id OF attrids, fn);
+      attrids := rest OF attrids
+   OD;
+   result
+END;
+
+PROC case_port = (REF UCASE ucase, REF ELLAFN fn,
+                  PROC (UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   INT ichoice := 0;
+   VECTOR[UPB namedoutputs OF fn]PORT saved_namedoutputs := namedoutputs OF fn;
+   PROC build_choices = (REF UCHOICES uchoices) REF CASECHOICEVEC:
+   BEGIN
+      IF uchoices IS niluchoices THEN nilcasechoicevec
+      ELSE ichoice PLUSAB 1;
+           REF VECTOR[]PORT (namedoutputs OF fn) := saved_namedoutputs;
+           { need to restore LET names before each case arm, to cope with
+           assignment in transformed SEQCASEs }
+           INT mode = sort OF uchoices;
+           CONSTVAL selector = conv_const(test OF uchoices);
+           REF ELLATYPE choicetype =
+                get_unittype(output OF uchoices, assemdec OF fn);
+           REF VECTOR[]ELLATYPE flattype = flattentype(choicetype);
+           HEAP VECTOR[UPB flattype]REF SIGDEST dests;
+           FOR i TO UPB dests
+           DO dests[i] := HEAP SIGDEST :=
+                (HEAP SDCASE := (NIL, ichoice), i, flattype[i], nilalias)
+           OD;
+           IF mode /= 4
+           THEN join(unit_port(output OF uchoices, fn),
+                     make in port(choicetype,dests) )
+           FI;
+           HEAP CASECHOICEVEC :=
+                ((selector,dests,mode), build_choices(rest OF uchoices))
+      FI
+   END;
+
+   REF ELLATYPE
+       intype = get_unittype(input OF ucase, assemdec OF fn),
+       outtype = get_unittype(output OF choices OF ucase, assemdec OF fn);
+   REF PORT inport = unit_port(input OF ucase, fn);
+   INOUTPORTS makeports =
+     specialmake_ports(fn,nilbv,intype,outtype,build_choices(choices OF ucase));
+
+   {Fill in casemake of sigdests for CASE limbs}
+   REF EMAKE casemake =
+               CASE flattenport(in OF makeports)[1] IN
+               (REF SIGDEST sd) CASE sdmode OF sd IN (REF EMAKE make) make ESAC
+               ESAC;
+   CASE makemode OF casemake IN
+   (REF CASECHOICEVEC cvec)
+      (REF CASECHOICEVEC vec := cvec;
+       WHILE vec ISNT nilcasechoicevec
+       DO REF VECTOR[]REF SIGDEST dests = dests OF elem OF vec;
+          FOR i TO UPB dests
+          DO CASE sdmode OF dests[i] IN
+             (REF SDCASE sdcase) casemake OF sdcase := casemake
+             ESAC
+          OD;
+          vec := rest OF vec
+       OD
+      )
+   ESAC;
+
+   {Make the connections}
+   join(inport, in OF makeports);
+   out OF makeports
+END;
+
+{Updates local environment}
+
+PROC add_let =
+     (REF NAMES names, REF ELLAFN fn, REF ELLATYPE type, REF PORT letport) VOID:
+BEGIN
+   REF VECTOR []NAMETYPE nametypes = nametypes OF assemdec OF fn;
+   REF NAMES letnames := names;
+   BOOL multiple = rest OF letnames ISNT nilnames;
+   INT ix := 0;
+   WHILE letnames ISNT nilnames
+   DO (namedoutputs OF fn)[nameno OF letnames] :=
+          IF multiple THEN
+              ix +:= 1;
+              rename_port (indexport (ix, letport),
+                           indextype (ix, type),
+                           name OF nametypes[nameno OF letnames], fn)
+          ELSE
+              rename_port(letport, type, name OF nametypes[nameno OF letnames],
+                          fn)
+          FI;
+      letnames := rest OF letnames
+   OD
+END;
+
+{Creates EMAKE and updates local environment}
+
+PROC add_make = (REF MAKE make, REF ELLAFN withinfn) VOID:
+BEGIN
+   REF VECTOR []NAMETYPE nametypes = nametypes OF assemdec OF withinfn;
+   REF NAMES makenames := makenames OF make;
+   WHILE makenames ISNT nilnames
+   DO ID makename = name OF nametypes[nameno OF makenames];
+      INOUTPORTS makeports;
+      INT makesize =
+        IF sizes OF make IS nilformulas
+        THEN 0
+        ELSE form_int(formula OF sizes OF make)
+        FI;
+      IF makesize = 0
+      THEN makeports := instance_ports(makename, 0, inst OF make, withinfn)
+      ELSE HEAP VECTOR[makesize]PORT inrow, outrow;
+           FOR i TO makesize
+           DO makeports := instance_ports(makename, i, inst OF make, withinfn);
+              inrow[i] := in OF makeports;
+              outrow[i] := out OF makeports
+           OD;
+           makeports := (HEAP PORT := CE inrow, HEAP PORT := CE outrow)
+      FI;
+      (namedinputs OF withinfn)[nameno OF makenames] := in OF makeports;
+      (namedoutputs OF withinfn)[nameno OF makenames] := out OF makeports;
+      makenames := rest OF makenames
+   OD
+END;
+
+{Performs required connections}
+
+PROC add_join = (REF JOIN ujoin, REF ELLAFN fn, REF PORT fromport) VOID:
+BEGIN
+   PROC unit_port = (UNIT u) REF PORT:
+      CASE u IN
+      (REF UNAME un)  (namedinputs OF fn)[nameno OF un],
+      (REF UINDEX ui)
+         ( INT index = form_int(index OF ui);
+           indexport(index, unit_port(unit OF ui))
+         )
+      OUT flt("Unexpected unit on rhs of JOIN"); SKIP
+      ESAC;
+
+   REF PORT toport = unit_port(to OF ujoin);
+   join(fromport, toport)
+END;
+
+{Define build_fndec for use in mutual recursion}
+PROC (REF FNDEC) VOID build_fndec;
+
+{Checks if fndec has not been processed}
+PROC notdone = (REF FNDEC fndec) BOOL:
+BEGIN
+     BOOL found := FALSE;
+
+     REF FNVEC vec := ellafunctions;
+     WHILE (vec ISNT nilfnvec) ANDTH NOT found
+     DO found := assemdec OF elem OF vec IS fndec;
+        vec := rest OF vec
+     OD;
+     NOT found
+END;
+
+PROC add_declaration = (DECLARATION declaration, REF ELLAFN withinfn) VOID:
+BEGIN
+   CASE declaration IN
+   (TNAME tname)
+      (REF TYDEC typedec = gettypedec(typeno OF tname);
+       enclfn OF dec OF typedec := num OF dec OF withinfn;
+       apptypedec(typedec, typedecs OF withinfn)
+      )
+  ,(FNNAME fnname)
+      (
+      {Set the enclfn and add the ELLAFN to the internal fndecs of `withinfn'}
+      REF ELLAFN fndec = getfndec(fnno OF fnname);
+      enclfn OF dec OF fndec := num OF dec OF withinfn;
+      appfn(fndec, fndecs OF withinfn)
+      )
+   ESAC
+END;
+
+PROC series_port = (REF USERIES useries, REF ELLAFN fn,
+                    PROC(UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF SERIES body := body OF useries;
+   WHILE body ISNT nilseries
+   DO CASE step OF body IN
+      (DECLARATION declaration) add_declaration(declaration, fn)
+     ,(REF LET let) add_let(letnames OF let, fn,
+                            get_unittype(unit OF let, assemdec OF fn),
+                            unit_port(unit OF let, fn))
+     ,(REF MAKE make) add_make(make, fn)
+     ,(REF JOIN join) add_join(join, fn, unit_port(from OF join, fn))
+      OUT SKIP
+      ESAC;
+      body := rest OF body
+   OD;
+   unit_port(output OF useries, fn)
+END;
+
+{************** Sequence conversion procs ************************}
+
+PROC build_seqstepvec = (REF SEQUENCE sequence, REF ELLAFN fn,
+                         PROC(UNIT,REF ELLAFN)REF PORT unit_port)
+                        REF SEQSTEPVEC:
+BEGIN
+   REF VECTOR [] NAMETYPE nametypes = nametypes OF assemdec OF fn;
+
+   PROC conv_let = (REF LET let, BOOL isvar,REF PORT port) SQSTEP:
+   BEGIN
+      INT upb := 0;
+      PROC build_vec = (REF NAMES names) REF SEQSTEPVEC:
+         IF names IS nilnames THEN nilseqstepvec
+         ELSE SQSTEP sqstep := HEAP LETINFO
+                 := (name OF nametypes[nameno OF names],
+                     port,
+                     isvar );
+              upb PLUSAB 1;
+              HEAP SEQSTEPVEC := (sqstep, build_vec(rest OF names))
+         FI;
+
+      SQSTEP result;
+      REF NAMES letnames := letnames OF let;
+      REF SEQSTEPVEC vec = build_vec(letnames);
+      IF upb = 1 THEN result := elem OF vec ELSE result := vec FI;
+      result
+   END;
+
+   PROC build_sqstep = (SEQSTEP seqstep) SQSTEP:
+   BEGIN
+      SQSTEP result;
+      CASE seqstep IN
+      (DECLARATION declaration)
+         (add_declaration(declaration,fn);
+          result := HEAP SEQDEC
+                 := CASE declaration IN
+                    (TNAME tname) (1, num OF dec OF gettypedec(typeno OF tname))
+                   ,(FNNAME fnname) (2, num OF dec OF getfndec(fnno OF fnname))
+                    ESAC
+         )
+     ,(REF SEQLET seqlet)
+         (REF LET let = seqlet OF seqlet;
+          REF PORT oldport = unit_port(unit OF let, fn);
+          add_let(letnames OF let, fn, get_unittype(unit OF let, assemdec OF fn),
+                  rename_port(oldport,get_unittype(unit OF let, assemdec OF fn),nullid,fn));
+
+          result := conv_let(let, FALSE, oldport)
+         )
+     ,(REF SEQVAR seqvar)
+         (REF LET let = seqvar OF seqvar;
+          REF PORT oldport = unit_port(unit OF let, fn);
+          add_let(letnames OF let, fn, get_unittype(unit OF let, assemdec OF fn),
+                  rename_port(oldport,get_unittype(unit OF let, assemdec OF fn),nullid,fn));
+          result := conv_let(let, TRUE, oldport)
+         )
+     ,(REF SEQPVAR seqpvar)
+         (CONSTVAL constval = conv_const(init OF seqpvar);
+          INT upb := 0;
+          PROC build_vec = (REF NAMES names) REF SEQSTEPVEC:
+             IF names IS nilnames THEN nilseqstepvec
+             ELSE SQSTEP sqstep := HEAP PVAR
+                      := (name OF nametypes[nameno OF names], constval);
+                  upb PLUSAB 1;
+                  HEAP SEQSTEPVEC := (sqstep, build_vec(rest OF names))
+             FI;
+
+          REF NAMES letnames := pvarnames OF seqpvar;
+          REF PORT constport = constval_port(constval, fn);
+          add_let(letnames, fn, constval_type(constval), constport);
+          REF SEQSTEPVEC vec = build_vec(letnames);
+          IF upb = 1 THEN result := elem OF vec ELSE result := vec FI
+         )
+     ,(REF SEQASSIGN seqassign)
+         (REF PORT fromport = unit_port(from OF seqassign, fn);
+          REF PORT toport = unit_port(to OF seqassign, fn);
+          result := HEAP ASSIGN := (toport, fromport)
+         )
+     ,(REF SEQCASE seqcase)
+         (PROC build_vec = (REF SEQCHOICES choices) REF SEQCHOICEVEC:
+             IF choices IS nilseqchoices THEN nilseqchoicevec
+             ELSE SEQCHOICE choice =
+                     (conv_const(test OF choices),
+                      build_sqstep(output OF choices),
+                      sort OF choices);
+                  HEAP SEQCHOICEVEC := (choice, build_vec(rest OF choices))
+             FI;
+
+          REF PORT chooser = unit_port(input OF seqcase, fn);
+          result := HEAP SQCASE := (chooser, build_vec(choices OF seqcase))
+         )
+     ,(REF SEQREPL seqrepl) result := build_sqstep(body OF seqrepl)
+     ,(REF SEQNULL) result := EMPTY
+     ,(REF SEQUENCE sequence)
+         result := build_seqstepvec(sequence, fn, unit_port)
+      ESAC;
+
+      result
+   END;
+
+   PROC buildvec = (REF SEQUENCE sequence) REF SEQSTEPVEC:
+      IF sequence IS nilsequence THEN nilseqstepvec
+      ELSE HEAP SEQSTEPVEC :=
+           (build_sqstep(step OF sequence), buildvec(rest OF sequence))
+      FI;
+
+  buildvec(sequence)
+END;
+
+PROC sequence_port = (REF USEQUENCE usequence, REF ELLAFN fn,
+                      REF ELLATYPE type,
+                      PROC(UNIT,REF ELLAFN)REF PORT unit_port) REF PORT:
+BEGIN
+   REF SEQSTEPVEC seqbody = build_seqstepvec(body OF usequence, fn, unit_port);
+   REF PORT seqport = unit_port(output OF usequence, fn);
+   REF PORT outport = rename_port(seqport, type, nullid, fn);
+
+   PROC action = (REF PORT port) VOID:
+     CASE port IN
+     (REF ALIAS alias)
+        IF struct OF alias ISNT nilsigstruct
+        THEN seqbody OF struct OF alias := seqbody;
+             withinfn OF struct OF alias := fn
+        ELSE {just one alias in the port, so must create a sigstruct to hold
+             the sequence}
+             struct OF alias := HEAP SIGSTRUCT :=
+                (1, type OF sigsource OF alias, HEAP PORT := alias, fn,
+                 seqbody)
+        FI
+     OUT SKIP
+     ESAC;
+
+   scanport(outport, action);
+   outport
+END;
+
+PROC unit_port = (UNIT unit, REF ELLAFN fn) REF PORT:
+BEGIN
+   CASE unit IN
+   (REF CPRIM cprim) cprim_port(typeno OF cprim, primno OF cprim)
+  ,(REF CINT cint) cprim_port(typeno OF cint, int(index OF cint))
+  ,(REF CQUERY cquery) cquery_port(querytype OF cquery)
+  ,(REF CQUOTE cquote) cquote_port(cquote, fn, unit_port)
+  ,(REF CVOID cvoid)   cvoid_port
+  ,(REF USTRING ustring)
+       row_port(HEAP UROW := (size OF ustring, char OF ustring), fn, unit_port)
+  ,(REF UNAME uname) (namedoutputs OF fn)[nameno OF uname]
+  ,(REF UASSOC uassoc) assoc_port(uassoc, fn, unit_port(assoc OF uassoc, fn))
+  ,(REF UEXTRACT uextract)
+        extract_port(uextract, fn, unit_port(extract OF uextract, fn))
+  ,(REF UINDEX uindex)
+        indexport(int(index OF uindex), unit_port(unit OF uindex, fn))
+  ,(REF UTRIM utrim) trim_port(utrim, unit_port(unit OF utrim, fn))
+  ,(REF UDYINDEX udyindex) dyindex_port(udyindex, fn, unit_port)
+  ,(REF UREPLACE ureplace) dyassign_port(ureplace, fn, unit_port)
+  ,(REF UROW urow) row_port(urow, fn, unit_port)
+  ,(REF USTR ustr) str_port(ustr, fn, unit_port)
+  ,(REF UCONC uconc) conc_port(uconc, fn, unit_port)
+  ,(REF UMINST uminst) minst_port(uminst, fn, unit_port(right OF uminst, fn))
+  ,(REF UDINST udinst) dinst_port(udinst, fn, unit_port)
+  ,(REF UCASE ucase) case_port(ucase, fn, unit_port)
+  ,(REF USEQUENCE usequence)
+        sequence_port(usequence, fn, get_unittype(unit, assemdec OF fn),
+                      unit_port)
+  ,(REF USERIES useries) series_port(useries, fn, unit_port)
+  ,(REF UATTR uattr) attr_port(uattr, get_unittype(unit, assemdec OF fn),
+                               unit_port(unit OF uattr, fn), fn)
+  ,(REF UNULL) nilport
+   OUT flt("Unexpected mode in unit_port"); nilport
+   ESAC
+END;
+
+PROC ftype_insize = (REF ELLATYPE type, BOOL in) INT:
+BEGIN
+   {Calculates size of input of transformed function-type}
+   CASE mode OF type IN
+   (INT) IF in THEN 1 ELSE 0 FI
+  ,(REF TYDEC tydec) ftype_insize(type OF tydec, in)
+  ,(REF TYROW tyrow) ftype_insize(rowelem OF tyrow, in) * size OF tyrow
+  ,(REF TYPEVEC typevec)
+       (REF TYPEVEC vec := typevec;
+        INT result := 0;
+        WHILE vec ISNT niltypevec
+        DO result PLUSAB ftype_insize(elem OF vec, in);
+           vec := rest OF vec
+        OD;
+        result
+       )
+  ,(REF TYFN tyfn) ftype_insize(to OF tyfn, in) +
+                   ftype_insize(from OF tyfn, NOT in)
+   ESAC
+END;
+
+PROC build_ftinfo = (REF ELLAFN fn) VOID:
+BEGIN
+
+   {Calculate size of output of untransformed type from:     }
+   {   size of transformed type - function-type contributions}
+   INT normaloutsize := 0;
+
+   PROC sp_outsize = (REF SPNORMAL sp) INT:
+           typesize(IF untransouttype OF sp IS nilellatype
+                    THEN outtype OF sp
+                    ELSE untransouttype OF sp
+                    FI);
+
+   CASE spec OF fn IN
+   (REF SPNORMAL spnormal) normaloutsize PLUSAB sp_outsize(spnormal)
+  ,(REF EFNSETROW frow)
+       (INT spout = sp_outsize(elem OF frow);
+        normaloutsize PLUSAB (size OF frow * spout)
+       )
+  ,(REF SPECVEC specvec)
+       (REF SPECVEC vec := specvec;
+        WHILE vec ISNT nilspecvec
+        DO normaloutsize PLUSAB sp_outsize(elem OF vec);
+           vec := rest OF vec
+        OD
+       )
+   ESAC;
+
+   PROC subfromnormaloutsize = (REF ELLATYPE type) VOID:
+   BEGIN
+      CASE mode OF type IN
+      (REF TYDEC tydec) subfromnormaloutsize(type OF tydec)
+     ,(REF TYROW tyrow)
+         FOR i TO size OF tyrow DO subfromnormaloutsize(rowelem OF tyrow) OD
+     ,(REF TYPEVEC typevec)
+         (REF TYPEVEC vec := typevec;
+          WHILE vec ISNT niltypevec
+          DO subfromnormaloutsize(elem OF vec); vec := rest OF vec OD
+         )
+     ,(REF TYFN tyfn)
+         (INT insize = ftype_insize(type, TRUE);
+          INT outsize = typesize(type) - insize;
+          normaloutsize MINUSAB outsize
+         )
+      ESAC
+   END;
+
+   PROC sp_normaloutsize = (REF SPNORMAL sp) VOID:
+      FOR i TO UPB inparams OF sp
+      DO REF INPAR inpar = (inparams OF sp)[i];
+         IF untranstype OF inpar ISNT nilellatype
+         THEN subfromnormaloutsize(untranstype OF inpar)
+         FI
+      OD;
+
+   CASE spec OF fn IN
+   (REF SPNORMAL sp) sp_normaloutsize(sp)
+  ,(REF EFNSETROW frow)
+        FOR i TO size OF frow DO sp_normaloutsize(elem OF frow) OD
+  ,(REF SPECVEC specvec)
+        (REF SPECVEC vec := specvec;
+         WHILE vec ISNT nilspecvec
+         DO sp_normaloutsize(elem OF vec); vec := rest OF vec OD
+        )
+   ESAC;
+
+   {Construct ftinfo for the function}
+   inftinfo OF fn := nilftinfo;
+   outftinfo OF fn := nilftinfo;
+   REF REF FTINFO inftinfo := inftinfo OF fn;
+   REF REF FTINFO outftinfo := outftinfo OF fn;
+   INT inputpos := 1,
+       outputpos := normaloutsize + 1; {tracks position of input and output}
+
+   PROC addtoftinfo = (REF ELLATYPE type) VOID:
+   BEGIN
+      CASE mode OF type IN
+      (INT) inputpos PLUSAB 1
+     ,(REF TYDEC tydec) addtoftinfo(type OF tydec)
+     ,(REF TYROW tyrow)
+         FOR i TO size OF tyrow DO addtoftinfo(rowelem OF tyrow) OD
+     ,(REF TYPEVEC typevec)
+         (REF TYPEVEC vec := typevec;
+          WHILE vec ISNT niltypevec
+          DO addtoftinfo(elem OF vec); vec := rest OF vec OD
+         )
+     ,(REF TYFN tyfn)
+         (INT insize = ftype_insize(type, TRUE);
+          INT outsize = typesize(type) - insize;
+          REF REF FTINFO(inftinfo) := HEAP FTINFO
+                := (inputpos, inputpos + insize - 1, nilftinfo);
+          inftinfo := rest OF inftinfo;
+          inputpos PLUSAB insize;
+          REF REF FTINFO(outftinfo) := HEAP FTINFO
+                := (outputpos, outputpos + outsize - 1, nilftinfo);
+          outftinfo := rest OF outftinfo;
+          outputpos PLUSAB outsize
+         )
+      ESAC
+   END;
+
+   PROC sp_ftinfo = (REF SPNORMAL sp) VOID:
+      FOR i TO UPB inparams OF sp
+      DO REF INPAR inpar = (inparams OF sp)[i];
+         IF untranstype OF inpar IS nilellatype
+         THEN inputpos PLUSAB typesize(type OF inpar)
+         ELSE addtoftinfo(untranstype OF inpar)
+         FI
+      OD;
+
+   CASE spec OF fn IN
+   (REF SPNORMAL sp) sp_ftinfo(sp)
+  ,(REF EFNSETROW frow)
+        FOR i TO size OF frow DO sp_ftinfo(elem OF frow) OD
+  ,(REF SPECVEC specvec)
+        (REF SPECVEC vec := specvec;
+         WHILE vec ISNT nilspecvec
+         DO sp_ftinfo(elem OF vec); vec := rest OF vec OD
+        )
+   ESAC
+END;
+
+PROC build_body = (REF ELLAFN fn) VOID:
+BEGIN
+   {Set up inputs of fn}
+   inputs OF fn := HEAP VECTOR[nins OF fn]REF SIGSOURCE;
+
+   {Set up outputs of fn}
+   outputs OF fn := HEAP VECTOR[nouts OF fn]REF SIGDEST;
+   REF VECTOR[]ELLATYPE flatouts = flattentype(outtype OF fn);
+   FOR j TO nouts OF fn
+   DO (outputs OF fn)[j] := HEAP SIGDEST := (fn, j, flatouts[j], nilalias) OD;
+   REF PORT outport = make in port(outtype OF fn, outputs OF fn);
+
+   {**** Generate aliases for inputs and fill in local environment *****}
+
+   INT inparno := 0, n_ss := 1;
+   INT nlocnames = UPB(nametypes OF assemdec OF fn);
+   namedinputs OF fn := HEAP VECTOR[nlocnames]PORT;
+   namedoutputs OF fn := HEAP VECTOR[nlocnames]PORT;
+
+   CASE spec OF fn IN
+   (REF SPNORMAL spnormal) spnormal_ports(spnormal, fn, inparno, n_ss)
+  ,(REF EFNSETROW efnsetrow) fnsetrow_ports(efnsetrow, fn, inparno)
+  ,(REF SPECVEC specvec)
+      (REF SPECVEC vec := specvec;
+       WHILE vec ISNT nilspecvec
+       DO spnormal_ports(elem OF vec, fn, inparno, n_ss);
+          vec := rest OF vec
+       OD
+      )
+   ESAC;
+
+   {****** Construct function body ******}
+
+   CASE fnbody OF assemdec OF fn IN
+   (REF UNITTAG tag)
+      (join(unit_port(tag OF tag, fn), outport);
+       body OF fn := make_simplefn(IF nmakesof OF fn = 0 THEN 1 ELSE 2 FI)
+      )
+  ,(REF ALIENCODE fnbiop) body OF fn := make_biop(fnbiop)
+  ,(REF ARITH arith) body OF fn := make_arith(arith, namedoutputs OF fn)
+  ,(REF REFORM) body OF fn := make_simplefn(4)
+  ,(REF IMPORT import) body OF fn := make_import(import)
+  ,(REF ADELAY adelay) body OF fn := make_adelay(adelay)
+  ,(REF IDELAY idelay) body OF fn := make_idelay(idelay)
+  ,(REF RAM ram) body OF fn := make_ram(ram)
+  ,(REF SAMPLE sample) body OF fn := make_sample(sample)
+  ,(REF BODYNULL) SKIP
+   ESAC
+END;
+
+build_fndec :=
+    (REF FNDEC fndec) VOID:
+BEGIN
+
+   IF notdone(fndec)
+   THEN
+     HEAP ELLAFN currentfn;
+     INT contextno = IF usage OF fndec IS nilusage
+                     THEN contextno OF usage OF (fns OF environ)[1]
+                     ELSE contextno OF usage OF fndec
+                     FI;
+     dec OF currentfn :=
+             build_decl(fnname OF fndec, nfndecs PLUSAB 1, contextno);
+
+     fndecs OF currentfn := nilfnvec;
+     macdecs OF currentfn := nilmacdecvec;
+     typedecs OF currentfn := niltypedecvec;
+     IF usage OF fndec ISNT nilusage
+     THEN vspec OF currentfn := libv_spec OF usage OF (fns OF environ)[1];
+          vbody OF currentfn := libv_body OF usage OF (fns OF environ)[1]
+     FI;
+{{EVW is this ok -  will now hold libv_spec of usages Ofouterfn where 0 before}}
+     makesof OF currentfn := nilmakevec;
+     nmakesof OF currentfn := 0;
+     uses OF currentfn := nilmakevec;
+     assemdec OF currentfn := fndec;
+     env_tydecs OF currentfn := environ_tydecs;
+     fnsetdata OF currentfn := nilfnsetdata;
+
+     process_spec(currentfn);
+     INOUTTYPES iotypes = make_iotypes(spec OF currentfn);
+     intype OF currentfn := intype OF iotypes;
+     outtype OF currentfn := outtype OF iotypes;
+     nins OF currentfn := typesize(intype OF currentfn);
+     nouts OF currentfn := typesize(outtype OF currentfn);
+     fnsetdata OF currentfn := getfnsetdata(currentfn);
+     mode OF currentfn := EMPTY;
+       {if currentfn IS a macro expansion,
+        the mode is modified in `build_macros'}
+
+     build_ftinfo(currentfn);
+
+     build_body(currentfn);
+     appfn(currentfn, ellafunctions)
+   FI
+END;
+
+{***************** BUILDING THE NETWORK ***********************************}
+
+PROC initialise_ellanet = (CREGION dcr, BOOL att, imp, seq, ID rfn,
+                           MESSAGEPROC dmsg, RCH ofile, BOOL diag) VOID:
+BEGIN
+   ellafunctions := nilfnvec;
+   ellamacros := nilmacdecvec;
+   ellatypes := niltypedecvec;
+
+   basicdrivers := nilssvec;
+
+   ntypedecs := 0;
+   nmacdecs := 0;
+   nfndecs := 0;
+   nbasicdrivers := 0;
+
+   cr := dcr;
+   att_set := att;
+   imp_set := imp;
+   seq_set := seq;
+   rootfn := rfn;
+   flt := (VECTOR [] CHAR s) VOID: dmsg(user, s);
+   msg := dmsg;
+   outfile := ofile;
+   dumpdiag := diag
+END;
+
+PROC traverse_fndec = (REF FNDEC fndec,
+                       PROC (REF FNDEC) VOID fndec_act,
+                       PROC (REF TYPEDEC) VOID typedec_act
+                      ) VOID:
+BEGIN {traverse_fndec}
+{ Traverse the body of a FNDEC in order apply the action routines to its
+  local declarations in the correct order (declaration before reference). }
+
+   PROC traverse_unit = (REF UNIT unit,
+                         PROC (REF FNDEC) VOID fndec_act,
+                         PROC (REF TYPEDEC) VOID typedec_act
+                        ) VOID:
+   BEGIN {traverse_unit}
+
+      PROC traverse_seqstep = (REF SEQSTEP the_seqstep,
+                               PROC (REF FNDEC) VOID fndec_act,
+                               PROC (REF TYPEDEC) VOID typedec_act
+                              ) VOID:
+      BEGIN {traverse_seqstep}
+         CASE (the_seqstep) IN
+         (DECLARATION decl)
+            CASE (decl) IN
+            (TNAME tname)
+               typedec_act((types OF environ)[typeno OF tname])
+           ,(FNNAME fnname)
+               traverse_fndec((fns OF environ)[fnno OF fnname],
+                              fndec_act, typedec_act)
+            OUT SKIP
+            ESAC
+        ,(REF SEQLET seqsteplet)
+            traverse_unit(unit OF seqlet OF seqsteplet, fndec_act, typedec_act)
+        ,(REF SEQVAR seqstepvar)
+            traverse_unit(unit OF seqvar OF seqstepvar, fndec_act, typedec_act)
+        ,(REF SEQASSIGN seqassign)
+            (traverse_unit(to OF seqassign, fndec_act, typedec_act);
+             traverse_unit(from OF seqassign, fndec_act, typedec_act)
+            )
+        ,(REF SEQCASE seqcase)
+            (traverse_unit(input OF seqcase, fndec_act, typedec_act);
+             REF SEQCHOICES seqchoices := choices OF seqcase;
+             WHILE seqchoices ISNT nilseqchoices
+             DO
+                traverse_seqstep(output OF seqchoices, fndec_act, typedec_act);
+                seqchoices := rest OF seqchoices
+             OD
+            )
+        ,(REF SEQCOND seqcond)
+            (traverse_seqstep(true OF seqcond, fndec_act, typedec_act);
+             traverse_seqstep(false OF seqcond, fndec_act, typedec_act)
+            )
+        ,(REF SEQREPL seqrepl)
+            traverse_seqstep(body OF seqrepl, fndec_act, typedec_act)
+        ,(REF SEQUENCE sequence)
+            (REF SEQUENCE seq := sequence;
+
+             WHILE seq ISNT nilsequence
+             DO
+                traverse_seqstep(step OF seq, fndec_act, typedec_act);
+                seq := rest OF seq
+             OD
+            )
+         OUT SKIP
+         ESAC
+      END {traverse_seqstep};
+
+      PROC traverse_series = (REF SERIES the_series,
+                              PROC (REF FNDEC) VOID fndec_act,
+                              PROC (REF TYPEDEC) VOID typedec_act
+                             ) VOID:
+      BEGIN {traverse_series}
+         REF SERIES series := the_series;
+
+         WHILE series ISNT nilseries
+         DO
+            CASE (step OF series) IN
+            (DECLARATION decl)
+               CASE (decl) IN
+               (TNAME tname)
+                  typedec_act((types OF environ)[typeno OF tname])
+              ,(FNNAME fnname)
+                  traverse_fndec((fns OF environ)[fnno OF fnname],
+                                 fndec_act, typedec_act)
+               OUT SKIP
+               ESAC
+           ,(REF LET let) traverse_unit(unit OF let, fndec_act, typedec_act)
+           ,(REF JOIN join) traverse_unit(from OF join, fndec_act, typedec_act)
+           ,(REF REPLJOIN repljoin)
+               (REF JOINS joins := joins OF repljoin;
+                WHILE joins ISNT niljoins
+                DO
+                   traverse_unit(from OF join OF joins, fndec_act, typedec_act);
+                   joins := rest OF joins
+                OD
+               )
+            OUT SKIP
+            ESAC;
+            series := rest OF series
+         OD
+      END {traverse_series};
+
+   {traverse_unit}
+
+      CASE (unit) IN
+      (REF UASSOC uassoc) traverse_unit(assoc OF uassoc, fndec_act, typedec_act)
+     ,(REF UEXTRACT uextract)
+         traverse_unit(extract OF uextract, fndec_act, typedec_act)
+     ,(REF UPORTNAME uterm)
+         traverse_unit(unit OF uterm, fndec_act, typedec_act)
+     ,(REF UINDEX uindex) traverse_unit(unit OF uindex, fndec_act, typedec_act)
+     ,(REF UTRIM utrim) traverse_unit(unit OF utrim, fndec_act, typedec_act)
+     ,(REF UDYINDEX udyindex)
+         (traverse_unit(unit OF udyindex, fndec_act, typedec_act);
+          traverse_unit(index OF udyindex, fndec_act, typedec_act)
+         )
+     ,(REF UREPLACE ureplace)
+         (traverse_unit(unit OF ureplace, fndec_act, typedec_act);
+          traverse_unit(index OF ureplace, fndec_act, typedec_act);
+          traverse_unit(from OF ureplace, fndec_act, typedec_act)
+         )
+     ,(REF UROW urow) traverse_unit(elem OF urow, fndec_act, typedec_act)
+     ,(REF USTR ustr)
+         (REF USTR ustr_ptr := ustr;
+          WHILE ustr_ptr ISNT nilustr
+          DO
+             traverse_unit(elem OF ustr_ptr, fndec_act, typedec_act);
+             ustr_ptr := rest OF ustr_ptr
+          OD
+         )
+     ,(REF UCONC uconc)
+         (traverse_unit(left OF uconc, fndec_act, typedec_act);
+          traverse_unit(right OF uconc, fndec_act, typedec_act)
+         )
+     ,(REF UMINST uminst) traverse_unit(right OF uminst, fndec_act, typedec_act)
+     ,(REF UDINST udinst)
+         (traverse_unit(left OF udinst, fndec_act, typedec_act);
+          traverse_unit(right OF udinst, fndec_act, typedec_act)
+         )
+     ,(REF UCASE ucase)
+         (traverse_unit(input OF ucase, fndec_act, typedec_act);
+          REF UCHOICES uchoices := choices OF ucase;
+          WHILE uchoices ISNT niluchoices
+          DO IF (sort OF uchoices) /= 4
+             THEN   traverse_unit(output OF uchoices, fndec_act, typedec_act)
+             FI;
+             uchoices := rest OF uchoices
+          OD
+         )
+     ,(REF UCOND ucond)
+         (traverse_unit(true OF ucond, fndec_act, typedec_act);
+          traverse_unit(false OF ucond, fndec_act, typedec_act)
+         )
+     ,(REF UREPL urepl) traverse_unit(body OF urepl, fndec_act, typedec_act)
+     ,(REF USEQUENCE usequence)
+         (REF SEQUENCE seq := body OF usequence;
+
+          WHILE seq ISNT nilsequence
+          DO
+             traverse_seqstep(step OF seq, fndec_act, typedec_act);
+             seq := rest OF seq
+          OD;
+          traverse_unit(output OF usequence, fndec_act, typedec_act)
+         )
+     ,(REF USERIES useries)
+         (traverse_series(body OF useries, fndec_act, typedec_act);
+          traverse_unit(output OF useries, fndec_act, typedec_act)
+         )
+     ,(REF UATTR uattr) traverse_unit(unit OF uattr, fndec_act, typedec_act)
+     ,(REF UCHECK ucheck) traverse_unit(unit OF ucheck, fndec_act, typedec_act)
+     ,(REF USTRING ustring)
+         traverse_unit(char OF ustring, fndec_act, typedec_act)
+     ,(REF UBRACKET ubracket)
+         traverse_unit(unit OF ubracket, fndec_act, typedec_act)
+      OUT SKIP
+      ESAC
+   END {traverse_unit};
+
+{traverse_fndec}
+   CASE (fnbody OF fndec) IN
+      (REF UNITTAG unittag)
+         traverse_unit(tag OF unittag, fndec_act, typedec_act)
+   OUT SKIP
+   ESAC;
+
+   fndec_act(fndec)
+END {traverse_fndec};
+
+REF VECTOR[] TYDECS   map_to_tydecs;
+
+PROC traverse_envs = (PROC (REF FNDEC) VOID fndec_act,
+                      PROC (REF TYPEDEC) VOID typedec_act
+                     ) VOID:
+BEGIN
+   REF REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO IF sort OF outer OF outers = outerfn
+      THEN environ := environ OF outer OF outers;
+           REF FNDEC fdec = get_outerfn(outer OF outers);
+           IF fdec ISNT nilfndec
+           THEN environ_tydecs := map_to_tydecs[closureno OF usage OF fdec];
+                traverse_fndec(fdec, fndec_act, typedec_act)
+           FI
+      FI;
+      outers := rest OF outers
+   OD
+END;
+
+PROC typedec_nop = (REF TYPEDEC the_typedec) VOID:
+BEGIN
+   SKIP
+END;
+
+PROC initialise_map_to_tydecs = VOID:
+BEGIN
+   map_to_tydecs := HEAP VECTOR[maxclosureno(closure)] TYDECS;
+   FORALL m IN map_to_tydecs DO m := NIL OD;
+
+   REF REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO IF sort OF outer OF outers = outerfn
+      THEN  environ := environ OF outer OF outers;
+            REF FNDEC fdec = (fns OF environ)[1];
+            IF fdec ISNT nilfndec
+            THEN  INT closureno = closureno OF usage OF fdec;
+                  map_to_tydecs[closureno] := environ_tydecs :=
+                     HEAP VECTOR[UPB types OF environ] REF TYDEC;
+                  FOR k TO UPB environ_tydecs
+                  DO REF TYPEDEC k_type = (types OF environ)[k];
+                     environ_tydecs[k] :=
+                       IF sort OF k_type = outerdec
+                       THEN  gettypedec(k)
+                       ELSE  NIL
+                       FI
+                 OD
+            FI
+      FI;
+      outers := rest OF outers
+   OD
+END;
+
+PROC complete_map_to_tydecs = VOID:
+BEGIN
+   REF REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO  IF sort OF outer OF outers = outerfn
+       THEN environ := environ OF outer OF outers;
+            REF FNDEC fdec = (fns OF environ)[1];
+            IF fdec ISNT nilfndec
+            THEN
+               environ_tydecs := map_to_tydecs[closureno OF usage OF fdec];
+               FOR k TO UPB types OF environ
+               DO environ_tydecs[k] := gettypedec(k) OD
+            FI
+       FI;
+       outers := rest OF outers
+   OD
+END;
+
+PROC save_types = VOID:
+BEGIN
+   environ_tydecs := NIL;
+   REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO IF sort OF outer OF outers = outertype
+      THEN environ := environ OF outer OF outers;
+           REF TYPEDEC tdec = (types OF environ)[1];
+           IF tdec ISNT niltypedec
+           THEN build_typedec(tdec)
+           FI
+      FI;
+      outers := rest OF outers
+   OD;
+
+   initialise_map_to_tydecs;
+
+   savedtypes := niltstr;   savedfndecs := nilfndecvec;
+   traverse_envs(getspec, build_typedec);
+   savedfndecs := nilfndecvec;   {saves some space!}
+
+   complete_map_to_tydecs
+END;
+
+
+
+{                     ***********************                }
+
+{ Start of terrible kludge }
+{ ======================== }
+
+{ This code, up to the matching comment, is a terrible kludge to keep track
+  of which functions are in fact derived from macros, even when there are
+  no macspecs.  This is TEMPORARY, and the information should be preserved
+  by the macro transformation (but that requires a small change to the
+  assembler modes).
+
+  The trickery used here works by keeping track of the name and contextno of
+  each outer level macro declaration (fairly safe) and the names of locally
+  declared macros (unsafe!).  To handle some of the cases we might miss,
+  such as when a global macro is re-declared locally by the macro
+  transformation when the scope of its parameter is local, we also check
+  for the existence of parameters as a further way of determining that
+  a FNDEC describes a macro.
+
+  The two procedures "remember macros" and "reinstate macros" are each
+  called just once, in "assemble_ellanet".
+}
+
+MODE MACINFO = STRUCT (ID name, INT contextno, BOOL macro,
+                       REF IDS inner macros, REF MACINFO rest);
+
+REF MACINFO nilmacinfo = NIL;
+REF MACINFO saved macro details := nilmacinfo;
+
+PROC remember macros = (CLOSURE closure) VOID:
+BEGIN
+    saved macro details := nilmacinfo;
+    REF OUTERS outers := outers OF closure;
+    WHILE outers ISNT nilouters
+    DO IF sort OF outer OF outers = outerfn
+       THEN REF FNDEC dec = get_outerfn(outer OF outers);
+            REF ENVIRON env = environ OF outer OF outers;
+            REF IDS inner := NIL;
+            FORALL fn IN fns OF env
+            DO IF (sort OF fn /= outerdec) ANDTH (macro OF fn)
+               THEN
+                   inner := HEAP IDS := (fnname OF fn, inner)
+               FI
+            OD;
+            saved macro details := HEAP MACINFO
+                  := (fnname OF dec, contextno OF usage OF dec, macro OF dec,
+                      inner, saved macro details)
+       FI;
+       outers := rest OF outers
+    OD
+END;
+
+
+PROC reinstate macros = (CLOSURE closure) VOID:
+BEGIN
+   PROC find_details = (ID fnname, INT contextno) REF MACINFO:
+   (  REF MACINFO details := saved macro details;
+      BOOL found := FALSE;
+      WHILE (details ISNT nilmacinfo) ANDTH NOT found
+      DO  IF (name OF details = fnname) ANDTH (contextno OF details = contextno)
+          THEN found := TRUE
+          ELSE details := rest OF details
+          FI
+      OD;
+      details
+   );
+
+   REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO IF sort OF outer OF outers = outerfn
+      THEN  REF FNDEC dec = get_outerfn(outer OF outers);
+            REF ENVIRON env = environ OF outer OF outers;
+            REF MACINFO minf =
+                   find_details(fnname OF dec, contextno OF usage OF dec);
+            IF minf ISNT nilmacinfo
+            THEN REF IDS inner := inner macros OF minf;
+                 IF  (name OF minf ISNT nilid) ANDTH
+                     (fnname OF dec /= name OF minf)
+                 THEN
+                    sysfault ("Inconsistent name: getnetwork")
+                 FI;
+                 IF  macro OF minf
+                      OREL ((macspecs OF dec ISNT nilmacspecs)
+                            ANDTH UPB macspecs OF dec > 0)
+                 THEN
+                      macro OF dec := TRUE
+                 FI;
+                 WHILE inner ISNT nilids DO
+                    FORALL fn IN fns OF env DO
+                      IF (sort OF fn = localdec) ANDTH
+                         (fnname OF fn = id OF inner)
+                      THEN
+                         macro OF fn := TRUE
+                      FI
+                   OD;
+                   inner := rest OF inner
+               OD
+            FI;
+            FORALL fn IN fns OF env DO
+                IF (sort OF fn = localdec) ANDTH
+                   (macspecs OF fn ISNT nilmacspecs)
+                      ANDTH UPB macspecs OF fn > 0
+                THEN
+                     macro OF fn := TRUE
+                FI
+            OD
+       FI;
+       outers := rest OF outers
+    OD
+END;
+
+
+{ End of terrible kludge }
+{ ====================== }
+
+{                     ***********************                }
+
+
+PROC assemble_ellanet = CLOSURE:
+BEGIN
+{****
+      The network is processed in two passes:
+
+      (1) The first pass merely stores the (untransformed) fn specs.
+
+      (2) The second pass transforms all fntypes and IO connections and
+          completes the ELLANET circuit by processing the ELLA declarations
+          and the transformed function bodies.
+ ****}
+
+
+   {**** Set up closure (with untransformed fntypes) so that original
+         function specs may be saved before fntypes are transformed ****}
+
+   CREGION cr = check_selected(currentct OF library, msg);
+   CLOSURESEEDS this seed := (cr, rootfn, nilclosureseed);
+
+   closure := generate_closure(this seed, TRUE, msg);
+   closure := get_allimports(closure, msg);
+   CLOSURE start_closure = closure;
+   IF imp_set THEN closure := cl OF transform_imports(closure, msg)
+   ELSE  REF OUTERS  outers := outers OF closure;
+         WHILE rest OF outers ISNT nilouters DO outers := rest OF outers OD;
+         INT currentctno =
+            CASE sort OF outer OF outers IN
+            {outerattr}
+                contextno OF usage OF (attrs OF environ OF outer OF outers)[1],
+            {outerint}
+                contextno OF usage OF (ints OF environ OF outer OF outers)[1],
+            {outertype}
+                 contextno OF usage OF (types OF environ OF outer OF outers)[1],
+            {outerconst}
+                 contextno OF usage OF(consts OF environ OF outer OF outers)[1],
+            {outerfn}
+                 contextno OF usage OF (fns OF environ OF outer OF outers)[1]
+            ESAC;
+
+         BOOL  changed:= FALSE;
+         CLOSURE newclosure := closure;
+         REF REF OUTERS newptr := outers OF newclosure;
+         WHILE newptr ISNT nilouters
+         DO REF ENVIRON env = environ OF outer OF newptr;
+            BOOL remove =
+              CASE sort OF outer OF newptr IN
+              {outerattr}
+                 contextno OF usage OF (attrs OF env)[1] /= currentctno,
+              {outerint}
+                 contextno OF usage OF (ints OF env)[1] /= currentctno,
+              {outertype}
+                 contextno OF usage OF (types OF env)[1] /= currentctno,
+              {outerconst}
+                 contextno OF usage OF (consts OF env)[1] /= currentctno,
+              {outerfn}
+                 contextno OF usage OF (fns OF env)[1] /= currentctno
+            ESAC;
+            IF remove
+            THEN IF NOT changed
+                 THEN changed:= TRUE;
+                      newclosure := copy_closure(newclosure, msg);
+                      { Now refind the current place in the outers list }
+                      INT  place = closureno OF outer OF newptr;
+                      newptr:= outers OF newclosure;
+                      WHILE closureno OF outer OF newptr /= place
+                        DO  newptr:= rest OF newptr  OD
+                 FI;
+                 free_outers(newptr, newclosure, msg) { dont add to list }
+            ELSE newptr := rest OF newptr
+            FI
+         OD;
+         closure := newclosure
+   FI;
+
+   remember macros (closure);
+
+   closure := cl OF expand(closure, nilids, FALSE, msg);
+   IF seq_set THEN closure := cl OF transform_sequences(closure, msg) FI;
+   closure := cl OF transform_timescale(closure, msg);
+   closure := cl OF expand(closure, nilids, FALSE, msg);
+   closure := cl OF transform_multimakes(closure, null_options, msg);
+
+   reinstate macros (closure);
+
+   {**** Build untransformed type decs, and store untransformed fn specs ****}
+
+   save_types;
+
+   {**** Transform fntypes and complete the processing of the network ****}
+
+   closure := cl OF transform_fntypes(closure, fntype_remove_ufn, msg);
+   closure := cl OF transform_joins(closure, null_options, msg);
+
+   traverse_envs(build_fndec, typedec_nop);
+   build_macros;
+   start_closure
+END;
+
+
+
+
+{******************************************************************************
+                      -----------------
+                      |  THE DUMPER   |
+                      -----------------
+ ****************************************************************************}
+
+
+{********************* Low-level write procs ************************}
+
+PROC putchar = (CHAR c )VOID:
+BEGIN
+   INT   abs_c = ABS c;
+   IF   abs_c < 64
+   THEN
+      IF   abs_c < 16
+{  0.. 15: Map small values to printable digits etc, ["0".."9",":".."?"] }
+      THEN   put(outfile, REPR(abs_c + 48) )
+      ELIF   abs_c < 32
+{ 16.. 31: Map to [32..47] = [" ".."/"], without escape character        }
+      THEN   put(outfile, REPR(abs_c + 16) )
+{ 32.. 63: Map to   "~" [32..63], ie escape_1 before unchanged character }
+      ELSE   put(outfile, ("~", c) )
+      FI
+   ELIF   abs_c < 124
+{ 64..123: Map straight through - includes letters and underscore        }
+   THEN   put(outfile, c)
+   ELIF   abs_c < 192
+   THEN
+      IF   abs_c < 128
+{124..127: Map to   "~" [64..67], ie escape_1 [@,A,B,C]                  }
+      THEN   put(outfile, ("~", REPR(abs_c - 60)) )
+{128..191: Map to   125 [48..111], ie escape_2 ["0".."o"]                }
+      ELSE   put(outfile, ("}", REPR(abs_c - 80)) )
+      FI
+{192..255: Map to   "|" [48..111], ie escape_3 ["0".."o"]                }
+   ELSE   put(outfile, ("|", REPR(abs_c - 144)) )
+   FI
+END;
+
+PROC   putint = (INT i)VOID:
+BEGIN
+   IF   dumpdiag
+   THEN
+      IF   charnumber(outfile) > 1   THEN   put(outfile, newline)   FI;
+      put(outfile, ( "~{Int ", i, " }~" ) )
+   FI;
+   putpkdint( putchar, i)
+END;
+
+PROC   putident = (VECTOR[ ]CHAR n )VOID:
+BEGIN
+   IF   dumpdiag
+   THEN
+      IF   charnumber(outfile) > 1   THEN   put(outfile, newline)   FI;
+      put(outfile, "~{Name}~" )
+   FI;
+   putpkdname( putchar, n)
+END;
+
+PROC   puttext = ( VECTOR[]CHAR t) VOID:
+BEGIN
+   IF   dumpdiag
+   THEN
+      IF   charnumber(outfile) > 1   THEN   put(outfile, newline)   FI;
+      put(outfile, "~{Text}~" )
+   FI;
+   putpkdtext( putchar, t)
+END;
+
+
+{**************************  Dumping procs  *********************************}
+
+PROC dump_context = (ELLACT ct) VOID:
+BEGIN
+   putident(declname OF ct);
+   putident(importsname OF ct)
+END;
+
+PROC dump_decl = (REF DECL decl) VOID:
+BEGIN
+   putident(name OF decl);
+   putint(enclfn OF decl);
+   dump_context(context OF decl)
+END;
+
+{******** Types *********}
+
+{Dumps the type (apart from its basic values)}
+
+PROC dump_type_nobv = (REF ELLATYPE type, BOOL dumping_typedec) VOID:
+BEGIN
+   PROC dump_tyrow = (REF TYROW tyrow) VOID:
+   BEGIN
+      putint(size OF tyrow);
+      dump_type_nobv(rowelem OF tyrow, FALSE)
+   END;
+
+   PROC dump_typevec = (REF TYPEVEC typevec) VOID:
+   BEGIN
+      REF TYPEVEC vec := typevec;
+      INT nvec := 0;
+      WHILE vec ISNT niltypevec
+      DO nvec PLUSAB 1; vec := rest OF vec OD;
+
+      putint(nvec);
+      vec := typevec;
+      WHILE vec ISNT niltypevec
+      DO dump_type_nobv(elem OF vec, FALSE);
+         vec := rest OF vec
+      OD
+   END;
+
+   PROC dump_tyfn = (REF TYFN tyfn) VOID:
+   BEGIN
+      dump_type_nobv(from OF tyfn, FALSE);
+      dump_type_nobv(to OF tyfn, FALSE)
+   END;
+
+   IF type IS nilellatype THEN putchar("n")
+   ELSE CASE mode OF type IN
+        (INT int) IF dumping_typedec
+                  {if currently dumping typedec of this type}
+                  THEN putchar("m"); putint(int)
+                  {if referring to an earlier type dec}
+                  ELSE putchar("d"); putint(num OF dec OF dec OF type)
+                  FI
+{       ,(REF TYDEC tydec) dump_type_nobv(type OF tydec, dumping_typedec)}
+       ,(REF TYDEC tydec) (putchar("d"); putint(num OF dec OF tydec))
+       ,(REF TYROW tyrow) (putchar("r"); dump_tyrow(tyrow))
+       ,(REF TYPEVEC typevec) (putchar("s"); dump_typevec(typevec))
+       ,(REF TYFN tyfn) (putchar("f"); dump_tyfn(tyfn))
+        ESAC
+   FI
+END;
+
+PROC dump_bv = (REF BV bv) VOID:
+BEGIN
+   putident(name OF bv);
+
+   CASE bvmode OF bv IN
+   (REF ELLATYPE assoctype) (putchar("a"); dump_type_nobv(assoctype,FALSE))
+  ,(INT int) (putchar("b"); putint(int))
+  ,(CHAR char) (putchar("c"); putchar(char))
+   ESAC
+END;
+
+PROC dump_value = (REF VALUE value) VOID:
+BEGIN
+   CASE value IN
+   (REF BV bv) (putchar("a"); dump_bv(bv))
+  ,(REF BVRANGE bvrange)
+      (putchar("b"); dump_bv(lwb OF bvrange); dump_bv(upb OF bvrange))
+   ESAC
+END;
+
+{ Dumps the type and its basic values }
+
+PROC dump_type = (REF ELLATYPE type) VOID:
+BEGIN
+
+   {*** Dump basic values ***}
+   putint(UPB values OF type);
+   FOR i TO UPB values OF type DO dump_value((values OF type)[i]) OD;
+
+   {*** Dump rest of type ***}
+   dump_type_nobv(type,TRUE)
+END;
+
+PROC dump_typedec = (REF TYDEC typedec) VOID:
+BEGIN
+   dump_decl(dec OF typedec);
+   dump_type(type OF typedec)
+END;
+
+PROC isvalbv = (REF BV bv) BOOL:
+  {Determines if the bv is a value of a normal enumerated type}
+  name OF bv /= bv_queryname ANDTH
+  CASE bvmode OF bv IN (REF ELLATYPE) TRUE OUT FALSE ESAC;
+
+PROC bvnum = (REF BV bv) INT:
+BEGIN
+   {Returns the position of a basic value in the values of its type;
+     applies to normal enumerated types only}
+   INT pos := 0;
+   REF VECTOR[]VALUE values = values OF type OF bv;
+   FOR i TO UPB values
+   DO CASE values[i] IN
+      (REF BV bvi) IF bvi IS bv THEN pos := i FI
+      ESAC
+   OD;
+   IF pos = 0 THEN flt("bv not found in bvnum") FI;
+   pos
+END;
+
+PROC ssbvnum = (REF BV bv) INT:
+BEGIN
+   {Returns the position of the corresponding driver in `basicdrivers'}
+   INT pos := 0;
+   BOOL found := FALSE;
+   REF SSVEC drivers := basicdrivers;
+   WHILE (drivers ISNT nilssvec) AND NOT found
+   DO pos PLUSAB 1;
+      REF BV ssbv = CASE ssmode OF elem OF drivers IN (REF BV bvi) bvi ESAC;
+      found := ssbv IS bv;
+      drivers := rest OF drivers
+   OD;
+   IF pos = 0 THEN flt("bv not found in ssbvnum") FI;
+   pos
+END;
+
+PROC dump_bvref = (REF BV bv) VOID:
+BEGIN
+   IF bv IS nilbv THEN putchar("c")
+   ELIF isvalbv(bv) THEN putchar("a");
+                         putint(num OF dec OF dec OF type OF bv);
+                         putint(bvnum(bv))
+   ELSE putchar("b"); putint(ssbvnum(bv))
+   FI
+END;
+
+PROC dump_driverbv = (REF BV bv) VOID:
+BEGIN
+   IF isvalbv(bv)
+   THEN putchar("a");
+        putint(num OF dec OF dec OF type OF bv);
+        putint(bvnum(bv))
+   ELSE putchar("b"); dump_bv(bv)
+   FI
+END;
+
+{********* Constants **********}
+
+PROC dump_constval = (CONSTVAL constval) VOID:
+   CASE constval IN
+   (REF ELLATYPE ctval) (putchar("a"); putint(num OF dec OF dec OF ctval))
+  ,(REF BV ccval) (putchar("b"); dump_bvref(ccval))
+  ,(REF CRVAL crval)
+      (putchar("d");
+       putint(num OF dec OF dec OF type OF crval);
+       putint(lwb OF range OF crval);
+       putint(upb OF range OF crval)
+      )
+  ,(REF CVROW cvrow)
+      (putchar("e"); putint(size OF cvrow); dump_constval(item OF cvrow))
+  ,(REF CAVAL caval)
+      (putchar("f"); dump_bvref(bv OF caval); dump_constval(assoc OF caval))
+  ,(REF CONQUERY conquery)
+      (putchar("g"); dump_type_nobv(type OF conquery,FALSE))
+  ,(REF CVSTR cvstr)
+      (REF CVVEC vec := cvstr OF cvstr;
+       INT nstr := 0;
+       WHILE vec ISNT nilcvvec
+       DO nstr PLUSAB 1; vec := rest OF vec OD;
+       putchar("h");
+       putint(nstr);
+       vec := cvstr OF cvstr;
+       WHILE vec ISNT nilcvvec
+       DO dump_constval(elem OF vec); vec := rest OF vec OD
+      )
+  ,(REF CVALTS cvalts)
+      (REF CVVEC vec := cvalts OF cvalts;
+       INT nstr := 0;
+       WHILE vec ISNT nilcvvec
+       DO nstr PLUSAB 1; vec := rest OF vec OD;
+       putchar("i");
+       putint(nstr);
+       vec := cvalts OF cvalts;
+       WHILE vec ISNT nilcvvec
+       DO dump_constval(elem OF vec); vec := rest OF vec OD
+      )
+  ,(VOID) putchar("j")
+  ,(REF CRCHAR crchar)
+        (putchar("k");
+         dump_type_nobv(type OF crchar, FALSE);
+         putchar(lwb OF crchar);
+         putchar(upb OF crchar)
+        )
+   ESAC;
+
+{****** Macros *******}
+
+PROC dump_macparam = (REF EMACPARAM macparam) VOID:
+BEGIN
+   putident(name OF macparam);
+   putint(mode OF macparam)
+END;
+
+PROC dump_macparamvec = (REF VECTOR[]EMACPARAM macparamvec) VOID:
+BEGIN
+   putint(UPB macparamvec);
+   FOR i TO UPB macparamvec DO dump_macparam(macparamvec[i]) OD
+END;
+
+PROC dump_macdec = (REF MACDEC macdec) VOID:
+BEGIN
+   dump_decl(dec OF macdec);
+   putint(vspec OF macdec);
+   putint(vbody OF macdec);
+   dump_macparamvec(params OF macdec)
+END;
+
+{****** Signals ******}
+
+PROC dump_aliasref = (REF ALIAS alias) VOID:
+BEGIN
+   CASE ssmode OF sigsource OF alias IN
+   (REF SSINPUT ssinput) (putchar("b"); putint(num OF ssinput))
+  ,(REF SSOUTPUT ssoutput)
+       (putchar("c");
+        putint(num OF make OF ssoutput);
+        putint(num OF ssoutput)
+       )
+  ,(REF BV bv) (putchar("a"); putint(ssbvnum(bv)))
+   ESAC;
+   INT pos := 0;
+   REF ALIASVEC vec := aliases OF sigsource OF alias;
+   WHILE pos PLUSAB 1; elem OF vec ISNT alias DO vec := rest OF vec OD;
+   putint(pos)
+END;
+
+PROC dump_aliasrefvec = (REF VECTOR[]PORT ports) VOID:
+BEGIN
+   putint(UPB ports);
+   FOR i TO UPB ports
+   DO REF ALIAS alias = CASE ports[i] IN (REF ALIAS al) al ESAC;
+      dump_aliasref(alias)
+   OD
+END;
+
+PROC dump_seqstepvec = (REF SEQSTEPVEC seqstepvec) VOID:
+BEGIN
+   PROC dump_seqstep = (REF SQSTEP seqstep) VOID:
+   BEGIN
+      CASE seqstep IN
+      (REF SEQDEC seqdec)
+         (putchar("a"); putint(sort OF seqdec); putint(num OF seqdec))
+     ,(REF LETINFO letinfo)
+         (putchar(IF isvar OF letinfo THEN "c" ELSE "b" FI);
+          putident(name OF letinfo);
+          dump_aliasrefvec(flattenport(sources OF letinfo))
+         )
+     ,(REF PVAR pvar)
+         (putchar("d"); putident(name OF pvar); dump_constval(init OF pvar))
+     ,(REF ASSIGN assign)
+         (putchar("e");
+          dump_aliasrefvec(flattenport(lhs OF assign));
+          dump_aliasrefvec(flattenport(rhs OF assign))
+         )
+     ,(REF SQCASE sqcase)
+         (putchar("f");
+          dump_aliasrefvec(flattenport(chooser OF sqcase));
+          INT nvec := 0;
+          REF SEQCHOICEVEC vec := choices OF sqcase;
+          WHILE vec ISNT nilseqchoicevec
+          DO nvec PLUSAB 1; vec := rest OF vec OD;
+          putint(nvec);
+          vec := choices OF sqcase;
+          WHILE vec ISNT nilseqchoicevec
+          DO REF SEQCHOICE seqchoice = elem OF vec;
+             dump_constval(select OF seqchoice);
+             dump_seqstep(out OF seqchoice);
+             putint(mode OF seqchoice);
+             vec := rest OF vec
+          OD
+         )
+     ,(REF SEQSTEPVEC vec) (putchar("g"); dump_seqstepvec(vec))
+     ,(VOID) putchar("h")
+      ESAC
+   END;
+
+   INT nvec := 0;
+   REF SEQSTEPVEC vec := seqstepvec;
+   WHILE vec ISNT nilseqstepvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := seqstepvec;
+   WHILE vec ISNT nilseqstepvec
+   DO dump_seqstep(elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_sigstruct = (REF SIGSTRUCT sigstruct) VOID:
+BEGIN
+   IF sigstruct IS nilsigstruct THEN putchar("a")
+   ELSE putchar("b");
+        putint(num OF dec OF withinfn OF sigstruct);
+        dump_type_nobv(type OF sigstruct, FALSE);
+        dump_aliasrefvec(flattenport(ports OF sigstruct));
+        dump_seqstepvec(seqbody OF sigstruct)
+   FI
+END;
+
+PROC dump_sdref = (REF SIGDEST sd) VOID:
+BEGIN
+     CASE sdmode OF sd IN
+     (REF ELLAFN fn) (putchar("a"); putint(num OF dec OF fn))
+    ,(REF EMAKE make)
+        (putchar("b");
+         putint(num OF dec OF withinfn OF make);
+         putint(num OF make))
+    ,(REF SDCASE sdcase)
+        (putchar("c");
+         putint(num OF dec OF withinfn OF casemake OF sdcase);
+         putint(num OF casemake OF sdcase);
+         putint(limb OF sdcase))
+
+     ESAC;
+     putint(num OF sd)
+END;
+
+PROC dump_sdrefvec = (REF SDVEC sdvec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF SDVEC vec := sdvec;
+   WHILE vec ISNT nilsdvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := sdvec;
+   WHILE vec ISNT nilsdvec
+   DO dump_sdref(elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_alias = (REF ALIAS alias) VOID:
+BEGIN
+   IF struct OF alias IS nilsigstruct
+   THEN putchar("a"); dump_sigstruct(struct OF alias)
+   ELSE REF PORT port = flattenport(ports OF struct OF alias)[1];
+        IF CASE port IN (REF ALIAS al) al IS alias ESAC
+        THEN putchar("a"); dump_sigstruct(struct OF alias)
+        ELSE putchar("b");
+             dump_aliasref(CASE port IN (REF ALIAS al) al ESAC)
+        FI
+   FI;
+   putident(name OF alias);
+   dump_sdrefvec(dests OF alias)
+END;
+
+PROC dump_aliasvec = (REF ALIASVEC aliasvec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF ALIASVEC vec := aliasvec;
+   WHILE vec ISNT nilaliasvec
+   DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := aliasvec;
+   WHILE vec ISNT nilaliasvec
+   DO dump_alias(elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_sigsource = (REF SIGSOURCE ss) VOID:
+BEGIN
+   CASE ssmode OF ss IN
+   (REF SSINPUT ssinput)
+      (putchar("a");
+       putint(num OF ssinput)
+      )
+  ,(REF SSOUTPUT ssoutput)
+      (putchar("b");
+       putint(num OF ssoutput)
+      )
+  ,(REF BV ssbv) (putchar("c"); dump_driverbv(ssbv))
+   ESAC;
+
+   dump_type_nobv(type OF ss, FALSE);
+   dump_aliasvec(aliases OF ss)
+END;
+
+PROC dump_ssvec = (REF VECTOR[]REF SIGSOURCE ssvec) VOID:
+BEGIN
+   putint(UPB ssvec);
+   FOR i TO UPB ssvec DO dump_sigsource(ssvec[i]) OD
+END;
+
+PROC dump_sigdest = (REF SIGDEST sd) VOID:
+   dump_type_nobv(type OF sd, FALSE);
+
+PROC dump_sdvec = (REF VECTOR[]REF SIGDEST sdvec) VOID:
+BEGIN
+   putint(UPB sdvec);
+   FOR i TO UPB sdvec DO dump_sigdest(sdvec[i]) OD
+END;
+
+PROC dump_drivers = VOID:
+BEGIN
+   putint(nbasicdrivers);
+   REF SSVEC vec := basicdrivers;
+   WHILE vec ISNT nilssvec
+   DO dump_sigsource(elem OF vec); vec := rest OF vec OD
+END;
+
+{******* Makes ********}
+
+PROC dump_makerefvec = (REF MAKEVEC makevec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF MAKEVEC vec := makevec;
+   WHILE vec ISNT nilmakevec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := makevec;
+   WHILE vec ISNT nilmakevec
+   DO putint(num OF dec OF withinfn OF elem OF vec);
+      putint(num OF elem OF vec);
+     vec := rest OF vec
+   OD
+END;
+
+PROC dump_idvec = (REF IDS ids) VOID:
+BEGIN
+   INT nvec := 0;
+   REF IDS vec := ids;
+   WHILE vec ISNT nilids DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := ids;
+   WHILE vec ISNT nilids DO putident(id OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_casechoice = (REF CASECHOICE choice) VOID:
+BEGIN
+   dump_constval(selector OF choice);
+   putint(mode OF choice);
+   dump_sdvec(dests OF choice)
+END;
+
+PROC dump_casechoicevec = (REF CASECHOICEVEC choices) VOID:
+BEGIN
+   INT nvec := 0;
+   REF CASECHOICEVEC vec := choices;
+   WHILE vec ISNT nilcasechoicevec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := choices;
+   WHILE vec ISNT nilcasechoicevec
+   DO dump_casechoice(elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_make = (REF EMAKE make) VOID:
+BEGIN
+   putident(name OF make);
+   dump_idvec(attnames OF make);
+   putint(index OF make);
+   IF fnmade OF make IS nilellafn
+   THEN putint(0)
+   ELSE putint(num OF dec OF fnmade OF make)
+   FI;
+   dump_sdvec(inputs OF make);
+   dump_ssvec(outputs OF make);
+   dump_bvref(bv OF make);
+   CASE makemode OF make IN
+   (INT int) (putchar("a"); putint(int))
+  ,(REF CASECHOICEVEC choices) (putchar("b"); dump_casechoicevec(choices))
+   ESAC
+END;
+
+PROC dump_makevec = (REF MAKEVEC makevec, INT nvec) VOID:
+BEGIN
+   putint(nvec);
+   REF MAKEVEC vec := makevec;
+   WHILE vec ISNT nilmakevec
+   DO dump_make(elem OF vec); vec := rest OF vec OD
+END;
+
+{****** Functions *******}
+
+PROC dump_fnrefvec = (REF FNVEC fnvec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF FNVEC vec := fnvec;
+   WHILE vec ISNT nilfnvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := fnvec;
+   WHILE vec ISNT nilfnvec
+   DO putint(num OF dec OF elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_macdecrefvec = (REF MACDECVEC macdecvec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF MACDECVEC vec := macdecvec;
+   WHILE vec ISNT nilmacdecvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := macdecvec;
+   WHILE vec ISNT nilmacdecvec
+   DO putint(num OF dec OF elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_typedecrefvec = (REF TYPEDECVEC typedecvec) VOID:
+BEGIN
+   INT nvec := 0;
+   REF TYPEDECVEC vec := typedecvec;
+   WHILE vec ISNT niltypedecvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := typedecvec;
+   WHILE vec ISNT niltypedecvec
+   DO putint(num OF dec OF elem OF vec); vec := rest OF vec OD
+END;
+
+PROC dump_spnormal = (REF SPNORMAL spnormal) VOID:
+BEGIN
+   putint(UPB inparams OF spnormal);
+   FOR i TO UPB inparams OF spnormal
+   DO REF INPAR inpar = (inparams OF spnormal)[i];
+      putident(name OF inpar);
+      dump_type_nobv(type OF inpar, FALSE);
+      dump_type_nobv(untranstype OF inpar, FALSE)
+   OD;
+   dump_type_nobv(outtype OF spnormal, FALSE);
+   dump_type_nobv(untransouttype OF spnormal, FALSE)
+END;
+
+PROC dump_spec = (SPEC spec) VOID:
+BEGIN
+   CASE spec IN
+   (REF SPNORMAL spnormal) (putchar("a"); dump_spnormal(spnormal))
+  ,(REF EFNSETROW efnsetrow)
+      (putchar("b"); putint(size OF efnsetrow);dump_spnormal(elem OF efnsetrow))
+  ,(REF SPECVEC specvec)
+      (putchar("c");
+       INT nvec := 0;
+       REF SPECVEC vec := specvec;
+       WHILE vec ISNT nilspecvec DO nvec PLUSAB 1; vec := rest OF vec OD;
+       putint(nvec);
+       vec := specvec;
+       WHILE vec ISNT nilspecvec
+       DO dump_spnormal(elem OF vec); vec := rest OF vec OD
+      )
+   ESAC
+END;
+
+PROC dump_fnsetdatavec = (REF FNSETDATA fnsetdata) VOID:
+BEGIN
+   INT nvec := 0;
+   REF FNSETDATA vec := fnsetdata;
+   WHILE vec ISNT nilfnsetdata DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := fnsetdata;
+   WHILE vec ISNT nilfnsetdata
+   DO putint(il OF vec);
+      putint(iu OF vec);
+      putint(ol OF vec);
+      putint(ou OF vec);
+      vec := rest OF vec
+   OD
+END;
+
+PROC dump_ftinfo = (REF FTINFO ftinfo) VOID:
+BEGIN
+   INT nvec := 0;
+   REF FTINFO vec := ftinfo;
+   WHILE vec ISNT nilftinfo DO nvec PLUSAB 1; vec := rest OF vec OD;
+   putint(nvec);
+   vec := ftinfo;
+   WHILE vec ISNT nilftinfo
+   DO putint(lwb OF vec);
+      putint(upb OF vec);
+      vec := rest OF vec
+   OD
+END;
+
+PROC dump_instmpar = (REF INSTMPAR instmpar, INT pos) VOID:
+BEGIN
+   putint(num OF dec OF macdec OF mpar OF instmpar);
+   putint(pos);
+   CASE mode OF instmpar IN
+       (REF ELLATYPE type): (putchar("a"); dump_type_nobv(type, FALSE)),
+       (INT int):           (putchar("b"); putint(int)),
+       (CONSTMPAR c):       (putchar("c"); dump_constval(const OF c))
+   ESAC
+END;
+
+PROC dump_fnmode = (FNMODE mode) VOID:
+BEGIN
+   CASE mode IN
+   (VOID) putchar("a")
+  ,(REF FNMODEINFO fnmodeinfo)
+      (putchar("b");
+       putint(UPB mpars OF fnmodeinfo);
+       FOR i TO UPB mpars OF fnmodeinfo
+       DO dump_instmpar((mpars OF fnmodeinfo)[i], i) OD;
+       putint(num OF dec OF macdec OF fnmodeinfo)
+      )
+   ESAC
+END;
+
+PROC dump_arith = (REF EARITH arith) VOID:
+BEGIN
+   CASE arith IN
+   (INT int) (putchar("a"); putint(int))
+  ,(REF ALIAS alias) (putchar("b"); dump_aliasref(alias))
+  ,(REF ARMOP armop)
+      (putchar("c"); putint(mop OF armop); dump_arith(operand OF armop))
+  ,(REF ARDYOP ardyop)
+      (putchar("d");
+       putint(dyop OF ardyop);
+       dump_arith(left OF ardyop);
+       dump_arith(right OF ardyop)
+      )
+  ,(REF ACOND acond)
+      (putchar("e");
+       dump_arith(cond OF acond);
+       dump_arith(t OF acond);
+       dump_arith(f OF acond)
+      )
+   ESAC
+END;
+
+PROC dump_delayinfo = (REF DELAYINFO delayinfo) VOID:
+BEGIN
+   dump_constval(initstate OF delayinfo);
+   putint(totaltime OF delayinfo);
+   CASE mode OF delayinfo IN
+   (REF SIMPLEDEL del) (putchar("a"); putint(simpledel OF del))
+  ,(REF AMBIG ambig)
+      (putchar("b"); putint(risetime OF ambig); dump_constval(xstate OF ambig))
+   ESAC
+END;
+
+PROC dump_fnbody = (EFNBODY body) VOID:
+BEGIN
+   CASE body IN
+   (REF SIMPLEFN simplefn) (putchar("a"); putint(simplefn OF simplefn))
+  ,(REF EBIOP ebiop)
+      (putchar("b");
+       putident(name OF ebiop);
+       putint(UPB pars OF ebiop);
+       FOR i TO UPB pars OF ebiop DO putint((pars OF ebiop)[i]) OD
+      )
+   ,(REF EARITH arith) (putchar("c"); dump_arith(arith))
+   ,(REF EIMPORT import)
+      (putchar("d");
+       putident(impname OF import);
+       dump_context(impcontext OF import)
+      )
+   ,(REF DELAYINFO delayinfo) (putchar("e"); dump_delayinfo(delayinfo))
+   ,(CONSTVAL constval) (putchar("f"); dump_constval(constval))
+   ,(REF SAMPLEINFO sampleinfo)
+      (putchar("g");
+       putint(intervaltime OF sampleinfo);
+       dump_constval(initstate OF sampleinfo);
+       putint(skewtime OF sampleinfo)
+      )
+    ESAC
+END;
+
+PROC dump_fn = (REF ELLAFN fn) VOID:
+BEGIN
+   dump_decl(dec OF fn);
+   dump_fnrefvec(fndecs OF fn);
+   dump_macdecrefvec(macdecs OF fn);
+   dump_typedecrefvec(typedecs OF fn);
+   putint(nins OF fn);
+   putint(nouts OF fn);
+   putint(vspec OF fn);
+   putint(vbody OF fn);
+   dump_spec(spec OF fn);
+   dump_fnsetdatavec(fnsetdata OF fn);
+   dump_ftinfo(inftinfo OF fn);
+   dump_ftinfo(outftinfo OF fn);
+   dump_type_nobv(intype OF fn, FALSE);
+   dump_type_nobv(outtype OF fn, FALSE);
+   dump_fnmode(mode OF fn);
+   dump_fnbody(body OF fn);
+   dump_ssvec(inputs OF fn);
+   dump_sdvec(outputs OF fn);
+   dump_makevec(makesof OF fn, nmakesof OF fn);
+   dump_makerefvec(uses OF fn)
+END;
+
+{****** The Network ******}
+
+{ Dumps the network }
+
+PROC dump_ellanet = VOID:
+BEGIN
+
+   {*** Dump type declarations ***}
+
+   putint(ntypedecs);
+   REF TYPEDECVEC typedecvec := ellatypes;
+   WHILE typedecvec ISNT niltypedecvec
+   DO dump_typedec(elem OF typedecvec);
+      typedecvec := rest OF typedecvec
+   OD;
+
+   {*** Dump basic drivers ***}
+
+   dump_drivers;
+
+   {*** Dump macro declarations ***}
+
+   putint(nmacdecs);
+   REF MACDECVEC macdecvec := ellamacros;
+   WHILE macdecvec ISNT nilmacdecvec
+   DO dump_macdec(elem OF macdecvec);
+      macdecvec := rest OF macdecvec
+   OD;
+
+   {*** Dump function declarations ***}
+
+   putint(nfndecs);
+   REF FNVEC fnvec := ellafunctions;
+   WHILE fnvec ISNT nilfnvec
+   DO dump_fn(elem OF fnvec);
+      fnvec := rest OF fnvec
+   OD
+END;
+
+{****** The Title Components ******}
+
+PROC   dump_title_data = (REF VECTOR[]CHAR   dump_title) VOID:
+BEGIN {dump_title_data}
+   REF VECTOR[]CHAR   dummy;
+   CHAR   title_char;
+   INT   title_char_index := 0;
+   ELLACT   title_ct;
+   REF VECTOR[]CHAR   title_libname;
+   REF VECTOR[]CHAR   title_datetime;
+   INT   title_version;
+
+   PROC   get_word = REF VECTOR[]CHAR:
+   BEGIN {get_word}
+      INT   word_lwb, word_upb;
+
+      title_char_index PLUSAB 1;                {Skip current character}
+      title_char := dump_title[title_char_index];
+      WHILE   title_char = " "   DO             {Skip leading spaces}
+         title_char_index PLUSAB 1;
+         title_char := dump_title[title_char_index]
+      {WHILE   title_char = " "}   OD;
+      word_lwb := title_char_index;
+
+      WHILE   (title_char /= " ") AND (title_char /= "/")   DO
+         title_char_index PLUSAB 1;
+         title_char := dump_title[title_char_index]
+      {WHILE   (title_char /= " ") AND (title_char /= "/")}   OD;
+      word_upb := title_char_index - 1;
+
+      dump_title[word_lwb:word_upb]
+   END {get_word};
+
+   PROC   get_int = INT:
+   BEGIN
+      INT   value := 0;
+
+      title_char_index PLUSAB 1;                {Skip current character}
+      title_char := dump_title[title_char_index];
+      WHILE   (title_char = " ") OR (title_char = "(")   DO
+         title_char_index PLUSAB 1;
+         title_char := dump_title[title_char_index]
+      {WHILE   (title_char = " ") OR (title_char = "(")}   OD;
+
+      WHILE   (title_char /= ")") AND (title_char /= " ")   DO
+         value := 10 * value + ABS(title_char) - ABS("0");
+         title_char_index PLUSAB 1;
+         title_char := dump_title[title_char_index]
+      {WHILE   title_char /= ")"}   OD;
+
+      value
+   END {get_int};
+
+   {Extract title data components from title}
+      dummy := get_word;                        {Skip "Context"}
+      declname OF title_ct := MAKEID get_word;  {Get <context_decl_name>}
+      IF                                        {Get <context_imports_name>}
+         title_char = "/" THEN   importsname OF title_ct := MAKEID get_word
+         ELSE   importsname OF title_ct := MAKEID "                    "
+      FI;
+      dummy := get_word;                        {Skip "assembled"}
+      dummy := get_word;                        {Skip "from"}
+      dummy := get_word;                        {Skip "library"}
+      title_libname := get_word;                {Get <library_name>}
+      title_version := get_int;                 {Get <library_version_number>}
+      RVC mytitle = title;
+      title_datetime :=
+         dump_title[(UPB mytitle) - 20 : UPB mytitle];  {Get <datetime>}
+   {Title data components extracted from title}
+
+   { Dump title data: }
+      dump_context(title_ct);
+      puttext(title_libname);
+      putint(title_version);
+      puttext(title_datetime)
+   { Title data dumped. }
+END {dump_title_data};
+
+
+{***************************************************************************
+                     -------------------------------
+                     |   THE TOP-LEVEL PROCEDURE   |
+                     -------------------------------
+  ***************************************************************************}
+
+
+PROC dumpnet =
+    (BOOL standalone, CREGION cr, BOOL att, imp, seq,
+     ID rfn, MESSAGEPROC dmsg, RCH ofile, BOOL diag) VOID:
+BEGIN
+   initialise_ellanet(cr, att, imp, seq, rfn, dmsg, ofile, diag);
+
+   CLOSURE closure = assemble_ellanet;
+
+   VECTOR[]CHAR signature = "NDV V4.1";
+   FOR j TO UPB signature DO putchar(signature[j]) OD;
+   newline(outfile);
+   dump_title_data(title);
+   newline(outfile);
+
+   IF att THEN putint(1) ELSE putint(0) FI;
+   IF imp THEN putint(1) ELSE putint(0) FI;
+   IF seq THEN putint(1) ELSE putint(0) FI;
+
+   IF att
+   THEN dumpattr(standalone, cr, closure, putchar, putint, putident, puttext,
+                 msg)
+   FI;
+   dump_ellanet;
+   newline(outfile)
+END
+
+KEEP dumpnet
+FINISH
