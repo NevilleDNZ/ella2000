@@ -1,0 +1,106 @@
+DECS  vmsellastart  CONTEXT VOID  USE  putstrings,  osinterface,  vmsinterface,
+      parsecommand, basics:
+
+{                  " Id: vmsellastart.sta,v 1.1 91/10/14 14:32:14 edcad Exp $" }
+configinfo A68CONFIG "$Id: vmsellastart.a68,v 34.2 1995/03/29 13:03:35 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1985
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+30:07:85   reads command line and open the ELLA library
+08:11:85   PROC settimedate now in libprocs so when a new library is
+              created clearlib and savelib can be used.
+19:02:86   Fixed problems with /create qualifier.
+25:02:86   Tidy up create message.
+08:09:86   Updated to use new form of "find_file" from VAXINTERFACE
+21:10:86   Completely re-written for new os interface.  Now considered
+              machine dependent.  opening and creating moved to ELLA and
+              LIBPROCS respectively.  New module "parsecommand" added.  DCT
+11:08:89   UNIX and VMS separated for Kernel Interface.  DCT
+21:01:92   Remove the boolean parameters from 'make_command_line'. DJS
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.008 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+MODE  ELLAPARAMETERS = STRUCT (RVC  lib_name,  BOOL  create,  settestmode );
+
+PROC  get_parameters = ELLAPARAMETERS:
+BEGIN
+   COMMANDLINE  cl =
+      make_command_line( cl_expected,   { parameter expected }
+                         VECTOR [] QUALIFIER
+                            ( make_qualifier("HELP", cl_none),
+                              make_qualifier("CREATE", cl_none),
+                              make_qualifier("SETTESTMODE", cl_none)
+                            )
+                       );
+
+   RVC  line;
+   line:= get_command_line("Give ELLA library file name: ", abort);
+   WHILE UPB line = 0
+   DO  line:= prompt("Give ELLA library file name or ""help"": ", abort);
+       uppercase(line)
+   OD;
+
+   parse_command_line(line, cl, abort);
+
+   RVC  parameter = get_parameter(cl, 1);
+
+   IF parameter = "HELP"  OREL  qualifier_present(cl, "HELP")
+   THEN  put(screen,  (newline, "The ELLA Command calls the ELLA System.",
+             newline,
+             "It takes an ELLA library file (default type ", library_type,
+             ") and allows the", newline,
+             "user to compile and simulate ELLA designs.", newline,
+             "Use the qualifier  /CREATE  to make a new library.", newline));
+         stop_message(mess_finished)
+   FI;
+
+   RVC  filename = parameter;
+   BOOL  newlib = qualifier_present(cl, "CREATE"),
+         settestmode = qualifier_present(cl, "SETTESTMODE");
+
+   IF newlib
+   THEN  FILENAME  name_found;
+         IF find_file(filename, library_type, abort, name_found)
+         THEN  abort( "Library already exists" )
+         FI
+   FI;
+
+   ( filename, newlib, settestmode )
+
+END
+
+KEEP  ELLAPARAMETERS, get_parameters
+FINISH
