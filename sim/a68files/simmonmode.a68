@@ -1,0 +1,161 @@
+DECS simmonmode CONTEXT VOID USE putstrings, kernel, basics:
+
+{ " Id: simmonmode.sta,v 2.1 91/02/22 18:37:02 edcad Exp$" }
+configinfo A68CONFIG "$Id: simmonmode.a68,v 34.2 1995/03/29 13:05:00 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+20:07:88  Module created for release 4 using code taken from the release 3
+             module SIMPOINTS.  BJE
+09:09:88  MONITOR split into MONITOR and MONITORLIST to allow handles
+             which are needed for EPI V2.
+20:12:88  'no value' comment changed.  AAP
+11:04:89  Encoded values stored in monitors for speed.  R4B134.  PAR.
+04:12:89  Change to MONITOR for "monitoring optimisation".  PAR.
+18:12:89  Changed monitored location for Probe functions. MDR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module is responsible for declaring the basic monitoring modes.  It
+   would be part of SIMMONITOR but that would produce circularity.
+}
+
+{
+   THE MONITOR MODE
+   ================
+}
+
+{
+   A test point is a display point, keep point, monitor point or break point,
+   each of which causes the simulator shell to test the signal values at a
+   point in the circuit and take some action (IO or abandon time advance or
+   both) conditional upon the value seen.
+
+   'MONITOR' is used to describe a testpoint.  The name is historical;
+   'TESTPOINT' would be better.
+
+   'MONITORLIST' is used to form lists of testpoints, each attached to a unique
+   handle.
+
+   'sizes' and 'columns' are used by the tabulator only.  'columns' is updated
+   to hold the columns number that is to be used for each element of the
+   flattened signal type in order to ensure that these line up in columns in
+   the table.  'sizes' holds the display widths of each element.  'sizes'
+   should be calculated once only (it is a fairly expensive operation) but
+   'columns' may need recalculation if a display is added or removed.
+
+   'decoded' is used to hold the SVALUE form of the monitor's lastvalue
+   whenever that value is know (ie is NOT 'no value' or 'empty value').
+
+   'workspace' is provided so that space can be allocated into which to
+   read new values.  This enables us to avoid heap allocation on every
+   access to the circuit data, replacing it with pointer operations.
+   (Note that a WORD is a REFerence mode.)  'workspace' must *ALWAYS*
+   point to an area of the correct size (the size of the 'location').
+
+   See also the comment against 'flatten signal value' below.
+}
+MODE MONITOR = STRUCT (
+   ID id,                         { last segment of ... }
+      full id,                    { full path name used to reach the node }
+   INT action,                    { see below }
+       condition,                 { see below }
+   REF VECTOR [] INT columns,     { for use by tabulated style formatter }
+                     sizes,       { for use by tabulated style formatter }
+   MNODE location,                { handle on kernel location for values in
+                                    present mode }
+   INT keep number,               { handle on history file for values in past
+                                    mode }
+   WORD lastvalues,               { last recorded values }
+        testvalues,               { match values for ...equals and ...becomes }
+
+        workspace,                { into which to read new values }
+
+   REF SVALUE decoded,            { cache for decoded 'lastvalues' }
+   INT flag address               { To decide quickly if there is no change }
+);
+
+{  Values for testpoint action }
+INT
+   no action    = 0,
+   monitor      = 1,
+   display      = 2,
+   stop         = 3,
+   keep         = 4,
+{  Values for monitor type -- NB both of the continous types, 'always' and
+   'equals' can be tested together by  BIN always <= BIN condition }
+   no condition = 0,   {eg for keeps }
+   always       = 1,
+   changes      = 2,
+   equals       = 3,
+   becomes      = 4;
+
+{
+   'no value' indicates that a value is not available from the
+   history file
+}
+WORD no value = NIL;
+
+MODE MONITORLIST = STRUCT (
+   MONITOR         monitor,
+   INT             handle,
+   REF MONITORLIST rest               { list linkage }
+);
+
+{
+   End of list NIL
+}
+REF MONITORLIST nil monitorlist = NIL;
+
+{
+   Monitor handles must be unique for any ELLA run.  This procedure returns
+   a new one
+}
+
+INT seed := 0; { so frst handle will be 1 }
+
+PROC new handle = INT: seed +:= 1;
+
+SKIP
+
+KEEP
+   MONITOR,
+   no action, monitor, display, stop, keep,
+   no condition, always, changes, becomes, equals,
+   no value,
+
+   MONITORLIST, nil monitorlist, new handle
+
+FINISH
