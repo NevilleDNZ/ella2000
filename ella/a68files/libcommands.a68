@@ -1,0 +1,843 @@
+DECS  libcommands  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      testmode,  basics,  databasebuffers,  libmodes,  libinterface,  libprocs,
+      attrdecls,  ioprocs,  commandsyntax,  command,  kernelreader:
+
+{ " Id: libcommands.sta,v 1.1 91/10/14 14:30:20 edcad Exp $" }
+configinfo A68CONFIG "$Id: libcommands.a68,v 34.2 1995/03/29 13:03:27 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+03:04:84  Taken from ELLALIBUPD(166)
+19:04:84  ella_lib_procs  extracted
+22:08:84  renamed
+07:09:84  FLEX keeps text,  more added to curt
+09:10:84  network dump command added (D.J.S)
+             also exit when not in interactive mode
+             and procedure PARSEFILE for file names.
+05:02:85  "flt" tidied in "libprocs",  "exportall" added
+02:09:85  New set of library commands.  (network dump command temporarily
+             withdrawn).  Single image created.
+25:09:85  SIZES command withdrawn.  COPY IMPORTS withdrawn message added
+23:10:85  prompt renamed libprompt because of name clash with vaxinterface.
+             PROC set time date moved to libprocs
+04:11:85  new set of context commands based on simple and compound contexts.
+             copyimports now been reintroduced.
+08:11:85  change made due to new library structure.
+20:11:85  Updated for Perq FLEX,  1906 removed
+22:11:85  Calls of newline added to help messages - previously relied on
+             several lines forcing a new line.
+12:12:85  Updated for new command structure
+05:02:86  Added the trace and donttrace commands and trace flag for
+             new command structure.
+14:02:86  Changed for command renames.
+13:03:86  Release 2 help messages
+20:03:86  Amended further for Release 2 help messages
+05:05:86  PROC ordercontexts altered ctno on contexts list so order wrong
+             for assembly, so PROC close called after ordercontexts in PFL.
+29:06:86  CR 252.  Makecontext now uses newattributes.  EVW.
+01:07:86  empty context check replaced by call of PROC no_text.
+23:09:86  "findnames" added to keep list for diagnostics.
+16:10:86  Updated for new osinterface  DCT.
+31:10:86  <CTRL / C> interrupt added  DCT.
+05:08:87  Updated for new source text storage  (CR124)  DCT.
+01:10:87  Porting change integrated - reference to VMS removed.  JER
+16:10:87  CR 435.  Fix help inconsistency.  JER
+27:10:87  R3B008  "close" removed from PFL.  Order corrected at assembly
+                     time.  EVW
+03:11:87  R3B059  makeimports used to be pick up an import filename.  EVW
+05:11:87  R3B064.  Remove '<sub-command>' from help messages.  JER
+08:02:88  Updated help messages.  LR
+11:05:88  CR 596  Modules renamed  JER
+29:06:88  Modified for use with EPI: extra field added to COMPOUND
+             command. Main body of some commands arranged as global procedures
+             and added to KEEP list BGH
+14:09:88  Use changed field names of CTNAME. BGH (EVW)
+26:05:88  IR3041. Old imports details no longer carried into new region. EVW
+06:12:88  Corrected bug in make_imports_cmd. BGH
+15:03:89  CR 642.  Renamed LIBCOMMANDS for kernel interface. EVW
+17:07:90  Consequential changes of declaration attributes. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+28:11:90  compactlibrary and testmode added.  DCT
+20:02:91  KEEPSAKE now accessed through KEEPSAKEBUFFERS only.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+24:02:93  Updated for new OSIF - Level 1.  DCT
+23:08:93  Changes to commands for Public Domain. EVW
+25:08:93  rename printclosure checkclosure. EVW
+26:10:93  EASE -> ELLA in context field of make_compound.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.046 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+
+{{ **** Printing procedures **** }}
+
+
+PROC print_imports = (CREGION cr, BOOL full, MESSAGEPROC msg) VOID:
+BEGIN
+   REF IMPORTS ips := get_imports(cr);
+   IF ips IS nilimports
+   THEN  IF full
+         THEN  put(out, ( newline, "Imports of ", CTOS cr, ":", newline,
+                          "   (none)", newline ))
+         FI
+   ELSE  DISCPTR  info:= nilptr;
+         put(out, (newline, "Imports of ", CTOS cr, ":", newline));
+         WHILE ips ISNT nilimports
+         DO  flt_if_interrupted(msg);
+             REF BINDING b = binding OF ips;
+             IF NOT same_discptr(database OF discfile, info OF b, info)
+             THEN  IF name OF b = nullid  ANDTH isnilptr(discfile, info OF b)
+                   THEN  IF NOT same_discptr(database OF discfile,
+                                             info, ptrimpinfo)
+                         THEN  put(out, ( newline, "      not defined",
+                                          newline ));
+                               info:= ptrimpinfo       { Used as a flag only }
+                         FI
+                   ELSE  REF SOURCE s = get_binding_source(cr, rename OF b);
+                         RVC  date =
+                             IF date OF s = 0
+                             THEN  MAKERVC "written - not known"
+                             ELSE  oneline(("written ", date_time(date OF s)))
+                             FI;
+                         put(out, (newline, "     from ", name OF s));
+                         newline(out);
+                         info:= info OF b
+                   FI
+             FI;
+             put(out, ("   ", sort_id(sort OF b), " ", rename OF b, " = "));
+             IF name OF b = nullid
+             THEN  IF isnilptr(discfile, info OF b)
+                   THEN  put(out, ( "?", newline ))
+                   ELSE  put(out, ( "?", after(39), " - has been cancelled",
+                                    newline ))
+                   FI
+             ELSE  put(out, (name OF b," from ", CTOS ctn OF b, newline))
+             FI;
+             ips:= rest OF ips
+         OD
+   FI
+END;
+
+
+PROC print_closure = (CREGION cr, BOOL full, MESSAGEPROC msg) VOID:
+BEGIN
+   IF full
+   THEN closure_details(cr, FALSE, FALSE, TRUE, msg)
+   ELSE  IF get_imports(cr) ISNT nilimports
+         THEN put(out, ( newline, "Closure of ", CTOS cr,
+                         " contains:", newline ));
+              INT closureno = closure_details(cr, FALSE, FALSE, FALSE, msg);
+              FOR i FROM ABS closureno BY -1 TO 1
+              DO  IF charsleft(out) < 20 THEN  newline(out)  FI;
+                  put(out, ("   ", CTOS ctno_region(i)))
+              OD;
+              put(out, ( newline, IF closureno < 0
+                                  THEN "   (incomplete)" ELSE "   (complete)"
+                                  FI, newline ))
+         FI
+   FI
+END;
+
+PROC printdecls = (REF CONTXT ct, BOOL full, MESSAGEPROC msg) VOID:
+BEGIN
+   DISCPTR  info:= nilptr;
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   DECL decl;
+   REF DECLATTRIBUTES set := get_declattribute(ct, info_key, msg);
+   put(out, (newline, "Declarations of ", name OF ct, ":", newline));
+   FOR index TO UPB decls
+   DO  flt_if_interrupted(msg);
+       decl := decls[index];
+       IF full
+       THEN  printdecl(ct, index, full, full, msg)
+       ELSE  IF NOT same_discptr(database OF discfile, info,
+                                 (data OF set)[index])
+             THEN  info := (data OF set)[index];
+                   info_chars(ct, index, msg)
+             FI;
+             put(out, ("   ", sort_id(sort OF decl), " ", name OF decl, "(",
+                       version_str(version OF decl), ")", newline))
+       FI
+   OD
+END;
+
+PROC print_exports = (REF CONTXT ct, BOOL full, MESSAGEPROC msg) VOID:
+BEGIN
+   BOOL  exps:= FALSE;
+   REF VECTOR [] DECL decls = get_decls(ct, msg);
+   FORALL decl IN decls
+   DO  flt_if_interrupted(msg);
+       IF export OF decl
+       THEN  IF NOT exps
+             THEN  exps:= TRUE;
+                   put(out, (newline, "Exports of ", name OF ct, ":", newline))
+             FI;
+             IF charsleft(out) < 20 THEN  newline(out)  FI;
+             put(out, ("   ", sort_id(sort OF decl), " ", name OF decl))
+       FI
+   OD;
+   IF NOT exps ANDTH full
+   THEN  put(out, ( newline, "Exports of ", name OF ct, ":", newline,
+                    "   (none)", newline ))
+   ELIF exps THEN  newline(out)
+   FI
+END;
+
+
+PROC printct = (REF CONTXT ct, BOOL full, ptdecls, ptexports, ptimports,
+                MESSAGEPROC msg) VOID:
+BEGIN
+   IF no_text(ct, msg)
+   THEN  put(out, (newline, "Context ", name OF ct, " is empty", newline))
+   ELSE  IF ptdecls   THEN  printdecls(ct, full, msg)    FI;
+         IF ptexports THEN  print_exports(ct, full, msg) FI;
+         IF ptimports
+         THEN REF REGIONS r := regions OF ct;
+              WHILE r ISNT nilregions
+              DO  flt_if_interrupted(msg);
+                  print_imports((ct, region OF r), full, msg);
+                  print_closure((ct, region OF r), full, msg);
+                  r := rest OF r
+              OD
+         FI
+   FI
+END;
+
+
+PROC ptcontexts = (MESSAGEPROC msg) VOID:
+BEGIN
+   INT  no = ordercontexts;
+   put(out, ("Context names are:", newline));
+   FOR i TO no
+   DO  IF charsleft(out) < 20 THEN  newline(out)  FI;
+       put(out, ("   ", CTOS ctno_region(i)))
+   OD;
+   newline(out)
+END;
+
+PROC ptlibinfo = (MESSAGEPROC msg) VOID:
+BEGIN
+   REF CONTXT ct = get_context(context OF currentct OF library);
+   CREGION cr = get_region(ct, import OF currentct OF library);
+   CTNAME ctn =  IF region OF cr IS nilregion
+                 THEN (name OF context OF cr, MAKERVC "?")
+                 ELSE CTN cr
+                 FI;
+   put(out, ( "Ella library: ", name OF library, newline,
+              "Version number: ", version_str(lib_version),
+              ", Selected context: ", CTOS ctn, newline,
+              "   Cleared on ", datecleared OF library, " at ",
+              timecleared OF library, newline,
+              "   Last written to on ", datelastwritten OF library, " at ",
+              timelastwritten OF library, newline ))
+END;
+
+PROC print_full_library = (MESSAGEPROC msg) VOID:
+BEGIN
+   CREGION cr;
+   ID currentname := nullid;
+   ptlibinfo(msg);   newline(out); printsizes(msg);
+   FOR i TO ordercontexts
+   DO  cr := ctno_region(i);
+       IF name OF context OF cr /= currentname
+       THEN  currentname := name OF context OF cr;
+             put(out, newline);
+             printct(context OF cr, FALSE, TRUE, TRUE, TRUE, msg);
+             ordercontexts  {{ printct alters ctno }}
+       FI
+  OD
+END;
+
+PROC print_usage = (REF CONTXT ct, INT declno, MESSAGEPROC msg) VOID:
+   printdecl(ct, declno, TRUE, TRUE, msg);
+
+
+{{ ********************** LIBRARY COMMANDS ********************* }}
+
+
+
+PROC  get_optctname = ( VALUES  values,  REF INT  index,
+                        MESSAGEPROC  msg ) CTNAME:
+   { Where the context name is optional, the current contextname is used. }
+   IF is_ctname(values[index + 1])
+   THEN  get_ctname(values, index, context OF currentct OF library, msg)
+   ELSE  { null parameter - deliver current context }
+         index PLUSAB 1;  { consume the null }
+         currentct OF library
+   FI;
+
+
+PROC  do_ctnames = ( VALUES  values,  MESSAGEPROC  msg,
+                     PROC (CTNAME, MESSAGEPROC) VOID  do ) VOID:
+BEGIN
+   { Procedure calls an action on each of a list of ctname parameters }
+   INT  index:= 0;
+   WHILE index < UPB values
+   DO  flt_if_interrupted(msg);
+       do(get_optctname(values, index, msg), msg)
+   OD
+END;
+
+
+PROC  do_contexts = ( VALUES  values,  MESSAGEPROC  msg,
+                      PROC (REF CONTXT, MESSAGEPROC) VOID  do ) VOID:
+   do_ctnames( values, msg, (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                  do(check_context(context OF ctn, msg), msg) );
+
+
+STR  exit_help = "Exits from the current ELLA environment and returns to "
+                 "the host system.  All changes to the current library "
+                 "are made permanent.";
+
+PROC  exit_command = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   finish_library(default_msg  { Use default to avoid returning on error });
+
+
+
+PROC  initialise_library = REF COMPOUND:
+BEGIN
+
+   HEAP SIMPLE  start_up:=
+   ( MAKERVC "ELLA", nullstr, no parameters, normal access, continue,
+     MAKERVC "Enters ELLA",
+     (VALUES names, MESSAGEPROC msg) VOID:
+     ( libchanged OF library:= FALSE;
+       printversion(msg)
+     )
+   );
+
+
+   {{{  Library GROUP commands - starting with general ones  }}}
+
+   COMMANDVEC lib_global_commands = MAKECOMMANDS
+     make_group("PRINT", "P", normal access,
+     BEGIN
+
+        make_group("FULL", "F", normal access,
+        BEGIN
+
+         HEAP SIMPLE :=
+         ( MAKERVC "LIBRARY", MAKERVC "L", no parameters,
+           normal access, continue,
+           MAKERVC "Displays a summary of the library contents followed by a "
+                   "list of declarations, exports from and imports to each "
+                   "context in the library.",
+          (VALUES names, MESSAGEPROC msg) VOID:
+             print_full_library(msg)
+         ),
+
+
+         HEAP SIMPLE :=
+         ( MAKERVC "CONTEXT", MAKERVC "C", star(opt(contextname_syntax)),
+           normal access, continue,
+           MAKERVC "Displays the declarations, their usages, the exports from, "
+                   "the imports to and closure of each imports region for the "
+                   "selected or named context(s).",
+           (VALUES  names,  MESSAGEPROC  msg) VOID:
+              do_contexts( names, msg, (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                              printct(ct, TRUE, TRUE, TRUE, TRUE, msg) )
+         ) ,
+
+
+         HEAP SIMPLE :=
+         ( MAKERVC "DECLS", MAKERVC "D", star(opt(contextname_syntax)),
+           normal access, continue,
+           MAKERVC "Displays the declarations which use and are used by each "
+                   "declaration in the declarations region of the selected or "
+                   "named context(s).",
+           (VALUES  names,  MESSAGEPROC  msg) VOID:
+              do_contexts( names, msg, (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                              printct(ct, TRUE, TRUE, FALSE, FALSE, msg) )
+         )
+
+      END ),  {{ End of full print }}
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "LIBRARY", MAKERVC "L", no parameters, normal access, continue,
+        MAKERVC "Displays a summary of the contents of the library.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( ptlibinfo(msg); ptcontexts(msg); printsizes(msg) )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CONTEXT", MAKERVC "C", star(opt(contextname_syntax)),
+        normal access, continue,
+        MAKERVC "Displays the declarations, any exports, and any imports to "
+                "each imports region, of the selected or named context(s).",
+        (VALUES  names,  MESSAGEPROC  msg) VOID:
+           do_contexts( names, msg, (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                           printct(ct, FALSE, TRUE, TRUE, TRUE, msg) )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "DECLS", MAKERVC "D", star(opt(contextname_syntax)),
+        normal access, continue,
+        MAKERVC "Displays the declarations and their source files in the "
+                "selected or named context(s).",
+        (VALUES  names,  MESSAGEPROC  msg) VOID:
+           do_contexts( names, msg, (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                           printct(ct, FALSE, TRUE, FALSE, FALSE, msg) )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "USAGE", MAKERVC "U", star(declname_syntax),
+        normal access, continue,
+        MAKERVC "Displays a list of the declarations which use, and are used "
+                "by, the named declaration(s).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( REF CONTXT ct = get_context(context OF currentct OF library);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              INT declno = check_decl(ct, get_declname(name, msg), msg);
+              newline(out);
+              print_usage(ct, declno, msg)
+          OD
+        )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "EXPORTS", MAKERVC "E", star(opt(contextname_syntax)),
+        normal access, continue,
+        MAKERVC "Displays the exports from the selected or named context(s).",
+        (VALUES  names,  MESSAGEPROC  msg) VOID:
+           do_contexts( names, msg, (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                        print_exports(ct, TRUE, msg) )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "IMPORTS", MAKERVC "I",
+        star(opt(prod(( opt(contextname_syntax), opt(importname_syntax) )))),
+        normal access, continue,
+        MAKERVC
+           "Displays the imports to the selected or named imports region(s).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_ctnames( names, msg, (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                         print_imports(check_selected(ctn, msg), TRUE, msg) )
+      )
+
+     END );
+
+
+   {{{  Library GROUP commands - local ones  }}}
+
+   COMMANDVEC  lib_local_commands = MAKECOMMANDS
+
+   VECTOR [] COMMAND
+   BEGIN
+
+     make_group("DONT", "D", normal access,
+     BEGIN
+
+      HEAP SIMPLE :=
+      ( MAKERVC "EXPORT", MAKERVC "E", star(declname_syntax),
+        normal access, continue,
+        MAKERVC "Stops the export of the named declaration(s) from the "
+                "selected context.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( REF CONTXT ct = get_context(context OF currentct OF library);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              INT declno = check_decl(ct, get_declname(name, msg), msg);
+              dont_export(ct, declno, msg)
+          OD
+        )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "IMPORT", MAKERVC "I", star(fnname_syntax),
+        normal access, continue,
+        MAKERVC "Stops the import of the named declaration(s) into the "
+                "selected imports region.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( CREGION cr = check_selected(currentct OF library, msg);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              INT declno =
+                     check_decl(context OF cr, get_fnname(name, msg), msg);
+              dont_import(cr, declno, msg)
+          OD
+        )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "NAMEIMPORTS", MAKERVC "NI", no parameters,
+        normal access, continue,
+        MAKERVC "Converts the selected compound context with one named imports "
+                "region to a simple context.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( REF CONTXT ct = get_context(context OF currentct OF library);
+          dont_name_region(ct, msg);
+          setcurrentct((name OF ct, nullid), msg)
+        )
+      )
+
+     END ),  {{{ end of lib dont command }}}
+
+
+     make_group("CLEAR", "", normal access,
+     BEGIN
+
+      HEAP SIMPLE :=
+      ( MAKERVC "LIBRARY", nullstr, no parameters, normal access, continue,
+        MAKERVC "Clears the contents of all the contexts and erases all the "
+                "contexts except 'ella', which is then selected.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+          clear_library(msg)
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CONTEXT", nullstr, star(opt(contextname_syntax)),
+        normal access, continue,
+        MAKERVC "Erases all the declarations, imports and exports, in the "
+                "selected or named context(s).  The structure of the cleared "
+                "context(s) is unaltered.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_contexts(names, msg, clear_context)
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "EXPORTS", nullstr, star(opt(contextname_syntax)),
+        normal access, continue,
+        MAKERVC "Clears all exports from the selected or named context(s).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_contexts(names, msg, clear_exports)
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "IMPORTS", nullstr,
+        star(opt(prod(( opt(contextname_syntax), opt(importname_syntax) )))),
+        normal access, continue,
+        MAKERVC "Clears all the imports from the selected or named imports "
+                "region(s).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_ctnames( names, msg, (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                          clear_imports(check_selected(ctn, msg), msg) )
+      )
+
+     END ),  {{{ end of clear command }}}
+
+   make_group("COPY", "C", normal access,
+   BEGIN
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CONTEXT", MAKERVC "C", star(contextname_syntax),
+        normal access, continue,
+        MAKERVC "Creates new contexts which are copies of the selected "
+                "context.  The last-named context is then selected for use.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( REF CONTXT ct = get_context(context OF currentct OF library);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              ID newcontextname = get_contextname(name, msg);
+              copy_context(ct, newcontextname, msg);
+              setcurrentct((newcontextname, import OF currentct OF library),msg)
+          OD
+        )
+      ) ,
+
+      HEAP SIMPLE:=
+      ( MAKERVC "IMPORTS", MAKERVC "I", star(importname_syntax),
+        normal access, continue,
+        MAKERVC "Creates new imports region(s) which are copies of the "
+                "selected imports region in a compound context.  The "
+                "last-named imports region is then selected for use.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( CREGION cr = check_selected(currentct OF library, msg);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              ID newimpname = get_importname(name, msg);
+              copy_region(cr, newimpname, msg);
+              setcurrentct((name OF context OF cr, newimpname), msg)
+          OD
+        )
+      )
+
+   END ),  {{{ end of copy command }}}
+
+
+   make_group("MAKE", "M", normal access,
+   BEGIN
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CONTEXT", MAKERVC "C",
+        star(prod(( contextname_syntax, opt(importname_syntax) ))),
+        normal access, continue,
+        MAKERVC "Creates empty context(s).  The last-named context is selected "
+                "for use.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_ctnames( names, msg, (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                          ( make_context(ctn, msg);  setcurrentct(ctn, msg) ) )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "IMPORTS", MAKERVC "I", star(importname_syntax),
+        normal access, continue,
+        MAKERVC "Creates new imports region(s) in the selected compound "
+                "context.  The last-named imports region is selected for use.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( REF CONTXT ct = get_context(context OF currentct OF library);
+          FORALL name IN names
+          DO  flt_if_interrupted(msg);
+              ID newimpname = get_importname(name, msg);
+              make_region(ct, newimpname, msg);
+              setcurrentct((name OF ct,  newimpname), msg)
+          OD
+        )
+      )
+
+   END ),   {{{ end of make command }}}
+
+
+
+   make_group("SET", "S", normal access,
+   BEGIN
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CONTEXT", MAKERVC "C",
+        prod(( contextname_syntax, opt(importname_syntax) )),
+        normal access, continue,
+        MAKERVC "Selects the named context (and imports region).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        (  setcurrentct(get_optctname(names, HEAP INT:= 0, msg), msg);
+           setlibchanged(msg)
+        )
+      ) ,
+
+
+      HEAP SIMPLE :=
+      ( MAKERVC "IMPORTS", MAKERVC "I", importname_syntax,
+        normal access, continue,
+        MAKERVC "Selects the named imports region.",
+        (VALUES names, MESSAGEPROC msg) VOID:
+        ( CTNAME ctn = ( context OF currentct OF library,
+                         get_importname(names[1], msg) );
+          setcurrentct(ctn, msg);
+          setlibchanged(msg)
+        )
+      )
+
+   END ),   {{{ end of set command }}}
+
+
+   {{{  Library SIMPLE commands  }}}
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "ERASE", nullstr, star(declname_syntax), normal access, continue,
+     MAKERVC "Erases the named declaration(s) from the declarations region of "
+             "the selected context.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+     ( REF CONTXT ct = get_context(context OF currentct OF library);
+       FORALL name IN names
+       DO  flt_if_interrupted(msg);
+           INT declno = check_decl(ct, get_declname(name, msg), msg);
+           erase(ct, declno, msg)
+       OD
+     )
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "ERASECONTEXT", nullstr, star(contextname_syntax), normal access,
+     continue,
+     MAKERVC "Erases the named context(s). If the selected context is erased, "
+             "'ella' is then selected for use.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+        do_contexts( names, msg,
+                     (REF CONTXT  ct,  MESSAGEPROC  msg) VOID:
+                       ( erase_context(ct, msg);
+                         IF name OF ct = context OF currentct OF library
+                         THEN  setcurrentct(defaultct, msg)
+                         FI
+                       )
+                   )
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "ERASEIMPORTS", nullstr,
+     star(prod((contextname_syntax,importname_syntax))),
+     normal access, continue,
+     MAKERVC "Erases the named imports region(s) in a compound context with "
+             "more than one imports region.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+        do_ctnames( names, msg,
+                    (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                      ( CREGION cr = check_selected(ctn, msg);
+                        erase_region(cr, msg);
+                        IF CTN cr = currentct OF library
+                        THEN  setcurrentct( ( context OF currentct OF library,
+                                              nullid ), msg )
+                        FI
+                      )
+                  )
+   ) ,
+
+      HEAP SIMPLE :=
+      ( MAKERVC "CHECKCLOSURE", MAKERVC "CCL",
+        star(opt(prod(( opt(contextname_syntax), opt(importname_syntax) )))),
+        normal access, continue,
+        MAKERVC "Checks and displays the consistency, and availability through "
+                "imports and exports, of the declarations required by the "
+                "selected or named context(s) (and, for a compound context, "
+                "the named imports region).",
+        (VALUES names, MESSAGEPROC msg) VOID:
+           do_ctnames( names, msg, (CTNAME  ctn,  MESSAGEPROC  msg) VOID:
+                         print_closure(check_selected(ctn, msg), TRUE, msg) )
+      ),
+
+   HEAP SIMPLE :=
+   ( MAKERVC "SAVELIBRARY", nullstr, no parameters, normal access, continue,
+     MAKERVC "Makes permanent all changes since the last implicit or explicit "
+             "'savelibrary'.  Implicit 'savelibrary' commands are performed "
+             "before 'compile', 'increaselibrary', 'simulate' and 'finish'.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+       save_libchanges(msg)
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "COMPACTLIBRARY", nullstr,
+*4   opt(filename_syntax),
+*5   filename_syntax,
+     normal access, continue,
+     MAKERVC "Calls the KEEPSAKE compacting garbage collector to make a new "
+             "compacted version of the current ELLA library."
+*4           "  If a parameter is not supplied then the new library will have "
+*4           "the same name with a generation number one higher."
+*5           "  A new file name must be specified for the new library."
+             "  The old version of the library may then be discarded.",
+     (VALUES  params,  MESSAGEPROC  msg) VOID:
+        compact_library( filename OF IF is_filename(params[1])
+                                     THEN  get_filename( params[1],
+                                                         library_type, msg )
+                                     ELSE  parse_filename( name OF library,
+                                                           library_type, msg )
+                                     FI, msg )
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "REGRESSLIBRARY", nullstr, no parameters, normal access, continue,
+     MAKERVC "Returns the library to its previous version.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+       regress_library(msg)
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "EXPORT", MAKERVC "E", star(declname_syntax),
+     normal access, continue,
+     MAKERVC "Exports the named declaration(s) from the selected context.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+     ( REF CONTXT ct = get_context(context OF currentct OF library);
+       FORALL name IN names
+       DO  flt_if_interrupted(msg);
+           INT declno = check_decl(ct, get_declname(name, msg), msg);
+           export(ct, declno, msg)
+       OD
+     )
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "EXPORTALL", MAKERVC "EA", star(opt(contextname_syntax)),
+     normal access, continue,
+     MAKERVC"Exports all the declarations in the selected or named context(s).",
+     (VALUES names, MESSAGEPROC msg) VOID:
+        do_contexts(names, msg, exportall)
+   ) ,
+
+
+   HEAP SIMPLE :=
+   ( MAKERVC "NAMEIMPORTS", MAKERVC "NI", importname_syntax,
+     normal access, continue,
+     MAKERVC "Converts the selected simple context to a compound context and "
+             "names its single imports region.",
+     (VALUES names, MESSAGEPROC msg) VOID:
+     ( REF CONTXT ct = get_context(context OF currentct OF library);
+       ID newimpname = get_importname(names[1], msg);
+       name_region(ct, newimpname, msg);
+       setcurrentct((name OF ct, newimpname), msg)
+     )
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "EXIT", nullstr, no parameters, normal access, finish,
+     STRTORVC  exit_help,  exit_command
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "FINISH", nullstr, no parameters, hidden access, finish,
+     STRTORVC  exit_help,  exit_command
+   ) ,
+
+   HEAP SIMPLE :=
+   ( MAKERVC "QUIT", nullstr, no parameters, normal access, finish,
+     MAKERVC "Aborts the current ELLA session and returns to the "
+             "host system.",
+     (VALUES  params,  MESSAGEPROC  msg) VOID:
+        IF libchanged OF library  ANDTH  interactive  ANDTH
+           ( STR  s = prompt("Library has changed - save library - y or n ? ");
+             UPB s = 0  OREL  s[1] /= "n"  ANDTH  s[1] /= "N"
+           )
+        THEN  exit_command(params, msg)
+        FI
+   )
+
+
+
+   END;
+
+   make_compound( start_up, "ELLA Library", libprompt, lib_local_commands,
+                  lib_global_commands, nullcommand )
+END
+
+
+KEEP  initialise_library
+FINISH
