@@ -1,0 +1,349 @@
+DECS kesort CONTEXT VOID USE  putstrings, basics:
+
+{ " Id: kesort.sta,v 2.1 91/02/22 18:35:29 edcad Exp$" }
+configinfo A68CONFIG "$Id: kesort.a68,v 34.2 1995/03/29 13:04:56 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement topological sorting of atomic
+              function instances in the kernel of the new simulator
+16:12:88  Made tolerant of predecessor counts artificially reduced
+              to zero.  PAR.
+19:01:89  'true predecessors' added to FANOUT, to preserve the
+              unadulterated values.  Bug 95.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ The basic algorithm is that described in Knuth's "The Art of Computer
+  Programming", vol 1, Fundamental Algorithms, pages 258 - 265, with
+  loop breaking derived from the solution to Ex 23 of the same chapter.
+
+  To aid annotating the algorithm with invariants, we use the following
+  definitions.
+
+  Let S be a set of nodes (function instances).  Defined on this set
+  is a reflexive, transitive relation, denoted by the symbol [= and
+  read as "earlier than", such that if x and y are members of S, and
+  y is in the list of successors of x, then x [= y.  (The successors
+  are not further defined here, but are given as the input to the
+  algorithm.)
+
+  A possibly empty set of minimum elements with respect to [= may be
+  defined:
+
+      min(S) = { x in S | forall y in S . y /= x => y ~[= x }
+
+  where y ~[= x is used to mean that y is not earlier than x under [=.
+
+  Note that the relation [= need not be a partial order, since it may
+  not be antisymmetric, however we can define a (possibly empty) subset
+  p(S) of S which we call a maximal prefix, in which [= is indeed a partial
+  order.  p(S) is defined as follows:
+
+      i)  forall x,y in p(S) . x [= y and y [= x  =>  x = y
+     ii)  forall x in p(S) . forall y in S - p(S) . y ~[= x
+    iii)  min (S - p(S)) = emptyset
+
+  Property i) is antisymmetry, making [= a partial order when restricted
+  to p(S), property ii) guarantees that the split respects the order, with
+  p(S) earlier than S - p(S) in the sense that no element which is earlier
+  than a member of p(S) is left behind in S - p(S), and finally iii) makes
+  p(S) maximal in the sense that no further element can be added to p(S).
+
+      {{ Proof:  Suppose there were an element z in S - p(S) which could
+                 be added to p(S), ie making a p'(S) = p(S) union {z} which
+                 satisfies properties i) and ii), then from ii)
+
+                     forall y in S - p'(S) . y ~[= z
+
+                 and since z is, by definition, not in S - p'(S), or
+                 equivalently
+
+                     S - p'(S) = { y in S - p(S) | y /= z }
+
+                 we can rewrite this as
+
+                     forall y in S - p(S) . y /= z  =>  y ~[= z
+
+                 showing that, contrary to iii), there must be a non-empty
+                 minimum of S - p(S).
+      }}
+
+  The algorithm works by starting with an empty set P, and then
+  continually selecting an element x of min(S-P), and replacing
+  P with P union {x}.
+  This process will produce P = p(S), and the order in which
+  elements are added to P is a total order <= such that
+
+      forall x,y in P . x [= y  =>  x <= y
+
+  If S - p(S) /= emtyset, ie the main algorithm terminates without
+  processing all the nodes, then there is some loop,
+
+}
+
+
+{ This sorting algorithm works on an array of nodes represented by the
+  following mode.  The lists of successors define the ordering, and are
+  the input to the algorithm predecessor values are the counts of immediate
+  predecessors.
+
+  The predecessor values are used for other purposes within the sorting
+  algorithm: when the actual numbers of predecessors are zero, the main
+  algorithm uses predecessor values as indices into the array, and they
+  are used to chain all the nodes with no predecessors -- in this case
+  they are negated; and when a node has been output, this is marked
+  by 'gone' (negative, and with a magnitude too large to be confused
+  with chain values) in its predecessor field.
+
+  Therefore the predecessor count is interpreted as a chain link if
+  it is negative, and the element can be reached via the chain starting
+  from 'first'; a positive predecessor count always is the actual number
+  of predecessors not yet actually output, and the only other valid value
+  is 'gone'.
+
+  The 'loop' field has no meaning outside this algorithm, and need not
+  be defined on input.
+
+  A reference is used for the successors in the hope that the data area
+  can be the same as that in the instance data being constructed.  If
+  this is not possible, the REF can be removed.
+
+  The predecessor counts are adjusted in the processing of delays, before
+  sorting is called, so that some nodes become available for immediate
+  output even though they appear to be 'successors' of remaining nodes.
+  Hence, the algorithm is made tolerant of the possibility of reaching
+  a node which is already output (or queued for output) from the
+  successors of a node which is not yet output.  The adjustment of
+  predecessors is done in two distinct ways, for two different calls
+  of 'topsort'.  The unadjusted value is preserved in the
+  'true predecessors' field (which is never changed, once set up).
+}
+MODE FANOUT = STRUCT (INT predecessors, true predecessors, loop,
+                      REF VECTOR [] INT successors);
+
+HEAP VECTOR [0] INT no successors;
+
+{ A flag to show that a node has been output -- not valid as a
+  predecessor count, nor as a chain value.
+}
+INT gone = - max int;
+
+
+{ 'find a loop' finds a loop when there is known to be one.
+  It assumes that the maximal prefix has already been output, and
+  the nodes constituting it marked with 'predecessors = gone'
+  The return result is a set of indices describing the elements
+  of the loop, with each being a predecessor of the one which
+  follows in the vector (and the last being a predecessor of the
+  first, of course).
+
+  The guaranteed way of dropping into a loop is to find any remaining
+  *predecessor* of each remaining node, and follow them back until a
+  node is visited twice.  Predecessors have to be used because the
+  loop(s) must *start* any remaining chain of nodes, otherwise more
+  would have been output by the main algorithm.
+}
+PROC find a loop = (REF VECTOR [] FANOUT nodes) REF VECTOR [] INT:
+BEGIN
+    INT start := 0;
+
+    FOR k TO UPB nodes DO
+        loop OF nodes [k] := 0
+    OD;
+    FOR k TO UPB nodes DO
+        IF predecessors OF nodes [k] /= gone THEN
+            FOR j TO UPB successors OF nodes [k] DO
+                loop OF nodes [(successors OF nodes [k]) [j]] := start := k
+            OD
+        FI
+    OD;
+
+    { Now, the 'loop' field of each remaining node refers to
+      an arbitrary one of its remaining predecessors, and
+      'start' points to an arbitrary remaining node.
+      Trace back from 'start' until we drop into a loop, marking
+      those visited by negating the 'loop' field.
+    }
+
+    WHILE loop OF nodes [start] > 0 DO
+        REF FANOUT this := nodes [start];
+        start := loop OF this;
+        loop OF this := - loop OF this
+    OD;
+
+    { Now, 'start' points to the first node we have visited twice,
+      so can be considered the start of a loop (and in what follows,
+      the nodes we look at will all have negated 'loop' fields).
+      First, find the length of the loop.
+    }
+
+    INT length := 0,
+        scan := - loop OF nodes [start];
+
+    WHILE
+        length +:= 1;
+        scan /= start
+    DO
+        scan := - loop OF nodes [scan]
+    OD;
+
+    { Now set up the vector describing the loop, following the loop
+      by predecessor, and therefore setting the vector from the end
+      to the beginning.
+    }
+
+    HEAP VECTOR [length] INT loop;
+
+    scan := - loop OF nodes [start];
+    length +:= 1;
+    WHILE
+        loop [length -:= 1] := scan;
+        scan /= start
+    DO
+        scan := - loop OF nodes [scan]
+    OD;
+
+    loop
+END;
+
+
+{ The main topological sorting algorithm -- assuming that the array of
+  nodes has been set up, complete with correct successors and count
+  of predecessors.
+
+  The 'put node' procedure is called repeatedly, and takes whatever
+  action is necessary to record the fact that the specified node is
+  the next one in the resulting linear order.
+
+  The 'break loop' procedure is supplied by the caller to take any
+  action required to mirror the sorting algorithm's breaking of the
+  loop.  The sorting algorithm will have added an extra element, deemed
+  to have no predecessors, which 'buffers' the first of the given
+  instances from its successors.  'break loop' should also print any
+  diagnostics required.  The integer it returns is the index of the
+  new element.  'break loop' should not modify the data structure
+  it is given.
+
+  Note that 'put node' is called on the new node returned by 'break loop'.
+  This therefore gives the using module some freedom in how these two
+  procedures cooperate to construct the new node, but also means that
+  it must be careful not to duplicate the work!
+
+  Note also that the supplied successors of a FANOUT are modified for
+  one node of a loop.  (There is no other situation in which the successors
+  are modified.)  The modification is sufficient for the purposes of
+  sorting, but does not complete the representation of the new connectivity
+  (with the loop breaking function added) for the purposes of dynamic
+  fanout (flag setting on changes).  This is because loop breaking functions
+  are not given a FANOUT representation at this stage.  It is the
+  responsibility of the user of this sorting routine to ensure that the
+  loop breaking function correctly acquires the fanout of the function
+  after which it is inserted, and that that preceding function correctly
+  fans out to the loop break.
+}
+PROC topsort = (REF VECTOR [] FANOUT nodes,
+                PROC (INT) VOID put node,
+                PROC (REF VECTOR [] INT) INT break loop) VOID:
+BEGIN
+    INT n := UPB nodes;
+
+    { First, set up a queue of those ready for immediate output }
+    INT first := 0;
+    FOR k TO n DO
+        IF predecessors OF nodes [k] = 0 THEN
+            predecessors OF nodes [k] := - first;
+            first := k
+        FI
+    OD;
+
+    { Now 'first' is the index of the head of a list of elements which
+      have no predecessors -- linked by (-ve of) index, terminated by zero.
+    }
+
+    WHILE n > 0 DO
+        REF VECTOR [] INT succ;
+        IF first /= 0 THEN
+            { Normal sorting operation -- there is still something to output }
+
+            put node (first);
+            succ := successors OF nodes [first];
+            INT next = - predecessors OF nodes [first]; { Go to next in chain }
+            predecessors OF nodes [first] := gone;
+            first := next;
+            n -:= 1
+        ELSE
+            { Nothing queued for output -- we have hit a loop.
+              We must find it, break it, and continue.
+            }
+
+            REF VECTOR [] INT loop = find a loop (nodes);
+
+            { 'loop' is now a list of nodes in a loop to be broken.
+              A new node is added just after the first in the list, taking
+              over its successors, but deemed not to have any predecessors
+              (so it can be output immediately).
+            }
+
+            INT new node = break loop (loop);
+
+            put node (new node);
+
+            succ := successors OF nodes [loop [1]];
+            successors OF nodes [loop [1]] := no successors
+        FI;
+
+        { Decrease predecessor counts of all successors of the node
+          just output.
+        }
+        FOR i TO UPB succ DO
+            INT successor = succ [i];
+            REF INT pred of succ = predecessors OF nodes [successor];
+            IF pred of succ > 0 ANDTH (pred of succ -:= 1) = 0 THEN
+                { Successor neither output nor queued, and now has no
+                  predecessors -- chain it for output }
+                pred of succ := - first;
+                first := successor
+            FI
+        OD
+
+    OD
+
+END
+
+
+KEEP
+    FANOUT, no successors, topsort
+FINISH
