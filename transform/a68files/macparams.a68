@@ -1,0 +1,126 @@
+DECS macparams CONTEXT VOID USE putstrings, basics, messageproc, assmodes,
+     modeprocs, transformprocs, options :
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: macparams.a68,v 34.2 1995/03/29 13:02:57 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:12:90  Macparams Transform copied from 'tidyup'. DJS.
+17:12:91  BODYDATA removed. EVW
+03:03:92  Declaration attributes added. EVW
+28:07:92  null_const removed. JIT
+
+    Removes macro parameters from the functions that represent expanded macros.
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR macparams_options;
+
+PROC outerfn_macparams = (OUTER ofn,
+                          CLOSURE closure,
+                          OPTIONS  options,
+                          MESSAGEPROC msg )OUTERC:
+BEGIN
+REF ENVIRON env = environ OF ofn;
+
+PROC fndec_macparams = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs )FNDECC:
+BEGIN
+
+    PROC instance_proc = (INSTANCE inst, TRANSFORMPROCS tprocs) INSTANCEC:
+    BEGIN
+    BOOL macro = macro OF (fns OF env)[fnno OF inst];
+        IF macro  THEN
+        MACPARAMSC  mps = (macparams OF tprocs)(macparams OF inst, tprocs);
+
+            IF c OF mps THEN
+                (( fnno OF inst, m OF mps, attr OF inst ), TRUE )
+          ELSE
+                ( inst, FALSE )
+            FI
+      ELIF ( macparams OF inst ISNT nilmacparams ) THEN
+            (( fnno OF inst, nilmacparams, attr OF inst ), TRUE )
+      ELSE
+            ( inst, FALSE )
+        FI
+    END;
+
+PROC fnbody_proc = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+    CASE fbody IN
+    (REF UNITTAG ut)  ( fnbody OF nulltprocs )( fbody, tprocs )
+    OUT ( fbody, FALSE )
+    ESAC;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( dec_tprocs, ( fnbody_proc,
+                                                         instance_proc ));
+FNBODYC bc = ( fnbody OF nulltprocs )( fnbody OF fdec, newtprocs );
+
+    IF c OF bc OREL
+       ( NOT macro OF fdec ANDTH UPB macspecs OF fdec > 0 ) THEN
+    REF FNDEC new = HEAP FNDEC := fdec;
+
+        fnbody OF new := f OF bc;
+        macspecs OF new := nilmacspecs;
+        ( new, TRUE )
+  ELSE
+        ( fdec, FALSE )
+    FI
+END;
+
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( null_attr,
+                                                         null_formula,
+                                                         null_type,
+                                                         fndec_macparams ));
+
+   ( outer OF nulltprocs )( ofn, newtprocs )
+END;
+
+
+PROC transform_macparams = (CLOSURE closure,
+                            OPTIONS  options,
+                            MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                ( (OUTER ofn, TRANSFORMPROCS tprocs )OUTERC:
+                     outerfn_macparams( ofn, closure, options, msg )));
+
+    (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP outerfn_macparams, transform_macparams, macparams_options
+FINISH
