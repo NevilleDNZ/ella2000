@@ -1,0 +1,841 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRCMDS.STA }
+{ *2    23-NOV-1988 16:55:02 ELLADEV "created" }
+{ *1    11-NOV-1988 15:50:21 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRCMDS.STA }
+DECS attrcmds CONTEXT VOID
+USE osinterface, testmode,
+    putstrings, messageproc, basics, commandsyntax, commandproc, command,
+    kernelreader, attrreader, libmodes, libinterface, libprocs, attrmodes,
+    attrlevel1, attrprocs, ioprocs,
+    assmodes, openinterface :
+
+{                    " Id: attrcmds.sta,v 1.1 91/10/14 14:25:54 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrcmds.a68,v 34.2 1995/03/29 13:03:15 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+08:11:88  EPI Modifications: added  ident to compound commands. BGH
+11:11:88  "Finish" commands added to command set.  TK
+01:03:89  Modified for kernel interface.  DCT
+20:06:90  "finish_" procedures added to the KEEP list for EPI.  DCT
+17:07:90  Revised attributes means save_classes and open_classes removed.EVW
+18:07:90  return and finish occurred twice in nodedata.  DCT
+19:11:90  Declaration attributes merged onto update 26. JIT
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.007 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+RCH outch;
+
+{ Procedures used in the attribute system top-level commands.}
+
+RVC attrprompt;  { ****** This shouldn't be needed ????????????? }
+
+{ Starts top-level session.}
+
+PROC start_attrsys = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   save_library(msg);
+   init_state;
+   textattributes_key
+      := login_class("_textattributes", "_RSREtextattributes", io_msgproc);
+   attrprompt := MAKERVC "Attr"
+END;
+
+{ Saves changes and exits from top level.}
+
+PROC exitattrsys = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Exiting attribute system and returning to EASE", newline));
+   save_library(msg);
+   init_state
+END;
+
+{ Undoes changes to attribute library }
+
+PROC undoattrsys = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Undoing changes to attribute library", newline));
+   regress_library(msg);
+   init_state
+END;
+
+{                          ***************                        }
+
+PROC check_class = (VALUES v, MESSAGEPROC msg) RVC:   { <class> }
+BEGIN
+   RVC  class = get_class(v[1], msg);
+   IF NOT isopen(class) THEN msg(user, "Class not opened") FI;
+   class
+END;
+
+PROC openclass = (VALUES v, MESSAGEPROC msg) VOID:   { <class> [<password>] }
+BEGIN
+   RVC class = get_class(v[1], msg),
+       password = IF UPB v > 1  ANDTH  is_password(v[2])
+                  THEN  get_password(v[2], msg)
+                  ELSE  nullstr
+                  FI;
+   login_class(class,password,msg);
+   put(outch,("Class ",class," is opened", newline))
+END;
+
+PROC closeclass = (VALUES v, MESSAGEPROC msg) VOID:   { <class> }
+BEGIN
+   RVC class = get_class(v[1], msg);
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+      IF name = class
+      THEN logout_class(key,msg); FALSE
+      ELSE TRUE
+      FI;
+   scan_classes(action)
+END;
+
+PROC eraseclass = (VALUES v, MESSAGEPROC msg ) VOID:   { <class> }
+BEGIN
+   INT classkey;
+   RVC class = check_class(v, msg);
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      IF name = class THEN classkey := key FI;
+      name /= class
+   END;
+   scan_classes(action);
+   remove_class(classkey,msg);
+   put(outch, ("Class ",class," erased from library", newline))
+END;
+
+PROC addclass = (VALUES v, MESSAGEPROC msg ) VOID:   { <class> [<password>] }
+BEGIN
+   RVC requd_name = get_class(v[1], msg),
+       password = IF UPB v > 1  ANDTH  is_password(v[2])
+                  THEN  get_password(v[2], msg)
+                  ELSE  nullstr
+                  FI;
+   introduce_class( requd_name, password, msg );
+   put(outch, ("Class ",requd_name," added to library", newline))
+END;
+
+PROC renpassword = (VALUES v, MESSAGEPROC msg ) VOID:   { <class> [<password>] }
+BEGIN
+   RVC class = check_class(v, msg),
+       password = IF UPB v > 1  ANDTH  is_password(v[2])
+                  THEN  get_password(v[2], msg)
+                  ELSE  nullstr
+                  FI;
+   INT classkey;
+   PROC action = (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+   BEGIN
+      IF name = class THEN classkey := key FI;
+      name /= class
+   END;
+   scan_classes(action);
+   rename_class(classkey,password,msg)
+END;
+
+PROC printclasses = (VALUES v, MESSAGEPROC msg )VOID:
+BEGIN
+PROC class_action = (VECTOR[ ]CHAR name,
+                     INT key,
+                     BOOL login, needspassword ) BOOL:
+BEGIN
+    IF NOT is_system_attribute(key) THEN put( out, ( name, newline )) FI;
+    TRUE
+END;
+
+    scan_classes( class_action )
+END;
+
+{                         **********************                     }
+
+{ Initialises state for reading closure data }
+
+
+INT  linesize = 160,
+     maxlinesize = 2048;  { maxlinesize added to allow for foreign systems }
+
+PROC  read_assmodes = (STR  fname,  MESSAGEPROC msg) CLOSURE:
+BEGIN
+   VECTOR [maxlinesize] CHAR buffer;
+   INT pos := maxlinesize, end := 0;
+   FILE file := open_file( fname, assfile_type, get_access, msg );
+   RVC  filename = filename OF testmode_filename(file_name(file));
+
+   PROC get_char = CHAR:
+   BEGIN
+      IF pos >= end
+      THEN
+          { get_buffer is ELLAs low level file reading routine - It fills in
+            the buffer and assigns the length of that line to end - Note all
+            lines of the file are not necessarily the same length but will
+            have a maximum length of <linesize> (if produced by ELLA).  On UNIX
+            systems each line will be explicitly terminated when the file is
+            produced in unpacked format - this terminating character is
+            ignored.  The packed format uses a byte stream: (it is not dividied
+            into lines). }
+          READREPLY reply = get_buffer(file, buffer, end, msg);
+          IF reply = read_too_long
+          THEN  close_file(file, abort);
+                msg( system, "Line of text is too long")
+          ELIF reply = read_eof
+          THEN msg( system, "End of dump stream" )
+          FI;
+          pos := 0
+      FI;
+      buffer[ pos PLUSAB 1 ]
+   END;
+
+   put(screen, ( newline,
+                 "Reading assembler modes from file ", filename, newline ));
+
+   ASSEMREADER reader = read_signature( get_char, msg );
+   EXTERNALCLOSURE new_modes = read_closure( reader, msg );
+   close_file( file, msg );
+   closure OF new_modes
+END;
+
+
+PROC editclosuredata = (VALUES params, MESSAGEPROC msg) VOID:
+BEGIN
+   check_selected(currentct OF library, msg);
+   attcontext := context OF currentct OF library;
+   attrprompt := MAKERVC "CLDATA";
+   FILENAME  fname = get_filename(params[1], assfile_type, msg);
+   FILENAME  filename;
+   IF find_file(filename OF fname, nullstr, msg, filename)
+   THEN  attclosure := read_assmodes(filename OF filename, msg)
+   ELSE  msg(user, oneline(("Can not find file ", filename OF filename)))
+   FI;
+   read_attribs(msg)
+END;
+
+
+{ Initialises state for the editing of library data.}
+
+PROC editlibdata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   attcontext := nullstr;
+   read_attdata(msg);
+   attrprompt := MAKERVC "LDATA"
+END;
+
+{ Initialises state for the editing of context data.}
+
+PROC editctdata = (VALUES v, MESSAGEPROC msg) VOID:  { <contextname> }
+BEGIN
+   RVC ctn = get_contextname(v[1], msg);
+   check_context(ctn, msg);
+   attcontext := ctn;
+   read_attdata(msg);
+   put(outch,("Editing data for context ",ctn, newline));
+   attrprompt := MAKERVC "CDATA"
+END;
+
+PROC editattribs = (VALUES v, MESSAGEPROC msg) VOID:  { <contextname> }
+BEGIN
+   RVC ctn = get_contextname(v[1], msg);
+   check_context(ctn, msg);
+   attcontext := ctn;
+   read_attribs(msg);
+   put(outch,("Editing attributes for context ",ctn, newline));
+   attrprompt := MAKERVC "CATTR"
+END;
+
+{                           ********************                     }
+
+{ Procedures for the data editing session.}
+
+{ Prints the context associated with the current data or attribute
+  editing session.}
+
+PROC printcxt = (VALUES v, MESSAGEPROC msg) VOID:
+  put(outch,("Currently editing context ",attcontext, newline));
+
+{ Clears data from given class.}
+
+PROC cleardata = (VALUES v, MESSAGEPROC msg) VOID:   { <class> }
+BEGIN
+   RVC class = check_class(v,msg);
+   attdata[find_index(class)] := nildatalist;
+   attdatachanged := TRUE
+END;
+
+{ Deletes specified data item.}
+
+PROC deletedata = (VALUES v, MESSAGEPROC msg) VOID:   { <class> <int> }
+BEGIN
+   RVC class = check_class(v,msg);
+   INT item = get_int(v[2], msg);
+   INT index = find_index(class);
+   IF index < 0
+   THEN msg(user, "Data position doesn't exist")
+   ELSE deleteitem(attdata[index], item, msg);
+        attdatachanged := TRUE
+   FI
+END;
+
+{ Adds data item to end of class data.}
+
+PROC appenddata = (VALUES v, MESSAGEPROC msg) VOID:   { <class> <data> }
+BEGIN
+   RVC class = check_class(v, msg);
+   appenddlist(attdata[find_index(class)], get_data(v[2], msg));
+   attdatachanged := TRUE
+END;
+
+{ Inserts item in specified position in class data.}
+
+PROC insertdata = (VALUES v, MESSAGEPROC msg) VOID:   { <class> <int> <data> }
+BEGIN
+   RVC class = check_class(v, msg);
+   INT position = get_int(v[2], msg);
+   insdata(attdata[find_index(class)], position, get_data(v[3], msg), msg);
+   attdatachanged := TRUE
+END;
+
+{ Prints the data for the given class, or for all classes if no class given.}
+
+PROC printdata = (VALUES v, MESSAGEPROC msg) VOID:   { [<class>] }
+BEGIN
+   IF is_class(v[1])
+   THEN IF RVC class = get_class(v[1], msg);
+           isopen(class)
+        THEN put(outch, (class,":", newline));
+             printdatalist(attdata[find_index(class)], outch)
+        ELSE msg(user, "Class not opened")
+        FI
+   ELSE print_attdata(attdata, outch)
+   FI
+END;
+
+{ Undoes library or context data editing session }
+
+PROC undodata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Undoing data editing session", newline));
+   attdatachanged := FALSE;
+   read_attdata(msg)
+END;
+
+{ Undoes attribute data editing session }
+
+PROC undoattrdata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Undoing data editing session", newline));
+   attdatachanged := FALSE;
+   read_attdata(msg)
+END;
+
+{ Returns from library or context data editing session and saves changes.}
+
+PROC exitdata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Exiting data editing session", newline));
+   IF attdatachanged THEN write_attdata(msg) FI;
+   attdatachanged := FALSE;
+   attdata := nilattdata;
+   attcontext := nullstr;
+   attrprompt := MAKERVC "Attr"
+END;
+
+{ Returns from attribute data editing session and saves changes.}
+
+PROC exitattrdata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Exiting data editing session", newline));
+   IF NOT find_nodeset(curnodeset)
+   THEN append_nodeset(curnodeset);
+        attribschanged := TRUE
+   FI;
+   IF attdatachanged
+   THEN attribschanged := TRUE;
+        add_attdata(curnodeset)
+   FI;
+   attdatachanged := FALSE;
+   attdata := nilattdata;
+   attrprompt := MAKERVC "CATTR"
+END;
+
+{                    *****************************                    }
+
+{ Procedures for the attribute editing session.}
+
+{ Checks if a given nodeset name exists.}
+
+PROC check_nodeset = (VALUES v, MESSAGEPROC msg) NODESET:   { <nodeset> }
+BEGIN
+   NODESET nodeset = get_nodeset(v, HEAP INT:= 0, msg);
+   IF NOT find_nodeset(nodeset) THEN msg(user, "Nodeset name not found") FI;
+   nodeset
+END;
+
+{ Removes a specified nodeset from the attributes.}
+
+PROC erasenode = (VALUES  v, MESSAGEPROC msg) VOID:   { <nodeset> }
+BEGIN
+   NODESET nodeset = check_nodeset(v, msg);
+   deletenodeset(nodeset);
+   attribschanged := TRUE
+END;
+
+{ Prints all nodeset names associated with the current context.}
+
+PROC printnodesets = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   IF attribs IS nilattribs
+   THEN put(outch, ("No nodeset names in this context", newline))
+   ELSE put(outch, ("Nodeset names in context ",attcontext, newline));
+        REF ATTRIBS attr := attribs;
+        WHILE attr ISNT nilattribs
+        DO put(outch, ("    ", nodesetstring(nodeset OF attr), newline));
+           attr := rest OF attr
+        OD
+   FI
+END;
+
+{ Prints the data associated with a specified nodeset name.}
+
+PROC printnodedata = (VALUES v, MESSAGEPROC msg) VOID:   { <nodeset> }
+BEGIN
+   NODESET nodeset = check_nodeset(v, msg);
+   print_attdata(find_attdata(nodeset), outch)
+END;
+
+{ Initialises the state for the editing of data associated with a nodeset
+  name.}
+
+PROC start_attrdata = (VALUES v, MESSAGEPROC msg) VOID:   { <nodeset> }
+BEGIN
+   curnodeset :=  get_nodeset(v, HEAP INT:= 0, msg);
+   put(outch, ("Editing data for nodeset ", nodesetstring(curnodeset),newline));
+   IF find_nodeset(curnodeset)
+   THEN get_nattdata(curnodeset)
+   ELSE attdata := HEAP VECTOR [nclasses] REF DATALIST;
+        FOR i TO UPB attdata DO attdata[i] := nildatalist OD
+   FI;
+   attdatachanged := FALSE;
+   attrprompt := MAKERVC "NDATA"
+END;
+
+{ Prints nodeset name associated with current data editing session.}
+
+PROC printcnodeset = (VALUES v, MESSAGEPROC msg) VOID:
+   put(outch, (nodesetstring(curnodeset), newline));
+
+{ Undoes attribute editing session }
+
+PROC undoattribs = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Undoing attribute editing session",newline));
+   attribschanged := FALSE;
+   read_attribs(msg)
+END;
+
+{ Returns from editing attributes and saves changes.}
+
+PROC exit_attribs = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   put(outch, ("Exiting attribute editing session",newline));
+   IF attribschanged THEN write_attribs(msg) FI;
+   attribschanged := FALSE;
+   attribs := nilattribs;
+   attcontext := nullstr;
+   attrprompt := MAKERVC "Attr"
+END;
+
+{ FINISH commands}
+
+PROC finish_attrsys = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   exitattrsys(v, msg)
+END;
+
+PROC finish_data = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   exitdata(v, msg);
+   finish_attrsys(v, msg)
+END;
+
+PROC finish_attribs = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   exit_attribs(v, msg);
+   finish_attrsys(v, msg)
+END;
+
+PROC finish_attrdata = (VALUES v, MESSAGEPROC msg) VOID:
+BEGIN
+   exitattrdata(v, msg);
+   finish_attribs(v, msg)
+END;
+
+{                        *********************                        }
+
+
+
+PROC  make_attributes = (RCH  outchannel,  COMMANDVEC  globals) REF COMPOUND:
+BEGIN
+   outch:= outchannel;    { outchannel MUST be GLOBAL }
+
+   { These commands are used more than once and so are named }
+
+   REF SIMPLE
+      increaselibrary_cmd = HEAP SIMPLE:=
+         ( MAKERVC "INCREASELIBRARY", nilstr,
+           int_syntax, normal access, continue,
+           MAKERVC "Increases the size of the current library by a number of "
+                   "words equal to or greater than the number specified "
+                   "(minimum is 2000).",
+           (VALUES v, MESSAGEPROC msg) VOID:
+             increase_library(get_int(v[1], msg), msg)
+         ),
+      pattributecontext_cmd = HEAP SIMPLE:=   { will be part of a GROUP }
+         ( MAKERVC "ATTRIBUTECONTEXT", MAKERVC "AC",
+           no parameters, normal access, continue,
+           MAKERVC "Prints the name of the context associated with the "
+                   "current session.",
+           printcxt
+         ),
+      pcurrentnodeset_cmd = HEAP SIMPLE:=   { will be part of a GROUP }
+         ( MAKERVC "CURRENTNODESET", MAKERVC "CN",
+           no parameters, normal access, continue,
+           MAKERVC "Prints nodeset associated with current data editing "
+                   "session.",
+           printcnodeset
+         ),
+
+      { Common data editor commands }
+
+      cleardata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "CLEARDATA", nilstr, class_syntax, normal access, continue,
+           MAKERVC "Clears data from given class.",
+           cleardata
+         ),
+      erasedata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "ERASEDATA", nilstr,
+           prod((class_syntax, int_syntax)), normal access, continue,
+           MAKERVC "Deletes specified data item in class data.",
+           deletedata
+         ),
+      appenddata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "APPENDDATA", MAKERVC "AD",
+           prod((class_syntax, data_syntax)), normal access, continue,
+           MAKERVC "Adds data item to end of class data.",
+           appenddata
+         ),
+      insertdata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "INSERTDATA", MAKERVC "ID",
+           prod((class_syntax, int_syntax, data_syntax)),
+           normal access, continue,
+           MAKERVC "Inserts data item in specific position in class data.",
+           insertdata
+         ),
+      printdata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "PRINTDATA", MAKERVC "PD",
+           opt(class_syntax), normal access, continue,
+           MAKERVC "Prints data for the given class; if no class given, "
+                   "prints data for all classes.",
+           printdata
+         ),
+      pdata_cmd = HEAP SIMPLE:=   { will be part of a GROUP }
+         ( MAKERVC "DATA", MAKERVC "D",
+           opt(class_syntax), normal access, continue,
+           MAKERVC "Prints data for the given class; if no class given, "
+                   "prints data for all classes.",
+           printdata
+         ),
+      undodata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "UNDO", nilstr, no parameters, normal access, continue,
+           MAKERVC "Undoes current data editing session.",
+           undodata
+         ),
+      returndata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "RETURN", nilstr, no parameters, normal access, return,
+           MAKERVC "Saves changes to data and returns to calling environment.",
+           exitdata
+         ),
+      finishdata_cmd = HEAP SIMPLE:=
+         ( MAKERVC "FINISH", nilstr, no parameters, normal access, finish,
+           MAKERVC "Saves changes to data and returns to host system.",
+           finish_data
+         );
+
+   COMMANDVEC  globals_with_inclib = globals ADD increaselibrary_cmd;
+
+   COMMANDVEC  editing_cmds = MAKECOMMANDS VECTOR [] COMMAND
+             ( HEAP SIMPLE:=
+               ( MAKERVC "ERASENODESET", nilstr,
+                 nodeset_syntax, normal access, continue,
+                 MAKERVC "Removes a nodeset from the attributes.",
+                 erasenode
+               ),
+               HEAP SIMPLE :=
+               ( MAKERVC "UNDO", nilstr, no parameters, normal access, continue,
+                 MAKERVC "Undoes attribute editing session.",
+                 undoattribs
+               ),
+               HEAP SIMPLE :=
+               ( MAKERVC "RETURN", nilstr, no parameters, normal access, return,
+                 MAKERVC "Saves changes and returns to calling environment.",
+                 exit_attribs
+               ),
+               HEAP SIMPLE :=
+               ( MAKERVC "FINISH", nilstr, no parameters, normal access, finish,
+                 MAKERVC "Saves changes and returns to host system.",
+                 finish_attribs
+               ),
+
+               make_group
+               ( "PRINT", "P", normal access,
+                 ( pattributecontext_cmd,
+
+                   HEAP SIMPLE:=
+                   ( MAKERVC "NODESETS", MAKERVC "N",
+                     no parameters, normal access, continue,
+                     MAKERVC "Prints the nodesets.",
+                     printnodesets
+                   ),
+                   HEAP SIMPLE:=
+                   ( MAKERVC "NODESETDATA", MAKERVC "ND",
+                     nodeset_syntax, normal access, continue,
+                     MAKERVC "Prints the data for the nodeset.",
+                     printnodedata
+                   )
+                 )
+               ),
+
+               make_compound
+               ( HEAP SIMPLE :=
+                 ( MAKERVC "ENTERNODESETDATA", MAKERVC "ENDATA",
+                   nodeset_syntax, normal access, continue,
+                   MAKERVC "Calls editor for editing the data associated with "
+                           "the given nodeset.  The given nodeset may be new.",
+                   start_attrdata
+                 ),
+
+                 "the data editor for attribute data",
+                 attrprompt,
+
+                 MAKECOMMANDS  VECTOR [] COMMAND   { local commands }
+                 ( make_group( "PRINT", "P", normal access,
+                               ( pdata_cmd,
+                                 pattributecontext_cmd,
+                                 pcurrentnodeset_cmd
+                               )
+                             ),
+                   cleardata_cmd, erasedata_cmd, appenddata_cmd, insertdata_cmd,
+                   undodata_cmd,
+
+                   HEAP SIMPLE :=
+                   ( MAKERVC "UNDO", nilstr, no parameters,
+                     normal access, continue,
+                     MAKERVC "Undoes current data editing session.",
+                     undoattrdata
+                   ),
+                   HEAP SIMPLE :=
+                   ( MAKERVC "RETURN", nilstr, no parameters,
+                     normal access, return,
+                     MAKERVC "Saves changes to data and returns to calling "
+                             "environment.",
+                     exitattrdata
+                   ),
+                   HEAP SIMPLE :=
+                   ( MAKERVC "FINISH", nilstr, no parameters,
+                     normal access, finish,
+                     MAKERVC "Saves changes to data and returns to "
+                             "host system.",
+                     finish_attrdata
+                   )
+                 ),
+
+                 globals_with_inclib,
+                 nullcommand
+               ) { End of "enternodesetdata" }
+             );
+
+
+   { Top level of the attribute system }
+
+   make_compound
+   ( HEAP SIMPLE:=
+     ( MAKERVC "ENTERATTRIBUTES", MAKERVC "EATTR", no parameters,
+       normal access, continue,
+       MAKERVC "Enters the attribute system.",
+       start_attrsys
+     ),
+
+     "the attribute system",
+     attrprompt,
+
+     MAKECOMMANDS  VECTOR [] COMMAND
+     ( HEAP SIMPLE:=
+       ( MAKERVC "ERASECLASS", nilstr, class_syntax, normal access, continue,
+         MAKERVC "Erases given class from library.",
+         eraseclass
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "MAKECLASS", MAKERVC "MCL",
+         prod((class_syntax, opt(password_syntax))), normal access, continue,
+         MAKERVC "Adds given class name and password to library.",
+         addclass
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "RENAMEPASSWORD", MAKERVC "RPASS",
+         prod((class_syntax, password_syntax)), normal access, continue,
+         MAKERVC "Renames a class password.",
+         renpassword
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "OPENCLASS", MAKERVC "OCL",
+         prod((class_syntax, opt(password_syntax))), normal access, continue,
+         MAKERVC "Allows class data to be read and edited in this session.",
+         openclass
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "CLOSECLASS", MAKERVC "CCL", class_syntax, normal access,
+         continue,
+         MAKERVC "Closes class; if no class given, all classes are closed.",
+         closeclass
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "PRINTCLASSES", MAKERVC "PCL",
+         no parameters, normal access, continue,
+         MAKERVC "Prints all classnames in library (whether opened or not).",
+         printclasses
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "UNDO", nilstr, no parameters, normal access, continue,
+         MAKERVC "Undoes changes to attribute library.",
+         undoattrsys
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "RETURN", nilstr, no parameters, normal access, return,
+         MAKERVC "Saves changes and returns to EASE.",
+         exitattrsys
+       ),
+       HEAP SIMPLE:=
+       ( MAKERVC "FINISH", nilstr, no parameters, normal access, finish,
+         MAKERVC "Saves changes and returns to host system.",
+         finish_attrsys
+       ),
+
+       make_group
+       ( "ENTER", "E", normal access,
+         ( make_compound
+           ( HEAP SIMPLE:=
+             ( MAKERVC "CLOSUREDATA", MAKERVC "CLDATA",
+               filename_syntax, normal access, continue,
+               MAKERVC "Enters session for closure data",
+               editclosuredata
+             ),
+
+             "session for closure data",
+             attrprompt,
+
+             editing_cmds,
+             globals_with_inclib,
+             nullcommand
+           ),
+
+           make_compound
+           ( HEAP SIMPLE:=
+             ( MAKERVC "LIBRARYDATA", MAKERVC "LDATA",
+               no parameters, normal access, continue,
+               MAKERVC "Enters edit session for library data.",
+               editlibdata
+             ),
+
+             "editing session for library data",
+             attrprompt,
+
+             MAKECOMMANDS  VECTOR [] COMMAND
+             ( cleardata_cmd, erasedata_cmd, appenddata_cmd, insertdata_cmd,
+               printdata_cmd, undodata_cmd, returndata_cmd, finishdata_cmd
+             ),
+
+             globals_with_inclib,
+             nullcommand
+           ),
+
+           make_compound
+           ( HEAP SIMPLE :=
+             ( MAKERVC "CONTEXTDATA", MAKERVC "CDATA",
+               contextname_syntax, normal access, continue,
+               MAKERVC "Enters edit session for context data.",
+               editctdata
+             ),
+
+             "editing session for context data",
+             attrprompt,
+
+             MAKECOMMANDS  VECTOR [] COMMAND
+             ( cleardata_cmd, erasedata_cmd, appenddata_cmd, insertdata_cmd,
+               make_group( "PRINT", "P", normal access,
+                           (pdata_cmd, pattributecontext_cmd) ),
+               undodata_cmd, returndata_cmd, finishdata_cmd
+             ),
+
+             globals_with_inclib,
+             nullcommand
+           ),
+
+           { The attributes editor }
+
+           make_compound
+           ( HEAP SIMPLE :=
+             ( MAKERVC "CONTEXTATTRIBUTES", MAKERVC "CA",
+               contextname_syntax, normal access, continue,
+               MAKERVC "Enters edit session for attributes.",
+               editattribs
+             ),
+
+             "editing session for attributes",
+             attrprompt,
+
+             editing_cmds,
+             globals_with_inclib,
+             nullcommand
+           ) { End of "(enter)contextattributes" }
+         )
+       ) { End of group "enter" }
+     ),
+
+     globals_with_inclib,
+     nullcommand
+   ) { End of "enterattributes" }
+END
+
+KEEP  finish_attrsys,  finish_data,  finish_attribs,  finish_attrdata,
+      make_attributes
+FINISH

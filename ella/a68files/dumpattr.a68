@@ -1,0 +1,236 @@
+DECS dumpattr CONTEXT VOID USE putstrings, basics, messageproc, libmodes,
+     libinterface, assmodes, attrmodes, attrlevel1, attrprocs:
+
+{                    " Id: dumpattr.sta,v 1.1 91/10/14 14:26:37 edcad Exp $" }
+configinfo A68CONFIG "$Id: dumpattr.a68,v 34.2 1995/03/29 13:03:24 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+07:04:89   R4B285. `open_allclasses' used for stand-alone dumper.  TK
+29:07:89   CR ???  Updated to RSRE kernel.  EVW
+17:07:90   ELLA system attributes not dumped.  EVW
+19:11:90   Declaration attributes merged onto update 26. JIT
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{                       ********************                           }
+{
+     SYNTAX OF DUMP FILE  (using notation of ELLA Language Reference Manual)
+     ===================
+
+dumpfile   :- network << X attributes >> ?  E
+
+attributes :- classes attdata closure
+
+classes    :- integer name name etc
+
+attdata    :- datalist datalist etc
+
+closure    :- integer context context etc
+
+context    :- name attdata attribs
+
+attribs    :- nodedata nodedata etc
+
+nodedata   :- integer << nodeset datalist >> etc
+
+datalist   :- integer text etc
+
+nodeset    :- N nodelist
+              I name nodelist
+
+nodelist   :- integer node node etc
+
+node       :- D decnode
+              I decnode name
+
+decnode    :- decname integer
+
+decname    :- name
+              fnname
+}
+{                    *****************************                }
+
+
+{ Procedure for dumping attributes.}
+
+PROC dumpattr = (BOOL standalone,
+                 CREGION cr,
+                 CLOSURE closure,
+                 PROC(CHAR)VOID putchar,
+                 PROC(INT)VOID putadint,
+                 PROC(VECTOR[]CHAR)VOID putadident,
+                 PROC(VECTOR[]CHAR)VOID puttext,
+                 MESSAGEPROC flt) VOID:
+BEGIN
+
+{                       **********************                    }
+
+{ Output procedures.}
+
+   PROC nopenclasses = INT:
+   BEGIN
+      INT nopened := 0;
+      PROC countopened =
+        (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+      BEGIN
+         IF NOT is_system_attribute(key) ANDTH login THEN nopened PLUSAB 1 FI;
+         TRUE
+      END;
+      scan_classes(countopened);
+      nopened
+   END;
+
+   PROC dumpclasses = VOID:
+   BEGIN
+      {Dumps number and names of open classes; doesn't dump passwords or keys.}
+      PROC dumpnames =
+        (VECTOR[]CHAR name, INT key, BOOL login, needspassword) BOOL:
+      BEGIN
+         IF NOT is_system_attribute(key) ANDTH login
+         THEN putadident(MAKEID name)
+         FI; TRUE
+      END;
+
+      putadint(nopenclasses);
+      scan_classes(dumpnames)
+   END;
+
+   PROC outnode = (NODE node) VOID:
+   BEGIN
+      CASE node IN
+      (DECNODE decnode) (putchar("D");
+                         putadident(decname OF decnode);
+                         putadint(level OF decnode))
+     ,(INSTNODE inode)  (putchar("I");
+                         putadident(decname OF decnode OF inode);
+                         putadint(level OF decnode OF inode);
+                         putadident(instname OF inode))
+      ESAC
+   END;
+
+   PROC outnodelist = (REF NODELIST nodelist) VOID:
+   BEGIN
+      INT nlist := 0;
+      REF NODELIST ndlist := nodelist;
+      WHILE ndlist ISNT nilnodelist
+      DO nlist PLUSAB 1; ndlist := rest OF ndlist OD;
+
+      putadint(nlist);
+      ndlist := nodelist;
+      WHILE ndlist ISNT nilnodelist
+      DO outnode(node OF ndlist); ndlist := rest OF ndlist OD
+   END;
+
+   PROC outnodeset = (NODESET nodeset) VOID:
+   BEGIN
+      CASE nodeset IN
+      (REF NODELIST nodelist) (putchar("N");
+                               outnodelist(nodelist))
+     ,(IMPNODE impnode) (putchar("I");
+                         putadident(region OF impnode);
+                         outnodelist(nodes OF impnode))
+      ESAC
+   END;
+
+   PROC outdatalist = (REF DATALIST datalist) VOID:
+   BEGIN
+      INT nlist := 0;
+      REF DATALIST dlist := datalist;
+      WHILE dlist ISNT nildatalist
+      DO nlist PLUSAB 1; dlist := rest OF dlist OD;
+
+      putadint(nlist);
+      dlist := datalist;
+      WHILE dlist ISNT nildatalist
+      DO puttext(data OF dlist); dlist := rest OF dlist OD
+   END;
+
+   PROC outnodedata = (REF NODEDATA nodedata) VOID:
+   BEGIN
+      REF NODEDATA ndata := nodedata;
+      INT numnodes := 0;
+      WHILE ndata ISNT nilnodedata
+      DO numnodes PLUSAB 1; ndata := rest OF ndata OD;
+
+      putadint(numnodes);
+      ndata := nodedata;
+      WHILE ndata ISNT nilnodedata
+      DO outnodeset(nodeset OF ndata);
+         outdatalist(datalist OF ndata);
+         ndata := rest OF ndata
+      OD
+   END;
+
+{                               ****************                }
+
+   IF standalone
+   THEN open_allclasses {all classes are opened, no passwords required!}
+   FI;
+
+   textattributes_key
+        := login_class("_textattributes", "_RSREtextattributes", flt);
+   IF nopenclasses > 0
+   THEN putchar("X");
+
+        dumpclasses;              {Dump class names (no passwords!)}
+
+        attcontext := nullid;     {Dump library data}
+        read_attdata(flt);
+        FOR i TO UPB attdata DO outdatalist(attdata[i]) OD;
+
+        {Run through closure}
+        attclosure := closure;
+        INT n = close(cr);
+        putadint(n);
+        FOR i FROM n BY -1 TO 1
+        DO attcontext := name OF context OF ctno_region(i);
+           putadident(attcontext);
+
+           read_attdata(flt);                 {Dump context data}
+           FOR i TO UPB attdata DO outdatalist(attdata[i]) OD;
+
+           TEMPATTR temp = read_temp(flt);    {Dump context attributes}
+           FOR i TO UPB temp DO outnodedata(temp[i]) OD
+        OD
+   ELSE   putchar("E")
+   FI
+END;
+
+SKIP
+KEEP dumpattr
+FINISH

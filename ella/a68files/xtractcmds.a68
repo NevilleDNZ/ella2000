@@ -1,0 +1,129 @@
+DECS  xtractcmds  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      libmodes,  xtract,  commandsyntax,  commandproc,  command,
+      kernelreader:
+
+{                    " Id: xtractcmds.sta,v 1.1 91/10/14 14:32:24 edcad Exp $" }
+configinfo A68CONFIG "$Id: xtractcmds.a68,v 34.2 1995/03/29 13:03:37 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+03:08:89  Extracted from ella_commands as part of the kernel interface.  DCT
+17:07:90  LIBINTERFACE replaced by LIBMODES. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  26.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC  make_xtractcmds = COMMANDVEC:
+BEGIN
+   clearxtract;
+
+   MAKECOMMANDS  VECTOR [] COMMAND
+   ( HEAP SIMPLE :=
+     ( MAKERVC "XTRACT", MAKERVC "XT", opt(filename_syntax),
+       normal access, continue,
+       MAKERVC "Extracts circuit information from the closure of the current "
+               "context and outputs it to the specified file, which has "
+               "defaults <library_name> and .ELN for name and extension.",
+       (VALUES names, MESSAGEPROC  msg) VOID:
+       ( STR name = IF is_filename(names[1])
+                    THEN  filename OF get_filename(names[1], "", msg)
+                    ELSE  name OF get_library
+                    FI;
+         CREGION cr = check_selected(currentct OF get_library, msg);
+         xtract(cr, MAKERVC name, msg)
+
+         {{??epi_send_message(m_epi_m_lib_changed, FALSE) }}
+       )
+     ),
+
+     make_group
+     ( "SET", "S", normal access,
+       make_group
+       ( "XTRACT", "X", normal access,
+         MAKECOMMANDS VECTOR [] COMMAND
+         ( HEAP SIMPLE :=
+           ( MAKERVC "ATTRIBUTES", MAKERVC "A", no parameters,
+             normal access, continue,
+             MAKERVC "Sets the environment such that the attribute library is "
+                     "included in the dumpfile created by subsequent `xtract' "
+                     "commands.",
+             (VALUES names, MESSAGEPROC msg) VOID:  att_set := TRUE
+           ),
+
+           HEAP SIMPLE :=
+           ( MAKERVC "FN", MAKERVC "F", fnname_syntax, normal access, continue,
+             MAKERVC "Sets the environment such that the circuit dumped by "
+                     "subsequent `xtract' commands has the given function "
+                     "as its root.",
+             (VALUES names, MESSAGEPROC msg) VOID:
+                rootfnid := get_fnname(names[1], msg)
+           ),
+
+           HEAP SIMPLE :=
+           ( MAKERVC "IMPORTS", MAKERVC "I", no parameters,
+             normal access, continue,
+             MAKERVC "Sets the environment such that the bodies of imported "
+                     "functions are included in the dumpfile created by "
+                     "subsequent `xtract' commands.",
+             (VALUES names, MESSAGEPROC msg) VOID:  imp_set := TRUE
+           ),
+
+           HEAP SIMPLE :=
+           ( MAKERVC "SEQUENCE", MAKERVC "S", no parameters,
+             normal access, continue,
+             MAKERVC "Sets the environment such that in the dumpfile "
+                     "created by subsequent `xtract' commands, all ELLA "
+                     "sequences are transformed into their corresponding "
+                     "structural representations.",
+             (VALUES names, MESSAGEPROC msg) VOID:  seq_set := TRUE
+           )
+         )
+       )
+     ),  { End of "set" }
+
+     HEAP SIMPLE :=
+     ( MAKERVC "CLEARXTRACT", MAKERVC "CXTRACT", no parameters,
+       normal access, continue,
+       MAKERVC "Undoes the effect of the `setxtractattributes', `setxtractfn',"
+               "`setxtractimports' and `setxtractsequence' commands.",
+       (VALUES names, MESSAGEPROC msg) VOID: clearxtract
+     )
+   )
+END
+
+
+KEEP  make_xtractcmds
+FINISH
