@@ -1,0 +1,135 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element XTRACT.STA }
+{ *1    11-NOV-1988 16:03:30 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element XTRACT.STA }
+{ DEC/CMS REPLACEMENT HISTORY, Element XTRACT.STA}
+{ *5    15-MAR-1988 16:48:25 ELLADEV "Porting changes for UNIX Release 3"}
+{ *4     7-FEB-1988 16:09:02 ELLADEV "ADMIN: Dump file diagnostics improved."}
+{ *3     2-NOV-1987 13:52:59 ELLADEV "R3B008: spurious error message from mishandling closures"}
+{ *2    23-SEP-1987 18:01:37 ELLADEV "CR 244"}
+{ *1     3-AUG-1987 14:15:49 ELLADEV "CR215: ELLANET dumper top-level module"}
+{ DEC/CMS REPLACEMENT HISTORY, Element XTRACT.STA}
+{
+Module  :   xtract.a68
+
+Created 27Jul87 by DJD for CR215 : Integrate dumper into main ELLA system
+
+Purpose :   Integrated dumper top level procedure, called by the ELLA
+                command processor in response to the 'xtract (xt)' command.
+                Replaces stand-alone dumper module dumper.a68 .
+
+Issue 2dev2 30Jul87 DJD
+
+}
+
+DECS   xtract   CONTEXT VOID
+USE   basics, messageproc, getnetwork, libmodes, assclosure, libprocs,
+      testmode, osinterface, putstrings:
+
+{                    " Id: xtract.sta,v 1.1 91/10/14 14:32:22 edcad Exp $" }
+configinfo A68CONFIG "$Id: xtract.a68,v 34.2 1995/03/29 13:03:36 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+02:09:87  CR244 - use shortened filenames on VMS.  JER
+27:10:87  R3B008.  Closure must be created before start assembly.  EVW
+29:10:87  CR244 - use shortname on UNIX.  JER
+05:02:88  ADMIN - Provide dumpnet diagnostics parameter.  DJD
+23:02:88  R3B167: use of open_file modified to correct fault with default
+             file types on Unix. BGH
+11:05:88  Attribute system and renaming of modules.  TK
+22:07:88  Modified for use with EPI: reading of filename for xtract
+             moved to xtract command in ellacommands.sta; call to epi_notify
+             added BGH
+16:09:88  Updating for Release 4.  TK
+07:02:89  Updated to RSRE kernel.  EVW
+07:04:89  R4B285. `Standalone' parameter for `dumpnet'.  TK
+15:06:90  get_filename renamed file_name to avoid clash in KI.  DCT
+17:07:90  LIBINTERFACE replaced by LIBMODES and ASSCLOSURE. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+28:11:90  Printing of file names modified for testmode.  DJS
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  26.014 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+BOOL att_set, imp_set, seq_set;
+ID rootfnid;
+                {These determine what level of info is dumped}
+
+PROC clearxtract = VOID:
+BEGIN
+   att_set := FALSE; imp_set := FALSE; seq_set := FALSE; rootfnid := nullid
+END;
+
+PROC   xtract = (CREGION cr, RVC filename, MESSAGEPROC flt) VOID:
+   { xtract command action routine:
+        checks context;
+        open xtract file; report xtract details; xtract data to file;
+        close file.
+   }
+BEGIN
+   IF  create_closure(cr, flt) > 0
+   THEN
+      { Open xtract file }
+      FILE  xt_file = open_file(filename, ellanet_type, create_access, flt);
+
+      { xtract data to specified file }
+      PROC   flt_close = (MSGNO no, VECSTR params) VOID:
+         { Fault routine to trap faults, and close xtract file }
+      (  close_file(xt_file, flt);
+         flt(no, params)
+      );
+
+      { Report xtract details }
+      put(screen, (title, newline,
+                   "Extracting data into file ",
+                   """", shortname OF testmode_filename(file_name(xt_file)),
+                   """", newline));
+      flt_if_interrupted(flt_close);
+
+      RCH   xt_channel = make_channel(80,
+                         (RVC vc, BOOL np)VOID: put_line(xt_file, vc, flt_close)
+                                     );
+
+      { xtract data, including MACRO and CASE data }
+      dumpnet(FALSE, cr, att_set, imp_set, seq_set,
+              rootfnid, flt, xt_channel, FALSE);
+      { data xtracted to file. }
+
+      { close xtract file }
+      close_file(xt_file, flt)
+   FI
+END
+
+KEEP   xtract, clearxtract, imp_set, seq_set, att_set, rootfnid
+FINISH
