@@ -1,0 +1,268 @@
+DECS keamgen CONTEXT VOID
+USE assmodes, basics, putstrings, kebasics, keambasics, keamstandard,
+    keamarith, keamalien, keamassoc, keambiop, keamcase, keamextract, keamdelay,
+    keamram, keamregister, keamdynindex, keamreplace, keamconc, keamstring,
+    keamtrim:
+
+{  " Id: keamgen.sta,v 2.1 91/02/22 18:34:14 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamgen.a68,v 34.2 1995/03/29 13:04:37 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement production of abstract machine
+              code in the kernel of the new simulator
+16:09:88  Separated into separate modules for the different primitives
+25:11:88  `translate start c l loop' kept on from KEAMSTANDARD. Bug 35.
+28:11:88  `unit function' and `is atomic' removed as they are no
+              longer required after fixing bug 4.  BJE.
+02:12:88  Arms for UINDEX, UASSOC and USTRING added to main conformity
+              clause.  Bugs 47 and 50.  BJE.
+12:12:88  `translate atomic' returns SRAM.  Bug 32.  BJE.
+12:12:88  `translate data source' added to KEEP list and `global circuit
+              params' renamed `global end'.  Bug 13.  BJE.
+29:12:88  `global *' variables kept for reinitialisation by
+              `set function'.  Bug 64.  BJE.
+30:12:88  Call to 'translate clear generic id' added.  Bug 82.  PAR.
+30:12:88  'translate atomic' now takes 'input wires', and passes it
+              to 'translate case' and 'translate arith'.  Bug 55.  PAR.
+ 4:01:89  'no ariths yet' initialised.  Bug 80.  PAR.
+27:01:89  Location of 'global iterations' changed.  R4B072.  PAR.
+02:02:89  Initialisation rearranged.  R4B034.  PAR.
+04:08:89  Added call to 'translate generic query'.  R4B150.  PAR.
+28:11:89  Added label initialisation for Probe functions. MDR.
+14:12:89  Added support for REGISTERS in 'translate atomic'  and
+              modified USElist to include module 'keamregister'  MHC.
+19:12:89  FNBIOP changed to ALIENCODE. EVW
+16:02:89  'resolve alien' added to work out whether the "alien" is
+              actually implemented internally, and if so, where.  PAR.
+11:05:90  Added global variables for next event optimisation. MDR.
+10:12:90  Putstrings added to use list for RVC. JIT
+24:01:91  Renamed "A_REGISTER" to "REGISTER", pass on alien "CAST"
+              as "_CAST". MDR.
+23:04:91  Re-merge with ELLA 6, update 27.5.  DJS
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.022 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Initial Environment }
+{ =================== }
+
+
+PROC am locations initialise = VOID:
+BEGIN
+    global time            := 0;         { A machine integer }
+    global maxtime         := ws;        {     - ditto -     }
+    global interrupted     := 2 * ws;    {     - ditto -     }
+    global initialised     := 3 * ws;    {     - ditto -     }
+    global action          := 4 * ws;    {     - ditto -     }
+    global temp1           := 5 * ws;    {     - ditto -     }
+    global comb outputs stable := 6 * ws;    {     - ditto -     }
+    global monitor changed := 7 * ws;    {     - ditto -     }
+    global next event      := 8 * ws;    {     - ditto -     }
+    global unit del event  := 9 * ws;    {     - ditto -     }
+    global start init list := 10 * ws;    {     - ditto -     }
+    global end init list   := 11 * ws;    {     - ditto -     }
+    global start inst list := 12 * ws;    {     - ditto -     }
+    global end inst list   := 13 * ws;    {     - ditto -     }
+    global instance list   := 14 * ws;    {     - ditto -     }
+    global iterations      := 15 * ws;   { The evaluation flag of the first }
+    global end             := 15 * ws    {  instance is used for iterations }
+END;
+
+
+PROC translate initialise = (PROC (RVC) VOID diag, INT level, FLTPROC flt) VOID:
+BEGIN
+    am initialise (diag, level, flt);
+
+    am locations initialise;
+
+    no ariths yet := TRUE;
+
+    initialise biop;
+
+    am generate named data (global time label, global time);
+    am generate named data (global maxtime label, global maxtime);
+    am generate named data (global interrupted label, global interrupted);
+    am generate named data (global initialised label, global initialised);
+    am generate named data (global action label, global action);
+    am generate named data (global iterations label, global iterations);
+    am generate named data (global monitor changed label,
+                            global monitor changed);
+    am generate named data (global comb outputs stable label,
+                            global comb outputs stable);
+    am generate named data (global next event label, global next event);
+    am generate named data (global unit del event label,global unit del event);
+    am generate named data (global start init label, global start init list);
+    am generate named data (global end init label, global end init list);
+    am generate named data (global start inst label, global start inst list);
+    am generate named data (global end inst label, global end inst list);
+
+
+
+    translate generic identity;
+    translate clear generic id;
+    translate generic query
+END;
+
+
+{ Recognition of special aliens }
+{ ============================= }
+
+{ 'asbiop' does a check on the name to determine whether the "alien"
+  is implemented as a normal "biop".  At present it is a dummy -- the
+  first candidates for recognition may turn out to be the floating point
+  decimal converters, which may be changed to ALIEN.
+}
+PROC asbiop = (ID name) BOOL: FALSE;
+
+
+{ 'resolve alien' is called for any alien or biop to switch between the
+  different implementation strategies.
+}
+PROC resolve alien = (REF ALIENCODE alien, ID name, FNDEC declaration,
+                      VECTOR [] INT input types, INT output type,
+                      ENVIRON environ, CLOSURE closure,
+                      REF STRUCT(INT workspace, history, declid) alien shape,
+                      FLTPROC flt
+                     ) STRUCT (INT size, offset, BITS sort) :
+    IF biop OF alien OREL asbiop (name OF alien) THEN
+        translate biop (alien, name, declaration, input types,
+                        output type, environ, closure, flt)
+    ELIF name OF alien = "REGISTER" THEN
+        translate full register (alien, name, declaration, input types,
+                                 output type, environ, closure, flt)
+    ELSE
+        IF name OF alien = "CAST" THEN
+           name OF alien := MAKEID "_CAST"
+        FI;
+        translate alien (alien, name, declaration, input types,
+                         output type, environ, closure, alien shape, flt)
+    FI;
+
+
+{ Translation of all primitives }
+{ ============================= }
+
+
+{ The return result is the size of the fixed part of the function instance
+  produced, and the offset of the outputs within it, followed by the sort
+  of function, ie in which phases it needs to be called.
+
+  `sram' is updated iff the function is a RAM.
+}
+PROC translate atomic = (FNBODY body, ID name, FNDEC declaration,
+                         VECTOR [] WIRE input wires,
+                         VECTOR [] INT input types, INT output type,
+                         REF ENVIRON environ, CLOSURE closure,
+                         REF REF SRAM sram,
+                         REF STRUCT(INT workspace, history, declid) alien shape,
+                         FLTPROC flt)
+STRUCT (INT size, offset, BITS sort):
+    CASE body IN
+    (REF ARITH arith):
+        translate arith (arith, name, declaration, input wires, input types,
+                         output type, environ, closure, flt),
+    (REF ALIENCODE alien):
+        resolve alien (alien, name, declaration, input types,
+                        output type, environ, closure, alien shape, flt),
+    (REF ADELAY adelay):
+        translate adelay (adelay, name, declaration, input types,
+                          output type, environ, closure, flt),
+    (REF IDELAY idelay):
+        translate idelay (idelay, name, declaration, input types,
+                          output type, environ, closure, flt),
+    (REF RAM ram):
+        translate ram (ram, name, declaration, input types,
+                       output type, environ, closure, sram, flt),
+    (REF SAMPLE register):
+        translate register (register, name, declaration, input types,
+                            output type, 0, environ, closure, flt),
+    (REF UNITTAG u):
+        CASE tag OF u IN
+        (REF UCASE case):
+            translate case (case, name, declaration, input wires, input types,
+                            output type, environ, closure, flt),
+        (REF UASSOC assoc):
+            translate assoc (assoc, name, declaration, input types,
+                             output type, environ, closure, flt),
+        (REF UEXTRACT extract):
+            translate extract (extract, name, declaration, input types,
+                               output type, environ, closure, flt),
+        (REF UCONC conc):
+            translate conc (conc, name, declaration, input types,
+                            output type, environ, closure, flt),
+        (REF UINDEX index):
+            translate index (index, name, declaration, input types,
+                             output type, environ, closure, flt),
+        (REF UTRIM trim):
+            translate trim (trim, name, declaration, input types,
+                            output type, environ, closure, flt),
+        (REF UDYINDEX dyindex):
+            translate dynindex (dyindex, name, declaration, input types,
+                                output type, environ, closure, flt),
+        (REF UREPLACE replace):
+            translate replace (replace, name, declaration, input types,
+                               output type, environ, closure, flt),
+        (REF USTRING string):
+            translate string (string, name, declaration, input types,
+                              output type, environ, closure, flt)
+        ESAC
+ESAC
+
+
+KEEP
+    translate start calls array, translate start calls loop,
+    translate start combinatorial loop, translate end combinatorial loop,
+    translate time test,
+    translate start terminators,
+    translate start savers,
+    translate start restorers,
+    translate start initialisers,
+    translate time advance, translate end calls array,
+    translate start probe loop up, translate start case arm,
+    translate end case arm, translate end probe loop up,
+    translate start probe loop down, translate end probe loop down,
+    translate start init loop up, translate end init loop up,
+
+    global time, global maxtime, global interrupted, global initialised,
+    global end, global monitor changed, global next event,
+    global unit del event, global comb outputs stable,
+    global start init list, global end init list, global start inst list,
+    global end inst list,
+
+    am locations initialise,
+    translate initialise, translate atomic, translate data source,
+    translate probe id
+FINISH
