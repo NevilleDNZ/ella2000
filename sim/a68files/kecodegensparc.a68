@@ -1,0 +1,1358 @@
+DECS  kecodegensparc  CONTEXT VOID USE  putstrings, messageproc, osinterface,
+*5    osif { for signal handlers - not kept through osinterface },
+      basics, kebasics, kemassemsparc, kecodegenbiopifsparc,
+      kecodegenalienifsparc, kecodegenserversparc, kecodegenstacksparc:
+
+{  "  Id: kecodegensparc.sta,v 1.1 91/10/14 14:29:25 edcad Exp $ " }
+configinfo A68CONFIG "$Id: kecodegensparc.a68,v 34.2 1995/03/29 13:04:47 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+22:02:89  Module created from 68020 Code generator. MDR.
+03:05:89  Temporary definition of t_int_overflow removed. BGH
+11:05:89  Added fix to generate halt. MDR.
+22:05:89  Fixed callinst optimisation. R4B338. MDR
+05:06:89  Fixed 'save' stack offsets. R4B347. MDR.
+04:12:89  'cg extend space' added.  PAR.
+04:12:89  Parameter to 'generate callinst' generalised.  PAR.
+11:09:90  Callinst indirect fixed. MDR.
+17:09:90  Integrated alien code. MDR.
+24:05:91  codegen_interrupt_handler also increments n_interrupts.  PAR.
+13:08:93  Updated for new OSIF interface.  AAP / DCT
+29:11:93  Extern declaration added.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  32.012 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{                            SPARC Code Generator                             }
+{-----------------------------------------------------------------------------}
+
+{
+  Notes
+  -----
+
+ The major design differences between this code generator and the 68020 version
+ are discussed in Rewriting the simulator code generator for SPARC, reference
+ N045.50.10
+
+ Background
+ ----------
+
+ The code generator has been implemented using object oriented development.
+
+ Each object class is represented by a MODE declaration.
+
+ Each operation is represented by an OP declaration, except for a constructor
+ operation which is implemented for each class as a procedure which returns
+ an example of the class.  The use of OP for operations is convenient
+ because it allows overloading of operation names.
+
+ Note that because ALGOL68 resolves overloading of operators (etc) by the
+ structure of the type involved and as the structure of some distinct types
+ are likely to be the same it would appear at first sight that some operators
+ might be ambiguous.  In fact, the compiler doesn't allow the declaration
+ of ambiguous operators so it is sometimes necessary to introduce extra
+ characters into type field names to differenciate one from the other.
+
+ No subclassing is used.
+
+ Layout
+ ------
+
+ Each class (=MODE) definition is given and underlined.  After each mode
+ definition is given the constructor procedure followed by the operations
+ (=OP) with full definitions.  For ideal encapsulation, only the operation
+ names would appear together with the class but ALGOL doesn't make this easy.
+
+ Exceptions
+ ----------
+
+ The machine assembler already exists as a set of procedures, and because this
+ tends to be referenced by more than one object no attempt is made
+ to make it an object with operations.
+
+ The code generator itself must have an interface conforming to the relevant
+ standard [see "Code Generation in the New Simulator" P029.50.17].
+ This is a set of procedures.  Thus the code generator itself is not
+ an object either.
+
+}
+
+{======================================================================}
+MODE CODEGENERATOR
+{---------------------------------------}
+
+   = STRUCT (MEMORY global_memory,
+              MEMORY dynamic_memory,
+              STACKALLOCATOR stack_allocator,
+
+              REF BACKPATCHLIST jump_backpatch_list,
+              REF SPECLIST jump_spec_list,
+              REF MACHINEOFFSETSTACK repeat_stack,
+
+              REF LABELLIST named_data_list,
+              REF LABELLIST named_code_list,
+              REF BACKPATCHLIST named_code_backpatch_list,
+              REF VECTOR [] REF LABELLIST named_code_array, {**See Note**}
+              REF PARAMETERLIST call_parameter_list,
+              MACHINEOFFSET calls_location,
+              BOOL reachable,
+              BOOL in calls array,
+              MACHINEOFFSET last ret address,
+              INT diagnose);
+
+CODEGENERATOR code_generator;
+
+BYTENUMBER privatespace = 4;
+   { A number of bytes reserved for the use of the code generator
+     in global memory.  Should appear invisible to the translator. }
+
+{ In allocating, and especially extending, abstract machine memory, we may
+  wish to allocate more than was actually requested (so as to avoid too
+  many actual extensions -- which are expensive).  The difference may
+  of course be put towards future allocations.  So as to avoid complicating
+  the underlying MODE MEMORY, we choose to keep this information in this
+  module as a global variable:
+}
+INT spare space := 0;
+
+{ Caches for optimisations }
+{ ======================== }
+
+{ We cache the values of the important offsets in the global memory
+  array.  Since they are accessed as integers, we hold them as REF INTs.
+  They are set up at the end of translation, restoration and whenever
+  the global memory is extended.
+}
+REF INT time ref,
+        maxtime ref,
+        interrupt ref;
+
+REF INT global memory start;    { used by alien code toolkit }
+
+{ We also cache the entry point to the calls array, keeping it as as
+  procedure variable.
+}
+PROC (REF CHAR, REF CHAR) VOID code entry;
+
+{ This is used to convert an indexed reference to the global memory
+  to an Algol 68 REF INT.  Note that the use for integers will
+  automatically include the correct 'up' direction.  It is assumed
+  that it will be used on locations which are correctly aligned
+  for integer accesses.
+}
+OP (REF CHAR) REF INT INTAT = BIOP 99;
+
+PROC set caches = VOID:
+   BEGIN
+      time ref      := INTAT (mem OF global_memory OF code_generator)
+                              [((named_data_list OF code_generator)
+                                LOOKUP label ("Time")) + 1 + privatespace];
+      global memory start := time ref; { time is at start of global memory }
+      maxtime ref   := INTAT (mem OF global_memory OF code_generator)
+                              [((named_data_list OF code_generator)
+                                LOOKUP label ("Maxtime")) + 1 + privatespace];
+      interrupt ref := INTAT (mem OF global_memory OF code_generator)
+                              [((named_data_list OF code_generator)
+                                LOOKUP label ("Interrupted")) + 1 + privatespace];
+
+      {
+	Pass to alien code toolkit the information it needs at evaluation
+	time.
+      }
+      PROC (REF INT, REF INT) VOID initialise alien toolkit =
+            ALIEN "aci_initialise" "extern void aci_initialise();";
+      initialise alien toolkit(global memory start, time ref);
+
+      OP (REF PROC(REF CHAR, REF CHAR) VOID)
+         REF STRUCT (REF CHAR addr, BITS env) PROCDESC = BIOP 99;
+
+      addr OF PROCDESC code entry :=
+          ma code ref (calls_location OF code_generator)
+   END;
+
+
+{ Interrupt handling }
+{ ================== }
+
+*5 PROC  codegen_catch_int_error = (MSGNO  msgno,  VECSTR  params) VOID:
+*5 { SIGNAL handler for integer overflows and divide by zero while simulating }
+*5 BEGIN
+*5    BITS level = BIN interrupt ref;
+*5    REF INT (interrupt ref) := ABS(level OR BIN (8))
+*5 END;
+
+PROC  codegen_catch_interrupt = (MSGNO msgno, VECSTR  params) VOID:
+BEGIN
+        n_interrupts +:= 1;
+*5      BITS level = BIN interrupt ref;
+*5      IF NOT(level >= BIN(1)) THEN
+*5         {if no interrupts yet, set soft interrupt}
+*5         REF INT (interrupt ref) := ABS(level OR BIN(1))
+*5      ELSE
+*5         {if soft interrupt already, set hard interrupt}
+*5         REF INT (interrupt ref) := ABS(level OR BIN(2))
+*5      FI
+%5      SKIP
+END;
+
+*5 MESSAGEPROC old_int_handler;
+
+{ Internal operation used to optimise calls array }
+{ =============================================== }
+PROC mark_relative_code_region = VOID :
+   IF in calls array OF code_generator THEN
+      call USING (location +8);
+      last ret address OF code_generator := location -4;
+      nop USING IR(0, g0)
+     {r15 now contains address of 'call USING 8'}
+   FI;
+
+{**Note**
+ The named_code_array is a row of references to the elements of the
+ named_code_list. OP SQUASH below creates the named_code_array from
+ the named_code_list, OP LOOKUP finds a machine offset from it. Any
+ label with a non-zero lab field is assumed to be unique, labels
+ with a zero lab field are looked up by name in the named_code_list.
+ The last non-zero label added to the named_code_list is assumed to
+ have the largest numerical value. It is then rounded up to a multiple
+ of 7. (See KEINSTANCE construct calls & KEAMSTANDARD translate start function
+ etc.)
+ The named_code_array is *NOT* saved & restored as it is only used
+ on startup at present, ie before a save could occur.
+}
+INT no of phases      = 7;
+
+{THESE OPERATIONS BELONG IN THE SERVER MODULE }
+OP SQUASH = (REF LABELLIST l) REF VECTOR [] REF LABELLIST:
+BEGIN
+   REF LABELLIST tail := l;
+   WHILE (tail ISNT REF LABELLIST(NIL)) ANDTH
+         (lab OF label OF labeled_offset OF tail = 0)
+   DO tail := rest OF tail OD;
+
+   INT upb = (((lab OF label OF labeled_offset OF tail) OVER no of phases)+1)
+               *no of phases;
+   REF VECTOR [] REF LABELLIST result := HEAP VECTOR [upb] REF LABELLIST;
+   WHILE tail ISNT REF LABELLIST(NIL) DO
+      IF lab OF label OF labeled_offset OF tail /= 0 THEN
+         result[lab OF label OF labeled_offset OF tail] := tail
+      FI;
+      tail := rest OF tail
+   OD;
+  result
+END;
+
+OP LOOKUP = (REF VECTOR [] REF LABELLIST l, LABEL k) MACHINEOFFSET:
+IF lab OF k = 0 THEN
+   named_code_list OF code_generator LOOKUP k
+ELSE
+   machine_offset OF labeled_offset OF (l[lab OF k])
+FI;
+
+{ The procedural interface }
+{ ======================== }
+
+PROC cg initialise = (PROC (RVC) VOID diag, INT level, FLTPROC fltproc) AMVERSION:
+
+   BEGIN
+      ma initialise(fltproc); { Initialise machine assembler. }
+
+      code_generator :=
+         (nullmemory,
+          nullmemory,
+          stackallocator,
+
+          backpatchlist,
+          speclist,
+          machineoffsetstack,
+
+          labellist,
+          labellist,
+          backpatchlist,
+          NIL,
+          parameterlist,
+          nullmachineoffset,
+          FALSE,
+          FALSE,
+          0,
+          level);
+
+      machangeflt(simfault);
+
+      kecodegenbiopif init;
+
+      am_version
+
+   END;
+
+
+PROC cg dump = VOID:
+{ A diagnostic command to put out the state of the code generator. }
+   BEGIN
+      put (screen, ("CODE GENERATOR", newline));
+      global_memory OF code_generator DUMP "  ";
+      dynamic_memory OF code_generator DUMP "  ";
+      stack_allocator OF code_generator DUMP "  ";
+      put (screen, ("jump backpatch list", newline));
+      jump_backpatch_list OF code_generator DUMP "  ";
+      put (screen, ("jump spec list", newline));
+      jump_spec_list OF code_generator DUMP "  ";
+      repeat_stack OF code_generator DUMP "  ";
+      put (screen, ("named data list", newline));
+      named_data_list OF code_generator DUMP "  ";
+      put (screen, ("named code list", newline));
+      named_code_list OF code_generator DUMP "  ";
+      put (screen, ("named code backpatch list", newline));
+      named_code_backpatch_list OF code_generator DUMP "  ";
+      put (screen, ("call parameter list", newline));
+      call_parameter_list OF code_generator DUMP "  ";
+      put (screen, ("calls location", newline));
+      calls_location OF code_generator DUMP "  ";
+      put (screen, ("reachable", newline));
+      reachable OF code_generator DUMP "  "
+      { Don't dump the diagnostic level! }
+   END;
+
+PROC cg sizes =
+   STRUCT (BYTENUMBER codesize, datasize, dynamicstacksize, staticstacksize):
+{ A procedure returning the sizes of memory objects in the code generator. }
+   (
+      ma code size,
+      SIZEOF global_memory OF code_generator,
+      SIZEOF dynamic_memory OF code_generator,
+      0 {static memory does not exist in this code generator}
+   );
+
+PROC cgsavestate = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryoutstatic,
+                      ferryoutdynamic, FLTPROC flt) VOID:
+
+   BEGIN
+      IF dump code generator <= BIN diagnose OF code_generator THEN
+          cg dump
+      FI;
+
+      machangeflt (flt);
+      masavestate (ferryoutstatic);
+
+      global_memory OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+      dynamic_memory OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+      stack_allocator OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+
+      { don't save jump_backpatch_list }
+      { don't save jump_spec_list }
+      { don't save repeat_stack }
+
+      named_data_list OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+      named_code_list OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+      { don't save named_code_backpatch_list }
+      { don't save named_code_array }
+
+      call_parameter_list OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+      calls_location OF code_generator SAVE
+          ferryoutandflt (ferryoutdynamic, flt);
+
+      { don't save reachable }
+      { don't save in calls array }
+      { don't save last ret address}
+      { don't save the diagnostic level }
+
+      spare space SAVE ferryoutandflt (ferryoutdynamic, flt);
+
+      machangeflt (simfault)
+
+   END;
+
+PROC cgrestorestate = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryinstatic,
+                      ferryindynamic, FLTPROC flt) VOID:
+
+   BEGIN
+
+      machangeflt (flt);
+      marestorestate (ferryinstatic);
+
+      global_memory OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+      dynamic_memory OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+      stack_allocator OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+
+      { don't restore jump_backpatch_list }
+      { don't restore jump_spec_list }
+      { don't restore repeat_stack }
+
+      named_data_list OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+      named_code_list OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+      { don't restore named_code_backpatch_list }
+      { don't restore named_code_array }
+
+      call_parameter_list OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+      calls_location OF code_generator RESTORE
+          ferryinandflt (ferryindynamic, flt);
+
+      { don't restore reachable }
+      { don't restore in calls array }
+      { don't restore last ret address}
+      { don't restore the diagnostic level }
+
+      spare space RESTORE ferryinandflt (ferryindynamic, flt);
+
+      machangeflt (simfault);
+
+      set caches;
+
+*5    old_int_handler := get_sigmsgproc(sigint, default_msg);
+*5    set_sigmsgproc(sigint, codegen_catch_interrupt, default_msg);
+
+      IF dump code generator <= BIN diagnose OF code_generator THEN
+          cg dump
+      FI
+   END;
+
+PROC generate halt = VOID:
+
+   IF reachable OF code_generator THEN
+      { Assemble exit code to HLL.}
+
+      CLEAR stack_allocator OF code_generator;
+      reachable OF code_generator := FALSE;
+
+      ld USING RIR(globalpointer, -4, tempreg1);
+      MACHINEOFFSET loop = location;
+      subcc USING RRR(tempreg1, fp, g0);
+      b/ne_a USING loop;
+      restore USING RRR(g0, g0, g0);
+
+      ma ret;
+      restore USING RRR(g0, g0, g0)
+
+   FI;
+
+PROC generate add = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      ADD stack_allocator OF code_generator
+   FI;
+
+PROC generate sub = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      subcc USING NONASSOCDYOP stack_allocator OF code_generator;
+      t/vs USING RI(g0, t_int_overflow);
+      POP stack_allocator OF code_generator
+   FI;
+
+PROC generate mul = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      MUL stack_allocator OF code_generator
+   FI;
+
+PROC generate div = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      DIV stack_allocator OF code_generator
+   FI;
+
+PROC generate mod = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      MOD stack_allocator OF code_generator
+   FI;
+
+PROC generate neg = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      subcc USING MONOP stack_allocator OF code_generator; {subtract from 0}
+      t/vs USING RI(g0, t_int_overflow)
+   FI;
+
+PROC generate abs = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      MACHINELABEL branchlabel;
+      RXR result := MONOP stack_allocator OF code_generator;
+      orcc USING result; {test against zero}
+      bd/pos_a USING branch label;
+      subcc USING result; {negate result}
+      t/vs USING RI(g0, t_int_overflow);
+      fixmachinelabel (branch label)
+   FI;
+
+PROC generate iand = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      and USING ASSOCDYOP stack_allocator OF code_generator;
+      POP stack_allocator OF code_generator
+
+   FI;
+
+PROC generate ior = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      or USING ASSOCDYOP stack_allocator OF code_generator;
+      POP stack_allocator OF code_generator
+   FI;
+
+PROC generate shl = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      SHL stack_allocator OF code_generator
+   FI;
+
+PROC generate shr = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      SHR stack_allocator OF code_generator
+   FI;
+
+PROC generate com = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      xnor USING MONOP stack_allocator OF code_generator
+   FI;
+
+PROC generate not = VOID:
+
+   IF reachable OF code_generator THEN
+      NOT stack_allocator OF code_generator
+   FI;
+
+PROC generate test = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      TEST stack_allocator OF code_generator
+   FI;
+
+PROC generate eq = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      EQ stack_allocator OF code_generator
+   FI;
+
+PROC generate neq = VOID:
+
+   IF reachable OF code_generator THEN
+      generate eq;
+      generate not
+   FI;
+
+PROC generate gt = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator GENERICRELATION g
+   FI;
+
+PROC generate ge = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator GENERICRELATION ge
+   FI;
+
+PROC generate lt = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator GENERICRELATION l
+   FI;
+
+PROC generate le = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator GENERICRELATION le
+   FI;
+
+PROC generate and = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      and USING ASSOCDYOP stack_allocator OF code_generator;
+      POP stack_allocator OF code_generator
+   FI;
+
+PROC generate or = VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      or USING ASSOCDYOP stack_allocator OF code_generator;
+      POP stack_allocator OF code_generator
+
+   FI;
+
+PROC generate push string = (BITNUMBER b, WORD x) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator PUSHCONST (x LEN b)
+   FI;
+
+PROC generate pushint = (INT x) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator PUSHINT x
+   FI;
+
+PROC generate drop = (INT n) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator DROP n
+   FI;
+
+PROC generate local = (INT n) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator LOCAL n
+   FI;
+
+PROC generate global = (INT w, ADDRESS a) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+
+      CASE a IN
+      (OFFSET o):
+         BEGIN
+            generate pushint (o);
+            generate global (w, indirect)
+         END,
+
+      (LABEL l):
+         BEGIN
+            generate pushint (named_data_list OF code_generator LOOKUP l);
+            generate global (w, indirect)
+         END,
+
+      (VOID):
+         stack_allocator OF code_generator GLOBAL w
+      ESAC
+   FI;
+
+PROC generate store = (INT w, ADDRESS a) VOID:
+
+   IF reachable OF code_generator THEN
+      { Note that the two operands of the store, that is, the
+        value and address are reversed cf the abstract machine
+        for the offset and label cases.  This is for convenience only. }
+      FORCECONDITION stack_allocator OF code_generator;
+      CASE a IN
+      (OFFSET o):
+         BEGIN
+            generate pushint (o);
+            stack_allocator OF code_generator STORE ((tos1 LEN w) ATT tos)
+         END,
+
+      (LABEL l):
+         BEGIN
+            generate pushint (named_data_list OF code_generator LOOKUP l);
+            stack_allocator OF code_generator STORE ((tos1 LEN w) ATT tos)
+         END,
+
+      (VOID):
+         stack_allocator OF code_generator STORE ((tos LEN w) ATT tos1)
+
+      ESAC
+   FI;
+
+PROC generate bstring = (INT w, l, ADDRESS a) VOID:
+{ The length of the enclosing string, l, can be ignored since msbs are at
+  low addresses }
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+
+      CASE a IN
+      (OFFSET o):
+         BEGIN
+            generate pushint(o);
+            generate bstring(w, l, indirect)
+         END,
+      (LABEL lab):
+         BEGIN
+            generate pushint(named_data_list OF code_generator LOOKUP lab);
+            generate bstring(w, l, indirect)
+         END,
+      (VOID):
+         stack_allocator OF code_generator BSTRING w
+      ESAC
+
+   FI;
+
+PROC generate bstore = (INT bw, ADDRESS a) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      generate store ((bw + 7) OVER 8, a)
+   FI;
+
+PROC generate itos = (INT bw) VOID:
+   IF reachable OF code_generator THEN
+      stack_allocator OF code_generator ITOS bw
+   FI;
+
+PROC generate utos = (INT bw) VOID:
+   IF reachable OF code_generator THEN
+      stack_allocator OF code_generator UTOS bw
+   FI;
+
+PROC generate stoi = VOID:
+   IF reachable OF code_generator THEN
+      STOI stack_allocator OF code_generator
+   FI;
+
+PROC generate stou = VOID:
+   IF reachable OF code_generator THEN
+      STOU stack_allocator OF code_generator
+   FI;
+
+PROC generate jump = (LABEL l) VOID:
+
+   IF reachable OF code_generator THEN
+
+      FORCECONDITION stack_allocator OF code_generator;
+      CONFORM stack_allocator OF code_generator;
+
+      MACHINELABEL ml;
+      bd/a USING ml;  {nb. annul bit *not* set, as delay slot might be used}
+
+      jump_backpatch_list OF code_generator WRITE (ml ATT l);
+      IF NOT (jump_spec_list OF code_generator PRESENT l) THEN
+         jump_spec_list OF code_generator WRITE
+            labeledspec(l, DERIVESPEC stack_allocator OF code_generator)
+      FI;
+      CLEAR stack_allocator OF code_generator;
+      reachable OF code_generator := FALSE
+
+   FI;
+
+PROC generate jump no = (INT d, LABEL l) VOID:
+
+   IF reachable OF code_generator THEN
+
+      MACHINELABEL over;
+
+      stack_allocator OF code_generator TRANSMUTESMALL tos;
+      CASE location_stack OF stack_allocator OF code_generator STATEOF tos IN
+      (CONDITION cc):
+         BEGIN
+            bd/(condition OF cc OR n_a) USING over;
+            POP stack_allocator OF code_generator
+         END
+      OUT
+         BEGIN
+            orcc USING MONOP stack_allocator OF code_generator;
+            bd/ne_a USING over;
+            POP stack_allocator OF code_generator
+         END
+      ESAC;
+
+      STACKALLOCATOR savedstack = NEW stack_allocator OF code_generator;
+
+      TO d DO POP stack_allocator OF code_generator OD;
+
+      CONFORM stack_allocator OF code_generator;
+
+      MACHINELABEL ml;
+      bd/a USING ml;
+      jump_backpatch_list OF code_generator WRITE (ml ATT l);
+      IF NOT (jump_spec_list OF code_generator PRESENT l) THEN
+         jump_spec_list OF code_generator WRITE
+            labeledspec(l, DERIVESPEC stack_allocator OF code_generator)
+      FI;
+
+      fixmachinelabel(over);
+      stack_allocator OF code_generator := savedstack
+
+   FI;
+
+PROC generate label = (INT stacksize, LABEL l) VOID:
+
+   BEGIN
+      IF reachable OF code_generator THEN
+         FORCECONDITION stack_allocator OF code_generator;
+         CONFORM stack_allocator OF code_generator;
+         IF jump_spec_list OF code_generator PRESENT l THEN
+            jump_spec_list OF code_generator LOOKUPREMOVE l
+         FI
+      ELIF jump_spec_list OF code_generator PRESENT l THEN
+         stack_allocator OF code_generator CREATESPEC
+            (jump_spec_list OF code_generator LOOKUPREMOVE l);
+         reachable OF code_generator := TRUE
+      FI;
+
+      REF MACHINELABELSTACK patches := jump_backpatch_list OF code_generator
+         LOOKUPREMOVE l;
+      WHILE NOT CLEARED patches DO fixmachinelabel(POP patches) OD;
+      mark_relative_code_region
+   END;
+
+PROC generate repeat = VOID:
+
+   IF reachable OF code_generator THEN
+
+      FORCECONDITION stack_allocator OF code_generator;
+
+      CONFORM stack_allocator OF code_generator;
+      repeat_stack OF code_generator PUSH location;
+      mark_relative_code_region
+
+   FI;
+
+PROC generate loop = VOID:
+
+   IF reachable OF code_generator THEN
+
+      MACHINELABEL over;
+
+      stack_allocator OF code_generator TRANSMUTESMALL tos;
+      CASE location_stack OF stack_allocator OF code_generator STATEOF tos IN
+      (CONDITION cc):
+         BEGIN
+            bd/(invcondition(condition OF cc) OR n_a) USING over;
+            POP stack_allocator OF code_generator
+         END
+      OUT
+         BEGIN
+            orcc USING MONOP stack_allocator OF code_generator;
+            bd/eq_a USING over;
+            POP stack_allocator OF code_generator
+         END
+      ESAC;
+
+      STACKALLOCATOR savedstack = NEW stack_allocator OF code_generator;
+      CONFORM stack_allocator OF code_generator;
+      bd/a USING POP repeat_stack OF code_generator;
+
+      fixmachinelabel (over);
+      stack_allocator OF code_generator := savedstack
+
+   FI;
+
+REF PARAMS instparams = HEAP PARAMS := ((instanceptr, 32), NIL);
+[] REF PARAMS advanceparams = ((HEAP PARAMS := ((instanceptr,32),NIL)),NIL);
+
+PROC generate callinst = (ADDRESS addr, LABEL l) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+
+      MACHINELABEL skip;
+      CASE addr IN
+          (OFFSET o):
+             ma add rir (globalpointer, o, g0, callinstpointer),
+          (LABEL lab):
+             BEGIN
+                generate pushint(named_data_list OF code_generator LOOKUP lab);
+                generate callinst (indirect, l)
+             END,
+          (VOID): {Indirect}
+             BEGIN
+                add USING RRR (stack_allocator OF code_generator RSOURCE tos,
+                              globalpointer, callinstpointer);
+                stack_allocator OF code_generator DROP 1
+             END
+      ESAC;
+         { What we load into the callinstptr includes the global memory
+           pointer on the assumption that it will be indirected via.
+           This may prove incorrect, and we may have to subtract the
+           global memory pointer from it before using its value. }
+
+      stack_allocator OF code_generator PUSHNEWSTACKLOCATION 32;
+      location_stack OF stack_allocator OF code_generator
+         CHANGESTATEOF (tos GIVEN inregister (TRUE));
+
+      INT params advanced = stack_allocator OF code_generator ADVANCE
+            instparams;
+      { I don't expect this to generate any code, because the stack
+        frame already contains the instance pointer in correct state. }
+
+      ld USING RRR(g0, callinstpointer, tempreg1);
+      orcc USING RRR(tempreg1, tempreg1, g0);
+
+      MACHINEOFFSET destination =
+         named_code_array OF code_generator LOOKUP l;
+
+      BOOL use long branch = NOT in calls array OF code_generator OREL
+                             destination = nullmachineoffset OREL
+                             params advanced /= 1 OREL
+                             ABS (destination -location)%4 > max imm22;
+
+
+      IF use long branch THEN
+         bd/eq_a USING skip
+      FI;
+
+      IF params advanced /= 1 THEN
+         { Advance dynamic memory pointer if the stack contained more than
+           just the instance pointer. }
+
+         stack_allocator OF code_generator CALCULATENEWDYNAMICADDR tos;
+
+         st USING RIR(fp, -4, dynamicpointer);
+         or USING RRR(g0, tempreg3, dynamicpointer)
+      FI;
+
+      IF NOT use long branch THEN
+         MACHINEOFFSET ret addr = location;
+         b/ne USING destination;
+         add USING RIR(r15, ret addr-last ret address OF code_generator , r15);
+         last ret address OF code_generator := ret addr
+      ELIF destination /= nullmachineoffset THEN
+         calld USING destination
+      ELSE
+         MACHINELABEL ml;
+         calld USING ml;
+         named_code_backpatch_list OF code_generator WRITE (ml ATT l)
+      FI;
+
+      IF params advanced /= 1 THEN
+         ld USING RIR(fp, -4, dynamicpointer)
+      FI;
+
+      IF use long branch THEN
+         fixmachinelabel (skip)
+      FI;
+
+      stack_allocator OF code_generator REPLACE
+         advanceparams
+   FI;
+
+PROC generate call = (INT ipstackframesize, LABEL l) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+
+      IF NOT generate call biop (stack_allocator OF code_generator, l)
+      ANDTH NOT generate call alien (stack_allocator OF code_generator, l)
+      THEN
+         [] REF PARAMS parameters = call_parameter_list OF code_generator
+                                       LOOKUP l;
+
+         "Stack frame size should match number of parameters" ASSERT
+            (LENGTH parameters [1]) = ipstackframesize;
+
+         INT params advanced = stack_allocator OF code_generator
+                   ADVANCE parameters [1];
+
+         IF params advanced /= 0 THEN { Something below on the stack. }
+            { Advance the dynamic memory pointer. }
+
+            IF ipstackframesize /= 0 THEN { Something in the parameter list. }
+               CASE (location_stack OF stack_allocator OF code_generator
+                  TYPEOF (ipstackframesize - 1)) IN
+               (SMALLSTACKLOCATION):
+                  BEGIN
+                     stack_allocator OF code_generator
+                        CALCULATENEWDYNAMICADDR (ipstackframesize - 1);
+
+                     st USING RIR(fp, -4, dynamicpointer);
+                     or USING RRR(g0, tempreg3, dynamicpointer)
+                  END
+               OUT
+                  BEGIN
+                    st USING RIR(fp, -4, dynamicpointer);
+                    R source = stack_allocator OF code_generator
+                                    RSOURCE (ipstackframesize - 1);
+                    or USING RRR(source, g0, dynamicpointer)
+                  END
+               ESAC
+            ELSE { Nothing in the parameter list. }
+               stack_allocator OF code_generator CALCULATENEWDYNAMICADDR - 1;
+               st USING RIR(fp, -4, dynamicpointer);
+               or USING RRR(g0, tempreg3, dynamicpointer)
+            FI
+         FI;
+
+         MACHINEOFFSET destination =
+            named_code_list OF code_generator LOOKUP l;
+         IF destination /= nullmachineoffset THEN
+            calld USING destination
+         ELSE
+            MACHINELABEL ml;
+            calld USING ml;
+            named_code_backpatch_list OF code_generator WRITE (ml ATT l)
+         FI;
+
+         IF params advanced /= 0 THEN
+            ld USING RIR(fp, -4, dynamicpointer)
+         FI;
+
+         { Next, we must reform the model stack to look as it should
+           after the call. }
+         stack_allocator OF code_generator
+            REPLACE parameters
+
+     FI
+
+  FI;
+
+PROC generate enter = VOID: SKIP;
+
+PROC generate fanout = (INT offset) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+      stack_allocator OF code_generator FANOUT offset
+   FI;
+
+PROC generate ret = (INT nooutputparams) VOID:
+
+   IF reachable OF code_generator THEN
+      FORCECONDITION stack_allocator OF code_generator;
+
+      { Return from call or callinst. }
+      stack_allocator OF code_generator COMPRESS nooutputparams;
+         { Remove all but the output parameters from the stack. }
+
+
+      CLEAR stack_allocator OF code_generator;
+         { Clear the output parameters from the model stack. }
+
+      jmpl USING RIR(i7, 8, g0);
+      restore USING RRR(g0, g0, g0);
+
+      { At this point we know the thread of control will never arrive. }
+
+      reachable OF code_generator := FALSE
+
+   FI;
+
+PROC generate named code = (LABEL l, REF PARAMS ip, REF PARAMS op) VOID:
+
+   BEGIN
+      call_parameter_list OF code_generator WRITE labeledparams(l,ip,op);
+      named_code_list OF code_generator WRITE labeledoffset(l, location);
+
+      REF MACHINELABELSTACK patches :=
+         (named_code_backpatch_list OF code_generator) LOOKUPREMOVE l;
+      WHILE NOT CLEARED patches DO
+         fix machine label (POP patches)
+      OD;
+
+       "Stack should be empty on arrival at named code." ASSERT
+          LENGTH stack_allocator OF code_generator = 0;
+       "Named code should be unreachable." ASSERT
+          reachable OF code_generator = FALSE;
+
+      stack_allocator OF code_generator CREATEPARAMS ip;
+      reachable OF code_generator := TRUE;
+      IF NOT in calls array OF code_generator THEN
+         save USING RIR(sp, -(23+1)*4, sp)
+      FI
+   END;
+
+PROC generate named data = (LABEL l, OFFSET o) VOID:
+
+   BEGIN
+
+      named_data_list OF code_generator WRITE labeledoffset(l,o)
+
+   END;
+
+PROC generate param types = (LABEL l, REF PARAMS ip, REF PARAMS op) VOID:
+
+   call_parameter_list OF code_generator WRITE labeledparams(l, ip, op);
+
+PROC generate = (FLTPROC flt) VOID:
+
+   machangeflt(flt);
+
+PROC generateenddecls = VOID:
+
+   BEGIN
+      { End of non-calls array code.  I assume the last thing
+        would have been a ret instruction (or a halt), which would have
+        cleared the stack allocator. }
+
+       "Stack allocator should be clear at end decls." ASSERT
+         (CLEARED stack_allocator OF code_generator);
+       "All jumps should be resolved at end decls." ASSERT
+         (CLEARED jump_backpatch_list OF code_generator);
+       "All repeats should be ended at end decls." ASSERT
+         (CLEARED repeat_stack OF code_generator);
+       "All calls and callinsts should be resolved at end decls." ASSERT
+         (CLEARED named_code_backpatch_list OF code_generator);
+       "End decls should be unreachable." ASSERT
+         NOT reachable OF code_generator;
+
+       machangeflt(simfault)
+   END;
+
+PROC generateca = (FLTPROC flt) VOID:
+
+   BEGIN
+
+      machangeflt(flt);
+
+      { Start calls array; First check to see if this is the
+        first calls array. }
+      IF calls_location OF code_generator = nullmachineoffset THEN
+         calls_location OF code_generator := location;
+         named_code_array OF code_generator :=
+            SQUASH named_code_list OF code_generator
+      ELSE
+         location := calls_location OF code_generator;
+         { Delete the label and params of the last code item
+           (the only one in the calls array). }
+         REMOVELAST call_parameter_list OF code_generator;
+         REMOVELAST named_code_list OF code_generator
+      FI;
+      { Assemble entry code.  Assuming a HLL procedure call. }
+
+      { We don't need to save any registers explicitly as this is handled by
+        the windowing mechanism.}
+
+      save USING RIR(sp, -(23+1)*4, sp);
+
+      { Set up dedicated registers.  Parameters are expected
+        in the first two input registers. }
+      or USING RRR(g0, i0, dynamicpointer);
+      or USING RRR(g0, i1, globalpointer);
+
+      { store the previous stack pointer for the halt instruction}
+      st USING RIR(globalpointer, -privatespace, fp);
+
+      in calls array OF code_generator := TRUE;
+      mark_relative_code_region
+
+      { Although code has been assembled, the reachable flag is not set.
+        A generate named code will follow. }
+
+   END;
+
+PROC generate endca = VOID:
+
+   BEGIN
+
+      { The action of arriving at this point, if it should happen,
+        is the same as at a halt instruction. }
+
+      in calls array OF code_generator := FALSE;
+      generate halt;
+
+      ma executable;
+
+      { We reserve an extra 4 bytes because zero memory requirement causes
+        us some difficultly when using ...memory[1] to derive a reference
+        to be passed to generated code. }
+      dynamic_memory OF code_generator CREATE
+         (4 + 3 * DYNAMICUSAGE stack_allocator OF code_generator);
+
+       "Stack allocator should be clear at end ca."
+          ASSERT  (CLEARED stack_allocator OF code_generator);
+       "All jumps should be resolved at end ca."
+          ASSERT  (CLEARED jump_backpatch_list OF code_generator);
+       "All repeats should be ended at end ca."
+          ASSERT  (CLEARED repeat_stack OF code_generator);
+       "All calls and callinsts should be resolved at end ca."
+          ASSERT (CLEARED named_code_backpatch_list OF code_generator);
+       "End ca should be unreachable."
+          ASSERT NOT reachable OF code_generator;
+          { The generate halt above should guarantee this anyway. }
+
+      { I assume that only one item of named code and no items of named
+        data will be introduced in the calls array.
+        Apart from the removal of a single named code item I make no action
+        to remove items from the relevant lists when a new calls array
+        arrives. }
+
+      machangeflt(simfault)
+
+   END;
+
+PROC cg setup space = (BYTENUMBER size, FLTPROC flt) WORD:
+
+   { Return a pointer to an area of memory to be used as the global
+     memory.  The code generator uses a single longword just before the
+     the global pointer to store the stack pointer for the halt instruction.
+     Hence the addition of "privatespace" before any index into the global
+     memory. }
+
+   BEGIN
+      spare space := 0;
+      machangeflt(flt);
+      global_memory OF code_generator CREATE (size + privatespace);
+      set caches;
+*5    old_int_handler := get_sigmsgproc(sigint, default_msg);
+*5    set_sigmsgproc(sigint, codegen_catch_interrupt, default_msg);
+      machangeflt(simfault);
+      (mem OF global_memory OF code_generator) [1 + privatespace :]
+   END;
+
+PROC cg extend space = (BYTENUMBER size, FLTPROC flt) VOID:
+
+   { This extends the area of memory used as the global memory by at least
+     "size".  The division by ten to find the minimum extension is rather
+     arbitrary, and can be tuned if necessary.
+   }
+   IF size <= spare space THEN  spare space -:= size
+   ELSE
+      INT min = (SIZEOF global_memory OF code_generator) % 10;
+      INT increment = IF min > size - spare space THEN  min
+                      ELSE  size - spare space
+                      FI;
+      spare space +:= increment - size;
+      machangeflt(flt);
+      global_memory OF code_generator EXTEND (increment);
+      machangeflt(simfault);
+      set caches
+   FI;
+
+PROC cg poke = (WORD w, OFFSET o) VOID:
+
+   BEGIN
+       INT ix = o + privatespace;
+       (mem OF global_memory OF code_generator) [1 + ix : ix + UPB w] := w
+   END;
+
+PROC cg peek = (INT l, OFFSET o) WORD:
+{ NOTE -- This does NOT copy the value -- the result must therefore be
+  treated as read only!  I consider this fairly important for efficiency
+  of monitoring, so it is worth the need for care.
+}
+   BEGIN
+       INT ix = o + privatespace;
+       (mem OF global_memory OF code_generator) [1 + ix : ix + l]
+   END;
+
+{ It is useful to have versions of peek and poke which *DO* include the
+  'up' direction for the special case of references to integers (ie
+  machine words).  We take the opportunity to include the encoding, and
+  to make these procedures rather efficient, as well.
+}
+
+PROC cg poke int = (INT i, OFFSET o) VOID:
+    INTAT (mem OF global_memory OF code_generator) [1 + privatespace + o] := i;
+
+PROC cg peek int = (OFFSET o) INT:
+    INTAT (mem OF global_memory OF code_generator) [1 + privatespace + o];
+
+PROC cg simulate = (INT maxtime) STRUCT (INT lasttime, interrupted):
+
+   BEGIN
+
+      REF INT (maxtime ref) := maxtime;
+
+*5    { Set up our own condition handlers for integer overflows,
+*5      and user interrupts.}
+*5
+*5    set_sigmsgproc(sigfpe,codegen_catch_int_error,default_msg);
+
+*5    code entry ((mem OF dynamic_memory OF code_generator) [1],
+*5                (mem OF global_memory OF code_generator) [1 + privatespace]);
+
+*5      { Cancel trapping of integer overflow or divide by zero. }
+*5
+*5    set_sigdefault(sigfpe,default_msg);
+
+      INT interrupt state = interrupt ref;
+      REF INT (interrupt ref) := 0;
+
+*5    (time ref, interrupt state)
+
+%5    (maxtime, interrupt state)
+
+
+   END;
+
+PROC cg clear interrupts = VOID:
+
+
+   REF INT (interrupt ref) := 0;
+
+PROC cg closedown = (FLTPROC flt) VOID:
+
+   BEGIN
+*5    set_sigmsgproc(sigint, old_int_handler,default_msg);
+      { Destroy those objects which must be explicitly destroyed. }
+      DESTROY global_memory OF code_generator;
+      DESTROY dynamic_memory OF code_generator;
+
+      { Then free up all other resources by reinitialising. }
+      cg initialise ((RVC dummy) VOID: SKIP, 0, flt);
+      machangeflt(simfault)
+   END
+
+KEEP
+cg dump, cg sizes, cg save state, cg restore state,
+generate halt, generate add, generate sub, generate mul, generate div,
+generate mod, generate neg, generate abs, generate iand, generate ior,
+generate shl, generate shr, generate com, generate test, generate eq,
+generate neq, generate gt, generate ge, generate lt, generate le, generate and,
+generate or, generate not, generate push string, generate pushint,
+generate drop,
+generate local, generate global, generate store, generate bstring,
+generate bstore,
+generate itos, generate utos, generate stoi, generate stou,
+generate jump, generate jump no, generate label,
+generate repeat, generate loop, generate callinst, generate call,
+generate enter, generate fanout, generate ret, generate named code,
+generate named data, generate param types, generate, cg initialise,
+generate end decls, generateca, generate endca, cg setup space,
+cg extend space, cg poke, cg poke int, cg peek, cg peek int,
+cg simulate, cg clear interrupts, cg closedown, OFFSET, LABEL, label,
+WORD, PARAMS, nilparams, PARAM, unknown, fixed, instanceptr, boolean, integer,
+ADDRESS, indirect, AMVERSION,
+ALIENINFO, nil alieninfo, alien finder,
+initialise action, reinitialise action, evaluate action,
+save action, restore action, terminate action
+FINISH

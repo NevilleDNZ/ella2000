@@ -1,0 +1,797 @@
+DECS kealientoolkit CONTEXT VOID USE  cif, putstrings, messageproc, kebasics,
+     kernel, kesignals, kesymbols, osinterface, ioprocs:
+
+{  " Id: kealientoolkit.sta,v 2.1.1.1 91/12/09 17:04:54 aap Exp$" }
+configinfo A68CONFIG "$Id: kealientoolkit.a68,v 34.2 1995/03/29 13:04:31 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ Change History :                                                         
+                  1) Major addition of code in "get epi input type" to    
+                     deal with raw lookup rnode which returns unflattened 
+                     inputs. Flattening is now applied to all inputs if   
+                     the Alien Code calling get epi input type has called 
+                     it for the first time.                               
+                                                            MHC 10-Oct-89 
+                                                                          
+                  2) PROC output now correctly prints the whole of it's   
+                     when given a zero length argument.     MHC 09-Nov-89 
+                                                                          
+                  3) Added PROC get_encoded_output to extract the         
+                     simulators representation of an EPISIGNAL.           
+                                                            MHC 10-Nov-89 
+                                                                          
+                  4) Cast of NIL to REF SST - type list.  DCT 31-Jan-91   
+                                                                          
+                     Algol procs now return EPI_TYPEs rather than using   
+                     writeback parameter.  2.1.1.1  91/12/09  AAP 17:04:54
+                                                                          
+                     Incorporate changes recieved April 91. DJS 23-Apr-91 
+                                                                          
+                     SVOID added. JIT 26-Oct-92                           
+                                                                          
+                     Appropriate part of epi support modules brought in   
+                     directly  DCT 13:08:93                               
+                                                                          
+29:11:93       Extern declaration added.  DCT              
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  32.002 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{  ************  ALGOL68 Alien Code Toolkit Support Module ************  }
+{                                                                        }
+{  ALGOL68 - C buffer module for C toolkit routines requiring access to  }
+{  Simulator data structures                              18:Jul:89 MHC  }
+
+
+
+{ Global data for the get epi input type routine }
+
+{ 13:08:93  Appropriate part of epi support modules brought in directly  DCT }
+
+{ Subset of the EPI Modes relevant to ALIEN code }
+
+MODE EPIIDENT                   = BITS;
+MODE EPIUNSIGNED                = BITS;
+MODE EPISTATUSCODE              = BITS;
+MODE EPIINT                     = INT;
+MODE EPISTRING                  = STR;
+
+{ EPISIGNAL is not expected to be unpacked by EPI clients }
+
+MODE EPISIGNAL                  = STRUCT (EPIIDENT ident,
+                                          REF VECTOR [] EPIINT value);
+MODE EPITYPE,
+        INTEPITYPE              = STRUCT (REF EPISTRING tag,
+                                          EPIINT lwb,
+                                          EPIINT upb),
+        CHAREPITYPE             = STRUCT (REF EPISTRING tag,
+                                          REF EPISTRING char_repr),
+        STRINGEPITYPE           = STRUCT (EPIUNSIGNED length,
+                                          REF EPITYPE subtype),
+        ROWEPITYPE              = STRUCT (EPIUNSIGNED row_elems,
+                                          REF EPITYPE subtype),
+        STRUCTEPITYPE           = REF VECTOR [] REF EPITYPE,
+        FNEPITYPE               = STRUCT (REF EPITYPE input,
+                                          REF EPITYPE output),
+        ENUMEPIALT              = STRUCT (REF EPISTRING tag,
+                                          REF EPITYPE subtype),
+        ENUMEPITYPE             = REF VECTOR [] ENUMEPIALT,
+        VOIDEPITYPE             = STRUCT (EPIUNSIGNED void),
+        ANYEPITYPE              = UNION  (INTEPITYPE,
+                                          CHAREPITYPE,
+                                          STRINGEPITYPE,
+                                          ROWEPITYPE,
+                                          STRUCTEPITYPE,
+                                          FNEPITYPE,
+                                          ENUMEPITYPE,
+                                          VOIDEPITYPE,
+                                          VOID),
+     EPITYPE                    = STRUCT (EPIIDENT ident,
+                                          EPIUNSIGNED class,
+                                          ANYEPITYPE type);
+
+
+{ type classes - NB *4 unsafe but avoids ALIEN }
+
+EPIUNSIGNED m_epi_c_type_char =
+%4 ALIEN "m_epi_c_type_char" "extern unsigned m_epi_c_type_char;";
+*4 BIN 174;
+
+EPIUNSIGNED m_epi_c_type_enum =
+%4 ALIEN "m_epi_c_type_enum" "extern unsigned m_epi_c_type_enum;";
+*4 BIN 175;
+
+EPIUNSIGNED m_epi_c_type_fntype =
+%4 ALIEN "m_epi_c_type_fntype" "extern unsigned m_epi_c_type_fntype;";
+*4 BIN 176;
+
+EPIUNSIGNED m_epi_c_type_int =
+%4 ALIEN "m_epi_c_type_int" "extern unsigned m_epi_c_type_int;";
+*4 BIN 177;
+
+EPIUNSIGNED m_epi_c_type_invalid =
+%4 ALIEN "m_epi_c_type_invalid" "extern unsigned m_epi_c_type_invalid;";
+*4 BIN 178;
+
+EPIUNSIGNED m_epi_c_type_null =
+%4 ALIEN "m_epi_c_type_null" "extern unsigned m_epi_c_type_null;";
+*4 BIN 179;
+
+EPIUNSIGNED m_epi_c_type_row =
+%4 ALIEN "m_epi_c_type_row" "extern unsigned m_epi_c_type_row;";
+*4 BIN 180;
+
+EPIUNSIGNED m_epi_c_type_string =
+%4 ALIEN "m_epi_c_type_string" "extern unsigned m_epi_c_type_string;";
+*4 BIN 181;
+
+EPIUNSIGNED m_epi_c_type_struct =
+%4 ALIEN "m_epi_c_type_struct" "extern unsigned m_epi_c_type_struct;";
+*4 BIN 182;
+
+EPIUNSIGNED m_epi_c_type_void =
+%4 ALIEN "m_epi_c_type_void" "extern unsigned m_epi_c_type_void;";
+*4 BIN 183;
+
+
+{ Error reporting adjusted for ALIEN code finder - epi_sim_signal  (DCT) }
+
+BITS  m_epi_s_bad_signal = BIN 0; { don't care }
+
+PROC epi_notify = (BITS  dummy,  STR  error) VOID:
+   global_msg(fatal, concat(("In ALIEN code finder:  illegal use - ", error)));
+
+EPIIDENT   m_epi_o_null_type =
+%4 ALIEN "m_epi_o_null_type" "extern unsigned m_epi_o_null_type;";
+*4 BIN 121121;
+
+EPIIDENT   m_epi_o_type =
+%4 ALIEN "m_epi_o_type" "extern unsigned m_epi_o_type;";
+*4 BIN 120120;
+
+PROC make_epi_type = (EPIUNSIGNED class,  ANYEPITYPE type) EPITYPE:
+BEGIN
+   EPITYPE epi_type;
+   ident OF epi_type   := m_epi_o_type;
+   class OF epi_type   := class;
+   type OF epi_type    := type;
+   epi_type
+END;
+
+
+{ Part of episupportsim.sta (as 13:08:93) - to support ALIEN only }
+
+{
+  This module converts between the EPI and Simulator modes that represent the
+  three key elements of a simulation: nodes (in the instance hierarchy);
+  signal types; and signal values as follows:
+
+  EPI         Simulator     -> Conversion      <- Conversion
+  ===         =========     =============      =============
+
+  EPINODE     PATH          epi_sim_node **     sim_epi_node  **
+  EPITYPE     STYPE         epi_sim_type **     sim_epi_type
+  EPISIGNAL   SVALUE        epi_sim_signal      sim_epi_signal **
+
+  ** = removed (DCT)
+
+  You might have expected the kernel mode NODE to be the counterpart of EPINODE
+  but as the latter supports a 'goout' operation we need a mode that includes
+  the route taken from the simulated function to get here and that is the shell
+  mode PATH.
+
+  A note on error treatment:
+
+  Invalid simulator modes should never occur.  If I explicitly discover such
+  an event then an "m_epi_s_internal_error" status is to be returned.  I have
+  not been officious in testing for these however, some will result in Algol
+  run-time errors.
+
+  Invalid EPI modes should always be trapped and result in an "m_epi_s_bad_..."
+  error.
+}
+
+{ Globals }
+
+{
+   This is a simple convenience to avoid unnecessary heap allocations; perhaps
+   it should be in EPISUPPORTINT
+}
+
+VECTOR [0] EPIINT empty vi;
+
+{  Local Procedures }
+
+PROC max = (INT a, b) INT: IF a > b THEN a ELSE b FI;
+
+{ The UPB of the value field of the EPISIGNAL counterpart of this signal type }
+PROC size_epi_query_signal = (STYPE type) INT:
+   CASE type IN
+      (SNULL       n): 0,
+      (SVOID       v): 0,
+      (REF SINT    i): 2,
+      (REF SCHAR   c): 1,
+      (REF SSTRING s): no OF s,
+      (REF SENUM   e): 1,
+      (REF SST     s):
+         IF s IS nil sst THEN 0
+         ELSE size_epi_query_signal(t OF s) + size_epi_query_signal(rest OF s)
+         FI,
+      (REF SROW    r): no OF r * size_epi_query_signal (type OF r),
+      (REF SFN     f): size_epi_query_signal (from OF f) +
+                       size_epi_query_signal (to OF f)
+   ESAC;
+
+PROC makevoidepitype = VOIDEPITYPE:
+(VOIDEPITYPE vet; void OF vet := BIN 1; vet);
+
+PROC sim_epi_type = (STYPE type) EPITYPE:
+BEGIN
+
+   PROC classify_epi_type = (STYPE type) EPIUNSIGNED:
+   CASE type IN
+      (SNULL):                  m_epi_c_type_null,
+      (SVOID):                  m_epi_c_type_void,
+      (REF SINT):               m_epi_c_type_int,
+      (REF SCHAR):              m_epi_c_type_char,
+      (REF SSTRING):            m_epi_c_type_string,
+      (REF SENUM):              m_epi_c_type_enum,
+      (REF SST):                m_epi_c_type_struct,
+      (REF SROW):               m_epi_c_type_row,
+      (REF SFN):                m_epi_c_type_fntype
+   ESAC;
+
+   PROC encode_enum_epi_type = (REF SENUM e) ENUMEPITYPE:
+   BEGIN
+      REF SENUM p := e;
+      INT upb := 0;
+      WHILE p ISNT nil senum DO upb +:= 1; p := rest OF p OD;
+      HEAP VECTOR [upb] ENUMEPIALT ans;
+      p := e;
+      FOR ix TO upb DO
+         ans [ix] := (id OF p, HEAP EPITYPE := sim_epi_type (t OF p));
+         p := rest OF p
+      OD;
+      ans
+   END;
+
+   PROC encode_struct_epi_type = (REF SST s) STRUCTEPITYPE:
+   BEGIN
+      REF SST p := s;
+      INT upb := 0;
+      WHILE p ISNT nil sst DO upb +:= 1; p := rest OF p OD;
+      HEAP VECTOR [upb] REF EPITYPE ans;
+      p := s;
+      FOR ix TO upb DO
+         ans [ix] := HEAP EPITYPE := sim_epi_type (t OF p);
+         p := rest OF p
+      OD;
+      ans
+   END;
+
+   PROC encode_epi_type = (STYPE type) ANYEPITYPE:
+   CASE type IN
+      (SNULL       n): EMPTY,
+      (SVOID       v): makevoidepitype,
+      (REF SINT    i): INTEPITYPE (id OF i, lwb OF i, upb OF i),
+      (REF SCHAR   c): CHAREPITYPE (id OF c, char OF c),
+      (REF SSTRING s): STRINGEPITYPE (BIN no OF s,
+                                      HEAP EPITYPE := sim_epi_type (t OF s)),
+      (REF SENUM   e): encode_enum_epi_type (e),
+      (REF SST     s): encode_struct_epi_type (s),
+      (REF SROW    r): ROWEPITYPE (BIN no OF r,
+                                   HEAP EPITYPE := sim_epi_type (type OF r)),
+      (REF SFN     f): FNEPITYPE (HEAP EPITYPE := sim_epi_type (from OF f),
+                                  HEAP EPITYPE := sim_epi_type (to OF f))
+   ESAC;
+
+   make_epi_type (classify_epi_type (type), encode_epi_type (type))
+END; {sim_epi_type}
+
+
+{
+   All the real work is delegated to 'decode signal'.  This is a top
+   down recursive descent parser which takes its input in the 'rep'
+   parameters and consumes it by slicing and updating 'rep'.
+
+   Note that this relies on the fact that if UPB vec = n, then vec [n+1:]
+   is a valid expression delivering an empty vector.  This is defined to
+   be the case in Ch 1.5.1 of "Informal Introduction to Agol 68" by C H Lindsey
+   and S G vandder Meulen and is implemented by the VMS Algol 86 RS compiler
+   and CTRANS.
+
+   A NIL return indicates an error.
+}
+PROC epi_sim_signal = (EPISIGNAL signal, STYPE type) REF SVALUE:
+BEGIN
+
+   PROC decode signal = (REF REF VECTOR [] INT rep, STYPE type) REF SVALUE:
+   BEGIN
+
+      PROC decode row = (REF REF VECTOR [] INT rep, SROW r) REF SVST:
+      BEGIN
+         BOOL ok := TRUE;
+         REF SVST ans := nil svst;
+         REF REF SVST p := ans;
+         FOR i TO no OF r WHILE ok DO
+            REF SVALUE element = decode signal (rep, type OF r);
+            IF element IS REF SVALUE (NIL) THEN
+               ok := FALSE
+            ELSE
+               REF REF SVST (p) := HEAP SVST := (element, nilsvst);
+               p := tail OF p
+            FI
+         OD;
+         IF ok THEN ans
+         ELSE nil svst
+         FI
+      END;
+
+      PROC decode structure = (REF REF VECTOR [] INT rep, REF SST s) REF SVST:
+      BEGIN
+         BOOL ok := TRUE;
+         REF SVST ans := nil svst;
+         REF REF SVST p := ans;
+         REF SST q := s;
+         WHILE ok ANDTH (q ISNT nil sst) DO
+            REF SVALUE element = decode signal (rep, t OF q);
+            IF element IS REF SVALUE (NIL) THEN
+               ok := FALSE
+            ELSE
+               REF REF SVST (p) := HEAP SVST := (element, nilsvst);
+               p := tail OF p
+            FI;
+            q := rest OF q
+         OD;
+         IF ok THEN ans
+         ELSE nil svst
+         FI
+      END;
+
+      IF (type | (REF SROW):FALSE, (REF SST):FALSE, (SVOID):FALSE,
+           (REF SFN):FALSE, (SNULL):FALSE | TRUE) ANDTH rep[1] = 0 THEN
+         HEAP SQUERY q;
+         type OF q := type;
+         INT size = size_epi_query_signal(type);
+         IF size > UPB rep THEN
+            epi_notify(m_epi_s_bad_signal,
+               "epi_sim_signal: not enough data for given type");
+            NIL
+         ELSE
+            rep := rep [size+1:];
+            HEAP SVALUE := q
+         FI
+      ELSE
+         CASE type IN
+         (REF SENUM e)  :
+            BEGIN
+               INT val = rep[1];
+               IF val <= 0 THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad enumerated value");
+                  NIL
+               ELSE
+                  REF SENUM p := e;
+                  BOOL ok := TRUE;
+                  FOR i TO val - 1 WHILE ok DO
+                     IF rest OF p IS nil senum THEN
+                        epi_notify(m_epi_s_bad_signal,
+                           "epi_sim_signal: bad enumerated value");
+                        ok := FALSE
+                     FI;
+                     p := rest OF p
+                     OD;
+                  IF ok THEN
+                     rep := rep [2:];
+                     HEAP SVALUE := HEAP SVENUM :=
+                        (e, val, decode signal(rep, t OF p))
+                  ELSE
+                     NIL
+                  FI
+               FI
+            END,
+         (REF SINT i)   :
+            BEGIN
+               INT val = rep[2];
+               IF val < lwb OF i OREL val > upb OF i THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad integer value");
+                  NIL
+               ELSE
+                  rep := rep [3:];
+                  HEAP SVALUE := HEAP SVINT := (i, val)
+               FI
+            END,
+         (REF SCHAR c)  :
+            BEGIN
+               INT val = rep[1];
+               REF VECTOR [] CHAR char list = char OF c;
+               IF val < 1 OREL val > UPB char list THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad character value");
+                  NIL
+               ELSE
+                  rep := rep [2:];
+                  HEAP SVALUE := HEAP SVCHAR := (c, char list [val])
+               FI
+            END,
+         (REF SROW r)   :
+            BEGIN
+               REF SVST svst = decode row (rep, r);
+               IF svst IS nil svst THEN NIL ELSE HEAP SVALUE := svst FI
+            END,
+         (REF SSTRING s):
+            BEGIN
+               HEAP VECTOR [no OF s] CHAR value;
+               REF VECTOR [] CHAR char list = char OF t OF s;
+               BOOL ok := TRUE;
+               FOR i TO no OF s WHILE ok DO
+                  INT val = rep[i];
+                  IF val < 1 OREL val > UPB char list THEN
+                     epi_notify(m_epi_s_bad_signal,
+                        "epi_sim_signal: bad character value");
+                     ok := FALSE
+                  FI;
+                  value [i] := char list [val]
+               OD;
+               IF ok THEN
+                  rep := rep[no OF s + 1:];
+                  HEAP SVALUE := HEAP SVSTR := (s, value)
+               ELSE
+                  NIL
+               FI
+         END,
+         (REF SFN f)    :
+            BEGIN
+               REF SVALUE from = decode signal(rep, from OF f);
+               REF SVALUE to = decode signal(rep, to OF f);
+               IF (from IS REF SVALUE (NIL)) OREL (to IS REF SVALUE (NIL))
+               THEN NIL
+               ELSE HEAP SVALUE := HEAP SVFN := (from, to)
+               FI
+            END,
+         (REF SST s)    :
+            BEGIN
+               REF SVST svst = decode structure (rep, s);
+               IF svst IS nil svst THEN NIL ELSE HEAP SVALUE := svst FI
+            END,
+         (SNULL v)      : HEAP SVALUE := null svalue,
+         (SVOID v)      : HEAP SVALUE := void svalue
+         ESAC
+      FI
+   END;
+
+   REF VECTOR [] INT rep := value OF signal;
+   REF SVALUE ans = decode signal (rep, type);
+   IF UPB rep /= 0 THEN
+      epi_notify(m_epi_s_bad_signal,
+         "epi_sim_signal: too much data for given type");
+      NIL
+   ELSE
+      ans
+   FI
+END; {epi_sim_signal}
+
+
+
+
+
+
+{ Start of ALIEN code interface proper }
+
+
+REF SST saved type list := NIL;  { Saved flattened input types }
+INT     last table index;        { Saved table index of last call }
+                                 { to get epi input type          }
+
+{ Global data for the get_encoded buffer routine }
+
+REF WORD output buffer;   { Simulator representation of output EPI signal }
+
+{ 'result' is used to hold a ref to the last EPITYPE object returned by a
+   toolkit routine, in case the garbage collector is called before the object
+   has been copied (eg by epi_dpc).
+}
+
+EPITYPE result;
+
+PROC aci_to_epi_type = (INT aci_type) REF EPITYPE :
+
+{ Procedure called by the alien code toolkit to provide }
+{ conversion from alien code type information to EPI    }
+{ type information via simulator STYPE representation.  }
+{ If the corresponding STYPE cannot be found then the   }
+{ procedure returns m_epi_o_null_type.                  }
+
+BEGIN
+
+  STYPE type =  lookup type (aci_type);
+
+  CASE type IN
+      (SPRIM)       : result := sim_epi_type (type),
+      (REF SROW)    : result := sim_epi_type (type),
+      (REF SSTRING) : result := sim_epi_type (type),
+      (REF SFN)     : result := sim_epi_type (type),
+      (REF SST)     : result := sim_epi_type (type),
+      (SNULL)       : result := sim_epi_type (type),
+      (SVOID)       : result := sim_epi_type (type)
+  OUT
+      ident OF result := m_epi_o_null_type
+  ESAC;
+
+  result
+END;
+
+
+
+PROC get_output_size = (INT table index) INT :
+
+{ Procedure called by the alien code toolkit to ascertain }
+{ the size in bytes of the function's output area. If the }
+{ output size is found to be faulty, a system fault is    }
+{ generated and size of zero is returned.                 }
+
+BEGIN
+
+  WIRE output = lookup outputs (table index);
+
+  IF (UPB (blocks OF output) /= 1) THEN
+    sys fault ("kealientoolkit get_output_size - Error in signal output size");
+    0
+  ELSE
+    size OF ((blocks OF output)[1])
+  FI
+
+END;
+
+
+
+PROC get_epi_input_type = (INT table index, nth input) REF EPITYPE :
+
+{ Procedure called by toolkit routines requiring the epi type     }
+{ corresponding to the specified (flattened) input number.        }
+{ Conversion from ACI to EPI type is done via the simulator STYPE.}
+{ If the input is out of range or the STYPE is faulty,  EPI_TYPE  }
+{ m_epi_o_null_type is returned. Before flattening all inputs, a  }
+{ check is made to determine whether the calling Alien Code       }
+{ function has called before, in that case all it's inputs will   }
+{ have been flattened and stored in the linked list "saved type   }
+{ list". This will speed up the routine for repeated calls to the }
+{ same input.                                                     }
+
+BEGIN
+
+  INT count := 1;        { Index in stepping through linked lists }
+
+  REF SST raw type list;          { Contains unflattened input STYPES }
+
+  { Check if Alien Code has called this routine before, in which }
+  { case it's flattened inputs will be in the stored list, else  }
+  { we need to flatten all inputs for this calling function.     }
+
+  IF (table index /= last table index) THEN
+
+    FN this function = raw lookup function (table index);
+    REF VECTOR [] BINDING raw input row = body OF this function;
+    INT raw no inputs = no inputs OF this function;
+
+    { Set list head to point to head of type list }
+
+    REF REF SST list head := raw type list;
+
+    { Build linked list of raw input types ready for flattening }
+    { Also transform out function type inputs.                  }
+
+    FORALL binding IN raw input row[ :raw no inputs] DO
+
+      CASE (raw lookup rnode (node OF binding))
+
+      IN (WIRE w) : BEGIN
+                     REF REF SST (list head) := HEAP SST :=
+                       ((CASE (type OF w) IN
+                           (REF SFN fn) : (to OF fn)
+                         OUT
+                           (type OF w)
+                       ESAC), NIL);
+                     list head := rest OF list head
+                    END
+
+      OUT GOTO error
+
+      ESAC
+
+    OD;
+
+    saved type list := flatten type (raw type list);
+    last table index := table index
+
+  FI;
+
+  { Loop through the flattened inputs until we reach  }
+  { the required one or we reach the end of the list. }
+
+  REF SST type list := saved type list;   { Temporary linked list of types }
+
+  WHILE (( type list ISNT REF SST (NIL)) AND (count < nth input)) DO
+
+    type list := rest OF type list;
+    count +:= 1
+
+  OD;
+
+  IF (count = nth input) THEN
+    result := sim_epi_type (t OF type list)
+  ELSE
+    GOTO error
+  FI;
+
+  result
+
+  EXIT
+
+  error : ident OF result := m_epi_o_null_type;
+
+  result
+
+END;
+
+
+
+
+PROC get_epi_output_type = (INT table index) REF EPITYPE :
+
+{  Procedure called by toolkit routines requiring the epi type }
+{  corresponding to the output of the specified function. This }
+{  is done by looking up the corresponding simulator STYPE and }
+{ converting to EPI type.                                      }
+
+BEGIN
+  WIRE output = lookup outputs (table index);
+  result := sim_epi_type (type OF output)
+END;
+
+
+
+
+PROC get_input_size = (INT table index, n) INT :
+
+{ Procedure called by the Alien Code toolkit routines to     }
+{ ascertain the size of the nth input held in the instance   }
+{ data record pointed to by the symbol table index. The size }
+{ returned represents bytes. Zero size is returned on error. }
+
+BEGIN
+
+  REF VECTOR [] INT sizes = lookup input sizes (table index);
+
+  IF UPB sizes < n THEN
+    0
+  ELSE
+    sizes [n]
+  FI
+
+END;
+
+
+
+
+
+
+PROC output = ( CSTRING buffer, INT length ) VOID :
+
+{ Procedure called by toolkit routines requiring output of }
+{ a text buffer to the screen or ELLA output/log files.    }
+{ The buffer is treated as a C string with elements upto   }
+{ the first occurrance of a null byte being printed. If    }
+{ a null byte is not found or length is zero it is assumed }
+{ that the whole of the string is to be printed.      MHC  }
+
+BEGIN
+
+  IF (length = 0) THEN
+    put(out, (CSTRINGTORVC buffer, newline))
+  ELSE
+    RVC buff = buffer [ :length];
+    INT null := length + 1;
+
+    FOR i TO length
+      WHILE null = length + 1 DO
+        IF buff[i] = 2r "0" THEN
+          null := i
+        FI
+    OD;
+
+    put (out, (buff [ :null-1], newline))
+
+  FI
+
+END;
+
+
+
+PROC get_encoded_output = (EPISIGNAL output signal, INT table index) CCHARPTR:
+
+{ This procedure is used by toolkit routines requiring conversion     }
+{ of EPI printable signal representations into simulator equivalents. }
+{ The simulator encoded buffer "output buffer" is held as a global    }
+{ variable to prevent garbage collection of the result of this PROC   }
+{ before it's use. This PROC returns a CCHARPTR so that the buffer may}
+{ be easily treated as a C char *.                           MHC      }
+
+BEGIN
+
+  STYPE output stype = type OF (lookup outputs (table index));
+
+  REF SVALUE output svalue = epi_sim_signal (output signal, output stype);
+
+  IF (output svalue ISNT NIL) THEN
+    output buffer := encode (output svalue, output stype)
+  ELSE
+    output buffer := NIL
+  FI;
+
+  VCTOCHARPTR output buffer
+
+END;
+
+
+
+PROC aci_initialise_procs = VOID :
+
+{ This procedure initialises the the above procedures so that }
+{ they may be used by the toolkit routines.                   }
+
+BEGIN
+  PROC ( PROC (INT) REF EPITYPE,
+         PROC (INT,INT) REF EPITYPE,
+         PROC (INT) REF EPITYPE,
+         PROC (INT,INT) INT,
+         PROC (INT) INT,
+         PROC (CSTRING,INT) VOID,
+         PROC (EPISIGNAL,INT) CCHARPTR
+       ) VOID  c_init =
+%4          ALIEN "aci_initialise_procs" "extern void aci_initialise_procs();";
+*4          ALIEN "ACI_INITIALISE_PROCS" ;
+
+  c_init ( aci_to_epi_type, get_epi_input_type,
+           get_epi_output_type, get_input_size,
+           get_output_size, output, get_encoded_output
+         )
+END
+
+
+KEEP aci_initialise_procs
+
+FINISH
