@@ -1,0 +1,580 @@
+DECS kesave CONTEXT VOID USE putstrings, basics, kebasics:
+
+{ " Id: kesave.sta,v 2.1 91/02/22 18:35:26 edcad Exp$" }
+configinfo A68CONFIG "$Id: kesave.a68,v 34.2 1995/03/29 13:04:55 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement the saving and restoring
+              of basic data items in the kernel of the new simulator.
+02:02:89  Ferry procedures changed.  Arch design CR 33.  PAR.
+12:09:89  CR 642. From basics, RVC -> putstrings, FLTPROC ->osinterface. EVW
+01:06:90  Added read/write mnode for frozenlist in KERTI. MDR.
+10:12:90  FLTPROC returned to basics. JIT
+26:10:92  SVOID/SVVOID added. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ This module is largely derived from the corresponding shell module,
+  SIMFILEBASICS, and there is much duplication of code.  This is
+  entirely because that module calls file oriented procedures to do
+  the underlying operations.  The two should be generalised and merged!
+}
+
+
+{ Basic Objects }
+{ ------------- }
+
+
+{ Reading of basic objects (CHARs, and vectors thereof, INTs,
+  IDs and BOOLs).
+
+  Note that certain assumptions are made about the relationship between
+  characters and integers, although an attempt is made to make as few as
+  possible.  It is assumed that 'max abs char' is one less than some
+  power of two -- the power being the width in bits of the character
+  representation -- and that exactly 'bytes width' characters would
+  fit into a machine integer of mode INT.
+}
+PROC read char = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) CHAR:
+BEGIN
+    VECTOR [1] CHAR ans;
+    ferry (ans, flt);
+    ans [1]
+END;
+
+PROC read charvec = (PROC (RVC, FLTPROC) VOID ferry, INT length, FLTPROC flt) RVC:
+BEGIN
+    HEAP VECTOR [length] CHAR ans;
+    ferry (ans, flt);
+    ans
+END;
+
+PROC read int = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) INT:
+BEGIN
+    RVC chars = read charvec (ferry, bytes width, flt);
+    word to signed (chars)
+END;
+
+PROC read id = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) ID:
+BEGIN
+   INT length = read int (ferry, flt);
+   IF length = -1 THEN
+      nilid
+   ELIF length = 0 THEN
+      nullid
+   ELSE
+      read charvec (ferry, length, flt)
+   FI
+END;
+
+PROC read bool = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) BOOL:
+BEGIN
+    INT flag = ABS read char (ferry, flt);
+    IF flag = 0 THEN  FALSE
+    ELIF flag = 1 THEN  TRUE
+    ELSE sys fault ("error in bool");  SKIP
+    FI
+END;
+
+
+{ writing of basic objects (CHARs, and vectors thereof, INTs,
+  IDs and BOOLs).
+}
+PROC write char = (CHAR c, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    ferry (MAKEID c, flt);
+
+PROC write charvec = (RVC str, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    ferry (str, flt);
+
+PROC write int = (INT i, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    VECTOR [bytes width] CHAR chars;
+    signed to word (i, chars);
+    write charvec (chars, ferry, flt)
+END;
+
+PROC write id = (ID id, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    IF id IS nilid THEN
+        write int (-1, ferry, flt)
+    ELIF id = nullid THEN
+        write int (0, ferry, flt)
+    ELSE
+        write int (UPB id, ferry, flt);
+        write charvec (id, ferry, flt)
+FI;
+
+PROC write bool = (BOOL flag, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    IF flag THEN  write char (REPR 1, ferry, flt)
+    ELSE  write char (REPR 0, ferry, flt)
+    FI;
+
+
+
+{   STRUCTURED DATA
+    ===============
+
+    The remaining procedures read and write compound ELLA modes.
+
+    I show the coding format in a pseudo BNF in which the productions are
+    shown in the form:
+
+    lhs      :- rhs
+
+    The basic elements of the right hand side are sytax elements like "id"
+    or named syntax element like
+
+    foo
+       id
+
+    which means an "id" named "foo".  Alternatives are shown as mutiple
+    productions. Iteration is shown by recursion or by the notation:
+
+      b
+    a
+
+    meaning a repeated b times;
+}
+
+
+{ Basic Kernel Modes }
+{ ------------------ }
+
+
+{   MODE
+        STYPE,
+        SVOID   = STRUCT (INT svoid),
+        SNULL   = STRUCT (INT snull),
+        SINT    = STRUCT (ID id, INT lwb, upb),
+        SCHAR   = STRUCT (ID id, REF VECTOR [] CHAR char),
+        SSTRING = STRUCT (INT no, SCHAR t),
+        SENUM   = STRUCT (ID id, STYPE t, REF SENUM rest),
+        SFN     = STRUCT (STYPE from, to),
+        SST     = STRUCT (STYPE t, REF SST rest),
+        SROW    = STRUCT (INT no, STYPE type),
+        SPRIM   = UNION  (REF SENUM, REF SINT, REF SCHAR),
+        STYPE   = UNION  (SPRIM, REF SROW, REF SSTRING,
+                          REF SFN, REF SST, SVOID, SNULL);
+
+    stype          :- 1 snull
+                      2 sint
+                      3 schar
+                      4 sstring
+                      5 senum
+                      6 sfn
+                      7 sst
+                      8 svoid
+                      9 srow
+
+    sint           :- id int int
+    schar          :- id id
+    sstring        :- int schar
+                              n
+    senum          :- n    alt
+                       int
+    sfn            :- stype stype
+                                n
+    sst            :- n    stype
+                       int
+    srow           :- int stype
+    alt            :- id stype
+}
+INT
+    cnull = 1,     cint = 2,      cchar = 3,     cstring = 4,   cenum = 5,
+    cfn = 6,       cst = 7,       crow = 9,      cvoid = 8;
+
+PROC (PROC (RVC, FLTPROC) VOID, FLTPROC) STYPE read stype;
+
+PROC read sint = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SINT:
+BEGIN
+    SINT ans;
+    id OF ans := read id (ferry, flt);
+    lwb OF ans := read int (ferry, flt);
+    upb OF ans := read int (ferry, flt);
+    ans
+END;
+
+PROC read schar = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SCHAR:
+BEGIN
+    SCHAR ans;
+    id OF ans := read id (ferry, flt);
+    char OF ans := read id (ferry, flt);
+    ans
+END;
+
+PROC read sstring = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SSTRING:
+BEGIN
+    SSTRING ans;
+    no OF ans := read int (ferry, flt);
+    t OF ans := read schar (ferry, flt);
+    ans
+END;
+
+PROC read senum = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) REF SENUM:
+BEGIN
+    REF SENUM ans := nil senum;
+    REF REF SENUM last := ans;
+    TO read int (ferry, flt) DO
+        HEAP SENUM alt;
+        id OF alt := read id (ferry, flt);
+        t OF alt := read stype (ferry, flt);
+        rest OF alt := nil senum;
+        REF REF SENUM (last) := alt;
+        last := rest OF last
+    OD;
+    ans
+END;
+
+PROC read sfn = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SFN:
+BEGIN
+    SFN ans;
+    from OF ans := read stype (ferry, flt);
+    to OF ans := read stype (ferry, flt);
+    ans
+END;
+
+PROC read sst = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) REF SST:
+BEGIN
+    REF SST ans := nil sst;
+    REF REF SST last := ans;
+    TO read int (ferry, flt) DO
+        REF REF SST (last) := HEAP SST := (read stype (ferry, flt), nil sst);
+        last := rest OF last
+    OD;
+    ans
+END;
+
+PROC read srow = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SROW:
+BEGIN
+    SROW ans;
+    no OF ans := read int (ferry, flt);
+    type OF ans := read stype (ferry, flt);
+    ans
+END;
+
+read stype := (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) STYPE:
+    CASE read int (ferry, flt) IN
+        null stype,
+        HEAP SINT := read sint (ferry, flt),
+        HEAP SCHAR := read schar (ferry, flt),
+        HEAP SSTRING := read sstring (ferry, flt),
+        read senum (ferry, flt),
+        HEAP SFN := read sfn (ferry, flt),
+        read sst (ferry, flt),
+        void stype,
+        HEAP SROW := read srow (ferry, flt)
+    OUT sys fault ("invalid stype"); null stype
+    ESAC;
+
+
+PROC (STYPE, PROC (RVC, FLTPROC) VOID, FLTPROC) VOID write stype;
+
+PROC write sint = (SINT s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write id (id OF s, ferry, flt);
+    write int (lwb OF s, ferry, flt);
+    write int (upb OF s, ferry, flt)
+END;
+
+PROC write schar = (SCHAR s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write id (id OF s, ferry, flt);
+    write id (char OF s, ferry, flt)
+END;
+
+PROC write sstring = (SSTRING s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write int (no OF s, ferry, flt);
+    write schar (t OF s, ferry, flt)
+END;
+
+PROC write senum = (REF SENUM s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    REF SENUM ptr := s;
+    INT n := 0;
+    WHILE ptr ISNT nil senum DO  n +:= 1; ptr := rest OF ptr  OD;
+    write int (n, ferry, flt);
+    ptr := s;
+    WHILE ptr ISNT nil senum DO
+        write id (id OF ptr, ferry, flt);
+        write stype (t OF ptr, ferry, flt);
+        ptr := rest OF ptr
+    OD
+END;
+
+PROC write sfn = (SFN s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write stype (from OF s, ferry, flt);
+    write stype (to OF s, ferry, flt)
+END;
+
+PROC write sst = (REF SST s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    REF SST ptr := s;
+    INT n := 0;
+    WHILE ptr ISNT nil sst DO n +:= 1; ptr := rest OF ptr OD;
+    write int (n, ferry, flt);
+    ptr := s;
+    WHILE ptr ISNT nil sst DO
+        write stype (t OF ptr, ferry, flt);
+        ptr := rest OF ptr
+    OD
+END;
+
+PROC write srow = (SROW s, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write int (no OF s, ferry, flt);
+    write stype (type OF s, ferry, flt)
+END;
+
+write stype := (STYPE stype, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+CASE stype IN
+    (SVOID s):     write int (cvoid, ferry, flt),
+    (SNULL s):     write int (cnull, ferry, flt),
+    (REF SINT s):  (write int(cint, ferry, flt); write sint(s, ferry, flt)),
+    (REF SCHAR s): (write int(cchar, ferry, flt); write schar(s, ferry, flt)),
+    (REF SSTRING s):
+        (write int(cstring, ferry, flt); write sstring(s, ferry, flt)),
+    (REF SENUM s): (write int(cenum, ferry, flt); write senum(s, ferry, flt)),
+    (REF SFN s):   (write int(cfn, ferry, flt); write sfn(s, ferry, flt)),
+    (REF SST s):   (write int(cst, ferry, flt); write sst(s, ferry, flt)),
+    (REF SROW s):  (write int(crow, ferry, flt); write srow(s, ferry, flt))
+ESAC;
+
+
+{   MODE
+        BLOCK   = STRUCT (INT inst offset, offset, size);
+        WIRE    = STRUCT (STYPE type, REF VECTOR [] BLOCK blocks),
+        SRAM    = STRUCT (WIRE first cell, INT lwb, ram size, step),
+        BINDING = STRUCT (ID uname, lname, INT node),
+        FN      = STRUCT (REF SRAM ram, WIRE outputs, INT no inputs,
+                          REF VECTOR [] BINDING body),
+        BOX     = STRUCT (INT fn, instance),
+        RNODE   = UNION  (BOX, WIRE);
+
+    block          :- int int int
+                                      n
+    wire           :- stype n    block
+                             int
+    ram            :- wire int int int
+    binding        :- id id int
+                                             n
+    fn             :- FALSE wire int n    binding
+                                      int
+                                                 n
+                   :- TRUE ram wire int n    binding
+                                         int
+    box            :- int int
+    rnode          :- 1 box
+                      2 wire
+}
+
+PROC write wire = (WIRE wire, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write stype (type OF wire, ferry, flt);
+    REF VECTOR [] BLOCK blocks = blocks OF wire;
+    INT upb = UPB blocks;
+    write int (upb, ferry, flt);
+    FOR i TO upb DO
+        write int (inst offset OF blocks [i], ferry, flt);
+        write int (offset OF blocks [i], ferry, flt);
+        write int (size OF blocks [i], ferry, flt)
+    OD
+END;
+
+PROC read wire = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) WIRE:
+BEGIN
+    WIRE ans;
+    type OF ans := read stype (ferry, flt);
+    INT upb = read int (ferry, flt);
+    HEAP VECTOR [upb] BLOCK blocks;
+    blocks OF ans := blocks;
+    FOR i TO upb DO
+        inst offset OF blocks [i] := read int (ferry, flt);
+        offset OF blocks [i] := read int (ferry, flt);
+        size OF blocks [i] := read int (ferry, flt)
+    OD;
+    ans
+END;
+
+PROC write ram = (SRAM ram, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write wire (first cell OF ram, ferry, flt);
+    write int (lwb OF ram, ferry, flt);
+    write int (ram size OF ram, ferry, flt);
+    write int (step OF ram, ferry, flt)
+END;
+
+PROC read ram = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) SRAM:
+BEGIN
+    SRAM ans;
+    first cell OF ans := read wire (ferry, flt);
+    lwb OF ans := read int (ferry, flt);
+    ram size OF ans := read int (ferry, flt);
+    step OF ans := read int (ferry, flt);
+    ans
+END;
+
+PROC write binding = (BINDING binding, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write id (uname OF binding, ferry, flt);
+    write id (lname OF binding, ferry, flt);
+    write int (node OF binding, ferry, flt)
+END;
+
+PROC read binding = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) BINDING:
+BEGIN
+    BINDING ans;
+    uname OF ans := read id (ferry, flt);
+    lname OF ans := read id (ferry, flt);
+    node OF ans := read int (ferry, flt);
+    ans
+END;
+
+
+PROC write fn = (FN fn, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    IF ram OF fn IS nil sram THEN
+        write bool (FALSE, ferry, flt)
+    ELSE
+        write bool (TRUE, ferry, flt);
+        write ram (ram OF fn, ferry, flt)
+    FI;
+    write wire (outputs OF fn, ferry, flt);
+    write int (no inputs OF fn, ferry, flt);
+    REF VECTOR [] BINDING bindings = body OF fn;
+    INT upb = UPB bindings;
+    write int (upb, ferry, flt);
+    FOR i TO upb DO
+        write binding (bindings [i], ferry, flt)
+    OD
+END;
+
+PROC read fn = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) FN:
+BEGIN
+    FN ans;
+    IF read bool (ferry, flt) THEN
+        ram OF ans := HEAP SRAM := read ram (ferry, flt)
+    ELSE
+        ram OF ans := nil sram
+    FI;
+    outputs OF ans := read wire (ferry, flt);
+    no inputs OF ans := read int (ferry, flt);
+    INT upb = read int (ferry, flt);
+    HEAP VECTOR [upb] BINDING bindings;
+    body OF ans := bindings;
+    FOR i TO upb DO
+        bindings [i] := read binding (ferry, flt)
+    OD;
+    ans
+END;
+
+PROC write box = (BOX box, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write int (fn OF box, ferry, flt);
+    write int (instance OF box, ferry, flt)
+END;
+
+PROC read box = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) BOX:
+BEGIN
+    BOX ans;
+    fn OF ans := read int (ferry, flt);
+    instance OF ans := read int (ferry, flt);
+    ans
+END;
+
+INT cbox = 1,  cwire = 2, cline = 3;
+
+PROC write rnode = (RNODE node, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    CASE node IN
+        (BOX box):
+            (write int (cbox, ferry, flt); write box (box, ferry, flt)),
+        (WIRE wire):
+            (write int (cwire, ferry, flt); write wire (wire, ferry, flt))
+    ESAC;
+
+PROC read rnode = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) RNODE:
+    CASE read int (ferry, flt) IN
+        {cbox} read box (ferry, flt),
+        {cwire} read wire (ferry, flt)
+    OUT sys fault ("invalid node"); BOX (0,0)
+    ESAC;
+
+
+PROC read line =  (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) LINE:
+  (HEAP WIRE := read wire (ferry, flt), read int(ferry, flt));
+
+PROC write line = (LINE line, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+   write wire(wire OF line, ferry, flt);
+   write int(instance OF line, ferry, flt)
+END;
+
+PROC read node =  (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) NODE:
+    CASE read int (ferry, flt) IN
+        {cbox} read box (ferry, flt),
+        {cline} read line (ferry, flt)
+    OUT sys fault ("invalid node"); SKIP
+    ESAC;
+
+PROC write node = (NODE node, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+    CASE node IN
+        (BOX box):
+            (write int (cbox, ferry, flt); write box (box, ferry, flt)),
+        (LINE line):
+            (write int (cline, ferry, flt); write line (line, ferry, flt))
+    ESAC;
+
+PROC read mnode = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) MNODE:
+   (read node(ferry, flt), read int(ferry, flt), read int(ferry, flt));
+
+PROC write mnode = (MNODE mnode, PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+   write node(node OF mnode, ferry, flt);
+   write int (circuit OF mnode, ferry, flt);
+   write int (base OF mnode, ferry, flt)
+END
+
+KEEP
+   read char, read charvec, read int, read id, read bool,
+   write char, write charvec, write int, write id, write bool,
+
+   read stype, write stype,
+   read wire, write wire, read ram, write ram, read binding, write binding,
+   read fn, write fn, read box, write box, read rnode, write rnode,
+   read mnode, write mnode
+
+FINISH

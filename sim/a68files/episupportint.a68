@@ -1,0 +1,1548 @@
+{  Id: episupportint.sta,v 2.1.1.2 91/11/29 14:39:02 aap Exp$ }
+{ DEC/CMS REPLACEMENT HISTORY, Element EPISUPPORTINT.STA }
+{ *9    10-AUG-1989 12:20:04 ELLADEV "Definitive release 4.0, first provisional release 4.1. BGH" }
+{ *8     2-JUN-1989 13:55:34 ELLADEV "Updated provisional with fixes for R4B362. BGH" }
+{ *7    29-MAR-1989 15:08:47 ELLADEV "Updated provisional with fixes for R4B239. BGH" }
+{ *6    17-MAR-1989 16:09:41 ELLADEV "Updated provisional with fixes for R4B187. BGH" }
+{ *5     1-FEB-1989 09:45:59 ELLADEV "Updated provisional with fixes for R4B045. BGH" }
+{ *4    21-JAN-1989 11:11:21 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *3     9-DEC-1988 15:03:04 ELLADEV "updated draft version for Release 4.0" }
+{ *2    30-NOV-1988 12:25:22 ELLADEV "updated draft version for Release 4.0" }
+{ *1    11-NOV-1988 15:54:27 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element EPISUPPORTINT.STA }
+
+DECS episupportint CONTEXT VOID  USE putstrings:
+
+{                " Id: episupportint.sta,v 2.1.1.2 91/11/29 14:39:02 aap Exp$" }
+configinfo A68CONFIG "$Id: episupportint.a68,v 34.2 1995/03/29 13:04:30 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ ******************************************************************************
+                                Praxis Systems plc
+
+Module        : EPI Support interface
+
+File          : episupportint.sta
+
+Description   : Acts as an interface to EPI support code/data required by
+                ELLA modules.
+
+                The following convention has been used:
+                a prefix of m_ indicates correspondence with a C macro,
+                a prefix of e_ indicates correspondence with a C variable.
+
+Changes History
+
+02.06.88     New module for EPI Version 0. BGH
+11.08.88     EPI Version 1. BGH
+08.09.88     EPI Version 2. BJE
+12.10.88     Implemented actions from code review n035.7.48. BGH
+25.11.88     EPITYPE subtypes changed. AAP
+29.11.88     Aliens defined for Unix only, circumvents problem
+                of unresolved references on VMS. BGH
+12.09.89     CR 642.  PROC sorttoclass moved from LIBINTERFACE. EVW
+12.12.90     Extended EPI_NODE to cope with probe functions. MDR.
+31:01:91     Merged release 5 and release 6.  DCT
+26:10:92     m_epi_c_type_void added at end of constants, VOIDEPITYPE added. JIT
+ ******************************************************************************
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ Modes }
+{ ----- }
+
+{ for use in and out of EPI support }
+MODE EPIIDENT                   = BITS;
+MODE EPIUNSIGNED                = BITS;
+MODE EPIINT                     = INT;
+MODE EPISTATUSCODE              = BITS;
+MODE EPISTRING                  = STR;
+MODE EPIBOOL                    = BOOL;
+MODE EPITIME                    = BITS;
+MODE EPILIBRARY                 = STRUCT (EPIIDENT ident,
+                                          REF EPISTRING lname);
+MODE EPICONTEXT                 = STRUCT (EPIIDENT ident,
+                                          REF EPISTRING cname);
+MODE EPIIMPORTS                 = STRUCT (EPIIDENT ident,
+                                          REF EPISTRING iname,
+                                          EPICONTEXT context);
+MODE EPIDECLARATION             = STRUCT (EPIIDENT ident,
+                                          REF EPISTRING dname,
+                                          EPIUNSIGNED version,
+                                          EPIUNSIGNED class,
+                                          EPICONTEXT context);
+MODE EPIBINDING                 = STRUCT (EPIIDENT ident,
+                                          EPIDECLARATION declaration,
+                                          EPIIMPORTS imports);
+{ EPINODE, EPISIGNAL and EPITESTPOINT are not expected to be unpacked by EPI
+  clients }
+MODE EPINODE                    = STRUCT (EPIIDENT ident,
+                                          EPIINT fn,
+                                          EPIINT instance,
+                                          EPIINT circuit,
+                                          EPIINT base,
+                                          REF VECTOR [] EPIINT rnode_list);
+MODE EPISIGNAL                  = STRUCT (EPIIDENT ident,
+                                          REF VECTOR [] EPIINT value);
+MODE EPITESTPOINT               = STRUCT (EPIIDENT ident,
+                                          EPIUNSIGNED handle);
+MODE EPIEVENT                   = STRUCT (EPIIDENT ident,
+                                          EPIUNSIGNED time,
+                                          EPITESTPOINT testpoint,
+                                          EPISIGNAL signal);
+MODE EPIRAMVALUE                = STRUCT (EPIIDENT ident,
+                                          EPISIGNAL address,
+                                          EPISIGNAL data);
+MODE EPIFNINPUT                 = STRUCT (EPIIDENT ident,
+                                          EPIUNSIGNED seq,
+                                          EPINODE node);
+MODE EPITYPE,
+        INTEPITYPE              = STRUCT (REF EPISTRING tag,
+                                          EPIINT lwb,
+                                          EPIINT upb),
+        CHAREPITYPE             = STRUCT (REF EPISTRING tag,
+                                          REF EPISTRING char_repr),
+        STRINGEPITYPE           = STRUCT (EPIUNSIGNED length,
+                                          REF EPITYPE subtype),
+        ROWEPITYPE              = STRUCT (EPIUNSIGNED row_elems,
+                                          REF EPITYPE subtype),
+        STRUCTEPITYPE           = REF VECTOR [] REF EPITYPE,
+        FNEPITYPE               = STRUCT (REF EPITYPE input,
+                                          REF EPITYPE output),
+        ENUMEPIALT              = STRUCT (REF EPISTRING tag,
+                                          REF EPITYPE subtype),
+        ENUMEPITYPE             = REF VECTOR [] ENUMEPIALT,
+        VOIDEPITYPE             = STRUCT (EPIUNSIGNED void),
+        ANYEPITYPE              = UNION  (INTEPITYPE,
+                                          CHAREPITYPE,
+                                          STRINGEPITYPE,
+                                          ROWEPITYPE,
+                                          STRUCTEPITYPE,
+                                          FNEPITYPE,
+                                          ENUMEPITYPE,
+                                          VOIDEPITYPE,
+                                          VOID),
+     EPITYPE                    = STRUCT (EPIIDENT ident,
+                                          EPIUNSIGNED class,
+                                          ANYEPITYPE type);
+MODE EPIMESSAGETYPE             = BITS;
+MODE    MESSAGEINFO             = UNION (EPISTRING,
+                                         EPIUNSIGNED,   { and EPITIME }
+                                         EPIBOOL,
+                                         EPILIBRARY,
+                                         EPICONTEXT,
+                                         EPIIMPORTS,
+                                         EPIBINDING,
+                                         EPIDECLARATION,
+                                         EPINODE,
+                                         EPISIGNAL,
+                                         EPITESTPOINT,
+                                         EPIEVENT,
+                                         EPIRAMVALUE,
+                                         EPIFNINPUT,
+                                         EPITYPE);
+MODE    MESSAGE                 = STRUCT (EPIMESSAGETYPE type,
+                                          MESSAGEINFO messageinfo);
+MODE EPIMESSAGE                 = REF MESSAGE;
+
+
+{ Constants }
+{ --------- }
+
+{ defined in epi.h and epi_internal.h }
+
+EPIIDENT   m_epi_o_library = ALIEN
+%4 "m_epi_o_library";
+*4 "M_EPI_O_LIBRARY";
+
+EPIIDENT   m_epi_o_context = ALIEN
+%4 "m_epi_o_context";
+*4 "M_EPI_O_CONTEXT";
+
+EPIIDENT   m_epi_o_imports = ALIEN
+%4 "m_epi_o_imports";
+*4 "M_EPI_O_IMPORTS";
+
+EPIIDENT   m_epi_o_declaration = ALIEN
+%4 "m_epi_o_declaration";
+*4 "M_EPI_O_DECLARATION";
+
+EPIIDENT   m_epi_o_binding = ALIEN
+%4 "m_epi_o_binding";
+*4 "M_EPI_O_BINDING";
+
+EPIIDENT   m_epi_o_null_binding = ALIEN
+%4 "m_epi_o_null_binding";
+*4 "M_EPI_O_NULL_BINDING";
+
+EPIIDENT   m_epi_o_node = ALIEN
+%4 "m_epi_o_node";
+*4 "M_EPI_O_NODE";
+
+EPIIDENT   m_epi_o_null_node = ALIEN
+%4 "m_epi_o_null_node";
+*4 "M_EPI_O_NULL_NODE";
+
+EPIIDENT   m_epi_o_event = ALIEN
+%4 "m_epi_o_event";
+*4 "M_EPI_O_EVENT";
+
+EPIIDENT   m_epi_o_ram_value = ALIEN
+%4 "m_epi_o_ram_value";
+*4 "M_EPI_O_RAM_VALUE";
+
+EPIIDENT   m_epi_o_fn_input = ALIEN
+%4 "m_epi_o_fn_input";
+*4 "M_EPI_O_FN_INPUT";
+
+EPIIDENT   m_epi_o_signal = ALIEN
+%4 "m_epi_o_signal";
+*4 "M_EPI_O_SIGNAL";
+
+EPIIDENT   m_epi_o_null_signal = ALIEN
+%4 "m_epi_o_null_signal";
+*4 "M_EPI_O_NULL_SIGNAL";
+
+EPIIDENT   m_epi_o_null_type = ALIEN
+%4 "m_epi_o_null_type";
+*4 "M_EPI_O_NULL_TYPE";
+
+EPIIDENT   m_epi_o_testpoint    = ALIEN
+%4 "m_epi_o_testpoint";
+*4 "M_EPI_O_TESTPOINT";
+
+EPIIDENT   m_epi_o_type = ALIEN
+%4 "m_epi_o_type";
+*4 "M_EPI_O_TYPE";
+
+{  The declarations between the lines containing 'update-constants start'
+   and 'update-constants end' are generated automatically by 'update-constants'.
+   THEY MUST NOT BE EDITED MANUALLY!!
+   See comment on 'epi_constant_strings' in epi.c.
+}
+
+{ update-constants start }
+    { status codes }
+EPISTATUSCODE m_epi_s_ok = ALIEN
+%4 "m_epi_s_ok";
+*4 "M_EPI_S_OK";
+
+EPISTATUSCODE m_epi_s_active = ALIEN
+%4 "m_epi_s_active";
+*4 "M_EPI_S_ACTIVE";
+
+EPISTATUSCODE m_epi_s_assembly_error = ALIEN
+%4 "m_epi_s_assembly_error";
+*4 "M_EPI_S_ASSEMBLY_ERROR";
+
+EPISTATUSCODE m_epi_s_bad_action = ALIEN
+%4 "m_epi_s_bad_action";
+*4 "M_EPI_S_BAD_ACTION";
+
+EPISTATUSCODE m_epi_s_bad_binding = ALIEN
+%4 "m_epi_s_bad_binding";
+*4 "M_EPI_S_BAD_BINDING";
+
+EPISTATUSCODE m_epi_s_bad_condition = ALIEN
+%4 "m_epi_s_bad_condition";
+*4 "M_EPI_S_BAD_CONDITION";
+
+EPISTATUSCODE m_epi_s_bad_context = ALIEN
+%4 "m_epi_s_bad_context";
+*4 "M_EPI_S_BAD_CONTEXT";
+
+EPISTATUSCODE m_epi_s_bad_context_name = ALIEN
+%4 "m_epi_s_bad_context_name";
+*4 "M_EPI_S_BAD_CONTEXT_NAME";
+
+EPISTATUSCODE m_epi_s_bad_declaration = ALIEN
+%4 "m_epi_s_bad_declaration";
+*4 "M_EPI_S_BAD_DECLARATION";
+
+EPISTATUSCODE m_epi_s_bad_filename = ALIEN
+%4 "m_epi_s_bad_filename";
+*4 "M_EPI_S_BAD_FILENAME";
+
+EPISTATUSCODE m_epi_s_bad_handler = ALIEN
+%4 "m_epi_s_bad_handler";
+*4 "M_EPI_S_BAD_HANDLER";
+
+EPISTATUSCODE m_epi_s_bad_imports = ALIEN
+%4 "m_epi_s_bad_imports";
+*4 "M_EPI_S_BAD_IMPORTS";
+
+EPISTATUSCODE m_epi_s_bad_imports_name = ALIEN
+%4 "m_epi_s_bad_imports_name";
+*4 "M_EPI_S_BAD_IMPORTS_NAME";
+
+EPISTATUSCODE m_epi_s_bad_increment = ALIEN
+%4 "m_epi_s_bad_increment";
+*4 "M_EPI_S_BAD_INCREMENT";
+
+EPISTATUSCODE m_epi_s_bad_library = ALIEN
+%4 "m_epi_s_bad_library";
+*4 "M_EPI_S_BAD_LIBRARY";
+
+EPISTATUSCODE m_epi_s_bad_message_type = ALIEN
+%4 "m_epi_s_bad_message_type";
+*4 "M_EPI_S_BAD_MESSAGE_TYPE";
+
+EPISTATUSCODE m_epi_s_bad_node = ALIEN
+%4 "m_epi_s_bad_node";
+*4 "M_EPI_S_BAD_NODE";
+
+EPISTATUSCODE m_epi_s_bad_nodename = ALIEN
+%4 "m_epi_s_bad_nodename";
+*4 "M_EPI_S_BAD_NODENAME";
+
+EPISTATUSCODE m_epi_s_bad_range = ALIEN
+%4 "m_epi_s_bad_range";
+*4 "M_EPI_S_BAD_RANGE";
+
+EPISTATUSCODE m_epi_s_bad_signal = ALIEN
+%4 "m_epi_s_bad_signal";
+*4 "M_EPI_S_BAD_SIGNAL";
+
+EPISTATUSCODE m_epi_s_bad_sim_file = ALIEN
+%4 "m_epi_s_bad_sim_file";
+*4 "M_EPI_S_BAD_SIM_FILE";
+
+EPISTATUSCODE m_epi_s_bad_string = ALIEN
+%4 "m_epi_s_bad_string";
+*4 "M_EPI_S_BAD_STRING";
+
+EPISTATUSCODE m_epi_s_bad_testpoint = ALIEN
+%4 "m_epi_s_bad_testpoint";
+*4 "M_EPI_S_BAD_TESTPOINT";
+
+EPISTATUSCODE m_epi_s_bad_values = ALIEN
+%4 "m_epi_s_bad_values";
+*4 "M_EPI_S_BAD_VALUES";
+
+EPISTATUSCODE m_epi_s_closure_circular = ALIEN
+%4 "m_epi_s_closure_circular";
+*4 "M_EPI_S_CLOSURE_CIRCULAR";
+
+EPISTATUSCODE m_epi_s_closure_empty = ALIEN
+%4 "m_epi_s_closure_empty";
+*4 "M_EPI_S_CLOSURE_EMPTY";
+
+EPISTATUSCODE m_epi_s_closure_incomplete = ALIEN
+%4 "m_epi_s_closure_incomplete";
+*4 "M_EPI_S_CLOSURE_INCOMPLETE";
+
+EPISTATUSCODE m_epi_s_compile_error = ALIEN
+%4 "m_epi_s_compile_error";
+*4 "M_EPI_S_COMPILE_ERROR";
+
+EPISTATUSCODE m_epi_s_compound_context = ALIEN
+%4 "m_epi_s_compound_context";
+*4 "M_EPI_S_COMPOUND_CONTEXT";
+
+EPISTATUSCODE m_epi_s_context_exists = ALIEN
+%4 "m_epi_s_context_exists";
+*4 "M_EPI_S_CONTEXT_EXISTS";
+
+EPISTATUSCODE m_epi_s_decl_bound = ALIEN
+%4 "m_epi_s_decl_bound";
+*4 "M_EPI_S_DECL_BOUND";
+
+EPISTATUSCODE m_epi_s_decl_exported = ALIEN
+%4 "m_epi_s_decl_exported";
+*4 "M_EPI_S_DECL_EXPORTED";
+
+EPISTATUSCODE m_epi_s_decl_not_exported = ALIEN
+%4 "m_epi_s_decl_not_exported";
+*4 "M_EPI_S_DECL_NOT_EXPORTED";
+
+EPISTATUSCODE m_epi_s_decl_not_imported = ALIEN
+%4 "m_epi_s_decl_not_imported";
+*4 "M_EPI_S_DECL_NOT_IMPORTED";
+
+EPISTATUSCODE m_epi_s_decl_used_by = ALIEN
+%4 "m_epi_s_decl_used_by";
+*4 "M_EPI_S_DECL_USED_BY";
+
+EPISTATUSCODE m_epi_s_file_not_found = ALIEN
+%4 "m_epi_s_file_not_found";
+*4 "M_EPI_S_FILE_NOT_FOUND";
+
+EPISTATUSCODE m_epi_s_imports_exists = ALIEN
+%4 "m_epi_s_imports_exists";
+*4 "M_EPI_S_IMPORTS_EXISTS";
+
+EPISTATUSCODE m_epi_s_internal_error = ALIEN
+%4 "m_epi_s_internal_error";
+*4 "M_EPI_S_INTERNAL_ERROR";
+
+EPISTATUSCODE m_epi_s_interrupted = ALIEN
+%4 "m_epi_s_interrupted";
+*4 "M_EPI_S_INTERRUPTED";
+
+EPISTATUSCODE m_epi_s_last_context = ALIEN
+%4 "m_epi_s_last_context";
+*4 "M_EPI_S_LAST_CONTEXT";
+
+EPISTATUSCODE m_epi_s_last_imports = ALIEN
+%4 "m_epi_s_last_imports";
+*4 "M_EPI_S_LAST_IMPORTS";
+
+EPISTATUSCODE m_epi_s_library_exists = ALIEN
+%4 "m_epi_s_library_exists";
+*4 "M_EPI_S_LIBRARY_EXISTS";
+
+EPISTATUSCODE m_epi_s_lib_full = ALIEN
+%4 "m_epi_s_lib_full";
+*4 "M_EPI_S_LIB_FULL";
+
+EPISTATUSCODE m_epi_s_lib_not_changed = ALIEN
+%4 "m_epi_s_lib_not_changed";
+*4 "M_EPI_S_LIB_NOT_CHANGED";
+
+EPISTATUSCODE m_epi_s_local_os_error = ALIEN
+%4 "m_epi_s_local_os_error";
+*4 "M_EPI_S_LOCAL_OS_ERROR";
+
+EPISTATUSCODE m_epi_s_logging = ALIEN
+%4 "m_epi_s_logging";
+*4 "M_EPI_S_LOGGING";
+
+EPISTATUSCODE m_epi_s_multiple_imports = ALIEN
+%4 "m_epi_s_multiple_imports";
+*4 "M_EPI_S_MULTIPLE_IMPORTS";
+
+EPISTATUSCODE m_epi_s_not_bound = ALIEN
+%4 "m_epi_s_not_bound";
+*4 "M_EPI_S_NOT_BOUND";
+
+EPISTATUSCODE m_epi_s_not_implemented = ALIEN
+%4 "m_epi_s_not_implemented";
+*4 "M_EPI_S_NOT_IMPLEMENTED";
+
+EPISTATUSCODE m_epi_s_not_logging = ALIEN
+%4 "m_epi_s_not_logging";
+*4 "M_EPI_S_NOT_LOGGING";
+
+EPISTATUSCODE m_epi_s_not_outputting = ALIEN
+%4 "m_epi_s_not_outputting";
+*4 "M_EPI_S_NOT_OUTPUTTING";
+
+EPISTATUSCODE m_epi_s_not_started = ALIEN
+%4 "m_epi_s_not_started";
+*4 "M_EPI_S_NOT_STARTED";
+
+EPISTATUSCODE m_epi_s_no_files = ALIEN
+%4 "m_epi_s_no_files";
+*4 "M_EPI_S_NO_FILES";
+
+EPISTATUSCODE m_epi_s_no_transaction = ALIEN
+%4 "m_epi_s_no_transaction";
+*4 "M_EPI_S_NO_TRANSACTION";
+
+EPISTATUSCODE m_epi_s_old_declaration = ALIEN
+%4 "m_epi_s_old_declaration";
+*4 "M_EPI_S_OLD_DECLARATION";
+
+EPISTATUSCODE m_epi_s_old_library = ALIEN
+%4 "m_epi_s_old_library";
+*4 "M_EPI_S_OLD_LIBRARY";
+
+EPISTATUSCODE m_epi_s_online = ALIEN
+%4 "m_epi_s_online";
+*4 "M_EPI_S_ONLINE";
+
+EPISTATUSCODE m_epi_s_outputting = ALIEN
+%4 "m_epi_s_outputting";
+*4 "M_EPI_S_OUTPUTTING";
+
+EPISTATUSCODE m_epi_s_recursion = ALIEN
+%4 "m_epi_s_recursion";
+*4 "M_EPI_S_RECURSION";
+
+EPISTATUSCODE m_epi_s_remote_os_error = ALIEN
+%4 "m_epi_s_remote_os_error";
+*4 "M_EPI_S_REMOTE_OS_ERROR";
+
+EPISTATUSCODE m_epi_s_same_context = ALIEN
+%4 "m_epi_s_same_context";
+*4 "M_EPI_S_SAME_CONTEXT";
+
+EPISTATUSCODE m_epi_s_simple_context = ALIEN
+%4 "m_epi_s_simple_context";
+*4 "M_EPI_S_SIMPLE_CONTEXT";
+
+EPISTATUSCODE m_epi_s_started = ALIEN
+%4 "m_epi_s_started";
+*4 "M_EPI_S_STARTED";
+
+EPISTATUSCODE m_epi_s_stopped = ALIEN
+%4 "m_epi_s_stopped";
+*4 "M_EPI_S_STOPPED";
+
+EPISTATUSCODE m_epi_s_suspended = ALIEN
+%4 "m_epi_s_suspended";
+*4 "M_EPI_S_SUSPENDED";
+
+EPISTATUSCODE m_epi_s_unsimulatable_function = ALIEN
+%4 "m_epi_s_unsimulatable_function";
+*4 "M_EPI_S_UNSIMULATABLE_FUNCTION";
+
+EPISTATUSCODE m_epi_s_usage_circular = ALIEN
+%4 "m_epi_s_usage_circular";
+*4 "M_EPI_S_USAGE_CIRCULAR";
+
+EPISTATUSCODE m_epi_s_wrong_mode = ALIEN
+%4 "m_epi_s_wrong_mode";
+*4 "M_EPI_S_WRONG_MODE";
+
+
+    { single message types  }
+EPIMESSAGETYPE m_epi_m_cpu = ALIEN
+%4 "m_epi_m_cpu";
+*4 "M_EPI_M_CPU";
+
+EPIMESSAGETYPE m_epi_m_internal_error = ALIEN
+%4 "m_epi_m_internal_error";
+*4 "M_EPI_M_INTERNAL_ERROR";
+
+EPIMESSAGETYPE m_epi_m_local_os_error = ALIEN
+%4 "m_epi_m_local_os_error";
+*4 "M_EPI_M_LOCAL_OS_ERROR";
+
+EPIMESSAGETYPE m_epi_m_remote_os_error = ALIEN
+%4 "m_epi_m_remote_os_error";
+*4 "M_EPI_M_REMOTE_OS_ERROR";
+
+EPIMESSAGETYPE m_epi_m_aborted = ALIEN
+%4 "m_epi_m_aborted";
+*4 "M_EPI_M_ABORTED";
+
+EPIMESSAGETYPE m_epi_m_library = ALIEN
+%4 "m_epi_m_library";
+*4 "M_EPI_M_LIBRARY";
+
+EPIMESSAGETYPE m_epi_m_context = ALIEN
+%4 "m_epi_m_context";
+*4 "M_EPI_M_CONTEXT";
+
+EPIMESSAGETYPE m_epi_m_imports = ALIEN
+%4 "m_epi_m_imports";
+*4 "M_EPI_M_IMPORTS";
+
+EPIMESSAGETYPE m_epi_m_binding = ALIEN
+%4 "m_epi_m_binding";
+*4 "M_EPI_M_BINDING";
+
+EPIMESSAGETYPE m_epi_m_declaration = ALIEN
+%4 "m_epi_m_declaration";
+*4 "M_EPI_M_DECLARATION";
+
+EPIMESSAGETYPE m_epi_m_lib_version = ALIEN
+%4 "m_epi_m_lib_version";
+*4 "M_EPI_M_LIB_VERSION";
+
+EPIMESSAGETYPE m_epi_m_lib_last_written = ALIEN
+%4 "m_epi_m_lib_last_written";
+*4 "M_EPI_M_LIB_LAST_WRITTEN";
+
+EPIMESSAGETYPE m_epi_m_lib_last_cleared = ALIEN
+%4 "m_epi_m_lib_last_cleared";
+*4 "M_EPI_M_LIB_LAST_CLEARED";
+
+EPIMESSAGETYPE m_epi_m_lib_name = ALIEN
+%4 "m_epi_m_lib_name";
+*4 "M_EPI_M_LIB_NAME";
+
+EPIMESSAGETYPE m_epi_m_lib_size = ALIEN
+%4 "m_epi_m_lib_size";
+*4 "M_EPI_M_LIB_SIZE";
+
+EPIMESSAGETYPE m_epi_m_lib_overhead = ALIEN
+%4 "m_epi_m_lib_overhead";
+*4 "M_EPI_M_LIB_OVERHEAD";
+
+EPIMESSAGETYPE m_epi_m_lib_free = ALIEN
+%4 "m_epi_m_lib_free";
+*4 "M_EPI_M_LIB_FREE";
+
+EPIMESSAGETYPE m_epi_m_lib_changed = ALIEN
+%4 "m_epi_m_lib_changed";
+*4 "M_EPI_M_LIB_CHANGED";
+
+EPIMESSAGETYPE m_epi_m_context_name = ALIEN
+%4 "m_epi_m_context_name";
+*4 "M_EPI_M_CONTEXT_NAME";
+
+EPIMESSAGETYPE m_epi_m_imports_name = ALIEN
+%4 "m_epi_m_imports_name";
+*4 "M_EPI_M_IMPORTS_NAME";
+
+EPIMESSAGETYPE m_epi_m_binding_incomplete = ALIEN
+%4 "m_epi_m_binding_incomplete";
+*4 "M_EPI_M_BINDING_INCOMPLETE";
+
+EPIMESSAGETYPE m_epi_m_decl_name = ALIEN
+%4 "m_epi_m_decl_name";
+*4 "M_EPI_M_DECL_NAME";
+
+EPIMESSAGETYPE m_epi_m_decl_exported_flag = ALIEN
+%4 "m_epi_m_decl_exported_flag";
+*4 "M_EPI_M_DECL_EXPORTED_FLAG";
+
+EPIMESSAGETYPE m_epi_m_decl_class = ALIEN
+%4 "m_epi_m_decl_class";
+*4 "M_EPI_M_DECL_CLASS";
+
+EPIMESSAGETYPE m_epi_m_decl_version = ALIEN
+%4 "m_epi_m_decl_version";
+*4 "M_EPI_M_DECL_VERSION";
+
+EPIMESSAGETYPE m_epi_m_decl_uses = ALIEN
+%4 "m_epi_m_decl_uses";
+*4 "M_EPI_M_DECL_USES";
+
+EPIMESSAGETYPE m_epi_m_decl_used_by = ALIEN
+%4 "m_epi_m_decl_used_by";
+*4 "M_EPI_M_DECL_USED_BY";
+
+EPIMESSAGETYPE m_epi_m_decl_source = ALIEN
+%4 "m_epi_m_decl_source";
+*4 "M_EPI_M_DECL_SOURCE";
+
+EPIMESSAGETYPE m_epi_m_decl_import = ALIEN
+%4 "m_epi_m_decl_import";
+*4 "M_EPI_M_DECL_IMPORT";
+
+EPIMESSAGETYPE m_epi_m_compile_error = ALIEN
+%4 "m_epi_m_compile_error";
+*4 "M_EPI_M_COMPILE_ERROR";
+
+EPIMESSAGETYPE m_epi_m_assembly_error = ALIEN
+%4 "m_epi_m_assembly_error";
+*4 "M_EPI_M_ASSEMBLY_ERROR";
+
+EPIMESSAGETYPE m_epi_m_new_decl = ALIEN
+%4 "m_epi_m_new_decl";
+*4 "M_EPI_M_NEW_DECL";
+
+EPIMESSAGETYPE m_epi_m_changed_decl = ALIEN
+%4 "m_epi_m_changed_decl";
+*4 "M_EPI_M_CHANGED_DECL";
+
+EPIMESSAGETYPE m_epi_m_inconsistent_decl = ALIEN
+%4 "m_epi_m_inconsistent_decl";
+*4 "M_EPI_M_INCONSISTENT_DECL";
+
+EPIMESSAGETYPE m_epi_m_decl_not_exported = ALIEN
+%4 "m_epi_m_decl_not_exported";
+*4 "M_EPI_M_DECL_NOT_EXPORTED";
+
+EPIMESSAGETYPE m_epi_m_decl_exported = ALIEN
+%4 "m_epi_m_decl_exported";
+*4 "M_EPI_M_DECL_EXPORTED";
+
+EPIMESSAGETYPE m_epi_m_decl_not_bound = ALIEN
+%4 "m_epi_m_decl_not_bound";
+*4 "M_EPI_M_DECL_NOT_BOUND";
+
+EPIMESSAGETYPE m_epi_m_decl_latest = ALIEN
+%4 "m_epi_m_decl_latest";
+*4 "M_EPI_M_DECL_LATEST";
+
+EPIMESSAGETYPE m_epi_m_simulatable_node = ALIEN
+%4 "m_epi_m_simulatable_node";
+*4 "M_EPI_M_SIMULATABLE_NODE";
+
+EPIMESSAGETYPE m_eti_m_output = ALIEN
+%4 "m_eti_m_output";
+*4 "M_ETI_M_OUTPUT";
+
+EPIMESSAGETYPE m_eti_m_showing_input = ALIEN
+%4 "m_eti_m_showing_input";
+*4 "M_ETI_M_SHOWING_INPUT";
+
+EPIMESSAGETYPE m_eti_m_showing_output = ALIEN
+%4 "m_eti_m_showing_output";
+*4 "M_ETI_M_SHOWING_OUTPUT";
+
+EPIMESSAGETYPE m_eti_m_input_file = ALIEN
+%4 "m_eti_m_input_file";
+*4 "M_ETI_M_INPUT_FILE";
+
+EPIMESSAGETYPE m_eti_m_input_start = ALIEN
+%4 "m_eti_m_input_start";
+*4 "M_ETI_M_INPUT_START";
+
+EPIMESSAGETYPE m_eti_m_input_end = ALIEN
+%4 "m_eti_m_input_end";
+*4 "M_ETI_M_INPUT_END";
+
+EPIMESSAGETYPE m_eti_m_input_file_count = ALIEN
+%4 "m_eti_m_input_file_count";
+*4 "M_ETI_M_INPUT_FILE_COUNT";
+
+EPIMESSAGETYPE m_eti_m_output_file = ALIEN
+%4 "m_eti_m_output_file";
+*4 "M_ETI_M_OUTPUT_FILE";
+
+EPIMESSAGETYPE m_eti_m_log_file = ALIEN
+%4 "m_eti_m_log_file";
+*4 "M_ETI_M_LOG_FILE";
+
+EPIMESSAGETYPE m_eti_m_mode = ALIEN
+%4 "m_eti_m_mode";
+*4 "M_ETI_M_MODE";
+
+EPIMESSAGETYPE m_epi_m_node = ALIEN
+%4 "m_epi_m_node";
+*4 "M_EPI_M_NODE";
+
+EPIMESSAGETYPE m_epi_m_type = ALIEN
+%4 "m_epi_m_type";
+*4 "M_EPI_M_TYPE";
+
+EPIMESSAGETYPE m_epi_m_signal = ALIEN
+%4 "m_epi_m_signal";
+*4 "M_EPI_M_SIGNAL";
+
+EPIMESSAGETYPE m_epi_m_old_testpoint = ALIEN
+%4 "m_epi_m_old_testpoint";
+*4 "M_EPI_M_OLD_TESTPOINT";
+
+EPIMESSAGETYPE m_epi_m_testpoint = ALIEN
+%4 "m_epi_m_testpoint";
+*4 "M_EPI_M_TESTPOINT";
+
+EPIMESSAGETYPE m_epi_m_event = ALIEN
+%4 "m_epi_m_event";
+*4 "M_EPI_M_EVENT";
+
+EPIMESSAGETYPE m_epi_m_first_event = ALIEN
+%4 "m_epi_m_first_event";
+*4 "M_EPI_M_FIRST_EVENT";
+
+EPIMESSAGETYPE m_epi_m_incomplete_event = ALIEN
+%4 "m_epi_m_incomplete_event";
+*4 "M_EPI_M_INCOMPLETE_EVENT";
+
+EPIMESSAGETYPE m_epi_m_incomplete_first_event = ALIEN
+%4 "m_epi_m_incomplete_first_event";
+*4 "M_EPI_M_INCOMPLETE_FIRST_EVENT";
+
+EPIMESSAGETYPE m_epi_m_sim_time = ALIEN
+%4 "m_epi_m_sim_time";
+*4 "M_EPI_M_SIM_TIME";
+
+EPIMESSAGETYPE m_epi_m_simulated_node = ALIEN
+%4 "m_epi_m_simulated_node";
+*4 "M_EPI_M_SIMULATED_NODE";
+
+EPIMESSAGETYPE m_epi_m_kept_node = ALIEN
+%4 "m_epi_m_kept_node";
+*4 "M_EPI_M_KEPT_NODE";
+
+EPIMESSAGETYPE m_epi_m_fn_input = ALIEN
+%4 "m_epi_m_fn_input";
+*4 "M_EPI_M_FN_INPUT";
+
+EPIMESSAGETYPE m_epi_m_node_class = ALIEN
+%4 "m_epi_m_node_class";
+*4 "M_EPI_M_NODE_CLASS";
+
+EPIMESSAGETYPE m_epi_m_node_contains = ALIEN
+%4 "m_epi_m_node_contains";
+*4 "M_EPI_M_NODE_CONTAINS";
+
+EPIMESSAGETYPE m_epi_m_node_contained_in = ALIEN
+%4 "m_epi_m_node_contained_in";
+*4 "M_EPI_M_NODE_CONTAINED_IN";
+
+EPIMESSAGETYPE m_epi_m_node_name = ALIEN
+%4 "m_epi_m_node_name";
+*4 "M_EPI_M_NODE_NAME";
+
+EPIMESSAGETYPE m_epi_m_node_kept = ALIEN
+%4 "m_epi_m_node_kept";
+*4 "M_EPI_M_NODE_KEPT";
+
+EPIMESSAGETYPE m_epi_m_ram_value = ALIEN
+%4 "m_epi_m_ram_value";
+*4 "M_EPI_M_RAM_VALUE";
+
+EPIMESSAGETYPE m_epi_m_testpoint_action = ALIEN
+%4 "m_epi_m_testpoint_action";
+*4 "M_EPI_M_TESTPOINT_ACTION";
+
+EPIMESSAGETYPE m_epi_m_testpoint_condition = ALIEN
+%4 "m_epi_m_testpoint_condition";
+*4 "M_EPI_M_TESTPOINT_CONDITION";
+
+EPIMESSAGETYPE m_epi_m_testpoint_cond_value = ALIEN
+%4 "m_epi_m_testpoint_cond_value";
+*4 "M_EPI_M_TESTPOINT_COND_VALUE";
+
+
+    { group message types }
+EPIMESSAGETYPE m_epi_m_all = ALIEN
+%4 "m_epi_m_all";
+*4 "M_EPI_M_ALL";
+
+EPIMESSAGETYPE m_epi_m_lib_all = ALIEN
+%4 "m_epi_m_lib_all";
+*4 "M_EPI_M_LIB_ALL";
+
+EPIMESSAGETYPE m_epi_m_context_all = ALIEN
+%4 "m_epi_m_context_all";
+*4 "M_EPI_M_CONTEXT_ALL";
+
+EPIMESSAGETYPE m_epi_m_imports_all = ALIEN
+%4 "m_epi_m_imports_all";
+*4 "M_EPI_M_IMPORTS_ALL";
+
+EPIMESSAGETYPE m_epi_m_closure_all = ALIEN
+%4 "m_epi_m_closure_all";
+*4 "M_EPI_M_CLOSURE_ALL";
+
+EPIMESSAGETYPE m_epi_m_binding_all = ALIEN
+%4 "m_epi_m_binding_all";
+*4 "M_EPI_M_BINDING_ALL";
+
+EPIMESSAGETYPE m_epi_m_decl_all = ALIEN
+%4 "m_epi_m_decl_all";
+*4 "M_EPI_M_DECL_ALL";
+
+EPIMESSAGETYPE m_eti_m_all = ALIEN
+%4 "m_eti_m_all";
+*4 "M_ETI_M_ALL";
+
+EPIMESSAGETYPE m_epi_m_sim_all = ALIEN
+%4 "m_epi_m_sim_all";
+*4 "M_EPI_M_SIM_ALL";
+
+EPIMESSAGETYPE m_epi_m_node_all = ALIEN
+%4 "m_epi_m_node_all";
+*4 "M_EPI_M_NODE_ALL";
+
+EPIMESSAGETYPE m_epi_m_testpoint_all = ALIEN
+%4 "m_epi_m_testpoint_all";
+*4 "M_EPI_M_TESTPOINT_ALL";
+
+
+    { declaration classes }
+EPIUNSIGNED m_epi_c_type = ALIEN
+%4 "m_epi_c_type";
+*4 "M_EPI_C_TYPE";
+
+EPIUNSIGNED m_epi_c_int = ALIEN
+%4 "m_epi_c_int";
+*4 "M_EPI_C_INT";
+
+EPIUNSIGNED m_epi_c_fn = ALIEN
+%4 "m_epi_c_fn";
+*4 "M_EPI_C_FN";
+
+EPIUNSIGNED m_epi_c_mac = ALIEN
+%4 "m_epi_c_mac";
+*4 "M_EPI_C_MAC";
+
+EPIUNSIGNED m_epi_c_const = ALIEN
+%4 "m_epi_c_const";
+*4 "M_EPI_C_CONST";
+
+
+    { ETI modes }
+EPIUNSIGNED m_eti_c_ease = ALIEN
+%4 "m_eti_c_ease";
+*4 "M_ETI_C_EASE";
+
+EPIUNSIGNED m_eti_c_sim_present = ALIEN
+%4 "m_eti_c_sim_present";
+*4 "M_ETI_C_SIM_PRESENT";
+
+EPIUNSIGNED m_eti_c_sim_past = ALIEN
+%4 "m_eti_c_sim_past";
+*4 "M_ETI_C_SIM_PAST";
+
+EPIUNSIGNED m_eti_c_attr = ALIEN
+%4 "m_eti_c_attr";
+*4 "M_ETI_C_ATTR";
+
+EPIUNSIGNED m_eti_c_attr_end = ALIEN
+%4 "m_eti_c_attr_end";
+*4 "M_ETI_C_ATTR_END";
+
+EPIUNSIGNED m_eti_c_attr_eld = ALIEN
+%4 "m_eti_c_attr_eld";
+*4 "M_ETI_C_ATTR_ELD";
+
+EPIUNSIGNED m_eti_c_attr_ecd = ALIEN
+%4 "m_eti_c_attr_ecd";
+*4 "M_ETI_C_ATTR_ECD";
+
+EPIUNSIGNED m_eti_c_attr_eca = ALIEN
+%4 "m_eti_c_attr_eca";
+*4 "M_ETI_C_ATTR_ECA";
+
+
+    { testpoint conditions }
+EPIUNSIGNED m_epi_c_always = ALIEN
+%4 "m_epi_c_always";
+*4 "M_EPI_C_ALWAYS";
+
+EPIUNSIGNED m_epi_c_becomes = ALIEN
+%4 "m_epi_c_becomes";
+*4 "M_EPI_C_BECOMES";
+
+EPIUNSIGNED m_epi_c_changes = ALIEN
+%4 "m_epi_c_changes";
+*4 "M_EPI_C_CHANGES";
+
+EPIUNSIGNED m_epi_c_equals = ALIEN
+%4 "m_epi_c_equals";
+*4 "M_EPI_C_EQUALS";
+
+
+    { node classes }
+EPIUNSIGNED m_epi_c_fn_node = ALIEN
+%4 "m_epi_c_fn_node";
+*4 "M_EPI_C_FN_NODE";
+
+EPIUNSIGNED m_epi_c_input_node = ALIEN
+%4 "m_epi_c_input_node";
+*4 "M_EPI_C_INPUT_NODE";
+
+EPIUNSIGNED m_epi_c_ram_node = ALIEN
+%4 "m_epi_c_ram_node";
+*4 "M_EPI_C_RAM_NODE";
+
+EPIUNSIGNED m_epi_c_wire_node = ALIEN
+%4 "m_epi_c_wire_node";
+*4 "M_EPI_C_WIRE_NODE";
+
+    { testpoint actions }
+EPIUNSIGNED m_epi_c_notify = ALIEN
+%4 "m_epi_c_notify";
+*4 "M_EPI_C_NOTIFY";
+
+EPIUNSIGNED m_epi_c_notify_and_keep = ALIEN
+%4 "m_epi_c_notify_and_keep";
+*4 "M_EPI_C_NOTIFY_AND_KEEP";
+
+EPIUNSIGNED m_epi_c_stop = ALIEN
+%4 "m_epi_c_stop";
+*4 "M_EPI_C_STOP";
+
+
+    { type classes }
+EPIUNSIGNED m_epi_c_type_char = ALIEN
+%4 "m_epi_c_type_char";
+*4 "M_EPI_C_TYPE_CHAR";
+
+EPIUNSIGNED m_epi_c_type_enum = ALIEN
+%4 "m_epi_c_type_enum";
+*4 "M_EPI_C_TYPE_ENUM";
+
+EPIUNSIGNED m_epi_c_type_fntype = ALIEN
+%4 "m_epi_c_type_fntype";
+*4 "M_EPI_C_TYPE_FNTYPE";
+
+EPIUNSIGNED m_epi_c_type_int = ALIEN
+%4 "m_epi_c_type_int";
+*4 "M_EPI_C_TYPE_INT";
+
+EPIUNSIGNED m_epi_c_type_invalid = ALIEN
+%4 "m_epi_c_type_invalid";
+*4 "M_EPI_C_TYPE_INVALID";
+
+EPIUNSIGNED m_epi_c_type_null = ALIEN
+%4 "m_epi_c_type_null";
+*4 "M_EPI_C_TYPE_NULL";
+
+EPIUNSIGNED m_epi_c_type_row = ALIEN
+%4 "m_epi_c_type_row";
+*4 "M_EPI_C_TYPE_ROW";
+
+EPIUNSIGNED m_epi_c_type_string = ALIEN
+%4 "m_epi_c_type_string";
+*4 "M_EPI_C_TYPE_STRING";
+
+EPIUNSIGNED m_epi_c_type_struct = ALIEN
+%4 "m_epi_c_type_struct";
+*4 "M_EPI_C_TYPE_STRUCT";
+
+EPIUNSIGNED m_epi_c_type_void = ALIEN
+%4"m_epi_c_type_void";
+*4"M_EPI_C_TYPE_VOID";
+
+{ update-constants end }
+
+{ Procedures }
+{ ---------- }
+
+{ For use by EPI and ELLA routines in generating epi messages }
+
+PROC make_epi_library =
+( STR lname                             { library name }
+) EPILIBRARY:
+BEGIN
+   EPILIBRARY epi_library;
+   ident OF epi_library := m_epi_o_library;
+   lname OF epi_library := MAKERVC(lname);
+   epi_library
+END;
+
+
+PROC make_epi_context =
+( STR cname                             { context name }
+) EPICONTEXT:
+BEGIN
+   EPICONTEXT epi_context;
+   ident OF epi_context := m_epi_o_context;
+   cname OF epi_context := MAKERVC(cname);
+   epi_context
+END;
+
+
+PROC make_epi_imports =
+( STR iname,                            { imports name }
+      cname                             { context name }
+) EPIIMPORTS:
+BEGIN
+   EPIIMPORTS epi_imports;
+   ident OF epi_imports   := m_epi_o_imports;
+   iname OF epi_imports   := MAKERVC(iname);
+   context OF epi_imports := make_epi_context(cname);
+   epi_imports
+END;
+
+
+PROC make_epi_declaration =
+( STR dname,                            { declaration name }
+  EPIUNSIGNED version,                  { version number }
+              class,                    { class ident }
+  STR cname                             { context name }
+) EPIDECLARATION:
+BEGIN
+   EPIDECLARATION epi_declaration;
+   ident OF epi_declaration   := m_epi_o_declaration;
+   dname OF epi_declaration   := MAKERVC(dname);
+   version OF epi_declaration := version;
+   class OF epi_declaration   := class;
+   context OF epi_declaration := make_epi_context(cname);
+   epi_declaration
+END;
+
+
+PROC make_epi_binding =
+( STR dname,                            { declaration name }
+  EPIUNSIGNED version,                  { version number }
+              class,                    { class ident }
+  STR iname,                            { imports name }
+      cname                             { context name }
+) EPIBINDING:
+BEGIN
+   EPIBINDING epi_binding;
+   ident OF epi_binding       := m_epi_o_binding;
+   declaration OF epi_binding := make_epi_declaration(dname, version,
+      class, cname);
+   imports OF epi_binding     := make_epi_imports(iname, cname);
+   epi_binding
+END;
+
+
+PROC make_epi_null_binding =
+EPIBINDING:
+BEGIN
+   EPIBINDING epi_binding := make_epi_binding("", BIN 0, BIN 0, "", "");
+   ident OF epi_binding   := m_epi_o_null_binding;
+   epi_binding
+END;
+
+PROC make_epi_node =
+( EPIINT fn,
+  EPIINT instance,
+  EPIINT circuit,
+  EPIINT base,
+  REF VECTOR [] EPIINT rnode_list
+) EPINODE:
+BEGIN
+   EPINODE epi_node;
+   ident OF epi_node   := m_epi_o_node;
+   fn OF epi_node      := fn;
+   instance OF epi_node:= instance;
+   circuit OF epi_node:= circuit;
+   base OF epi_node:= base;
+   rnode_list OF epi_node   := rnode_list;
+   epi_node
+END;
+
+PROC make_epi_null_node =
+EPINODE:
+BEGIN
+   EPINODE epi_node;
+   ident OF epi_node   := m_epi_o_null_node;
+   fn OF epi_node      := 0;
+   instance OF epi_node:= 0;
+   circuit OF epi_node:= 0;
+   base OF epi_node:= 0;
+   rnode_list OF epi_node   := NIL;
+   epi_node
+END;
+
+PROC make_epi_signal =
+( REF VECTOR [] EPIINT value
+) EPISIGNAL:
+BEGIN
+   EPISIGNAL epi_signal;
+   ident OF epi_signal   := m_epi_o_signal;
+   value OF epi_signal   := value;
+   epi_signal
+END;
+
+PROC make_epi_null_signal =
+EPISIGNAL:
+BEGIN
+   EPISIGNAL epi_signal;
+   ident OF epi_signal   := m_epi_o_null_signal;
+   value OF epi_signal   := NIL;
+   epi_signal
+END;
+
+PROC make_epi_testpoint =
+( EPIUNSIGNED handle
+) EPITESTPOINT:
+BEGIN
+   EPITESTPOINT epi_testpoint;
+   ident OF epi_testpoint   := m_epi_o_testpoint;
+   handle OF epi_testpoint  := handle;
+   epi_testpoint
+END;
+
+PROC make_epi_event =
+( EPIUNSIGNED time,
+  EPITESTPOINT testpoint,
+  EPISIGNAL signal
+) EPIEVENT:
+BEGIN
+   EPIEVENT epi_event;
+   ident OF epi_event   := m_epi_o_event;
+   time OF epi_event    := time;
+   testpoint OF epi_event := testpoint;
+   signal OF epi_event  := signal;
+   epi_event
+END;
+
+PROC make_epi_ram_value =
+( EPISIGNAL address,
+  EPISIGNAL data
+) EPIRAMVALUE:
+BEGIN
+   EPIRAMVALUE epi_ram_value;
+   ident OF epi_ram_value   := m_epi_o_ram_value;
+   address OF epi_ram_value := address;
+   data OF epi_ram_value    := data;
+   epi_ram_value
+END;
+
+PROC make_epi_fn_input =
+( EPIUNSIGNED seq,
+  EPINODE node
+) EPIFNINPUT:
+BEGIN
+   EPIFNINPUT epi_fn_input;
+   ident OF epi_fn_input   := m_epi_o_fn_input;
+   seq OF epi_fn_input     := seq;
+   node OF epi_fn_input    := node;
+   epi_fn_input
+END;
+
+PROC make_epi_type =
+( EPIUNSIGNED class,
+  ANYEPITYPE type
+) EPITYPE:
+BEGIN
+   EPITYPE epi_type;
+   ident OF epi_type   := m_epi_o_type;
+   class OF epi_type   := class;
+   type OF epi_type    := type;
+   epi_type
+END;
+
+{ The following are defined in episupport - assigned when epi is initialised }
+
+{ Used by EPI and ELLA routines to send EPI messages }
+PROC (EPIMESSAGETYPE, MESSAGEINFO) VOID
+   epi_send_message := (EPIMESSAGETYPE a, MESSAGEINFO b) VOID: SKIP;
+
+{ Used by ELLA routines to notify EPI of an event or fault }
+PROC (EPISTATUSCODE, STR) VOID
+   epi_notify := (EPISTATUSCODE a, STR b) VOID: SKIP;
+
+{ Used by ELLA routines to notify EPI that command mode has changed }
+PROC VOID epi_set_mode := VOID: SKIP;
+
+{ Used by ELLA textual input to obtain command string from EPI }
+PROC RVC
+   pass_eti_command;
+
+
+{ Translates Library Kept sort }
+{ ---------------------------- }
+
+INT ktype = 65;
+
+PROC sorttoclass =
+( INT sort
+) EPIUNSIGNED:
+   CASE sort - ktype + 1
+    IN
+      m_epi_c_type,
+      m_epi_c_int,
+      m_epi_c_fn,
+      m_epi_c_mac,
+      m_epi_c_const
+    OUT
+      epi_notify(m_epi_s_internal_error, "sorttoclass fault - unknown sort");
+      BIN 0
+   ESAC;
+
+
+{ Flags }
+{ ----- }
+
+BOOL
+   { indicates EPI in use rather than built-in textual interface of ELLA }
+   epi_in_use           := FALSE,
+
+   { indicates that EPI has initiated an ELLA command(s) via the textual
+     interface of ELLA (as a result of a call to eti_command, eti_input
+     or eti_offline - the command(s) being passed directly in the first case
+     and being read from an input file in the second and third cases) }
+   command_via_eti      := FALSE
+
+KEEP
+
+   { Modes }
+   EPIIDENT,
+   EPIUNSIGNED,
+   EPIINT,
+   EPISTATUSCODE,
+   EPISTRING,
+   EPIBOOL,
+   EPITIME,
+   EPILIBRARY,
+   EPICONTEXT,
+   EPIIMPORTS,
+   EPIDECLARATION,
+   EPIBINDING,
+   EPINODE,
+   EPISIGNAL,
+   EPITESTPOINT,
+   EPIEVENT,
+   EPIRAMVALUE,
+   EPIFNINPUT,
+   INTEPITYPE,
+   CHAREPITYPE,
+   STRINGEPITYPE,
+   ROWEPITYPE,
+   STRUCTEPITYPE,
+   FNEPITYPE,
+   ENUMEPIALT,
+   ENUMEPITYPE,
+   VOIDEPITYPE,
+   ANYEPITYPE,
+   EPITYPE,
+   EPIMESSAGETYPE,
+   MESSAGE,
+   EPIMESSAGE,
+   MESSAGEINFO,
+
+   { Constants }
+   m_epi_o_library,
+   m_epi_o_context,
+   m_epi_o_imports,
+   m_epi_o_declaration,
+   m_epi_o_binding,
+   m_epi_o_null_binding,
+   m_epi_o_node,
+   m_epi_o_null_node,
+   m_epi_o_event,
+   m_epi_o_ram_value,
+   m_epi_o_fn_input,
+   m_epi_o_signal,
+   m_epi_o_null_signal,
+   m_epi_o_null_type,
+   m_epi_o_testpoint,
+   m_epi_o_type,
+
+{  The kept items between the lines containing 'update-constants start'
+   and 'update-constants end' are generated automatically by 'update-constants'.
+   THEY MUST NOT BE EDITED MANUALLY!!
+   See comment on 'epi_constant_strings' in epi.c.
+}
+
+{ update-constants start }
+    { status codes }
+m_epi_s_ok,
+m_epi_s_active,
+m_epi_s_assembly_error,
+m_epi_s_bad_action,
+m_epi_s_bad_binding,
+m_epi_s_bad_condition,
+m_epi_s_bad_context,
+m_epi_s_bad_context_name,
+m_epi_s_bad_declaration,
+m_epi_s_bad_filename,
+m_epi_s_bad_handler,
+m_epi_s_bad_imports,
+m_epi_s_bad_imports_name,
+m_epi_s_bad_increment,
+m_epi_s_bad_library,
+m_epi_s_bad_message_type,
+m_epi_s_bad_node,
+m_epi_s_bad_nodename,
+m_epi_s_bad_range,
+m_epi_s_bad_signal,
+m_epi_s_bad_sim_file,
+m_epi_s_bad_string,
+m_epi_s_bad_testpoint,
+m_epi_s_bad_values,
+m_epi_s_closure_circular,
+m_epi_s_closure_empty,
+m_epi_s_closure_incomplete,
+m_epi_s_compile_error,
+m_epi_s_compound_context,
+m_epi_s_context_exists,
+m_epi_s_decl_bound,
+m_epi_s_decl_exported,
+m_epi_s_decl_not_exported,
+m_epi_s_decl_not_imported,
+m_epi_s_decl_used_by,
+m_epi_s_file_not_found,
+m_epi_s_imports_exists,
+m_epi_s_internal_error,
+m_epi_s_interrupted,
+m_epi_s_last_context,
+m_epi_s_last_imports,
+m_epi_s_library_exists,
+m_epi_s_lib_full,
+m_epi_s_lib_not_changed,
+m_epi_s_local_os_error,
+m_epi_s_logging,
+m_epi_s_multiple_imports,
+m_epi_s_not_bound,
+m_epi_s_not_implemented,
+m_epi_s_not_logging,
+m_epi_s_not_outputting,
+m_epi_s_not_started,
+m_epi_s_no_files,
+m_epi_s_no_transaction,
+m_epi_s_old_declaration,
+m_epi_s_old_library,
+m_epi_s_online,
+m_epi_s_outputting,
+m_epi_s_recursion,
+m_epi_s_remote_os_error,
+m_epi_s_same_context,
+m_epi_s_simple_context,
+m_epi_s_started,
+m_epi_s_stopped,
+m_epi_s_suspended,
+m_epi_s_unsimulatable_function,
+m_epi_s_usage_circular,
+m_epi_s_wrong_mode,
+
+    { single message types  }
+m_epi_m_cpu,
+m_epi_m_internal_error,
+m_epi_m_local_os_error,
+m_epi_m_remote_os_error,
+m_epi_m_aborted,
+m_epi_m_library,
+m_epi_m_context,
+m_epi_m_imports,
+m_epi_m_binding,
+m_epi_m_declaration,
+m_epi_m_lib_version,
+m_epi_m_lib_last_written,
+m_epi_m_lib_last_cleared,
+m_epi_m_lib_name,
+m_epi_m_lib_size,
+m_epi_m_lib_overhead,
+m_epi_m_lib_free,
+m_epi_m_lib_changed,
+m_epi_m_context_name,
+m_epi_m_imports_name,
+m_epi_m_binding_incomplete,
+m_epi_m_decl_name,
+m_epi_m_decl_exported_flag,
+m_epi_m_decl_class,
+m_epi_m_decl_version,
+m_epi_m_decl_uses,
+m_epi_m_decl_used_by,
+m_epi_m_decl_source,
+m_epi_m_decl_import,
+m_epi_m_compile_error,
+m_epi_m_assembly_error,
+m_epi_m_new_decl,
+m_epi_m_changed_decl,
+m_epi_m_inconsistent_decl,
+m_epi_m_decl_not_exported,
+m_epi_m_decl_exported,
+m_epi_m_decl_not_bound,
+m_epi_m_decl_latest,
+m_epi_m_simulatable_node,
+m_eti_m_output,
+m_eti_m_showing_input,
+m_eti_m_showing_output,
+m_eti_m_input_file,
+m_eti_m_input_start,
+m_eti_m_input_end,
+m_eti_m_input_file_count,
+m_eti_m_output_file,
+m_eti_m_log_file,
+m_eti_m_mode,
+m_epi_m_node,
+m_epi_m_type,
+m_epi_m_signal,
+m_epi_m_old_testpoint,
+m_epi_m_testpoint,
+m_epi_m_event,
+m_epi_m_first_event,
+m_epi_m_incomplete_event,
+m_epi_m_incomplete_first_event,
+m_epi_m_sim_time,
+m_epi_m_simulated_node,
+m_epi_m_kept_node,
+m_epi_m_fn_input,
+m_epi_m_node_class,
+m_epi_m_node_contains,
+m_epi_m_node_contained_in,
+m_epi_m_node_name,
+m_epi_m_node_kept,
+m_epi_m_ram_value,
+m_epi_m_testpoint_action,
+m_epi_m_testpoint_condition,
+m_epi_m_testpoint_cond_value,
+
+    { group message types }
+m_epi_m_all,
+m_epi_m_lib_all,
+m_epi_m_context_all,
+m_epi_m_imports_all,
+m_epi_m_closure_all,
+m_epi_m_binding_all,
+m_epi_m_decl_all,
+m_eti_m_all,
+m_epi_m_sim_all,
+m_epi_m_node_all,
+m_epi_m_testpoint_all,
+
+    { declaration classes }
+m_epi_c_type,
+m_epi_c_int,
+m_epi_c_fn,
+m_epi_c_mac,
+m_epi_c_const,
+
+    { ETI modes }
+m_eti_c_ease,
+m_eti_c_sim_present,
+m_eti_c_sim_past,
+m_eti_c_attr,
+m_eti_c_attr_end,
+m_eti_c_attr_eld,
+m_eti_c_attr_ecd,
+m_eti_c_attr_eca,
+
+    { testpoint conditions }
+m_epi_c_always,
+m_epi_c_becomes,
+m_epi_c_changes,
+m_epi_c_equals,
+
+    { node classes }
+m_epi_c_fn_node,
+m_epi_c_input_node,
+m_epi_c_ram_node,
+m_epi_c_wire_node,
+    { testpoint actions }
+m_epi_c_notify,
+m_epi_c_notify_and_keep,
+m_epi_c_stop,
+
+    { type classes }
+m_epi_c_type_char,
+m_epi_c_type_enum,
+m_epi_c_type_fntype,
+m_epi_c_type_int,
+m_epi_c_type_invalid,
+m_epi_c_type_null,
+m_epi_c_type_row,
+m_epi_c_type_string,
+m_epi_c_type_struct,
+{ update-constants end }
+m_epi_c_type_void,
+
+   { Flags }
+   epi_in_use,
+   command_via_eti,
+
+   { Procedures }
+   make_epi_library,
+   make_epi_context,
+   make_epi_imports,
+   make_epi_declaration,
+   make_epi_binding,
+   make_epi_null_binding,
+   make_epi_node,
+   make_epi_null_node,
+   make_epi_signal,
+   make_epi_null_signal,
+   make_epi_testpoint,
+   make_epi_event,
+   make_epi_ram_value,
+   make_epi_fn_input,
+   make_epi_type,
+
+   epi_send_message,
+   epi_notify,
+   epi_set_mode,
+   pass_eti_command,
+
+   sorttoclass
+
+FINISH

@@ -1,0 +1,719 @@
+{  Id: episupportsim.sta,v 2.1 91/02/22 18:33:15 edcad Exp$ }
+{ DEC/CMS REPLACEMENT HISTORY, Element EPISUPPORTSIM.STA }
+{ *8    10-AUG-1989 12:20:13 ELLADEV "Definitive release 4.0, first provisional release 4.1. BGH" }
+{ *7     2-JUN-1989 13:55:49 ELLADEV "Updated provisional with fixes for R4B362. BGH" }
+{ *6     1-FEB-1989 09:47:56 ELLADEV "Updated provisional with fixes for R4B052, R4B062. BGH" }
+{ *5    21-JAN-1989 11:11:30 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *4    12-JAN-1989 16:31:42 ELLADEV "updated draft version for Release 4.0" }
+{ *3     9-DEC-1988 15:03:23 ELLADEV "updated draft version for Release 4.0" }
+{ *2    30-NOV-1988 12:26:03 ELLADEV "updated draft version for Release 4.0" }
+{ *1    11-NOV-1988 15:54:39 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element EPISUPPORTSIM.STA }
+
+DECS episupportsim  CONTEXT VOID  USE  putstrings, simtable, simnode, kernel,
+     episupportint, basics:
+
+{                  " Id: episupportsim.sta,v 2.1 91/02/22 18:33:15 edcad Exp$" }
+configinfo A68CONFIG "$Id: episupportsim.a68,v 34.2 1995/03/29 13:04:30 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ ******************************************************************************
+                                Praxis Systems plc
+
+Module        : EPI Support interface
+
+File          : episupportsim.sta
+
+Description   : Supports the simulator part of EPI by providing
+                routines to convert between EPI and simulator modes
+
+
+
+Changes History
+
+08.09.88     New module for EPI Version 2. BJE
+24.11.88     `epi_sim_node' now returns a PATH with "_" as its
+                first component. BJE
+01.12.88     `epi_sim_node' changed: 1) to use lower case names in
+                preference to upper case one; 2) to accept unnamed
+                nodes and to generate an empty name for such.
+07:12:88     Error in `sim_epi_node' corrected.  EPI CR 50.  BJE.
+23:12:88     EPI CRs 64, 65 corrected in 'sim_epi_node'.  AAP
+10:01:89     EPI CR 83 corrected in 'epi_sim_signal'.  AAP
+10:01:89     R4B062 and R4B052 fixed in 'epi_sim_node'.  AAP
+03.01.90     BODGED for Probe Functions.
+                EPINODEs cant cope with probes yet... sim_epi_node &
+                epi_sim_node are temporary versions. MDR.
+12.12.90     Extended EPI_NODE to cope with probe functions. MDR.
+26:10:92     Changes made for SVOID/SVVOID. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{
+  This module converts between the EPI and Simulator modes that represent the
+  three key elements of a simulation: nodes (in the instance hierarchy);
+  signal types; and signal values as follows:
+
+  EPI         Simulator     -> Conversion      <- Conversion
+  ===         =========     =============      =============
+
+  EPINODE     PATH          epi_sim_node        sim_epi_node
+  EPITYPE     STYPE         epi_sim_type        sim_epi_type
+  EPISIGNAL   SVALUE        epi_sim_signal      sim_epi_signal
+
+  You might have expected the kernel mode NODE to be the counterpart of EPINODE
+  but as the latter supports a 'goout' operation we need a mode that includes
+  the route taken from the simulated function to get here and that is the shell
+  mode PATH.
+
+  A note on error treatment:
+
+  Invalid simulator modes should never occur.  If I explicitly discover such
+  an event then an "m_epi_s_internal_error" status is to be returned.  I have
+  not been officious in testing for these however, some will result in Algol
+  run-time errors.
+
+  Invalid EPI modes should always be trapped and result in an "m_epi_s_bad_..."
+  error.
+}
+
+{ Globals }
+
+{
+   This is a simple convenience to avoid unnecessary heap allocations; perhaps
+   it should be in EPISUPPORTINT
+}
+
+VECTOR [0] EPIINT empty vi;
+
+{  Local Procedures }
+
+PROC max = (INT a, b) INT: IF a > b THEN a ELSE b FI;
+
+{ The UPB of the value field of the EPISIGNAL counterpart of this signal type }
+PROC size_epi_query_signal = (STYPE type) INT:
+   CASE type IN
+      (SNULL       n): 0,
+      (SVOID       v): 0,
+      (REF SINT    i): 2,
+      (REF SCHAR   c): 1,
+      (REF SSTRING s): no OF s,
+      (REF SENUM   e): 1,
+      (REF SST     s):
+         IF s IS nil sst THEN 0
+         ELSE size_epi_query_signal (t OF s) + size_epi_query_signal (rest OF s)
+         FI,
+      (REF SROW    r): no OF r * size_epi_query_signal (type OF r),
+      (REF SFN     f): size_epi_query_signal (from OF f) + size_epi_query_signal (to OF f)
+   ESAC;
+
+{ Simulator modes -> EPI Modes }
+
+{
+   This routine demands that the 'node' fields of the 'bind' fields of the
+   steps in the path are set ie the path has been fully validated by a call to
+   the SIMNODE function 'node'.  The routine will fail if this is not
+   the case.
+
+   The routine relies on the knowledge that the first item in the path list
+   and all other items except the last must reference a BOX node.
+}
+PROC sim_epi_node = (REF PATH path) EPINODE:
+BEGIN
+   INT circuit of root = circuit OF node OF bind OF path;
+   INT base of root = base OF node OF bind OF path;
+   BOX root =
+      CASE node OF node OF bind OF path
+      IN (BOX box):box
+      OUT sys fault ("epi_sim_node: bad conformity"); (0,0)
+      ESAC;
+   INT i := 0;
+   REF PATH step := rest OF path;
+   WHILE step ISNT nil path DO i +:= 1; step := rest OF step OD;
+   HEAP VECTOR [i] EPIINT rnode_list;
+   i := 0;
+   BOX context := root;
+   step := rest OF path;
+   WHILE step ISNT nil path DO
+      i +:= 1;
+      NODE node = node OF node OF bind OF step;
+      REF VECTOR [] BINDING body = body OF lookup function (fn OF context);
+      INT j := 1;
+      WHILE NOT
+         CASE lookup rnode (node OF body[j]) IN
+            (BOX b1):
+               CASE node IN
+               (BOX b2): fn OF b1 = fn OF b2 ANDTH
+                         instance OF b1 + instance OF context = instance OF b2
+               OUT FALSE
+               ESAC,
+            (WIRE w):
+               CASE node IN
+               (LINE l): wire OF l = w
+               OUT FALSE
+               ESAC
+         ESAC
+      DO j +:= 1 OD;
+      { Match or bust; the latter only on internal inconsistency }
+      rnode_list [i] := j;
+      IF (rest OF step ISNT nil path) ANDTH (op OF step = go in) THEN
+         context := CASE node OF node OF bind OF step IN (BOX box):box ESAC
+      FI;
+      IF op OF step = go past THEN i -:= 1 FI;
+      step := rest OF step
+   OD;
+   make_epi_node (fn OF root, instance OF root,
+                  circuit of root, base of root, rnode_list[:i])
+END;
+
+PROC sim_epi_signal = (SVALUE signal) EPISIGNAL:
+BEGIN
+
+   OP + = (REF VECTOR [] INT a, b) REF VECTOR [] INT:
+   BEGIN
+      HEAP VECTOR [UPB a + UPB b] INT ans;
+      IF UPB a > 0 THEN ans [:UPB a] := a FI;
+      IF UPB b > 0 THEN ans [UPB a + 1:] := b FI;
+      ans
+   END;
+
+   OP MAKERVI = (INT b) REF VECTOR [] INT:
+   HEAP VECTOR [1] INT := (b);
+
+   OP ZERO = (INT upb) REF VECTOR [] INT:
+   BEGIN
+      HEAP VECTOR [upb] INT ans;
+      FOR i TO upb DO ans [i] := 0 OD;
+      ans
+   END;
+
+   PROC char ix = (SVCHAR c) INT:
+   BEGIN
+      INT ans := 1;
+      WHILE value OF c /= (char OF type OF c)[ans] DO ans +:= 1 OD;
+      ans
+   END;
+
+   PROC encode_epi_signal = (SVALUE signal) REF VECTOR [] INT:
+   CASE signal IN
+      (SVNULL     n): empty vi,
+      (SVVOID     v): empty vi,
+      (REF SQUERY q): ZERO size_epi_query_signal (type OF q),
+      (REF SVINT  i): MAKERVI 1 + MAKERVI value OF i,
+      (REF SVCHAR c): MAKERVI char ix (c),
+      (REF SVSTR  s):
+         BEGIN
+            REF VECTOR [] CHAR v = value OF s;
+            REF SCHAR c = t OF type OF s;
+            HEAP VECTOR [UPB v] INT ans;
+            FOR i TO UPB v DO
+               ans [i] := char ix ((c, v[i]))
+            OD;
+            ans
+         END,
+      (REF SVENUM e):
+               (MAKERVI tag OF e) + encode_epi_signal (assoc OF e),
+      (REF SVST   s):
+          IF s IS nil svst THEN empty vi
+          ELSE encode_epi_signal (head OF s) + encode_epi_signal (tail OF s)
+          FI,
+      (REF SVFN   f): encode_epi_signal (from OF f) +
+                         encode_epi_signal (to OF f)
+   ESAC;
+
+   make_epi_signal(encode_epi_signal (signal))
+END; {sim_epi_signal}
+
+PROC makevoidepitype = VOIDEPITYPE:
+(VOIDEPITYPE vet; void OF vet := BIN 1; vet);
+
+PROC sim_epi_type = (STYPE type) EPITYPE:
+BEGIN
+
+   PROC classify_epi_type = (STYPE type) EPIUNSIGNED:
+   CASE type IN
+      (SNULL):                  m_epi_c_type_null,
+      (SVOID):                  m_epi_c_type_void,
+      (REF SINT):               m_epi_c_type_int,
+      (REF SCHAR):              m_epi_c_type_char,
+      (REF SSTRING):            m_epi_c_type_string,
+      (REF SENUM):              m_epi_c_type_enum,
+      (REF SST):                m_epi_c_type_struct,
+      (REF SROW):               m_epi_c_type_row,
+      (REF SFN):                m_epi_c_type_fntype
+   ESAC;
+
+   PROC encode_enum_epi_type = (REF SENUM e) ENUMEPITYPE:
+   BEGIN
+      REF SENUM p := e;
+      INT upb := 0;
+      WHILE p ISNT nil senum DO upb +:= 1; p := rest OF p OD;
+      HEAP VECTOR [upb] ENUMEPIALT ans;
+      p := e;
+      FOR ix TO upb DO
+         ans [ix] := (id OF p, HEAP EPITYPE := sim_epi_type (t OF p));
+         p := rest OF p
+      OD;
+      ans
+   END;
+
+   PROC encode_struct_epi_type = (REF SST s) STRUCTEPITYPE:
+   BEGIN
+      REF SST p := s;
+      INT upb := 0;
+      WHILE p ISNT nil sst DO upb +:= 1; p := rest OF p OD;
+      HEAP VECTOR [upb] REF EPITYPE ans;
+      p := s;
+      FOR ix TO upb DO
+         ans [ix] := HEAP EPITYPE := sim_epi_type (t OF p);
+         p := rest OF p
+      OD;
+      ans
+   END;
+
+   PROC encode_epi_type = (STYPE type) ANYEPITYPE:
+   CASE type IN
+      (SNULL       n): EMPTY,
+      (SVOID       v): makevoidepitype,
+      (REF SINT    i): INTEPITYPE (id OF i, lwb OF i, upb OF i),
+      (REF SCHAR   c): CHAREPITYPE (id OF c, char OF c),
+      (REF SSTRING s): STRINGEPITYPE (BIN no OF s,
+                                      HEAP EPITYPE := sim_epi_type (t OF s)),
+      (REF SENUM   e): encode_enum_epi_type (e),
+      (REF SST     s): encode_struct_epi_type (s),
+      (REF SROW    r): ROWEPITYPE (BIN no OF r,
+                                   HEAP EPITYPE := sim_epi_type (type OF r)),
+      (REF SFN     f): FNEPITYPE (HEAP EPITYPE := sim_epi_type (from OF f),
+                                  HEAP EPITYPE := sim_epi_type (to OF f))
+   ESAC;
+
+   make_epi_type (classify_epi_type (type), encode_epi_type (type))
+END; {sim_epi_type}
+
+{ EPI modes -> Simulator Modes }
+
+{
+  The only valid PATHs are ones which start with the currently simulated
+  function or a probe.  NIL is returned on error;
+}
+PROC epi_sim_node = (EPINODE node) REF PATH:
+BEGIN
+
+   {
+      Check that the node is inside the simulated function.  Note that
+      conformity is guaranteed in the delcaration of 'simulated node'
+   }
+
+   REF PATH rootpath;
+   IF circuit OF node = 0 THEN
+      simtable lookup path (simulated function name, any, rootpath)
+   ELSE
+      simtable lookup path by base (base OF node, probe name, rootpath)
+   FI;
+
+   REF PATH ans := HEAP PATH := rootpath;
+
+   {
+      Now follow the rnode list of the EPINODE.   During the loop, 'end'
+      refers to the last item on the PATH list and 'ctnode' to the NODE
+      to which this refers.  If there are more steps to take then this
+      is guranteed to be a BOX (function instance) and 'context' is
+      the deunited form
+   }
+   REF PATH end := ans;
+   REF VECTOR [] EPIINT rnode_list = rnode_list OF node;
+   NODE ctnode := node OF node OF bind OF rootpath;
+   FOR i TO UPB rnode_list WHILE ans ISNT nil path DO
+      { Set 'context'; conformity guaranteed }
+      BOX context =
+         CASE ctnode
+         IN (BOX b): b
+         OUT sys fault ("epi_sim_node: bad conformity"); (0,0)
+         ESAC;
+
+      { Look up the correct binding for this step }
+      REF VECTOR [] BINDING body = body OF lookup function(fn OF context);
+      INT rnode = rnode_list[i];
+      BINDING binding;
+      ID name;
+      INT repeat := 1;
+      IF rnode < 0 OREL rnode > UPB body THEN
+         epi_notify(m_epi_s_bad_node,
+            "epi_sim_node: EPINODE contains anonymous path element");
+         ans := nil path
+      ELSE
+         binding := body[rnode];
+
+         {
+            Find a name that we can use and how many times it has been used up to
+            and including this time
+         }
+         IF (lname OF binding ISNT nilid) ANDTH (lname OF binding /= nullid)
+         THEN
+            name := lname OF binding;
+            FOR j TO rnode - 1 DO
+              IF lname OF body[j] = name THEN repeat +:= 1 FI
+            OD
+         ELIF (uname OF binding ISNT nilid) ANDTH (uname OF binding /= nullid) THEN
+            name := uname OF binding;
+            FOR j TO rnode - 1 DO
+              IF uname OF body[j] = name THEN repeat +:= 1 FI
+            OD
+         ELSE
+            name := null id
+         FI
+      FI;
+
+      IF ans ISNT nil path THEN
+         { Move 'ctnode' one step on }
+         ctnode :=
+            CASE lookup rnode (node OF binding) IN
+               (BOX b): BOX (fn OF b, instance OF b + instance OF context),
+               (WIRE w): LINE (HEAP WIRE := w, instance OF context)
+            ESAC;
+         { Add an item to the end of the PATH list }
+         op OF end := go in;
+         end := rest OF end := HEAP PATH := (
+            repeat,
+            name,
+            nilid,
+            no op,
+            HEAP BIND := (
+               uname OF binding,
+               lname OF binding,
+               HEAP MNODE := (ctnode, 0, 0)),
+            nil path
+         )
+      FI
+   OD;
+   ans
+END;
+
+{
+   All the real work is delegated to 'decode signal'.  This is a top
+   down recursive descent parser which takes its input in the 'rep'
+   parameters and consumes it by slicing and updating 'rep'.
+
+   Note that this relies on the fact that if UPB vec = n, then vec [n+1:]
+   is a valid expression delivering an empty vector.  This is defined to
+   be the case in Ch 1.5.1 of "Informal Introduction to Agol 68" by C H Lindsey
+   and S G vandder Meulen and is implemented by the VMS Algol 86 RS compiler
+   and CTRANS.
+
+   A NIL return indicates an error.
+}
+PROC epi_sim_signal = (EPISIGNAL signal, STYPE type) REF SVALUE:
+BEGIN
+
+   PROC decode signal = (REF REF VECTOR [] INT rep, STYPE type) REF SVALUE:
+   BEGIN
+
+      PROC decode row = (REF REF VECTOR [] INT rep, SROW r) REF SVST:
+      BEGIN
+         BOOL ok := TRUE;
+         REF SVST ans := nil svst;
+         REF REF SVST p := ans;
+         FOR i TO no OF r WHILE ok DO
+            REF SVALUE element = decode signal (rep, type OF r);
+            IF element IS REF SVALUE (NIL) THEN
+               ok := FALSE
+            ELSE
+               REF REF SVST (p) := HEAP SVST := (element, nilsvst);
+               p := tail OF p
+            FI
+         OD;
+         IF ok THEN ans
+         ELSE nil svst
+         FI
+      END;
+
+      PROC decode structure = (REF REF VECTOR [] INT rep, REF SST s) REF SVST:
+      BEGIN
+         BOOL ok := TRUE;
+         REF SVST ans := nil svst;
+         REF REF SVST p := ans;
+         REF SST q := s;
+         WHILE ok ANDTH (q ISNT nil sst) DO
+            REF SVALUE element = decode signal (rep, t OF q);
+            IF element IS REF SVALUE (NIL) THEN
+               ok := FALSE
+            ELSE
+               REF REF SVST (p) := HEAP SVST := (element, nilsvst);
+               p := tail OF p
+            FI;
+            q := rest OF q
+         OD;
+         IF ok THEN ans
+         ELSE nil svst
+         FI
+      END;
+
+      IF (type | (REF SROW):FALSE, (REF SST):FALSE, (SVOID):FALSE,
+           (REF SFN):FALSE, (SNULL):FALSE | TRUE) ANDTH rep[1] = 0 THEN
+         HEAP SQUERY q;
+         type OF q := type;
+         INT size = size_epi_query_signal(type);
+         IF size > UPB rep THEN
+            epi_notify(m_epi_s_bad_signal,
+               "epi_sim_signal: not enough data for given type");
+            NIL
+         ELSE
+            rep := rep [size+1:];
+            HEAP SVALUE := q
+         FI
+      ELSE
+         CASE type IN
+         (REF SENUM e)  :
+            BEGIN
+               INT val = rep[1];
+               IF val <= 0 THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad enumerated value");
+                  NIL
+               ELSE
+                  REF SENUM p := e;
+                  BOOL ok := TRUE;
+                  FOR i TO val - 1 WHILE ok DO
+                     IF rest OF p IS nil senum THEN
+                        epi_notify(m_epi_s_bad_signal,
+                           "epi_sim_signal: bad enumerated value");
+                        ok := FALSE
+                     FI;
+                     p := rest OF p
+                     OD;
+                  IF ok THEN
+                     rep := rep [2:];
+                     HEAP SVALUE := HEAP SVENUM :=
+                        (e, val, decode signal(rep, t OF p))
+                  ELSE
+                     NIL
+                  FI
+               FI
+            END,
+         (REF SINT i)   :
+            BEGIN
+               INT val = rep[2];
+               IF val < lwb OF i OREL val > upb OF i THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad integer value");
+                  NIL
+               ELSE
+                  rep := rep [3:];
+                  HEAP SVALUE := HEAP SVINT := (i, val)
+               FI
+            END,
+         (REF SCHAR c)  :
+            BEGIN
+               INT val = rep[1];
+               REF VECTOR [] CHAR char list = char OF c;
+               IF val < 1 OREL val > UPB char list THEN
+                  epi_notify(m_epi_s_bad_signal,
+                     "epi_sim_signal: bad character value");
+                  NIL
+               ELSE
+                  rep := rep [2:];
+                  HEAP SVALUE := HEAP SVCHAR := (c, char list [val])
+               FI
+            END,
+         (REF SROW r)   :
+            BEGIN
+               REF SVST svst = decode row (rep, r);
+               IF svst IS nil svst THEN NIL ELSE HEAP SVALUE := svst FI
+            END,
+         (REF SSTRING s):
+            BEGIN
+               HEAP VECTOR [no OF s] CHAR value;
+               REF VECTOR [] CHAR char list = char OF t OF s;
+               BOOL ok := TRUE;
+               FOR i TO no OF s WHILE ok DO
+                  INT val = rep[i];
+                  IF val < 1 OREL val > UPB char list THEN
+                     epi_notify(m_epi_s_bad_signal,
+                        "epi_sim_signal: bad character value");
+                     ok := FALSE
+                  FI;
+                  value [i] := char list [val]
+               OD;
+               IF ok THEN
+                  rep := rep[no OF s + 1:];
+                  HEAP SVALUE := HEAP SVSTR := (s, value)
+               ELSE
+                  NIL
+               FI
+         END,
+         (REF SFN f)    :
+            BEGIN
+               REF SVALUE from = decode signal(rep, from OF f);
+               REF SVALUE to = decode signal(rep, to OF f);
+               IF (from IS REF SVALUE (NIL)) OREL (to IS REF SVALUE (NIL))
+               THEN NIL
+               ELSE HEAP SVALUE := HEAP SVFN := (from, to)
+               FI
+            END,
+         (REF SST s)    :
+            BEGIN
+               REF SVST svst = decode structure (rep, s);
+               IF svst IS nil svst THEN NIL ELSE HEAP SVALUE := svst FI
+            END,
+         (SNULL v)      : HEAP SVALUE := null svalue,
+         (SVOID v)      : HEAP SVALUE := void svalue
+         ESAC
+      FI
+   END;
+
+   REF VECTOR [] INT rep := value OF signal;
+   REF SVALUE ans = decode signal (rep, type);
+   IF UPB rep /= 0 THEN
+      epi_notify(m_epi_s_bad_signal,
+         "epi_sim_signal: too much data for given type");
+      NIL
+   ELSE
+      ans
+   FI
+END; {epi_sim_signal}
+
+PROC epi_sim_type = (EPITYPE type) REF STYPE:
+BEGIN
+
+   PROC epi_sim_struct = (STRUCTEPITYPE s) REF SST:
+   BEGIN
+      REF SST ans := nil sst;
+      REF REF SST ptr := ans;
+      BOOL ok := TRUE;
+      FOR i TO UPB s WHILE ok DO
+         REF STYPE element = epi_sim_type(s[i]);
+         IF element IS REF STYPE (NIL) THEN
+            ok := FALSE
+         ELSE
+            REF REF SST (ptr) := HEAP SST := (element, nil sst)
+         FI;
+         ptr := rest OF ptr
+      OD;
+      IF ok THEN ans
+      ELSE NIL
+      FI
+   END;
+
+   PROC epi_sim_enum = (ENUMEPITYPE e) REF SENUM:
+   BEGIN
+      REF SENUM ans := nil senum;
+      REF REF SENUM ptr := ans;
+      BOOL ok := TRUE;
+      FOR i TO UPB e WHILE ok DO
+         REF STYPE ass = epi_sim_type(subtype OF e[i]);
+         IF ass IS REF STYPE (NIL) THEN
+            ok := FALSE
+         ELSE
+            REF REF SENUM (ptr) := HEAP SENUM := (tag OF e[i], ass, nil senum)
+         FI;
+         ptr := rest OF ptr
+      OD;
+      ans
+   END;
+
+   CASE type OF type IN
+   (INTEPITYPE i)   :
+       HEAP STYPE := HEAP SINT  := (MAKEID tag OF i, lwb OF i, upb OF i),
+   (CHAREPITYPE c)  :
+       HEAP STYPE := HEAP SCHAR := (MAKEID tag OF c, MAKEID char_repr OF c),
+   (STRINGEPITYPE s):
+       BEGIN
+          REF STYPE ctype = epi_sim_type (subtype OF s);
+          IF ctype IS REF STYPE (NIL) THEN
+             NIL
+          ELSE
+             CASE ctype IN
+             (REF SCHAR c): HEAP STYPE :=  HEAP SSTRING := (ABS length OF s, c)
+             OUT
+                epi_notify(m_epi_s_internal_error,
+                            "epi_sim_type: bad string type");
+                NIL
+             ESAC
+          FI
+      END,
+   (ROWEPITYPE r)   :
+      BEGIN
+          REF STYPE stype = epi_sim_type (subtype OF r);
+          IF stype IS REF STYPE (NIL) THEN
+             NIL
+          ELSE
+             HEAP STYPE := HEAP SROW := (ABS row_elems OF r, stype)
+          FI
+      END,
+   (STRUCTEPITYPE s):
+      BEGIN
+          REF SST sst = epi_sim_struct (s);
+          IF sst IS nil sst THEN
+             NIL
+          ELSE
+             HEAP STYPE := sst
+          FI
+      END,
+   (FNEPITYPE f)    :
+      BEGIN
+          REF STYPE from = epi_sim_type(input OF f);
+          REF STYPE to   = epi_sim_type(output OF f);
+          IF (from IS REF STYPE (NIL)) OREL (to IS REF STYPE (NIL)) THEN
+             NIL
+          ELSE
+             HEAP STYPE := HEAP SFN := (from, to)
+          FI
+      END,
+   (ENUMEPITYPE e)  :
+      BEGIN
+          REF SENUM senum = epi_sim_enum (e);
+          IF senum IS nil senum THEN
+             NIL
+          ELSE
+             HEAP STYPE := senum
+          FI
+      END,
+   (VOIDEPITYPE) : HEAP STYPE := void stype,
+   (VOID): HEAP STYPE := null stype
+   ESAC
+END; {epi_sim_type}
+
+SKIP
+
+KEEP
+   sim_epi_node,
+   sim_epi_signal,
+   sim_epi_type,
+   epi_sim_node,
+   epi_sim_signal,
+   epi_sim_type
+
+FINISH
