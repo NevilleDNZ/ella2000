@@ -1,0 +1,387 @@
+DECS  assdiagnostics CONTEXT VOID  USE  putstrings,  messageproc, ioprocs,
+      basics,  osinterface, assmodes, modeprocs, transformprocs:
+
+{ " Id: assdiagnostics.sta,v 1.1 91/10/14 14:25:39 edcad Exp $" }
+configinfo A68CONFIG "$Id: assdiagnostics.a68,v 34.2 1995/03/29 13:02:51 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+20:06:90  Set of diagnostic procedures to check consistency of a closure
+             of assembler modes.  EVW
+01:08:91  Updated to version 7 of assembler modes. EVW
+02:12:91  Test 3 - check whether parameters of INST include instances. EVW
+16:12:91  UTERMINDEX added. EVW
+17:02:92  R6B100.  unit fields not expanded in tests 1 + 2 - so tests not
+                      made. EVW
+16:03:92  Type equality extended to cover TYPEs in different contexts. EVW
+07:04:92  Optimisation of calls of make_newtprocs. EVW
+12:05:92  Move check_types to modeprocs. new spec fo fndec_tfn. DJS
+13:07:92  R6B121 Add test of function outputs. Test 7.  DJS
+28:07:92  UTERMINDEX changed to UPORTNAME and null_const removed. JIT
+17:08:92  Remove test 6 and make a separate command, test 7 then
+             becomes test 6.  DJS
+04:11:92  macpar changed to macpardec. JIT
+28:06:93  Missing UROW in test 4. EVW
+24:08:93  Changes to commands for Public Domain. EVW
+
+ 1.  Equality of types between LHS and RHS of LET statement
+ 2.  Equality of types between LHS and RHS of JOIN statement
+ 3.  Equality of types between parameters and spec of UMINST/UDINST
+ 4.  Check that UNAME has correct sort for LHS and RHS of JOIN
+ 5.  Check that an INSTANCE points to FN in closure with correct name
+ 6.  Function output type is correct.
+
+    Print out diagnostic table to show monitoring order is a separate call
+    of procedure monitoring_order.
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.020 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE CLOSED = STRUCT (CLOSURE closure, REF FNDEC fdec, REF ENVIRON env);
+
+PROC check types := (TYPE a, b, REF ENVIRON enva, envb) BOOL:
+BEGIN
+    check_types( a, b, enva, envb, TRUE )
+END;
+
+PROC assemble_diagnostics = (CLOSURE closure, REF VECTOR [] BOOL tests,
+                                              MESSAGEPROC msg) CLOSUREC:
+BEGIN
+
+REF ENVIRON env;  { Made non-local to optimise calls of make_newtprocs }
+
+{{ Test 1 }}
+{{ ------ }}
+
+PROC let_type = (REF LET l, TRANSFORMPROCS tprocs, CLOSED close) LETC:
+BEGIN
+   {{ Tests the type of the unit of a LET against the type stored in the }}
+   {{  nametypes array.                                                  }}
+   REF VECTOR [] NAMETYPE nametypes = nametypes OF fdec OF close;
+   UNITC test_unit = (unit OF nulltprocs)(unit OF l, tprocs);
+   TYPE rhs = unit_type(unit OF l, fdec OF close, env OF close);
+   REF NAMES names := letnames OF l;
+   TYPE lhs =
+      IF rest OF names IS nilnames
+      THEN  type OF nametypes[nameno OF names]
+      ELSE  REF TSTR tst := niltstr;
+            REF REF TSTR tstptr := tst;
+            WHILE names ISNT nilnames
+            DO  REF REF TSTR (tstptr) := HEAP TSTR :=
+                     (type OF nametypes[nameno OF names], niltstr);
+                tstptr := rest OF tstptr;
+                names := rest OF names
+            OD;
+            tst
+      FI;
+  TYPE lhs_type = simplify_type(lhs, env OF close),
+       rhs_type = simplify_type(rhs, env OF close);
+  IF NOT check types(lhs_type, rhs_type, env OF close, env OF close)
+  THEN RVC name = name OF nametypes[nameno OF letnames OF l];
+       put(out, ("Type mismatch in LET statement in ", fnname OF fdec OF close,
+                 " with name ", name, newline))
+  FI;
+  (l, FALSE)
+END;
+
+{{ Test 2 }}
+{{--------}}
+
+PROC join_type = (REF JOIN j, TRANSFORMPROCS tprocs, CLOSED close) JOINC:
+BEGIN
+   UNITC test_fromunit = (unit OF nulltprocs)(from OF j, tprocs);
+   TYPE lhs = unit_type(from OF j, fdec OF close, env OF close),
+        rhs = unit_type(to OF j, fdec OF close, env OF close);
+   TYPE lhs_type = simplify_type(lhs, env OF close),
+        rhs_type = simplify_type(rhs, env OF close);
+   IF NOT check types(lhs_type, rhs_type, env OF close, env OF close)
+   THEN put(out, ("Type mismatch in JOIN statement in ",
+                  fnname OF fdec OF close, newline))
+   FI;
+   (j, FALSE)
+END;
+
+{{ Test 3 }}
+{{--------}}
+
+PROC uinst_type = (UNION (REF UMINST, REF UDINST) uinst,
+                   TRANSFORMPROCS tprocs, CLOSED close) UNITC:
+BEGIN
+   IF (sort OF fdec OF close /= macpardec)
+   THEN
+     INSTANCE inst;
+     TYPE params =
+       CASE uinst IN
+       (REF UMINST um)
+          ( inst := inst OF um;
+            UNITC mc = (unit OF nulltprocs)(right OF um, tprocs);
+            unit_type(right OF um, fdec OF close, env OF close)
+          ),
+       (REF UDINST ud)
+          ( inst := inst OF ud;
+            UNITC lc = (unit OF nulltprocs)(left OF ud, tprocs);
+            UNITC rc = (unit OF nulltprocs)(right OF ud, tprocs);
+            TYPE l = unit_type(left OF ud, fdec OF close, env OF close),
+                 r = unit_type(right OF ud, fdec OF close, env OF close);
+            HEAP TSTR := (l, HEAP TSTR := (r, niltstr))
+          )
+       ESAC;
+
+     REF FNDEC idec = (fns OF env OF close)[fnno OF inst];
+     REF TFN tfn = fndec_tfn(idec);
+
+     TYPE params_type = simplify_type(params, env OF close),
+          inst_type = simplify_type(from OF tfn, env OF close);
+
+     IF NOT check types(params_type, inst_type, env OF close, env OF close)
+     THEN put(out,("Type mismatch in UMINST/UDINST call of ", fnname OF idec,
+                  " in ", fnname OF fdec OF close, newline))
+     FI
+   FI;
+   (uinst, FALSE)
+END;
+
+
+{{ Test 4 }}
+{{--------}}
+
+BOOL lhs := FALSE;
+ID fnname := nullid;
+
+  {{ This transform checks LHS of JOINs are So and RHS are Si }}
+
+TRANSFORMPROCS unit_sort = make_newtprocs(nulltprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+        CASE unit IN
+        (REF UNAME un)
+           ( INT sort = sort OF un;
+             IF NOT ( (lhs ANDTH (sort = usource OREL sort = uiosource))
+                      OREL
+                      (NOT lhs ANDTH (sort = usink OREL sort = uiosink))
+                    )
+             THEN ID sortname = MAKEID
+                    CASE sort IN "source", "sink", "iosource", "iosink" ESAC;
+                  put(out, (sortname, " found on ", ( lhs | "lhs " | "rhs " ),
+                            "of JOIN in ", fnname, newline))
+             FI;
+             (un, FALSE)
+           ),
+        ( UNION (REF UNULL, REF CVOID) )
+           (unit, FALSE),
+        ( UNION (REF UPORTNAME, REF UINDEX, REF UTRIM, REF UREPL, REF USTR,
+                 REF UROW, REF UCONC, REF UCOND, REF UATTR, REF UCHECK,
+                 REF UBRACKET) )
+           (unit OF nulltprocs)(unit, tprocs)
+        OUT IF NOT lhs
+            THEN put(out, ("Wrong sort of unit on rhs of JOIN in ",
+                            fnname, newline))
+            FI;
+            (unit, FALSE)
+        ESAC
+   ));
+
+PROC join_sort = (REF JOIN j, CLOSED close) JOINC:
+BEGIN
+   fnname := fnname OF fdec OF close;
+   lhs := TRUE;
+   (unit OF unit_sort)(from OF j, unit_sort);
+   lhs := FALSE;
+   (unit OF unit_sort)(to OF j, unit_sort);
+   (j, FALSE)
+END;
+
+{{ Test 5 }}
+{{--------}}
+
+PROC instance_name = (INSTANCE inst, CLOSED close) INSTANCEC:
+BEGIN
+   ID env_name = fnname OF (fns OF env OF close)[fnno OF inst];
+   REF FNDEC idec =
+     find_fndec(MAKEFNNAME(fnno OF inst), closure OF close, env OF close);
+   IF fnname OF idec /= env_name
+   THEN put(out, ("Name mismatch between ", env_name, " and ", fnname OF idec,
+                  " in ", fnname OF fdec OF close, newline))
+   FI;
+   (inst, FALSE)
+END;
+
+{{ Test 6 }}
+{{--------}}
+
+PROC output_type = (CLOSED closed) FNDECC:
+BEGIN
+   CASE fnbody OF fdec OF closed IN
+   (REF UNITTAG tag )
+   (TYPE rhs = unit_type(tag OF tag, fdec OF closed, env OF closed),
+         lhs = names_type(outputs OF fdec OF closed, fdec OF closed);
+    TYPE lhs_type = simplify_type(lhs, env OF closed),
+         rhs_type = simplify_type(rhs, env OF closed);
+    BOOL can_test = CASE lhs_type IN
+                    (REF TNULL ) FALSE
+                    OUT
+                        CASE rhs_type IN (REF TNULL ) FALSE OUT TRUE ESAC
+                    ESAC;
+    IF can_test ANDTH
+       NOT check types(lhs_type, rhs_type, env OF closed, env OF closed)
+    THEN put(out, ("Type mismatch at output of ", fnname OF fdec OF closed,
+                   newline))
+    FI
+   )
+   OUT
+      SKIP
+   ESAC;
+   (fdec OF closed, FALSE)
+END;
+
+
+PROC fndec = (REF FNDEC fdec, TRANSFORMPROCS tprocs, REF ENVIRON env, INT i)
+                                                                     FNDECC:
+   ( CLOSED closed = (closure, fdec, env);
+
+     IF i = 6
+     THEN output_type( closed )
+     ELSE
+       TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+       ( IF i = 1
+         THEN (REF LET l, TRANSFORMPROCS tprocs) LETC:
+                  let_type(l, tprocs, closed)
+         ELIF i = 2
+         THEN (REF JOIN j, TRANSFORMPROCS tprocs) JOINC:
+                  join_type(j, tprocs, closed)
+         ELIF i = 3
+         THEN (UNIT u, TRANSFORMPROCS tprocs) UNITC:
+                 CASE u IN
+                 (UNION(REF UMINST, REF UDINST) ui)
+                       uinst_type(ui, tprocs, closed)
+                 OUT (unit OF nulltprocs)(u, tprocs)
+                 ESAC
+         ELIF i = 4
+         THEN (REF  JOIN j, TRANSFORMPROCS tprocs) JOINC: join_sort(j, closed)
+         ELIF i = 5
+         THEN (INSTANCE i,TRANSFORMPROCS tp) INSTANCEC: instance_name(i, closed)
+         ELSE null_type
+         FI
+        ));
+        (fndec OF nulltprocs)(fdec, newtprocs)
+      FI
+   );
+
+   PROC outer = (OUTER of, TRANSFORMPROCS tprocs, INT index) OUTERC:
+   (  env := environ OF of;
+      TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+      ( (REF FNDEC fd, TRANSFORMPROCS tp) FNDECC:
+           fndec(fd, tp, environ OF of, index) ));
+     OUTERC oc = (outer OF nulltprocs)(of, newtprocs);
+     discard_tprocs(newtprocs);
+     oc
+   );
+
+   TRANSFORMPROCS tprocs1 = make_newtprocs(nulltprocs,
+     (null_formula, null_type));
+
+   FOR index TO UPB tests
+   DO IF tests[index]
+      THEN CASE index IN
+           {1} put(out, ("Test 1 on LET types", newline)),
+           {2} put(out, ("Test 2 on JOIN types", newline)),
+           {3} put(out, ("Test 3 on UMINST/UDINST types", newline)),
+           {4} put(out, ("Test 4 on sort of UNAME", newline)),
+           {5} put(out, ("Test 5 on name of FNDEC and INSTANCE", newline)),
+           {6} put(out, ("Test 6 on types of function outputs", newline ))
+           ESAC;
+           TRANSFORMPROCS tprocs2 = make_newtprocs(tprocs1,
+           ( (OUTER of, TRANSFORMPROCS tp) OUTERC:
+                outer(of, tp, index) ));
+           (closure OF nulltprocs)(closure, tprocs2, msg);
+           discard_tprocs(tprocs2)
+      FI
+   OD;
+   (closure, FALSE)
+END;
+
+PROC monitoring_order = (REF OUTERS os, MESSAGEPROC  msg)VOID:
+BEGIN
+    PROC fndec = (REF FNDEC fdec, TRANSFORMPROCS tp, REF ENVIRON env) FNDECC:
+    BEGIN
+       REF VECTOR [] NAMETYPE nametypes = nametypes OF fdec;
+
+       PROC names = (REF NAMES ns, TRANSFORMPROCS tprocs) NAMESC:
+       (  REF NAMES names := ns;
+          WHILE names ISNT nilnames
+          DO  put(out, (name OF nametypes[nameno OF names], "  "));
+              names := rest OF names
+          OD;
+          (ns, FALSE)
+       );
+
+       PROC instance = (INSTANCE inst, TRANSFORMPROCS tprocs) INSTANCEC:
+       (  ID env_name = fnname OF (fns OF env)[fnno OF inst];
+          put(out, (env_name, "  "));
+          (inst, FALSE)
+       );
+
+       TRANSFORMPROCS newtprocs = make_newtprocs(tp, ( names, instance ));
+
+       put(out, ("FN ", fnname OF fdec, "  "));
+       NAMESC ic = names(inputs OF fdec, newtprocs),
+              oc = names(outputs OF fdec, newtprocs);
+       FNBODYC  fb = (fnbody OF nulltprocs)(fnbody OF fdec, newtprocs);
+       put(out, newline);
+       discard_tprocs( newtprocs );
+       (fdec, FALSE)
+    END;
+
+   PROC outer = (OUTER of, TRANSFORMPROCS tprocs ) OUTERC:
+   BEGIN
+     TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+            ( (REF FNDEC fd, TRANSFORMPROCS tp) FNDECC:
+              fndec(fd, tp, environ OF of ) ));
+     (outer OF nulltprocs)(of, newtprocs);
+     discard_tprocs(newtprocs);
+     (of, FALSE)
+   END;
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs,
+                                             (null_formula, null_type, outer));
+   REF OUTERS o := os;
+   WHILE o ISNT nilouters
+   DO (outer OF newtprocs)(outer OF o, newtprocs);
+      o := rest OF o
+   OD
+END;
+
+
+SKIP
+KEEP assemble_diagnostics, monitoring_order
+FINISH
