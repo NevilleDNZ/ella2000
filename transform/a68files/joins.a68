@@ -1,0 +1,993 @@
+DECS joins CONTEXT VOID USE putstrings, basics, messageproc, assmodes,
+     modeprocs, transformprocs, options :
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: joins.a68,v 34.4 1995/03/29 13:02:55 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+ 2:07:90    DJS.  Joins Transform started
+11:07:90    DJS.  Successfull pass of tests
+12:07:90    DJS.  Annotation and refinement.
+24:07:90    EVW.  Temporary fix for trim/structures etc of multiple MAKES.
+                     Pre-pass now handles FN with OUTPUT unull as only change.
+27:07:90    EVW.  PROC need_new_name looks more deeply into unit.
+ 2:08:90    EVW.  Scopes only setup/used in second pass.
+24:08:90    DJS.  Correct error when more than one trim of the same object
+                     occured on the right hand side.
+ 3:09:90    DJS.  Modified to add option 2, remove output names from specs.
+31:01:91    DJS.  Correct 'need_new_name' to add UCASE, for R6B13.
+12:09:91    DJS.  Insert JOIN of UVOID to instances with VOID inputs.
+ 1:10:91    DJS.  R6B76 null OUTPUT not going to void.
+ 7:10:91    DJS.  R6B79 Not counting new names correctly.
+31:10:91    EVW.  Updated to version 7 of assembler modes.
+16:01:92    EVW.  Remove assumption that terminal namenos are first numbers.
+03:03:92    EVW.  Declaration attributes added. EVW
+ 5:05:92    DJS.  Remove type_source type_sink calls, new spec for fndec_tfn.
+10:07:92    DJS.  R6B119. Incorrect handling of strings.
+16:07:92    DJS.  R6B122. Series at left of join causes crash.
+21:07:92    DJS.  R6B123. Failure to deal with inner decs when outer dec
+                     does not need transforming.
+18:08:92    DJS.  R6B126. Scoping errors etc.
+29:06:93    EVW.  R6B159. UROW can occur on RHS of JOIN after fntype trans.
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.021 
+26:08:94  33.002  DJS   CoreElla  Use dec_tprocs in place of nulltprocs at
+                                  several places in fndec_join 
+10:11:94   EVW. temporary hash to get join 1 to create no CONC
+22:03:95  33.003  DJS   Release   Remove makes produced un-necessary struct of
+                                  indexed items, mod to stop this.
+29:03:95  34.004  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT name_in = 1, name_out = 2, name_other = 3;
+
+MODE RIGHTSIDE,
+     RHSLIST = STRUCT( RIGHTSIDE elem,           { A list of signal }
+                       REF RHSLIST rest ),       { references }
+     RIGHTSIDE = STRUCT( REF UNIT ru,            { A reference to a signal }
+                         REF RHSLIST rs ),       { A list of such references }
+     UNITREF = STRUCT( UNIT u,                   { Unit delivered by
+                                                   'type_unit' }
+                       REF RHSLIST rs ),         { Rightsidelist refering to
+                                                   elements in u. This is
+                                                   'nilrhslist' if u is not
+                                                   structured }
+     NAMEDATA = STRUCT( INT sort,                { input, output or other }
+                            seriesid,            { The unique number of the
+                                                   series clause in which the
+                                                   declaration of the name
+                                                   occurs, 1 for the outermost
+                                                   if it exists, negative if
+                                                   unjoined }
+                            ndim,                { the number of dimensions,
+                                                   this must match the
+                                                   number of indexes on the
+                                                   right of a normal join }
+                        REF FORMULAS dimentions, { the dimensions of the
+                                                   corresponding MAKE }
+                        UNIT source,             { A hole to keep the source
+                                                   signals for the instances }
+                        RIGHTSIDE refsrc );      { A structure referencing
+                                                   the individual signals in
+                                                   the source }
+
+REF MAKE nilmake = NIL;
+REF RHSLIST nilrhslist = NIL;
+
+PROC joins_remove_makes = OPTIONS: MAKEOPTIONS 1;
+PROC joins_remove_output_names = OPTIONS: MAKEOPTIONS 2;
+
+VECTOR[ ]VECTOR[ ]CHAR joins_options =
+    ( "Replace MAKEs & JOINs by LETS having the same name as the MAKE.",
+      "Remove output names from function specs" );
+
+PROC joinid = (INT nameno ) ID: oneline(("_j", nameno ));
+
+{ Null FNBODY proc }
+PROC fnbody_join = (FNBODY fbody, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE fbody IN
+   (REF UNITTAG ut)  (fnbody OF nulltprocs)(fbody, tprocs)
+   OUT (fbody, FALSE)
+   ESAC;
+
+PROC outerfn_joins = (OUTER ofn,
+                      CLOSURE closure,
+                      OPTIONS  options,
+                      MESSAGEPROC msg )OUTERC:
+BEGIN
+    BOOL remove_makes = options INCLUDES joins_remove_makes,
+         remove_output_names = options INCLUDES joins_remove_output_names;
+    PROC sysfault = (VECTOR[ ]CHAR text )VOID: msg( system, text );
+    REF ENVIRON env = environ OF ofn;
+
+    PROC fndec_join = (REF FNDEC fdec, TRANSFORMPROCS dec_tprocs )FNDECC:
+    BEGIN
+        REF VECTOR[ ]NAMETYPE nametypes := nametypes OF fdec;
+        INT num_names = UPB nametypes;
+        INT new_nameno := num_names,
+            seriesidcnt := 0,   { Counted up at the start of each USERIES }
+            num_new_names := 0; { Count of number of new names expected, this
+                                  is set during the pre_pass stage which looks
+                                  to see if anything needs doing. }
+        BOOL dec_changes := FALSE,    { Records changes to the declaration }
+             out_changes := FALSE;    { Records removal of an output name }
+        REF INTS series_changes := nilints,
+                 current_series := nilints;
+        REF REF INTS series_tail := series_changes;
+          { 'series_changes' is set up during the pre_pass, it indicates
+            whether there are changes to a series, by putting the current
+            value of 'seriesid' into the 'int' field, otherwise this field will
+            be zero.  There is one element on this list for each series
+            encountered. }
+        UNIT blank_unit := unull;
+        NAMEDATA nullnamedata = ( 0, 0, 0, nilformulas,
+                                  blank_unit, ( blank_unit, nilrhslist ) );
+        VECTOR[ num_names ]NAMEDATA namedata;  { Vector to hold info about the
+                                                 MAKEs, see mode decs above.
+                                                 Stack generator so no space
+                                                 wasted }
+
+        FORALL nd IN namedata DO nd := nullnamedata OD;
+
+        PROC init_namedata = (INT sort,
+                              REF NAMEDATA nd,
+                              REF FORMULAS sizes,
+                              INT seriesid )VOID:
+        BEGIN
+            REF FORMULAS el := sizes;
+            INT ndim := 0;
+
+            WHILE el ISNT nilformulas DO ndim PLUSAB 1; el := rest OF el OD;
+            nd := ( sort, seriesid, ndim, sizes, unull,
+                    ( blank_unit, nilrhslist ))
+        END;
+
+        PROC is_normal_join = (UNIT to, INT idepth )BOOL:
+        BEGIN
+          { Checks to see if the rhs of a join delivers an instance, if not
+            the join needs modifying.  This is used in the pre_pass and also
+            in the main transform }
+
+            CASE to IN
+            (REF UNAME un )
+            (REF NAMEDATA nd = namedata[ nameno OF un ];
+
+                seriesid OF nd := ABS seriesid OF nd;
+                IF sort OF nd /= name_other THEN  FALSE
+                ELIF ndim OF nd = idepth    THEN  TRUE
+                                            ELSE  FALSE
+                FI
+            ),
+            (REF UINDEX ind ) is_normal_join( unit OF ind, idepth + 1 )
+            OUT
+                FALSE
+            ESAC
+        END;
+
+        {{ Does the unit contain a node that needs naming, original supplied
+           by EVW }}
+        PROC need_new_name = (UNIT u) BOOL:
+        BEGIN
+            BOOL result := FALSE;
+
+            PROC nnn_unit = (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+            BEGIN
+                IF NOT result
+                THEN  CASE unit IN
+                      (UNION( REF USTRING, REF UMINST, REF UDINST, REF USERIES,
+                              REF USEQUENCE, REF UCASE, REF UCONC ))
+                         result := TRUE
+                      OUT
+                         ( unit OF dec_tprocs )( unit, tprocs )
+                      ESAC
+                FI;
+                ( unit, FALSE )
+            END;
+
+            TRANSFORMPROCS newtprocs = make_newtprocs( dec_tprocs,
+                                                       ( nnn_unit ));
+
+            ( unit OF newtprocs )( u, newtprocs );
+            discard_tprocs( newtprocs );
+            result
+        END;
+
+        PROC pre_pass_unit = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+        CASE u IN
+        (REF USERIES user )
+        BEGIN
+            INT seriesid = seriesidcnt PLUSAB 1;
+
+            PROC pre_pass_make = (REF MAKE m, TRANSFORMPROCS tprocs )MAKEC:
+            BEGIN
+            { Initialises the name data table for this MAKE during the pre_pass,
+              the UNIT source and RIGHTSIDE refsrc are set during the main pass
+              as these generate data from the HEAP. We only need number of
+              dimensions during pre_pass stage }
+
+                REF NAMES mkn := makenames OF m;
+
+                WHILE mkn ISNT nilnames
+                DO
+                    init_namedata( name_other, namedata[ nameno OF mkn ],
+                                   sizes OF m, -seriesid );
+                    mkn := rest OF mkn
+                OD;
+                ( m, FALSE )
+            END;
+
+            PROC pre_pass_join = (REF JOIN j, TRANSFORMPROCS tprocs) JOINC:
+            BEGIN
+            { Checks to see if any work needs doing, also counts how many new
+              names are needed so that a new nametypes table can be made prior
+              to the main pass }
+
+                UNITC ufc = ( unit OF tprocs )( from OF j, tprocs );
+
+                IF remove_makes OREL NOT is_normal_join( to OF j, 0 ) 
+                THEN
+                    IF need_new_name( u OF ufc ) THEN num_new_names PLUSAB 1 FI;
+                    int OF current_series := seriesid;
+                    dec_changes := TRUE
+                FI;
+                ( j, FALSE )
+            END;
+
+            REF INTS hold_current = current_series;
+
+            current_series := REF REF INTS( series_tail ) :=
+                                                HEAP INTS := ( 0, nilints );
+            series_tail := rest OF series_tail;
+
+            TRANSFORMPROCS series_tprocs = make_newtprocs( tprocs,
+                                                           ( pre_pass_join,
+                                                             pre_pass_make ));
+
+
+            ( series OF series_tprocs )( body OF user, series_tprocs );
+            CASE output OF user IN
+            (REF UNULL)
+            (
+                int OF current_series := seriesid;
+                dec_changes := TRUE
+            )
+            OUT
+                ( unit OF series_tprocs )( output OF user, series_tprocs )
+            ESAC;
+
+            discard_tprocs( series_tprocs );
+
+            FORALL nd IN namedata WHILE int OF current_series <= 0
+            DO
+                IF sort OF nd = name_other ANDTH seriesid OF nd = -seriesid
+                THEN
+                    int OF current_series := seriesid;
+                    dec_changes := TRUE
+                FI
+            OD;
+
+            REF INTS il := rest OF current_series;
+
+            WHILE ( il ISNT nilints ) ANDTH int OF current_series <= 0
+            DO
+                IF int OF il > 0
+                THEN  int OF current_series := seriesid
+                FI;
+                il := rest OF il
+            OD;
+            current_series := hold_current;
+            ( u, FALSE )
+        END
+        OUT
+            ( unit OF dec_tprocs )( u, tprocs )
+        ESAC;
+
+        PROC type_unit = (TYPE t )UNITREF:
+        BEGIN
+          { Creates a new unit given a type, this goes to the source position
+            of a join or instance }
+
+            PROC row_unit = (TYPE te, FORMULA size )UNITREF:
+            BEGIN
+                REF USTR new := nilustr;
+                REF REF USTR utail := new;
+                REF RHSLIST el := nilrhslist;
+                REF REF RHSLIST rtail := el;
+                UNITREF ur;
+
+                TO formula_int( size, msg )
+                DO
+                    ur := type_unit( te );
+                    REF REF USTR( utail ) := HEAP USTR := ( u OF ur, nilustr );
+                    REF REF RHSLIST( rtail ) := HEAP RHSLIST :=
+                                ( ( elem OF utail, rs OF ur ), nilrhslist );
+                    utail := rest OF utail;
+                    rtail := rest OF rtail
+                OD;
+                ( new, el )
+            END;
+
+            PROC str_unit = (REF TSTR tst )UNITREF:
+            BEGIN
+                REF TSTR tt := tst;
+                REF USTR new := nilustr;
+                REF REF USTR utail := new;
+                REF RHSLIST el := nilrhslist;
+                REF REF RHSLIST rtail := el;
+                UNITREF ur;
+
+                FOR strind WHILE tt ISNT niltstr
+                DO
+                    ur := type_unit( elem OF tt );
+                    REF REF USTR( utail ) := HEAP USTR := ( u OF ur, nilustr );
+                    REF REF RHSLIST( rtail ) := HEAP RHSLIST :=
+                                ( ( elem OF utail, rs OF ur ), nilrhslist );
+                    utail := rest OF utail;
+                    rtail := rest OF rtail;
+                    tt := rest OF tt
+                OD;
+                ( new, el )
+            END;
+
+            PROC string_unit = (TYPE te, FORMULA size )UNITREF:
+            BEGIN
+                UNITREF ur:= type_unit( te );
+                INT s = formula_int( size, msg );
+
+                IF s = 1
+                THEN
+                    ( HEAP USTRING := ( size, u OF ur ), rs OF ur )
+                ELSE
+                    REF UCONC cnc := NIL;
+                    REF USTRING newstr := HEAP USTRING :=
+                                                        ( MAKEFINT 1, u OF ur );
+                    UNIT new := newstr;
+                    REF RHSLIST el := HEAP RHSLIST :=
+                                ( ( char OF newstr, rs OF ur ), nilrhslist );
+                    REF REF RHSLIST rtail := rest OF el;
+
+                    TO s - 1
+                    DO
+                        cnc := HEAP UCONC := ( TRUE, flattenleft, new, cvoid );
+                        new := cnc;
+                        ur := type_unit( te );
+                        right OF cnc := u OF ur;
+                        REF REF RHSLIST( rtail ) := HEAP RHSLIST :=
+                                ( ( right OF cnc, rs OF ur ), nilrhslist );
+                        rtail := rest OF rtail
+                    OD;
+                    ( new, el )
+                FI
+            END;
+
+            CASE t IN
+            (REF TVOID ) ( cvoid, nilrhslist ),  { Empty input or output etc. }
+            (REF TNAME tn )
+                CASE body OF (types OF env)[ typeno OF tn ] IN
+                (REF TYPETAG tv )  type_unit( tag OF tv )
+                OUT ( cvoid, nilrhslist )
+                      { Leaf signal, make a cvoid to act as a hole for the true
+                        value when the JOIN is encountered.  It may also get
+                        delivered as the result of an output void being
+                        substituted for a null output }
+                ESAC,
+            (REF TROW tr )     row_unit( elem OF tr, size OF tr ),
+            (REF TSTR tst )    str_unit( tst ),
+            (REF TSTRING tg )  string_unit( char OF tg, size OF tg ),
+            (REF TFN tfn )     type_unit( from OF tfn ),
+            (REF TBRACKET tb ) type_unit( type OF tb )
+            OUT
+                sysfault( "type_unit" );
+                SKIP
+            ESAC
+        END;
+
+        PROC right_side = (REF UNIT ru )RIGHTSIDE:
+        BEGIN
+          { This procedure is applied to a source unit in order to get
+            references to the individual signal sources. It is applied at two
+            logically different points,
+                i) to the source of a MAKE when this is constructed from the
+                   input type of the MAKE,
+               ii) to the right hand side of a join. Its validity here is in
+                   doubt but it will fault if an unexpected condition arises }
+
+            PROC do_conc = (REF UCONC ucc )RIGHTSIDE:
+            BEGIN
+                INT sort = sort OF ucc;
+                REF RHSLIST result := nilrhslist;
+                REF REF RHSLIST tail := result;
+
+                PROC insert_elem = ( RIGHTSIDE u, INT cond ) VOID:
+                IF sort = cond OREL sort = flattenboth
+                THEN
+                    IF rs OF u ISNT nilrhslist
+                    THEN
+                        REF RHSLIST el := rs OF u;
+
+                        WHILE el ISNT nilrhslist
+                        DO
+                            REF REF RHSLIST( tail ) := HEAP RHSLIST :=
+                                                 ( elem OF el, nilrhslist );
+                            tail := rest OF tail;
+                            el := rest OF el
+                        OD
+                    ELSE
+                        sysfault( "right_side: conc list expected" )
+                    FI
+                ELSE
+                    REF REF RHSLIST( tail ) := HEAP RHSLIST :=
+                                                          ( u, nilrhslist );
+                    tail := rest OF tail
+                FI;
+
+                insert_elem( right_side( left OF ucc ), flattenleft );
+                insert_elem( right_side( right OF ucc ), flattenright );
+                ( ru, result )
+            END;
+
+            PROC do_index = (RIGHTSIDE rhs, FORMULA index )RIGHTSIDE:
+            IF rs OF rhs ISNT nilrhslist
+            THEN
+                REF RHSLIST el := rs OF rhs;
+
+                TO formula_int( index, msg ) - 1 DO el := rest OF el OD;
+                elem OF el
+            ELSE
+                 sysfault( "right_side: index list expected" );
+                 SKIP
+            FI;
+
+            PROC do_trim = (RIGHTSIDE rhs, RANGE range )RIGHTSIDE:
+            IF rs OF rhs ISNT nilrhslist
+            THEN
+                REF RHSLIST el := rs OF rhs;
+                INT lwb = formula_int( lwb OF range, msg ),
+                    upb = formula_int( upb OF range, msg );
+                REF RHSLIST new := nilrhslist;
+                REF REF RHSLIST tail := new;
+
+                TO lwb - 1 DO el := rest OF el OD;
+                TO upb - lwb + 1
+                DO
+                    REF REF RHSLIST( tail ) := HEAP RHSLIST :=
+                                               ( elem OF el, nilrhslist );
+                    tail := rest OF tail;
+                    el := rest OF el
+                OD;
+                ( ru, new )
+            ELSE
+                 sysfault( "right_side: trim list expected" );
+                 SKIP
+            FI;
+
+            PROC do_ustr = (REF USTR ustr )RIGHTSIDE:
+            BEGIN
+                REF USTR str := ustr;
+                REF RHSLIST el := nilrhslist;
+                REF REF RHSLIST tail := el;
+
+                WHILE str ISNT nilustr
+                DO
+                    REF REF RHSLIST( tail ) := HEAP RHSLIST :=
+                                      ( right_side( elem OF str ), nilrhslist );
+                    tail := rest OF tail;
+                    str := rest OF str
+                OD;
+                ( ru, el )
+            END;
+
+            PROC do_urow = (REF UROW urow )RIGHTSIDE:
+            BEGIN
+                REF RHSLIST el := nilrhslist;
+                REF REF RHSLIST tail := el;
+
+                TO int(size OF urow)
+                DO
+                    REF REF RHSLIST( tail ) := HEAP RHSLIST :=
+                                     ( right_side( elem OF urow ), nilrhslist );
+                    tail := rest OF tail
+                OD;
+                ( ru, el )
+            END;
+
+            CASE ru IN
+            (REF CVOID )    ( ru, nilrhslist ),  { Void is filled in for leaf
+                                                   signal by 'join_rhs', in the
+                                                   main pass. }
+            (REF USTR ustr ) do_ustr( ustr ),
+   {{ The following can only occur when dealing with the right sides of JOINs }}
+            (REF UROW urow ) do_urow( urow ),
+            (REF UNULL )    ( ru, nilrhslist ),  { Null can occur on the right
+                                                   of a JOIN following the
+                                                   FNTYPES transform, it will
+                                                   never be selected for use }
+            (REF UINDEX uindex )
+                do_index( right_side( unit OF uindex ), index OF uindex ),
+            (REF UTRIM utrim )
+                do_trim( right_side( unit OF utrim ), range OF utrim ),
+            (REF UCONC uconc )
+                do_conc( uconc ),
+            (REF UNAME uname )
+                refsrc OF namedata[ nameno OF uname ],
+            (REF UATTR uattr )
+                right_side( unit OF uattr ),
+            (REF UBRACKET ubracket )
+                right_side( unit OF ubracket )
+            OUT
+                sysfault( "right_side: unexpected mode" );
+                SKIP
+            ESAC
+        END;
+
+        INT seriesid := 0;
+
+        PROC useries_proc = (REF USERIES ser, TRANSFORMPROCS tprocs ) UNITC:
+        BEGIN
+          { Proc to handle useries during main phase }
+            REF SERIES new_body := nilseries;    { Variable, for head
+                                                   of new steps list }
+            REF REF SERIES stail := new_body;    { Reference to tail of
+                                                   new body, for constructing
+                                                   new steps list }
+            PROC add_new_step = (STEP step ) VOID:
+            BEGIN
+             { Add 'step' to end of new list, this may be taken unchanged
+               from old list. }
+                REF REF SERIES( stail ) := HEAP SERIES := ( step, nilseries );
+                stail := rest OF stail
+            END;
+
+            PROC make_index = (UNIT u, INT index )UNIT:
+              { Makes a UINDEX for 'u', but checks first to see if the index
+                can be applied to 'u', if so it does the index and delivers the
+                result }
+                CASE u IN
+                (REF UROW uro ) elem OF uro,
+                (REF USTR ust )
+                (REF USTR el := ust;
+
+                    TO index - 1 DO el := rest OF el OD;
+                    elem OF el
+                ),
+                (REF UTRIM tr )
+                    make_index( unit OF tr,
+                                formula_int( lwb OF range OF tr, msg ) +
+                                index - 1 )
+                OUT
+                    HEAP UINDEX := ( u, HEAP FINT := ( index, nullid ))
+                ESAC;
+
+            PROC uminst_right = (REF UNIT u )REF UNIT:
+            CASE u IN (REF UMINST um ) right OF um OUT u ESAC;
+
+            PROC make_uminsts = (INSTANCE inst,
+                                 TYPE type,
+                                 REF FORMULAS dimension )UNITREF:
+            BEGIN
+            { Expand rowed make to an equivalent set of instances, this
+              is used in 'remove_makes' mode }
+
+                UNITREF ur;
+                IF dimension IS nilformulas
+                THEN
+                    TYPE intype = CASE type IN
+                                  ( REF TFN tfn ) from OF tfn
+                                  OUT             type
+                                  ESAC;
+                    ur := type_unit( intype );
+                    HEAP UMINST uminst := ( inst, u OF ur );
+                    ( uminst, rs OF ur )
+                ELSE
+                    REF USTR str := nilustr;
+                    REF REF USTR utail := str;
+                    REF RHSLIST rhs := nilrhslist;
+                    REF REF RHSLIST rtail := rhs;
+                    TYPE tp = CASE type IN
+                              (REF TROW tr ) elem OF tr
+                              OUT            type
+                              ESAC;
+
+                    FOR index TO formula_int( formula OF dimension, msg )
+                    DO
+                        ur := make_uminsts( inst, tp, rest OF dimension );
+                        REF REF USTR( utail ) := HEAP USTR :=
+                                                ( u OF ur, nilustr );
+                        REF REF RHSLIST( rtail ) := HEAP RHSLIST :=
+                                ( ( uminst_right( elem OF utail ), rs OF ur ),
+                                  nilrhslist );
+                        utail := rest OF utail;
+                        rtail := rest OF rtail
+                    OD;
+                    ( str, rhs )
+                FI
+            END;
+
+            PROC output_type = (TYPE t, TRANSFORMPROCS tprocs )TYPEC:
+            CASE t IN
+            ( REF TFN tfn ) ( to OF tfn, TRUE )
+            OUT             ( type OF nulltprocs )( t, tprocs )
+            ESAC;
+
+            PROC make_proc = (REF MAKE make )VOID:
+            BEGIN
+              { Deals with makes during main pass }
+
+                PROC make_name = (REF NAMES mkn )VOID:
+                BEGIN
+                    REF NAMEDATA nd = namedata[ nameno OF mkn ];
+                    REF TYPE type = type OF nametypes[ nameno OF mkn ];
+
+                 { Fill in source and refsrc fields of the name data entry for
+                   this make. If removing makes generate a LET for each name
+                   in the makes list }
+
+                    refsrc OF nd :=
+                    IF remove_makes
+                    THEN
+                    UNITREF mur = make_uminsts( inst OF make,
+                                                type,
+                                                sizes OF make );
+                    REF LET let = HEAP LET :=
+                                  ( HEAP NAMES := ( nameno OF mkn, nilnames ),
+                                    u OF mur );
+
+                        add_new_step( let );
+                        TRANSFORMPROCS tpr = make_newtprocs( nulltprocs,
+                                                             ( output_type ));
+                        type := t OF ( type OF tpr )( type, tpr );
+                        discard_tprocs( tpr );
+                        ( uminst_right( unit OF let ), rs OF mur )
+                               { Reference must point to unit in LET or UMINST }
+                    ELSE
+                        UNITREF tur = type_unit( type );
+
+                        source OF nd := u OF tur;   { TYPE of MAKE contains
+                                                      rowing information }
+                        ( source OF nd, rs OF tur )
+                                    { Reference must point to unit in nametada }
+                    FI
+                END;
+
+                REF NAMES mkn := makenames OF make;
+
+                WHILE mkn ISNT nilnames
+                DO
+                    make_name( mkn );
+                    mkn := rest OF mkn
+                OD;
+                IF NOT remove_makes THEN add_new_step( make ) FI
+            END;
+
+            PROC join_proc = (REF JOIN join )VOID:
+            BEGIN
+              { Deals with joins during main pass }
+
+                UNITC fromc := ( unit OF tprocs )( from OF join, tprocs );
+                BOOL normal_join = is_normal_join( to OF join, 0 );
+
+                PROC join_rhs = (UNIT left, RIGHTSIDE right )VOID:
+                { Copy the unit given for left into the holes already created
+                  for the new JOIN or UMINST. Right delivers the necessary
+                  references to these holes }
+                BEGIN
+                    IF rs OF right ISNT nilrhslist
+                    THEN
+                        REF RHSLIST el := rs OF right;
+                        FOR index WHILE el ISNT nilrhslist
+                        DO
+                            join_rhs( make_index( left, index ), elem OF el );
+                            el := rest OF el
+                        OD
+                    ELSE
+                        ru OF right := left
+                    FI
+                END;
+
+              { Name left hand side if needed in order that
+                    i) declaration order is preserved,
+                   ii) hardware is not repeated,
+                  iii) text is not repeated.
+                If the join is not being removed it will be added later in its
+                modified form }
+
+                IF ( remove_makes OREL NOT normal_join ) ANDTH
+                   need_new_name( u OF fromc )
+                THEN
+                { Source unit is not a name, assume that it contains hardware
+                  and name it, modify fromc to reflect this change }
+                    new_nameno PLUSAB 1;
+                    add_new_step( HEAP LET :=
+                                     ( HEAP NAMES := ( new_nameno, nilnames ),
+                                       u OF fromc ) );
+
+                    { add type for new name to list of new types,
+                      care must be taken that a new name is never used as the
+                      argument of 'unit_type', so use un-transformed unit to
+                      obtain the type }
+                   ID newname = joinid( new_nameno );
+                   nametypes[ new_nameno ] :=
+                                      ( newname,
+                                        unit_type( from OF join, fdec, env ),
+                                        attrnull );
+                   fromc := ( HEAP UNAME := ( usource, new_nameno ), TRUE )
+                FI;
+
+                IF normal_join
+                THEN
+                REF UNIT ru = ru OF right_side( to OF join );
+
+                    ru := u OF fromc
+                ELSE
+                    join_rhs( u OF fromc, right_side( to OF join ))
+                FI
+            END;
+
+            PROC step_proc = (STEP step )VOID:
+            BEGIN
+                CASE step IN
+                (REF MAKE mk ) make_proc( mk ),
+                (REF JOIN jo ) join_proc( jo )
+                OUT
+                    add_new_step( s OF ( step OF tprocs )( step, tprocs ))
+                ESAC
+            END;
+
+            PROC next_dimension = (REF FORMULAS dimension,
+                                   UNIT source,
+                                        sink )VOID:
+              { Go through the dimensions for the relavent MAKE and join to
+                individual instances by indexing both left and right
+                appropriately }
+            BEGIN
+                IF dimension IS nilformulas
+                THEN
+                    add_new_step( HEAP JOIN := ( source, sink ) )
+                ELSE
+                    FOR index TO formula_int( formula OF dimension, msg )
+                    DO
+                        next_dimension( rest OF dimension,
+                                        make_index( source, index ),
+                                        make_index( sink, index ) )
+                    OD
+                FI
+            END;
+
+            PROC remake_joins = (REF NAMEDATA nd, INT nameno )VOID:
+              { IF the given name refers to a MAKE encountered in the current
+                series remake joins to it so that each join refers to a single
+                instance }
+            BEGIN
+                IF ABS seriesid OF nd = seriesid
+                THEN  next_dimension( dimentions OF nd,
+                                      source OF nd,
+                                      HEAP UNAME := ( usink, nameno ) )
+                FI
+            END;
+
+
+            REF SERIES old_body := body OF ser;  { Old body variable, for
+                                                   tracing the old steps }
+            WHILE old_body ISNT nilseries
+            DO
+                step_proc( step OF old_body );
+                old_body := rest OF old_body
+            OD;
+
+            IF NOT remove_makes
+            THEN
+                FOR nno TO UPB namedata
+                DO
+                    IF sort OF namedata[ nno ] = name_other
+                    THEN  remake_joins( namedata[ nno ], nno )
+                    FI
+                OD
+            FI;
+
+            UNITC outc = ( unit OF tprocs )( output OF ser, tprocs );
+            UNIT new_output =
+            CASE u OF outc IN
+            (REF UNULL )  { Outputs connected with joins, this can only
+                            occur on the outermost USERIES }
+                IF ( rest OF outputs OF fdec IS nilnames )
+                THEN
+                    source OF namedata[ nameno OF outputs OF fdec ]
+                ELSE
+                    REF USTR outstr := nilustr;
+                    REF REF USTR utail := outstr;
+                    REF NAMES ot := outputs OF fdec;
+
+                    WHILE ot ISNT nilnames
+                    DO
+                        REF REF USTR( utail ) := HEAP USTR :=
+                              ( source OF namedata [ nameno OF ot ], nilustr );
+                        utail := rest OF utail;
+                        ot := rest OF ot
+                    OD;
+                    outstr
+                 FI
+            OUT
+                u OF outc
+            ESAC;
+            REF USERIES new_series = HEAP USERIES := ( new_body, new_output );
+
+            ( new_series , TRUE )
+        END;
+
+        PROC unit_proc = (UNIT u, TRANSFORMPROCS tprocs ) UNITC:
+        { Only series needs to be looked at as only series can
+          contain makes and joins }
+        CASE u IN
+        (REF USERIES user )
+        (   INT old_seriesid = seriesid;
+            UNITC result = IF int OF series_changes > 0 THEN
+                               seriesid := int OF series_changes;
+                               series_changes := rest OF series_changes;
+                               useries_proc( user, tprocs )
+                           ELSE
+                               series_changes := rest OF series_changes;
+                               ( unit OF dec_tprocs )( u, tprocs )
+                           FI;
+
+            seriesid := old_seriesid;
+            result
+        )
+        OUT
+            ( unit OF dec_tprocs )( u, tprocs )
+        ESAC;
+
+        PROC nulldec = (DECLARATION dec, TRANSFORMPROCS tprocs )DECLARATIONC:
+            ( dec, FALSE );
+        { Note: This is a null tproc intended to stop processing of
+                inner declarations while doing the main pass.  These are
+                picked up by a separate call of the transform procs. }
+
+      { Pre pass looks to see if this FNDEC needs changing and counts up
+        number of new names. Inner declarations must not be transformed at
+        this stage so use 'nulltprocs' }
+
+        TRANSFORMPROCS pre_pass_tprocs = make_newtprocs( nulltprocs,
+                                                         ( null_attr,
+                                                           null_formula,
+                                                           null_type,
+                                                           fnbody_join,
+                                                           pre_pass_unit ));
+        FNDECC fdecc = ( fndec OF nulltprocs )( fdec, pre_pass_tprocs );
+
+        discard_tprocs( pre_pass_tprocs );
+
+        IF remove_output_names
+        THEN
+           REF NAMES outnames := outputs OF fdec;
+
+           WHILE outnames ISNT nilnames
+           DO
+                IF UPB name OF nametypes[ nameno OF outnames ] /= 0
+                THEN
+                    out_changes := TRUE;
+                    name OF nametypes[ nameno OF outnames] := nullid
+                FI;
+                outnames := rest OF outnames
+           OD
+        FI;
+
+        IF dec_changes OREL out_changes
+        THEN
+      { There are joins that need changing so perform second pass to make the
+        changes. This time inner declarations must be dealt with }
+
+      { Fill in empty units and references for the outputs }
+
+            PROC set_output = (INT nameno )VOID:
+            BEGIN
+                REF NAMEDATA nd = namedata[ nameno ];
+
+                init_namedata( name_out, nd, nilformulas, 0 );
+                 { field 'seriesid' set to 0 so that joins to outputs
+                   are only dealt with at end of declaration,
+                   seriesid of series clauses is always greater than zero }
+
+                UNITREF ur = type_unit( type OF nametypes[ nameno ] );
+
+                source OF nd := u OF ur;
+                refsrc OF nd := ( source OF nd, rs OF ur )
+                                    { Reference must point to unit in nametada }
+            END;
+
+            REF NAMES outputs := outputs OF fdec;
+
+            WHILE outputs ISNT nilnames
+            DO
+                set_output( nameno OF outputs );
+                outputs := rest OF outputs
+            OD;
+
+            IF num_new_names > 0 OREL remove_makes OREL out_changes
+            THEN
+                REF VECTOR[ ]NAMETYPE old_nametypes = nametypes;
+
+              { There are new names so make a new nametypes table }
+                nametypes := HEAP VECTOR[ num_names + num_new_names ]NAMETYPE;
+                nametypes[ : num_names ] := old_nametypes
+            FI;
+
+            TRANSFORMPROCS newtprocs = make_newtprocs( dec_tprocs,
+                                                       ( nulldec,
+                                                         unit_proc ));
+            FNDECC fdc = ( fndec OF nulltprocs )( fdec, newtprocs );
+            REF FNDEC new_dec = HEAP FNDEC := f OF fdc;
+
+            discard_tprocs( newtprocs );
+            nametypes OF new_dec := nametypes;
+            { Now call the nulltransform on the new declaration in order
+              to process inner declarations. }
+            ( f OF ( fndec OF nulltprocs )( new_dec, dec_tprocs ), TRUE )
+        ELSE
+            ( fndec OF nulltprocs )( fdec, dec_tprocs )
+        FI
+    END;
+
+    TRANSFORMPROCS outer_tprocs = make_newtprocs( nulltprocs, ( null_attr,
+                                                                null_formula,
+                                                                null_type,
+                                                                fnbody_join,
+                                                                fndec_join ));
+    OUTERC oc = ( outer OF nulltprocs )( ofn, outer_tprocs );
+
+    discard_tprocs( outer_tprocs );
+    oc
+END;
+
+
+PROC transform_joins = (CLOSURE closure,
+                        OPTIONS  options,
+                        MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+    PROC shell_outer = (OUTER o, TRANSFORMPROCS tprocs )OUTERC:
+    IF sort OF o = outerfn
+    THEN  outerfn_joins( o, closure, options, msg )
+    ELSE  ( o, FALSE )
+    FI;
+
+    TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( shell_outer ));
+    CLOSUREC clc = ( closure OF nulltprocs )( closure, newtprocs, msg );
+
+    discard_tprocs( newtprocs );
+    clc
+END;
+
+SKIP
+KEEP outerfn_joins, transform_joins, joins_options, joins_remove_makes,
+     joins_remove_output_names
+FINISH
