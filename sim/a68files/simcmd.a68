@@ -1,0 +1,2122 @@
+DECS simcmd CONTEXT VOID USE simbasics, { simhistory, } simmonitor, simtable,
+     simnode, simpast, simpeek, simpoke, simprompt, simrun, { simsave, }
+     simstart, simtime, kernel, basics, osinterface, putstrings, messageproc,
+     commandsyntax, kernelreader, command, ioprocs, simreader:
+
+{ " Id: simcmd.sta,v 1.1 91/10/14 14:31:17 edcad Exp$" }
+configinfo A68CONFIG "$Id: simcmd.a68,v 34.2 1995/03/29 13:04:57 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+   The user command library for the simulator
+
+10:05:88  Created. BJE.
+29:08:88  "setinterrupt" command removed BJE.
+09:09:88  Changes reflect addition of handles to testpoints
+13:10:88  Removal of `library filename' to SIMSAVE and some adjustment
+             of FLTPROCs to move the site of exception detection up to this
+             module also new arguments to `simulate and monitor'
+17:10:88  `sim prompt', `present sim prompt' and `past sim prompt' hived
+              off to SIMPROMPT
+04:11:88  Call to epi_send_message added to simulate cmd - episupportint
+             added to USE list. Calls to 'set time mode' used to record
+             changes in the time mode (other than temporary ones). BGH
+10:11:88 `RAM' and `nil ram' become `SRAM' and `nil sram' to avoid
+             name clash with assembler.  Arch Dec CR 30.  bje.
+11:11:88  `simulate cmd' processes optional <fnname> argument.
+             Sys Spec CR 13.  BJE.
+30:11:88  Return value from RELATIVE systematically checked.  BJE.
+14:11:88  `simulate cmd' checks closure and saves library.  Bug 51.  BJE.
+05:01:89  Modified call to checkclosure to add extra parameter
+             required for EPI. BGH
+10:01:89  Past mode prompt corrected.  Bug 94.  BJE.
+12:01:89  "simulatefn" no longer corrupts past mode prompt.  Bug 105.  BJE.
+12:01:89  "keep" now checks time mode.  Bug 107.  BJE.
+17:01:89  FLPROC supplied to `remove monitor'.  Bug 121.  BJE.
+17:01:89  "replay" and "setpast" adjusted to use new version of
+             NEW (REF MONITORLIST).  Bug 111. BJE
+26:01:89  "setnow" clears testpoint last values.  R4B040.  BJE
+02:02:89  `flatten function types' introduced and used in
+             "changeparameters".  R4B059. BJE.
+06:02:89  Improvements to "cs" and "sim" syntax error handling. R4B085. BJE.
+13.03.89     past mode testpoints suppressed  AAP.  R4B172
+23.03.89  replay now sets 'saved testpoints'  AAP.  R4B263
+11:04:89  Encode/decode changes for monitoring speedup.  R4B134.  PAR.
+21:04:89  Fixed decoding 'no value'.  R4B305.  PAR.
+14:12:89  Added extra commands for Probe Functions. MDR.
+
+15:12:89  Added support for time scaling                      MHC
+                  - 'scaletime' command added
+                  - new HEAP SIMPLE for the scaletime command
+                  - Modified 'time' command to multiply times by 'scale time'
+                  - Modified replay command so that times are scaled
+
+17:12:89  *9 use of ketranslate to allow simulation from asscommands. EVW
+30:01:90  Change to cache objects for changeparameters.  PAR.
+30:10:90  Reinstated 'testvalues' assignment min 'becomes or equals'
+             to fix stopb during 5v0 integration. MDR.
+20:12:90  Libmodes and assclosure added to use list. JIT
+18:12:90  Added set separator command. MDR.
+16:05:91  Merged with R5 v 2.2 from CG - "cout" and set cp cache.  DCT
+20:05:91  Clash in terminal symbols - parameter options switched ssep.  DCT
+26:09:91  R6B75  initialise ram did not cycle properly (Note, now behaves
+             like changeparameters unlike Release 4).  DCT
+03:10:91  R6B77  iram - changed behaviour above removed for efficiency.  DCT
+10:06:93  OSIF level 2, separate simulator image, simsave left out.  DCT
+20:08:93  Remove reference to history.  DJS
+23:08:93  Changes to commands for Public Domain. EVW
+29:10:93  Cycling of reader in cp (and cout) disabled.  DCT
+01:11:93  Syntax for displaysignal wrong - opt() missing.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.039 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module, in partnership with SIMNODE, handle all the ETI command
+   syntax particular to the simulator.  This module plays no part at all in
+   the provision of EPI services.
+
+   Note that the readers for nodenames (get_nodename) and for values (get_value)
+   may consume several items of MODE VALUE and so need to be used with a REF INT
+   index.  Note also that is_nodename and is_value should be called on the first
+   element of the suspected item but that the "index" parameter to get_nodename
+   and get_values should be initialised to the last item read (or zero).
+
+   The items in the VALUES list will be syntactically correct so there is no
+   need to test each item unless an alternative has been requested.  When
+   nothing has been read one "null" parameter is passed, therefore a test for an
+   upper bound of zero may not be used.  (If subsequent parameters are optional
+   then the upper bound of the VALUES array should be checked.  The "get_"
+   procedures will generate a system fault if the command syntax and command
+   bodies get out of step).  No test is made to check that the syntax specified
+   (in the COMMAND) is unambiguous.  (DCT)
+}
+
+
+{  This procedure is for the sole use of the "change parameters" command.
+   This command, for historical reasons, insists of regarding a function type
+   input whose output portion contains n primitive elements as n inputs.
+   This procedure flattens the function input type accordingly.  After the
+   initial flattening we transform types of the form "a-> (b,c)" into
+   "(a -> b, <NUL> -> c)" which while odd has the advantage of occupying
+   the same amount of memory as the original.
+
+   The input wire and all its referenced data are assumed to be of no
+   further value.
+
+}
+PROC flatten function types = (WIRE wire) WIRE:
+BEGIN
+   PROC flatten function type = (SFN sfn) REF SST:
+   BEGIN
+      STYPE to = to OF sfn;
+      REF SST fto := trim signal (to, 1, signal width(to));
+      HEAP SST ans := (HEAP SFN := (from OF sfn, t OF fto), nil sst);
+      fto := rest OF fto;
+      REF REF SST end := rest OF ans;
+      WHILE fto ISNT nil sst DO
+         REF REF SST (end) :=
+            HEAP SST := (HEAP SFN := (null stype, t OF fto), nil sst);
+         fto := rest OF fto;
+         end := rest OF end
+      OD;
+      ans
+   END;
+
+   STYPE type = type OF wire;
+   REF SST sst = trim signal (type, 1, signal width(type));
+   REF SST p := sst;
+   REF REF SST pp := p;
+   WHILE pp ISNT nil sst DO
+      CASE t OF pp IN
+         (REF SFN sfn):
+         BEGIN
+            REF SST rest = rest OF pp;
+            REF REF SST (pp) := flatten function type (sfn);
+            WHILE pp ISNT nil sst DO pp := rest OF pp OD;
+            REF REF SST (pp) := rest
+         END
+      OUT
+         pp := rest OF pp
+      ESAC
+  OD;
+  (sst, blocks OF wire)
+END;
+
+{
+   Process the following piece of command syntax, common to "printram" and
+   "initialiseram":
+
+   <node name> [<trim>]
+
+   Fully validate and return the relevant information - SRAM spec plus its
+   instance number and the bounds of the trim.
+
+   index gives the last values read from names - it should be initialised to
+   hold the index of the last item read (or zero).
+}
+PROC rd trimmed ram = (VALUES names, REF INT index, instance, lwb, upb,
+                       circuit, base, MESSAGEPROC msg) REF SRAM:
+BEGIN
+   PROC flt = (STR s) VOID:  msg(user, s);
+   REF PATH pathname = EXPANDROOT get_nodename(names, index, msg);
+   IF pathname IS nilpath THEN
+      flt ("Invalid nodename")
+   FI;
+   REF SRAM ram;
+   MNODE mnode = node(pathname, flt);
+   CASE node OF mnode IN
+      (BOX b) :
+         BEGIN
+            ram := ram OF lookup function (fn OF b);
+            instance := instance OF b
+         END
+   OUT flt ("The node name supplied does not identify a function")
+   ESAC;
+   IF ram IS nil sram THEN
+      flt ("The node name supplied does not identify a RAM")
+   FI;
+   INT upb of ram = lwb OF ram + (ram size OF ram - 1);
+   BOOL has_trim = (UPB names > index) ANDTH is_trim(names[index + 1]);
+   TRIM trim = IF has_trim THEN
+                  get_trim(names[index PLUSAB 1], (lwb OF ram, upb of ram), msg)
+               ELSE
+                  (lwb OF ram, upb of ram)
+               FI;
+   lwb := lwb OF trim;
+   upb := upb OF trim;
+   circuit := circuit OF mnode;
+   base := base OF mnode;
+   ram
+END;
+
+{
+   SIMULATOR COMMAND PROCEDURES
+   ============================
+
+   User command "foo" results in a call to 'PROC foo cmd' which is reponsible
+   for parsing the command tail and checking that all required arguments are
+   correctly supplied.  Note that these procedures consistently check that no
+   unwanted arguments are supplied.  The command interpreter will check that
+   commands without arguments are invoked without arguments but not that
+   commands with arguments do not have too many.
+}
+
+{
+    The following procedure applies to the withdrawn commands.
+}
+PROC withdrawn cmd = (VALUES names, MESSAGEPROC flt) VOID:
+    flt( user, "This command has been withdrawn." );
+
+{
+   COMMAND: printpointer (pp)
+}
+PROC print pointer cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   REF PATH mon ptr;
+   simtable lookup path(monitoring pointer name, any, mon ptr);
+   put (out, (NODENAME mon ptr, newline))
+END;
+
+{
+   COMMAND : printram (pram) <nodename> [<trim>]
+}
+PROC print ram cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   INT instance, lwb, upb, circuit, base;
+   IF time mode /= present THEN
+      flt (user, "RAMs may only be examined in present mode")
+   FI;
+   REF SRAM ram = rd trimmed ram (names, HEAP INT:= 0, instance, lwb, upb,
+                                  circuit, base, flt);
+   INT field width = max (digits(upb), digits(lwb));
+{
+   I'd like to write:
+
+   FOR i FROM lwb TO upb DO
+
+   but this overflows if 'upb' is the maximum positive integer, so instead
+}
+   FOR j FROM 0 TO upb - lwb DO
+      INT i = j + lwb;
+      IF i = lwb THEN
+         put (out,("Element   "))
+      ELSE
+         put (out, ("          "))
+      FI;
+      put (out, whole(i, -field width));
+      put (out, (" = "));
+      LINE element = (LOC WIRE := trim ram (ram, i, i), instance);
+      INT size := 0;
+      FORALL block IN blocks OF wire OF element DO
+         size +:= size OF block
+      OD;
+      VECTOR [size] CHAR workspace;
+      SVALUE value = peek and decode ((element, circuit, base), workspace);
+      print signal value (value, no punctuation, out);
+      put (out , newline)
+   OD
+END;
+
+{
+   Support for the "dont<action>" group
+}
+PROC dont common = (VALUES names, INT action, STR str, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   INT  index:= 0;
+   IF NOT is_nodename(names[index + 1]) THEN
+      REF PATH mon ptr;
+      simtable lookup path(monitoring pointer name, any, mon ptr);
+      REF VECTOR [] INT list =
+         list monitors (mon ptr, action, no condition, FALSE);
+      IF UPB list > 0 THEN
+         FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+      ELSE
+         flt (str)
+      FI
+   ELSE
+      WHILE index < UPB names DO
+         REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+         IF path IS nilpath THEN
+            flt ("Invalid nodename")
+         FI;
+         node (path, flt);
+         REF VECTOR [] INT list =
+            list monitors (path, action, no condition, FALSE);
+         IF UPB list > 0 THEN
+            FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+         ELSE
+            flt (str)
+         FI
+      OD
+   FI
+END;
+
+{
+   COMMAND: dontdisplay (dd) [<nodename>]*
+}
+PROC dont display cmd = (VALUES names, MESSAGEPROC flt) VOID:
+dont common (names, display, "This has not been displayed", flt);
+
+{
+   COMMAND: dontkeep (dk) [<nodename>]*
+}
+PROC dont keep cmd = (VALUES names, MESSAGEPROC flt) VOID:
+IF time mode = past THEN
+   flt(user, "Keeping must be switched off in present mode")
+ELSE
+   dont common (names, keep, "This has not been kept", flt)
+FI;
+
+{
+   COMMAND: dontmonitor (dm) [<nodename>]*
+}
+PROC dont monitor cmd = (VALUES names, MESSAGEPROC flt) VOID:
+dont common (names, monitor, "This has not been monitored", flt);
+
+{{{{
+   COMMAND: dontsavesimulation (dss)
+}
+PROC dont save simulation cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   put(out, ("Simulation will not be saved.", newline));
+   save simulator file := FALSE
+END;
+}}}
+
+{
+   COMMAND: dontstop (dstop) [<nodename>]*
+}
+PROC dont stop cmd = (VALUES names, MESSAGEPROC flt) VOID:
+dont common (names, stop, "No such breakpoint", flt);
+
+{
+   COMMAND: cleardisplays
+}
+PROC clear displays cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   REF VECTOR [] INT list =
+        list monitors (nil path, display, no condition, FALSE);
+   FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+END;
+
+{
+   COMMAND: clearmonitors
+}
+PROC clear monitors cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   REF VECTOR [] INT list =
+        list monitors (nil path, monitor, no condition, FALSE);
+   FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+END;
+
+{
+   COMMAND: clearstops
+}
+PROC clear stops cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   REF VECTOR [] INT list =
+        list monitors (nil path, stop, no condition, FALSE);
+   FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+END;
+
+{
+   COMMAND: clearkeeps
+}
+PROC clear keeps cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   REF VECTOR [] INT list =
+        list monitors (nil path, keep, no condition, FALSE);
+   FOR i TO UPB list DO remove monitor (list [i], FALSE, flt) OD
+END;
+
+{
+   COMMAND: goto (gt) <nodename>*
+}
+PROC go to cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   REF PATH saved;
+   simtable lookup path(monitoring pointer name, any, saved);
+   PROC msg = (MSGNO no, VECSTR s) VOID:
+     (simtable replace binding(monitoring pointer name, any, saved); flt(no,s));
+   PROC fault = (STR str) VOID:  msg(user, str);
+   INT  index := 0;
+   WHILE index < UPB names DO
+      REF PATH pathname = EXPANDROOT get_nodename(names, index, msg);
+      node (pathname, fault);
+      IF pathname IS nilpath THEN flt (user, "Invalid node name") FI;
+      simtable replace binding(monitoring pointer name, any, pathname)
+   OD
+END;
+
+
+{
+   COMMAND: goin (gi) [<nodename>]*
+}
+
+PROC go in cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   REF PATH saved;
+   simtable lookup path(monitoring pointer name, any, saved);
+   PROC msg = (MSGNO no, VECSTR s) VOID:
+     (simtable replace binding(monitoring pointer name, any, saved); flt(no,s));
+   PROC fault = (STR str) VOID:  msg(user, str);
+   INT  index:= 0;
+   WHILE index < UPB names  DO
+      REF PATH pathname;
+      IF is_nodename(names[index + 1])
+      THEN  pathname := GOIN (EXPANDROOT get_nodename(names, index, msg))
+      ELSE  index PLUSAB 1; { stop further iterations }
+            REF PATH mon ptr;
+            simtable lookup path(monitoring pointer name, any, mon ptr);
+            pathname := GOIN mon ptr
+      FI;
+      IF pathname IS nilpath THEN flt (user, "Invalid node name") FI;
+      node (pathname, fault);
+      IF pathname ISNT nilpath THEN
+         simtable replace binding(monitoring pointer name, any, pathname)
+      ELSE
+         fault ("This node name cannot be gone into")
+      FI
+   OD
+END;
+
+
+{
+   COMMAND: goout (go) [<fnname>|<identifier>]*
+}
+PROC go out cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   REF PATH saved;
+   simtable lookup path(monitoring pointer name, any, saved);
+   PROC msg = (MSGNO no, VECSTR s) VOID:
+     (simtable replace binding(monitoring pointer name, any, saved); flt(no,s));
+   PROC fault = (STR str) VOID:  msg(user, str);
+
+   IF is_name(names[1]) THEN
+      FORALL n IN names  DO
+         ID name = get_name(n, msg);
+         REF PATH mon ptr;
+         simtable lookup path(monitoring pointer name, any, mon ptr);
+         mon ptr := name GOOUT mon ptr;
+         IF mon ptr IS nilpath THEN
+            fault ("""" + name + """ is not a function in the current path")
+         FI;
+         simtable replace binding(monitoring pointer name, any, mon ptr)
+      OD
+   ELSE  { names[1] = null }
+      REF PATH mon ptr;
+      simtable lookup path(monitoring pointer name, any, mon ptr);
+      mon ptr := GOOUT mon ptr;
+      IF mon ptr IS nilpath THEN
+         fault ("There is no surrounding function")
+      FI;
+      simtable replace binding(monitoring pointer name, any, mon ptr)
+   FI
+END;
+
+{
+   COMMAND: goback [<fnname>|<identifier>]*
+}
+PROC go back cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   REF PATH saved;
+   simtable lookup path(monitoring pointer name, any, saved);
+   PROC fault = (MSGNO no, VECSTR s) VOID:
+     (simtable replace binding(monitoring pointer name, any, saved); msg(no,s));
+   go out cmd (names, msg);
+   go in cmd (names, fault)
+END;
+
+{
+   COMMAND: gohome (gh)
+}
+PROC go home cmd = (VALUES names, MESSAGEPROC flt) VOID:
+BEGIN
+   {
+      This repeats the initialisation done in 'newfn', so can never
+      fail if we get to here.
+   }
+   REF PATH sim fn;
+   simtable lookup path(simulated function name, any, sim fn);
+   simtable replace binding(monitoring pointer name, any, HEAP PATH := sim fn )
+END;
+
+{
+   COMMAND: displaysignal (ds) [<nodename>]*
+}
+PROC display signal cmd = (VALUES names, MESSAGEPROC msg) VOID:
+{{?? can halve this procedure if node(monitoring pinter) does nothing}}
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   IF NOT is_nodename(names[1]) { is null } THEN
+      REF PATH mon ptr;
+      simtable lookup path(monitoring pointer name, any, mon ptr);
+      REF MONITOR m = load monitor (mon ptr, display, no condition, flt);
+      REF SVALUE value =
+{  Remove history: DJS assume that time mode ias always present.
+         IF time mode = present THEN
+}
+            HEAP SVALUE := peek and decode (location OF m, workspace OF m)
+{         ELSE
+            INT column = reopen history column (location OF m, flt);
+            IF column = 0 THEN  NIL
+            ELSE
+               WORD raw value = read history value (column, flt);
+               IF raw value ISNT nil word THEN
+                  LINE loc of m =CASE node OF location OF m IN (LINE l):l ESAC;
+                  HEAP SVALUE := decode (raw value, type OF wire OF loc of m)
+               ELSE
+                  NIL
+               FI
+            FI
+         FI
+} ;
+      print freeform (active time, m, value, print equals)
+   ELSE
+      INT  index:= 0;
+      WHILE index < UPB names DO
+         REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+         IF path IS nilpath THEN
+            flt ("Invalid nodename")
+         FI;
+         node (path, flt);
+         REF MONITOR m = load monitor (path, display, no condition, flt);
+         REF SVALUE value =
+{  Remove history: DJS assume that time mode ias always present.
+            IF time mode = present THEN
+}
+               HEAP SVALUE := peek and decode (location OF m, workspace OF m)
+{            ELSE
+               INT column = reopen history column (location OF m, flt);
+               IF column = 0 THEN  NIL
+               ELSE
+                  WORD raw value = read history value (column, flt);
+                  IF raw value ISNT nil word THEN
+                     LINE loc of m =
+                          CASE node OF location OF m IN (LINE l):l ESAC;
+                     HEAP SVALUE := decode (raw value, type OF wire OF loc of m)
+                  ELSE
+                     NIL
+                  FI
+               FI
+            FI
+} ;
+         print freeform (active time, m, value, print equals)
+      OD
+   FI;
+   newline (out)
+END;
+
+{
+   Support for "...always" and "...changes"
+
+   Parses: [<nodename>]*
+}
+PROC always or changes = (VALUES names, INT action, condition, MESSAGEPROC msg)
+                                                                           VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   INT first new := -1;
+   IF NOT is_nodename(names[1]) { is null } THEN
+      REF PATH mon ptr;
+      simtable lookup path(monitoring pointer name, any, mon ptr);
+      REF MONITOR m = load monitor (mon ptr, action, condition, flt);
+      first new := add monitor (m)
+   ELSE
+      INT  index:= 0;
+      WHILE index < UPB names DO
+         REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+         IF path IS nilpath THEN
+            flt ("Invalid nodename")
+         FI;
+         node (path, flt);
+         REF MONITOR m = load monitor (path, action, condition, flt);
+         INT handle = add monitor (m);
+         IF first new = -1 THEN first new := handle FI
+      OD
+   FI;
+   new testpoints (first new, flt)
+END;
+
+{
+   Support for "...becomes" and "...equals"
+
+   Parses: <nodename> <value>*
+}
+PROC becomes or equals = (VALUES names, INT action, condition, MESSAGEPROC msg)
+                                                                        VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   INT  index:= 0;
+   REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+   IF path IS nilpath THEN
+      flt ("Invalid nodename")
+   FI;
+   node (path, flt);
+   REF MONITOR m = load monitor (path, action, condition, flt);
+   LINE loc of m = CASE node OF location OF m IN (LINE l):l ESAC;
+   testvalues OF m :=
+      encode( get_values( names, index, type OF wire OF loc of m,
+                          nocycle_and_check, flt ),
+              type OF wire OF loc of m );
+   new testpoints (add monitor (m), flt)
+END;
+
+{
+   COMMAND: displaychanges (dc) [<nodename>]*
+}
+PROC display changes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+always or changes (names, display, changes, flt);
+
+{
+   COMMAND: displayequals (deq) <nodename> <value>*
+}
+PROC display equals cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, display, equals, flt);
+
+{
+   COMMAND: displayalways (da) [<nodename>]*
+}
+PROC display always cmd = (VALUES names, MESSAGEPROC flt) VOID:
+always or changes (names, display, always, flt);
+
+{
+   COMMAND: displaybecomes (db) <nodename> <value>*
+}
+PROC display becomes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, display, becomes, flt);
+
+{
+   COMMAND: monitorchanges (mc) [<nodename>]*
+}
+PROC monitor changes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+always or changes (names, monitor, changes, flt);
+
+{
+   COMMAND: monitorequals (meq) <nodename> <value>*
+}
+PROC monitor equals cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, monitor, equals, flt);
+
+{
+   COMMAND: monitoralways (ma) [<nodename>]*
+}
+PROC monitor always cmd = (VALUES names, MESSAGEPROC flt) VOID:
+always or changes (names, monitor, always, flt);
+
+{
+   COMMAND: monitorbecomes (mb) <nodename> <value>*
+}
+PROC monitor becomes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, monitor, becomes, flt);
+
+{
+   COMMAND: setnow (sn)
+}
+PROC set now cmd = (VALUES names, MESSAGEPROC flt) VOID:
+IF time mode = past THEN
+   set time mode(present);
+   monitoring separator := saved monitoring separator;
+   active time := saved active time;
+   testpoints := saved testpoints;
+   simtable replace binding(monitoring pointer name, any,
+                            saved monitoring pointer);
+   print style := saved print style;
+   REF ID (sim prompt) := present sim prompt;
+   put (out, ("Now in present mode", newline));
+   monitor heading;
+   simulate and monitor (0, LOC BOOL, LOC BOOL, (STR s)VOID:flt(user,s))
+FI;
+
+{
+   COMMAND: setpast (sp)
+}
+PROC set past cmd = (VALUES names, MESSAGEPROC flt) VOID:
+IF time mode = present THEN
+   set time mode (past);
+   saved monitoring separator := monitoring separator;
+   saved active time := active time;
+   CLEAR testpoints;
+   saved testpoints := testpoints;
+   testpoints := NEW testpoints;
+   REF PATH mon ptr;
+   simtable lookup path(monitoring pointer name, any, mon ptr);
+   saved monitoring pointer := NEW mon ptr;
+   saved print style := print style;
+{  Remove history: DJS
+   set history read time (active time, (STR s)VOID:flt(user,s));
+}
+   REF ID (sim prompt) := past sim prompt;
+   put (out, ("Now in past mode", newline))
+FI;
+
+{
+   COMMAND: stopchanges (stopc) [<nodename>]*
+}
+PROC stop changes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+always or changes (names, stop, changes, flt);
+
+{
+   COMMAND: stopequals (stopeq) <nodename> <value>*
+}
+PROC stop equals cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, stop, equals, flt);
+
+{
+   COMMAND: stopbecomes (stopb) <nodename> <value>*
+}
+PROC stop becomes cmd = (VALUES names, MESSAGEPROC flt) VOID:
+becomes or equals (names, stop, becomes, flt);
+
+{ Cached values for the changeparameters command, together with the
+  procedure to set them up.
+}
+BOX sb;
+FN sf;
+WIRE sfi;
+STYPE sfi type;
+INT sfi width;
+
+PROC set cp cache = VOID:
+BEGIN
+
+   REF PATH sim fn;
+   simtable lookup path (simulated function name, any, sim fn);
+   { Get information about the simulated function ready to hand }
+   sb :=
+      CASE node OF node OF bind OF sim fn
+      IN (BOX b): b
+      OUT
+         sys fault ("set cp cache: simulated function found corrupt");
+         (0, 0)
+      ESAC;
+   sf := lookup function (fn OF sb);
+   sfi := flatten function types (inputs (sf));
+   sfi type := type OF sfi;
+   sfi width := signal width (sfi type)
+END;
+
+{
+   COMMAND: changeparameters (cp) [<trim>] <value>*
+}
+PROC change parameters cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   { Check command is valid at all }
+   IF time mode = past THEN flt ("Parameters must be set in present mode") FI;
+
+   { Read and Validate [<trim>] }
+   INT  index:= 0;
+   BOOL has_trim = is_trim(names[index + 1]);
+   TRIM trim = IF has_trim THEN
+                  get_trim(names[index PLUSAB 1], (1, sfi width), msg)
+               ELSE
+                  (1, sfi width)
+               FI;
+   INT lwb = lwb OF trim,
+       upb = upb OF trim;
+   WIRE trim sfi = IF lwb > 1 OR upb < sfi width THEN
+                       trim wire (sfi, lwb, upb)
+                   ELSE  sfi
+                   FI;
+   STYPE trim sfi type = type OF trim sfi;
+
+   { Read and validate <value>* }
+   SVALUE sfi value = get_values( names, index, trim sfi type,
+                                  nocycle_and_check { cycle_and_check }, flt );
+
+   { Poke Inputs }
+   LINE trim sfi line := (HEAP WIRE := trim sfi, instance OF sb);
+   poke signal value ((trim sfi line, 0, 0), encode (sfi value, trim sfi type));
+   monitors pending := TRUE;
+
+   { Wake up monitoring }
+   monitor heading;
+
+   { Run a combinatorial logic evaluation }
+   simulate and monitor (0, LOC BOOL, LOC BOOL, flt)
+END;
+
+{
+   COMMAND: changeoutput (cout) <nodename> [<trim>] <value>*
+}
+PROC change output cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   { Check command is valid at all }
+   IF time mode = past THEN flt ("Parameters must be set in present mode") FI;
+
+   INT  index:= 0;
+   REF PATH pathname = EXPANDROOT get_nodename(names, index, msg);
+   IF pathname IS nilpath THEN flt("Invalid nodename") FI;
+   MNODE mnode = node(pathname, flt);
+   BOX box :=
+      CASE node OF mnode IN (BOX b) : b
+      OUT flt ("The node name supplied does not identify a function"); SKIP
+      ESAC;
+   WIRE output = lookup outputs(fn OF box);
+   INT output width = signal width (type OF output);
+
+   { Read and Validate [<trim>] }
+   BOOL has_trim = is_trim(names[index + 1]);
+   TRIM trim = IF has_trim THEN
+                  get_trim(names[index PLUSAB 1], (1, output width), msg)
+               ELSE
+                  (1, output width)
+               FI;
+   INT lwb = lwb OF trim,
+       upb = upb OF trim;
+   WIRE trim output = IF lwb > 1 OR upb < output width THEN
+                         trim wire (output, lwb, upb)
+                      ELSE output
+                      FI;
+   STYPE trim output type = type OF trim output;
+
+
+   { Read and validate <value>* }
+   SVALUE output value = get_values( names, index, trim output type,
+                                  nocycle_and_check { cycle_and_check }, flt );
+
+   { Poke Inputs }
+   LINE trim output line := (HEAP WIRE := trim output, instance OF box);
+   poke signal value and fanout(
+      (trim output line, circuit OF mnode, base OF mnode),
+      encode (output value, trim output type))
+END;
+
+
+{
+   COMMAND: freeze <nodename>
+}
+PROC freeze cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+   INT  index:= 0;
+   REF PATH pathname = EXPANDROOT get_nodename(names, index, msg);
+   IF pathname IS nilpath THEN flt("Invalid nodename") FI;
+   MNODE mnode = node(pathname, flt);
+   IF circuit OF mnode /= 0 THEN flt("Cannot freeze probe functions") FI;
+   CASE node OF mnode IN (BOX b) : SKIP
+   OUT flt ("The node name supplied does not identify a function"); SKIP
+   ESAC;
+
+   INT state = freeze instance(mnode);
+   IF state = 1 THEN
+      put(out, ("Warning: Those outputs directly connected to inputs are not frozen"))
+   ELIF state = 2 THEN
+      flt("Already frozen")
+   FI
+END;
+
+{
+   COMMAND: dontfreeze <nodename>
+}
+PROC dontfreeze cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+   INT  index:= 0;
+   REF PATH pathname = EXPANDROOT get_nodename(names, index, msg);
+   IF pathname IS nilpath THEN flt("Invalid nodename") FI;
+   MNODE mnode = node(pathname, flt);
+   CASE node OF mnode IN (BOX b) : SKIP
+   OUT flt ("The node name supplied does not identify a function"); SKIP
+   ESAC;
+   IF NOT unfreeze instance(mnode) THEN flt("Can't dontfreeze that function") FI
+END;
+
+{
+   COMMAND: freeform (ff)
+}
+PROC free form cmd = (VALUES names, MESSAGEPROC flt) VOID:
+   print style := freeform;
+
+{
+   COMMAND: initialiseram (iram) <nodename> [<trim>] <value(s)>
+}
+PROC initialise ram cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   OP + = (REF VECTOR [] SVALUE list, SVALUE element) REF VECTOR [] SVALUE:
+   BEGIN
+      HEAP VECTOR [UPB list + 1] SVALUE ans;
+      IF UPB list > 0 THEN ans [1:UPB list] := list FI;
+      ans [UPB list + 1] := element;
+      ans
+   END;
+
+   INT index:= 0, instance, lwb, upb, circuit, base;
+   IF time mode /= present THEN
+      flt ("RAMs may only be initialised in present mode")
+   FI;
+   REF SRAM ram = rd trimmed ram (names, index, instance, lwb, upb, circuit,
+                                  base, msg);
+   STYPE type = type OF first cell OF ram;
+   REF VECTOR [] SVALUE values := LOC VECTOR [0] SVALUE;
+   { Warning - max can be very large - hence use of OP + }
+   INT  max = upb - lwb + 1;
+   FOR i TO max WHILE index < UPB names
+   DO  { The command syntax forces at least one <value> to be read }
+       values := values + get_values( names, index, type,
+                                      IF i = max THEN  nocycle_and_check
+                                                 ELSE  nocycle_nocheck
+                                      FI, flt )
+   OD;
+   INT loop := 1;
+   { Loop coded thus to avoid overflow -- see also 'print ram cmd' }
+   FOR j FROM 0 TO upb - lwb DO
+      INT i = j + lwb;
+      LINE element := (LOC WIRE := trim ram (ram, i, i), instance);
+      poke signal value ((element, circuit, base), encode(values[loop], type));
+      loop := IF loop = UPB values THEN 1 ELSE loop + 1 FI
+   OD;
+   simulate and monitor (0, LOC BOOL, LOC BOOL, flt)
+END;
+
+{
+   COMMAND: keep (k) [<nodename>]*
+}
+PROC keep cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+PROC flt = (STR s) VOID: msg(user, s);
+IF time mode = past THEN
+   flt ("Keeping must be started in present mode")
+ELSE
+   INT first new := -1;
+   IF NOT is_nodename(names[1]) { is null } THEN
+      REF PATH mon ptr;
+      IF
+         simtable lookup path(monitoring pointer name, any, mon ptr);
+         REF VECTOR [] INT list =
+            list monitors (mon ptr, keep, no condition, FALSE);
+         UPB list > 0
+      THEN flt ("this is already kept")
+      FI;
+      REF MONITOR m = load monitor(mon ptr, keep, no condition, flt);
+      first new := add monitor (m)
+   ELSE
+      INT  index:= 0;
+      WHILE index < UPB names DO
+         REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+         IF path IS nilpath THEN
+            flt ("Invalid nodename")
+         FI;
+         node (path, flt);
+         IF
+            REF VECTOR [] INT list =
+               list monitors (path, keep, no condition, FALSE);
+            UPB list > 0
+{{ ?? Now that all the parameters are parsed before any monitoring points
+      are set how is this error message going to help the user identify
+      which item has been already kept ?   (DCT)
+}}
+         THEN flt ("this is already kept")
+         FI;
+         REF MONITOR m = load monitor (path, keep, no condition, flt);
+         INT handle = add monitor (m);
+         IF first new = -1 THEN first new := handle FI
+      OD
+   FI;
+   new testpoints (first new, flt)
+FI
+END;
+
+{
+   COMMAND: make <fnname> <identifier>
+}
+PROC make probe cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   ID fn = get_fnname(names[1], msg);
+   ID name = get_ident(names[2], msg);
+
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+
+   REF PATH dummy;
+   IF simtable lookup path(name, probename, dummy) THEN
+      flt ("probe name already exists")
+   FI;
+
+   HEAP MNODE probe mnode := initialise probe instance(fn, flt);
+   HEAP BIND new probe := (fn, name, probe mnode);
+   simtable add binding(name, probe name, makepath(1, name, new probe))
+ END;
+
+
+{
+   COMMAND: dontmake <identifier>
+}
+PROC dont make probe cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+
+   OP + = (REF VECTOR [] INT a, b) REF VECTOR [] INT:
+   BEGIN
+      HEAP VECTOR [UPB a + UPB b] INT ans;
+      IF UPB a > 0 THEN ans [:UPB a] := a FI;
+      IF UPB b > 0 THEN ans [UPB a + 1:] := b FI;
+      ans
+   END;
+
+   PROC expand joins to = (INT base) REF VECTOR [] INT:
+   BEGIN
+      REF VECTOR [] INT branches := list probes connected to (base);
+      FOR i TO UPB branches DO
+         branches := branches + expand joins to (branches[i])
+      OD;
+      branches
+   END;
+
+   ID name = get_ident(names[1], msg);
+
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+
+   REF PATH probe;
+   IF NOT simtable lookup path(name, probe name, probe) THEN
+      flt("Probe not found")
+   FI;
+
+   REF PATH monptr;
+   simtable lookup path(monitoring pointer name, any, monptr);
+   INT monptrbase = base OF node OF bind OF monptr;
+
+   { Get a list of all probes connected to (and including) the one
+     we're going to delete }
+   VECTOR [1] INT this probe := base OF node OF bind OF probe;
+   REF VECTOR [] INT probe chain =
+       this probe + expand joins to(base OF node OF bind OF probe);
+
+   stop probe instances(probe chain);
+
+   BOOL deleted monptr := FALSE;
+   FOR i FROM UPB probe chain BY -1 TO 1 DO
+      INT this probe =  probe chain[i];
+      {Remove all testpoints connected to the probe we're about to delete}
+      REF VECTOR [] INT list =
+         list monitors (this probe, no action, no condition, FALSE);
+      FOR j TO UPB list DO remove monitor (list [j], TRUE, flt) OD;
+
+      {remove the probe instantiation}
+      INT circuit;
+      simtable lookup circuit by base(this probe, circuit);
+      destroy probe instance(circuit, this probe);
+
+      {Ensure the monitoring pointer in not removed from simtable}
+      IF NOT deleted monptr ANDTH (monptr base = this probe) THEN
+         go home cmd(names, msg);
+         deleted monptr := TRUE
+      FI;
+
+      {Delete all probe names & aliases referencing the current instance}
+      simtable discard bindings by base(this probe)
+   OD
+ END;
+
+{
+   COMMAND: let <identifier> <nodename>
+}
+PROC let cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   ID name = get_ident(names[1], msg);
+   REF PATH path = EXPANDROOT get_nodename(names, HEAP INT := 1, msg);
+   IF path IS nilpath THEN flt ("Invalid nodename") FI;
+   node(path, flt);
+   IF NOT simtable add binding(name, alias name, path NEWALIAS name)
+   THEN
+      flt("Let name already exists")
+   FI
+
+END;
+
+{
+   COMMAND: dontlet <identifier>
+}
+PROC dont let cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   ID name = get_ident(names[1], msg);
+   IF NOT simtable discard binding(name, alias name) THEN
+      flt("Let name not found")
+   FI
+END;
+
+{this returns true iff the tree of connections below 'root'
+ contains a connection to 'base'}
+OP ISJOINEDTO = (INT base, root)BOOL:
+BEGIN
+   BOOL found := (base = root);
+   REF VECTOR [] INT branches = list probes connected to(root);
+   FOR i TO UPB branches WHILE NOT found DO
+      found := (base = branches[i]) OREL (base ISJOINEDTO branches[i])
+   OD;
+   found
+END;
+
+{
+   COMMAND: join <nodename> <identifier>
+                  line    ->  probe
+              or  ?       ->  probe
+
+   An extension to this procedure could provide the equivalent of
+   changeparameters for probes by poking svalues into the MNODE
+   returned by 'probe input node'. 'probe input node' would need to
+   be parameterised by an MNODE describing the probe.
+ }
+
+
+PROC join probe cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+
+
+   { Get the ? or <node name> }
+   INT index := 0;
+   BOOL joining value = IF is_query(names[index + 1])
+                        THEN index PLUSAB 1; TRUE
+                        ELSE FALSE
+                        FI;
+   MNODE line mnode;
+   IF NOT joining value THEN
+      REF PATH path = EXPANDROOT get_nodename(names, index, msg);
+      IF path IS nilpath THEN flt ("Invalid nodename") FI;
+      line mnode := node(path, flt)
+   FI;
+
+   { Get the <identifier> }
+   REF PATH probe;
+   IF NOT simtable lookup path(get_ident(names[index PLUSAB 1], msg),
+                               probe name, probe)
+   THEN flt("Probe not found")
+   FI;
+   MNODE probe mnode = node OF bind OF probe;
+
+   IF joining value THEN
+      line mnode := probe input node(probe mnode)
+   ELSE
+      IF NOT probe type matches line(probe mnode, line mnode) THEN
+         flt("Probe input type does not match line type")
+      FI;
+
+      IF base OF line mnode ISJOINEDTO base OF probe mnode THEN
+         flt("Probes cannot be connected in a loop")
+      FI
+   FI;
+
+   reconnect probe instance(probe mnode, line mnode)
+END;
+
+{
+   COMMAND: restart <identifier>
+}
+PROC restart probe cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   ID name = get_ident(names[1], msg);
+   IF time mode = past THEN
+      flt("Circuit changes can only be achieved in present mode")
+   FI;
+
+   REF PATH probe;
+   IF NOT simtable lookup path(name, probe name, probe) THEN
+      flt("Probe not found")
+   FI;
+   reinitialise probe instance(node OF bind OF probe)
+END;
+
+*9{
+   COMMAND: listnames
+}
+*9PROC list names cmd = (VALUES names, MESSAGEPROC msg) VOID:
+*9BEGIN
+*9   PROC flt = (STR s) VOID: msg(user, s);
+*9   simtable start listing path names;
+*9   WHILE simtable more path names DO
+*9         put (out, (simtable next path name, " ", NODENAME simtable next path,
+*9                    newline))
+*9   OD
+*9END;
+
+{
+   COMMAND: noprint (np)
+}
+PROC no print cmd = (VALUES names, MESSAGEPROC flt) VOID: print style := noprint;
+
+{
+   COMMAND: replay (r) [<time>][<time>]
+}
+PROC replay cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   { Process parameters }
+   BOOL set1 := FALSE;
+   INT end = IF time mode = past THEN saved active time ELSE active time FI;
+   INT t1 = IF is_time(names[1])
+            THEN  set1 := TRUE;  get_time(names[1], msg) * scale time
+            ELSE  0
+            FI;
+   INT t2 = IF UPB names = 2  ANDTH is_time(names[2])
+            THEN get_time(names[2], msg) * scale time
+            ELIF set1 THEN t1 ELSE end
+            FI;
+   IF t1 < 0 OREL t2 < t1 OREL t2 > end THEN
+         flt ("The specified times are impossible")
+   FI;
+
+   {
+      The time and time mode must be changed during this command but restored
+      on exit.  We have to take some care to ensure that the restore is done
+      on fault exits. Note that 'set time mode' is not used to change the time
+      mode as the change is only temporary.
+   }
+   INT saved time = active time;     { So that it can be restored below }
+   INT saved mode = time mode;
+   REF MONITORLIST saved saved testpoints = saved testpoints;
+   CLEAR testpoints;
+
+   PROC local flt = (STR msg) VOID:  { Reset previous state }
+   BEGIN
+      active time := saved time;
+      time mode := saved mode;
+      saved testpoints := saved saved testpoints;
+      CLEAR testpoints;
+      flt (msg)
+   END;
+
+   { Perform the replay }
+   IF time mode = present
+   THEN
+      saved active time := active time ;
+      saved testpoints := test points
+   FI;
+   { 'replay and monitor' assumes that 'saved active time' is set }
+   { 'list monitors' assumes that 'saved testpoints' is set }
+   time mode := past;
+   active time := t1;
+   monitor heading;
+   replay and monitor (0, { dont stop = } TRUE, local flt);
+   IF t2 > t1 THEN
+      replay and monitor (t2 - t1, { dont stop = } TRUE, local flt)
+   FI;
+   active time := saved time;
+   time mode := saved mode;
+   saved testpoints := saved saved testpoints;
+   CLEAR testpoints
+END;
+
+
+{{{{
+   COMMAND: savesimulation (ss) [<filename>]
+}
+PROC save simulation cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   { Process parameters }
+   PROC flt = (STR s) VOID: msg(user, s);
+   BOOL file name given = is_filename(names[1]);
+
+   IF file name given THEN
+      FILENAME file name = get_filename(names[1], savefile_type, msg);
+      write status file (flt);
+      FILENAME new filename = copy simulator file (shortname OF file name, flt);
+      put (out, (
+          "Simulation has been saved as ",
+           shortname OF new filename,
+           newline
+      ))
+   ELSE
+      save simulator file := TRUE;
+      put(out, (
+         "Simulation will be saved as ",
+         library filename,
+         savefile_type,
+         newline
+      ))
+   FI;
+   put(out,(newline))    { extra newline not needed? - CME }
+END;
+}}}
+
+
+{ COMMAND : scaletime (sti) <integer>                              }
+{                                                                  }
+{           Reads an integer from the command line                 }
+{           and assigns this to the 'scale time' variable.         }
+
+
+PROC scaletime cmd = (VALUES names, MESSAGEPROC msg) VOID :
+
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   INT scale time input;    {Temporary variable to hold scale time value}
+
+   scale time input := IF is_int(names[1])
+                       THEN get_int(names[1], msg)
+                       ELSE get_int(names[2], msg)
+                       FI;
+
+   IF (scale time input < 1) THEN
+       flt ("Scale time must be greater than or equal to 1 !")
+   FI;
+
+   scale time := scale time input
+
+END;   {PROC scaletime cmd}
+
+
+{
+   COMMAND: simulatefn <fnname>
+}
+PROC simulatefn cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   ID fn = get_fnname(names[1], msg);
+
+   IF time mode = past THEN
+      flt("New simulated function must be selected in present mode")
+   FI;
+   initialise shell with fn (fn, flt);
+   set cp cache;
+   simulate and monitor (0, LOC BOOL, LOC BOOL, flt);
+   REF ID (sim prompt) := present sim prompt
+END;
+
+{
+   COMMAND: tabulated (t)
+}
+PROC tabulated cmd = (VALUES names, MESSAGEPROC flt) VOID:
+   print style := tabulated;
+
+
+PROC dont set separator cmd = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   monitoring separator := " ";
+
+PROC set separator cmd = (VALUES  params,  MESSAGEPROC  msg) VOID:
+   IF is_character(params[1])
+   THEN  monitoring separator := get_character(params[1], msg)
+   ELSE  RVC  str = get_quoted_string(params[1], msg);
+         IF UPB str = 1 THEN  monitoring separator := str[1]
+                        ELSE  msg(user, "A single character should be given")
+         FI
+   FI;
+
+{
+   COMMAND time (ti) [+|-] <int>
+
+   'time cmd' reads the new time, treating it as relative to the current time
+   if it is signed, and otherwise as absolute.  Its behaviour depends on
+   whether the mode is past or present, and on whether the requested time is
+   ahead of or behind the current time.
+   It is possible that the user may set scaletime to some large value, in
+   which case the time input by the user may, when multiplied by the scale
+   time, exceed max int. This is trapped by PROC 'scale if ok'. A further
+   check is needed when incrementing time (ti +x) since active time added
+   to the scaled time read in could also exceed maxint. This is done in the
+   section of code that deals with ti +number.
+}
+PROC time cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+   PROC scale if ok = (INT number read, FLTPROC flt) INT:
+     IF (number read > (max int OVER scale time)) THEN
+       flt ("Resulting value of time will be too large !");
+       0
+     ELSE
+       number read * scale time
+     FI;
+   INT new time =
+      IF is_plus(names[1]) THEN
+         { Signed, treat as relative offset and scale }
+         INT inc = get_int(names[2], msg);
+         INT scaled inc = scale if ok (inc, flt);
+         IF (active time > (max int - scaled inc)) THEN
+           flt ("Resulting end time will exceeded maximum value of time !");
+           0
+         ELSE
+           active time + scaled inc
+         FI
+{
+      ELIF is_minus(names[1]) THEN
+         { Signed, treat as relative offset and scale }
+         INT dec = get_int(names[2], msg);
+         active time - (scale if ok(dec, flt))
+}
+      ELSE
+         { No sign given, so treat as absolute time and scale }
+         scale if ok(get_int(names[1], msg), flt)
+      FI;
+   IF new time < 0 THEN
+      flt ("Time not valid")
+   ELIF time mode = present ANDTH new time < active time THEN
+      flt ("I can't reduce time"){ in present mode}
+   FI;
+   IF new time = active time THEN
+     IF (scale time > 1) THEN
+       pttime freeform scaled (active time, scale time)
+     ELSE
+       put (out, ("  *** time = ", active time, " ***", newline))
+     FI
+   ELSE
+      monitor heading;
+      IF time mode = present THEN
+         simulate and monitor (new time - active time, LOC BOOL, LOC BOOL, flt)
+      ELSE
+         replay and monitor (new time - active time, FALSE, flt)
+      FI
+   FI
+END;
+
+
+
+{{{
+
+{
+   COMMAND: exit
+   COMMAND: finish
+
+   One procedure is used for both commands.  The command line interpreter
+   takes care of the difference between them, ie whether or not ELLA is
+   terminated.  Any errors will return the user to the simulator (otherwise
+   provide last parameter of make_compound)
+}
+PROC sim_finish = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   put(screen, ( "Leaving the ELLA simulator and returning to the calling "
+                 "environment - continue or ""finish"" as desired", newline ));
+   deinitialise shell((STR s) VOID: msg(user, s));
+   REF ID (sim prompt) := present sim prompt
+END;
+
+
+{
+   COMMAND: continuesimulation (cs) [<filename>]
+}
+PROC continue simulation cmd = (VALUES names, MESSAGEPROC msg) VOID:
+BEGIN
+   PROC flt = (STR s) VOID: msg(user, s);
+{{??check use of filename v ID }}
+   ID sim_filename =
+      IF NOT is_filename(names[1]) THEN
+         library filename
+      ELSE
+         shortname OF get_filename(names[1], savefile_type, msg)
+      FI;
+
+   ID title;
+   REF FILENAME filename =
+      open simulator file (sim_filename, FALSE, title, flt);
+   put (out, (
+      title, newline,
+      newline,
+      "Restoring from ", shortname OF filename, newline
+   ));
+   reinitialise shell (flt);
+   set cp cache;
+   monitor heading;
+   IF time mode = present THEN
+      simulate and monitor (0, LOC BOOL, LOC BOOL, flt)
+   ELSE
+      replay and monitor (0, FALSE, flt)
+   FI;
+   present sim prompt := MAKRVC "Sim";
+   sim prompt := present sim prompt;
+   past sim prompt := MAKERVC (sim prompt + " (past)");
+   IF time mode = past THEN REF ID (sim prompt) := past sim prompt FI
+END;
+}}}
+
+
+
+{
+   SIMULATOR COMMAND TABLE
+   =======================
+
+   This procedure is called once at program initialisation to build and return
+   the simulator command table.  This contains entries for all
+   simulator-specific commands  as well as an entry for the simulator version
+   of the global "finish" command.
+}
+
+PROC  make_sim_commands = COMMANDVEC:  MAKECOMMANDS VECTOR [] COMMAND
+BEGIN
+     make_group("DONT", "D", normal access,
+     BEGIN
+         HEAP SIMPLE := (
+            MAKERVC "DISPLAY", MAKERVC "D", star(opt(nodename_syntax)),
+            normal access, continue, MAKERVC
+            "Switches off all displays on the named node(s).  Given "
+            "without a nodename, it applies to the function indicated "
+            "by the monitoring pointer.",
+{ "Used in past mode, its effects "
+  "are not carried forward into present mode simulation.", }
+            dont display cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "MONITOR", MAKERVC "M", star(opt(nodename_syntax)),
+            normal access, continue, MAKERVC
+            "Switches off all monitors on the named node(s).  Given "
+            "without a nodename, it applies to the function indicated "
+            "by the monitoring pointer.",
+{"   If used in past mode, its effects "
+ "are not carried forward into present mode simulation.", }
+            dont display cmd
+{           dont monitor cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "MAKE", nilid, ident_syntax,
+            hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Destroys a probe instance and any probe instances "
+            "joined to it. Switches off all monitors attached.",
+            dont make probe cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "LET", nilid, ident_syntax,
+            hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Destroys an identifier set up by LET.",
+            dont let cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "FREEZE", nilid, nodename_syntax,
+            hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Reverses the action of the freeze command.",
+            dont freeze cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "SAVESIMULATION", MAKERVC "SS", no parameters,
+            hidden access,  continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+      "Without a filename, ensures that the simulator file is retained at "
+      "the end of the simulation.  With a filename, a snapshot of the "
+      "simulation is taken by making a copy of the current simulator file.",
+            dont save simulation cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "STOP", MAKERVC "STOP", star(opt(nodename_syntax)),
+            {
+               The "abbreviation" is there to make the help facility print
+               the abbreviation 'dstop' for the compound!
+            }
+            normal access, continue, MAKERVC
+            "Switches off all stops on the named node(s). Given without "
+            "a nodename, it applies to the function indicated by the "
+            "monitoring pointer.",
+{"  If used in past mode, its effects are "
+ "not carried forward into present mode simulation.", }
+            dont stop cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "KEEP", MAKERVC "K", star(opt(nodename_syntax)),
+            hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Switches off all keeps on the named node(s).  Given without "
+            "a nodename, it applies to the function indicated by the "
+            "monitoring pointer.  This command may be used in present mode "
+            "only.",
+            dont keep cmd }
+         )
+
+      END ),
+
+      make_group("PRINT", "P", normal access,
+      BEGIN
+
+         HEAP SIMPLE := (
+            MAKERVC "POINTER", MAKERVC "P", no parameters, normal access,
+            continue, MAKERVC
+                 "Shows the position of the monitoring pointer, by "
+                 "displaying the full hierarchic name of the node "
+                 "to which it points.",
+            print pointer cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "RAM", nilid, prod((nodename_syntax, opt(trim_syntax))),
+            normal access, continue, MAKERVC
+               "Prints the values of some or all of the elements of the "
+               "RAM identified by the '<nodename>'.",
+            print ram cmd
+         )
+      END ),
+
+      make_group("CLEAR", "", normal access,
+      BEGIN
+
+         HEAP SIMPLE := (
+            MAKERVC "DISPLAYS", nullstr, no parameters, normal access,
+            continue, MAKERVC
+            "Switches off all the displays which have been set so far in "
+            "the simulation.",
+{  This command may be used in present mode only.",}
+            clear displays cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "MONITORS", nullstr, no parameters, normal access,
+            continue, MAKERVC
+            "Switches off all the monitors which have been set so far in "
+            "the simulation.",
+            clear monitors cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "SETSEPARATOR", MAKERVC "SSEP", no parameters,
+            normal access, continue,
+            MAKERVC "Sets the tabulated output column separator to <space>.",
+            dont set separator cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "STOPS", nullstr, no parameters, normal access, continue,
+            MAKERVC
+            "Switches off all the stops which have been set so far in "
+            "the simulation.",
+            clear stops cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "KEEPS", nullstr, no parameters, hidden access, continue,
+            MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Switches off all keeps which have been set so far in the "
+            "simulation.  This command may be used in present mode only.",
+            clear keeps cmd }
+         )
+      END ),
+
+   make_group("GO", "G", normal access,
+   BEGIN
+         HEAP SIMPLE :=
+         (
+             MAKERVC "HOME", MAKERVC "H", no parameters, normal access,
+             continue, MAKERVC
+                "Resets the monitoring pointer to just inside the "
+                "simulated function.",
+             go home cmd
+          ),
+
+         HEAP SIMPLE :=
+         (
+             MAKERVC "TO", MAKERVC "T", star(nodename_syntax), normal access,
+             continue, MAKERVC
+                "Moves the monitoring pointer to the next instance of the "
+                "named function(s) in the monitored function.",
+            go to cmd
+         ),
+
+         HEAP SIMPLE :=
+         (
+             MAKERVC "PAST", MAKERVC "P", star(nodename_syntax),
+             hidden access,  continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+              "Moves the monitoring pointer to the named point in the "
+              "function hierarchy.",
+             go to cmd }
+         ),
+
+         HEAP SIMPLE :=
+         (
+             MAKERVC "IN", MAKERVC "I", star(opt(nodename_syntax)),
+             normal access, continue, MAKERVC
+             "Selects as monitored function the next instance of the "
+             "named function after the monitoring pointer in the "
+             "currently monitored function.",
+            go in cmd
+         ),
+
+         HEAP SIMPLE :=
+         (
+            MAKERVC "OUT", MAKERVC "O",
+            star(opt(alt((fnname_syntax, ident_syntax)))),
+            normal access, continue,  MAKERVC
+            "Moves the monitoring pointer outside the specified function.",
+            go out cmd
+          ),
+
+         HEAP SIMPLE :=
+         (
+             MAKERVC "BACK", MAKERVC "B",
+             star(opt(alt((fnname_syntax, ident_syntax)))),
+             normal access, continue, MAKERVC
+             "This is equivalent to 'goout' followed by 'goin'.  "
+             "With no parameter this has the effect of moving the monitoring"
+             " pointer just inside the monitored function.",
+             go back cmd
+         )
+   END ),
+
+   make_group("DISPLAY", "D", normal access,
+   BEGIN
+          HEAP SIMPLE := (
+             MAKERVC "CHANGES", MAKERVC "C", opt(star(nodename_syntax)),
+             normal access, continue, MAKERVC
+             "Displays the value(s) of the signal(s) indicated by the "
+             "monitoring pointer, or of the signal(s) within the specified "
+             "node only when the value changes.",
+             display changes cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "EQUALS", MAKERVC "EQ",
+             prod((nodename_syntax, star(values_syntax))), normal access,
+             continue, MAKERVC
+             "Displays the value(s) of the named signal whenever it matches "
+             "the specified value(s).  The symbol '_' is used to specify "
+             "the node indicated by the monitoring pointer.",
+             display equals cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "ALWAYS", MAKERVC "A", star(opt(nodename_syntax)),
+            normal access, continue,  MAKERVC
+            "Always displays the value of the named signal(s), or if "
+            "no nodename is given, the node indicated by the monitoring "
+            "pointer.",
+            display always cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "BECOMES", MAKERVC "B",
+            prod((nodename_syntax, star(values_syntax))), normal access,
+            continue,  MAKERVC
+            "Displays the value(s) of the named signal whenever it changes "
+            "to become equal to the specified value(s).  The symbol '_' is "
+            "used to specify the node indicated by the monitoring pointer.",
+            display becomes cmd
+         ),
+
+         HEAP SIMPLE :=
+         (
+            MAKERVC "SIGNAL", MAKERVC "S", star(opt(nodename_syntax)),
+            normal access, continue,  MAKERVC
+            "Displays the value(s) of the signal(s) indicated by the "
+            "monitoring pointer, or of the named signal(s) within the "
+            "specified node, after the command has been given.",
+            display signal cmd
+         )
+   END ),
+
+   make_group("MONITOR", "M", normal access,
+   BEGIN
+
+         HEAP SIMPLE := (
+            MAKERVC "CHANGES", MAKERVC "C", star(opt(nodename_syntax)),
+            normal access, continue, MAKERVC
+            "Monitors the value(s) of the named signal(s) when it changes.",
+            display changes cmd
+{            monitor changes cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "EQUALS", MAKERVC "EQ",
+            prod((nodename_syntax, star(values_syntax))),
+            normal access, continue,  MAKERVC
+            "Monitors the value(s) of the named signal whenever it "
+            "matches the specified value(s).",
+            display equals cmd
+{            monitor equals cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "ALWAYS", MAKERVC "A", star(opt(nodename_syntax)),
+            normal access, continue,  MAKERVC
+            "Always monitors the value(s) of the signal(s) indicated by "
+            "monitoring pointer or of the named signal(s) within the "
+            "specified node.",
+            display always cmd
+{            monitor always cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "BECOMES", MAKERVC "B",
+            prod((nodename_syntax, star(values_syntax))),
+            normal access, continue,  MAKERVC
+            "Monitors the value(s) of the named signal when it changes to "
+            "become equal to the specified value(s).  The symbol '_' is "
+            "used to specify the monitored function.",
+            display becomes cmd
+{            monitor becomes cmd }
+         )
+   END ),
+
+   make_group("SET", "S", normal access,
+   BEGIN
+         HEAP SIMPLE := (
+            MAKERVC "NOW", MAKERVC "N", no parameters, hidden access,
+            continue,  MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "If this command is given from a past mode simulation the "
+            "present mode simulation is restored, with the test points "
+            "and print style that were active when past mode was entered.",
+            set now cmd }
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "SEPARATOR", MAKERVC "SEP",
+            alt((quoted_string_syntax, character_syntax)),
+            normal access, continue,
+            MAKERVC  "Forces a <char> to be output between each column "
+                     "of tabulated output.",
+            set separator cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "PAST", MAKERVC "P", no parameters, hidden access,
+            continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+            "Makes any stored values of a present mode simulation "
+            "available for review.",
+            set past cmd }
+         )
+   END ),
+
+   make_group("STOP", "", normal access,
+   BEGIN
+         HEAP SIMPLE := (
+            MAKERVC "CHANGES", MAKERVC "C", star(opt(nodename_syntax)),
+            normal access, continue, MAKERVC
+            "An event message is printed and the simulation terminated if "
+            "the value(s) of the node indicated by the monitoring pointer "
+            "or named signal(s) changes.",
+            stop changes cmd
+            ),
+
+         HEAP SIMPLE := (
+            MAKERVC "EQUALS", MAKERVC "EQ",
+            prod((nodename_syntax, star(values_syntax))),
+            normal access, continue,  MAKERVC
+            "An event message is printed and the simulation terminated "
+            "whenever the value(s) of the named signal is equal to the "
+            "specified value(s).  The symbol '_' is used to specify the "
+            "node indicated by the monitoring pointer.",
+            stop equals cmd
+         ),
+
+         HEAP SIMPLE := (
+            MAKERVC "BECOMES", MAKERVC "B",
+            prod((nodename_syntax, star(values_syntax))),
+            normal access, continue, MAKERVC
+            "An event message is printed and the simulation terminated if "
+            "the value(s) of the named signal changes to become equal to "
+            "the specified value(s).  The symbol '_' is used to specify "
+            "the node indicated by the monitoring pointer.",
+            stop becomes cmd
+         )
+   END ),
+
+   HEAP SIMPLE :=
+   (
+      MAKERVC "CHANGEPARAMETERS", MAKERVC "CP",
+      prod((opt(trim_syntax), star(values_syntax))),
+      normal access, continue, MAKERVC
+      "Changes the values on the selected inputs of the simulated "
+      "function.  Each value supplied must be of the appropriate type "
+      "(or possibly '?') and must be listed in the order expected from "
+      "the function specification.",
+      change parameters cmd
+   ),
+
+   HEAP SIMPLE :=
+   (
+      MAKERVC "CHANGEOUTPUT", MAKERVC "COUT",
+      prod((nodename_syntax, opt(trim_syntax), star(values_syntax))),
+      hidden access, continue, MAKERVC  "Withdrawn.", withdrawn cmd
+{
+      "Changes the values on the selected output of the function "
+      "indicated by <nodename>.  Each value supplied must be of the "
+      "appropriate type (or possibly '?') and must be listed in the "
+      "order expected from the function specification.",
+      change output cmd }
+   ),
+   HEAP SIMPLE :=
+   (
+     MAKERVC "FREEZE", nilid, nodename_syntax,
+     hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Freezes the state of the function instance specified by <nodename>.",
+     freeze cmd }
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "FREEFORM", MAKERVC "FF", no parameters, normal access,
+      continue,  MAKERVC
+     "Simulator output is displayed in free format (rather than tabulated).",
+      free form cmd
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "INITIALISERAM", MAKERVC "IRAM",
+      prod((nodename_syntax, opt(trim_syntax), star(values_syntax))),
+      normal access, continue, MAKERVC
+      "Initialises some or all of the elements of the RAM identified "
+      "by the '<nodename>' to the specified value(s).  Each value "
+      "supplied must be of the appropriate type.",
+      initialise ram cmd
+   ),
+
+   HEAP SIMPLE :=
+   (
+     MAKERVC "KEEP", MAKERVC "K", star(opt(nodename_syntax)), hidden access,
+     continue,  MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Sets keep(s) on the output of the monitored function or on the named "
+     "signal(s) within it.  The values are kept in a history file for "
+     "subsequent review, using replay or past mode simulation.",
+     keep cmd }
+   ),
+
+   HEAP SIMPLE :=
+   (
+     MAKERVC "MAKE", nilid, prod((fnname_syntax, ident_syntax)),
+     hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Creates a new instance of the function specified by <fnname> "
+     "with the unique name <identifier>.",
+     make probe cmd }
+   ),
+
+
+   HEAP SIMPLE :=
+   (
+     MAKERVC "JOIN", MAKERVC "J",
+     prod((alt((query_syntax, nodename_syntax)), ident_syntax)),
+     hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Connects the input of a probe specified by <identifier> "
+     "to either the circuit component given by <nodename>, or "
+     "to query.",
+     join probe cmd }
+   ),
+
+   HEAP SIMPLE :=
+   (
+     MAKERVC "RESTART", nilid, ident_syntax,
+     hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Causes the probe specified by <identifier> to be reinitialised.",
+     restart probe cmd }
+   ),
+*9
+     HEAP SIMPLE :=
+     (
+       MAKERVC "LISTLETNAMES", nilid, no parameters,
+        hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+       "Lists all names which map to nodenames.",
+       list names cmd }
+     ),
+*9
+   HEAP SIMPLE :=
+   (
+     MAKERVC "LET", nilid, prod((ident_syntax, nodename_syntax)),
+     hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+     "Allows <identifier> to be used to represent the circuit component "
+     "specified by <nodename>",
+     let cmd }
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "NOPRINT", MAKERVC "NP", no parameters, normal access,
+      continue,  MAKERVC
+      "Suppresses all printing of signal values other than those "
+      "matching an 'event' command.",
+      no print cmd
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "REPLAY", MAKERVC "R",
+      prod((opt(time_syntax), opt(time_syntax))),
+      hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+      "Replays the simulation over the given range of times "
+      "(or the whole simulation if no range given).",
+      replay cmd }
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "SAVESIMULATION", MAKERVC "SS", opt(filename_syntax),
+      hidden access, continue, MAKERVC "Withdrawn.", withdrawn cmd
+{
+      "Without a filename, ensures that the simulator file is retained at "
+      "the end of the simulation.  With a filename, a snapshot of the "
+      "simulation is taken by making a copy of the current simulator file.",
+      save simulation cmd }
+   ),
+
+   HEAP SIMPLE :=
+   (
+      MAKERVC "SCALETIME", MAKERVC "STI",
+      prod((opt(plus_syntax), int_syntax)), normal access, continue,
+      MAKERVC
+      "Changes the simulator's representation of time so that "
+      "it is scaled by the factor given. All times are then   "
+      "interpreted as multiples of the scaletime. For example,"
+      "time +2 increments simulator time by 2*scaletime units."
+      "Times are printed in a different style to reflect this "
+      "scaled effect.",
+      scaletime cmd
+   ),
+
+   HEAP SIMPLE :=
+   (
+      MAKERVC "SIMULATEFN", nilid, fnname_syntax, normal access,
+      continue, MAKERVC
+      "Starts a new simulation of the specified function. ",
+{      "Available in present mode only.",}
+      simulatefn cmd
+   ),
+
+   HEAP SIMPLE := (
+      MAKERVC "TABULATED", MAKERVC "T", no parameters, normal access,
+      continue, MAKERVC
+      "Causes subsequent printing of signal values to be in a "
+      "tabulated style (except events).",
+      tabulated cmd
+   ),
+
+   HEAP SIMPLE :=
+   (
+       MAKERVC "TIME", MAKERVC "TI",
+       prod((opt(plus_syntax), int_syntax)),
+       normal access, continue, MAKERVC
+       "Changes the simulator time-base to an absolute time or by "
+       "a relative number of time-units.",
+       time cmd
+   ),
+
+   HEAP SIMPLE:=
+   ( MAKERVC "EASE", nullstr, no parameters, hidden access, return,
+     MAKERVC "Leave the simulator and return to the calling environment",
+     nullcommand
+   )
+END;
+
+
+
+
+
+
+{
+   SIMULATOR ENTRY COMMAND PROCEDURES
+   ==================================
+
+   Although these are part of the simulator and belong here they are of course
+   EASE commands and referenced by the EASE command table built in the main
+   program module
+}
+
+{
+   COMMAND: simulate(sim) [<fnname>] [(<ctname>)]
+}
+PROC sim_startup = (FILE  simfile, FLTPROC flt) VOID:
+BEGIN
+   ID title;
+   { open simulator file (nil id, TRUE, title, flt); }
+   initialise shell (simfile, flt);
+   set cp cache;
+   simulate and monitor (0, LOC BOOL, LOC BOOL, flt);
+   present sim prompt := MAKERVC "Sim";
+   REF ID (sim prompt) := present sim prompt;
+   past sim prompt := MAKERVC (sim prompt + " (past)")
+END
+
+
+KEEP   sim_startup,  { sim_finish, } make_sim_commands,  set cp cache
+FINISH
