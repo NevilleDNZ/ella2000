@@ -1,0 +1,1027 @@
+DECS  kexpand  CONTEXT VOID USE  osinterface, basics, putstrings, assmodes,
+      modeprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: kexpand.a68,v 34.2 1995/03/29 13:02:55 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement expansion to atomic functions
+              in the kernel of the new simulator
+21:07:88  Updated for draft 5 assembler modes.
+25:11:88  `sim null id' moved out to KEBASICS
+28:11:88  Widespread changes for bugs 4 and 36.  BJE.
+02:12:88  UASSOC now isolated.  Bug 50.  BJE
+06:12:88  `sim null id' returned as a procedure.  Bug 51.  BJE.
+08:12:88  Constants always set atomic FALSE and UNULL trapped in `walk'
+              Bug 49.  BJE.
+08:12:88  Atomisation optimisation removed.  BJE.
+16:12:88  Added 'reform' expansion. Bug 46. MDR.
+12:01:89  Processing of UCONC in `walk' corrected.  Bug 93.  BJE.
+19:01:89  'sim null id' not now a visible name.  PAR.
+26:01:89  Atomisation optimisation reinstated (with additions) for
+              CASE clauses.  Bug 55.  R4B035.  PAR.
+07:02:89  Correction to associated types in the above optimisation.
+              R4B099.  PAR.
+10:02:89  Complex dynamic assignments trapped tp ameliorate the symptoms
+              of R4B054.  BJE.
+08:03:89  Improvement of mechanism for adding names within expand body.
+              to prevent heap fragmentation.  SPT.
+15:03:89  Correction to the various tests on whether a type is a string
+              type to allow for the obscurity of this information in the
+              assembler modes.  R4B258.  PAR.
+
+14:08:89  Added transformation of dynamic assignments. R4B054. MDR.
+14:08:89  Updated for Kernel Interface (CR642).  DCT.
+10:11:89  CR 638. Removal of explicitsize of FNDEC and INSTANCE.
+              Addition of macro to INSTANCE.  EVW
+04:07:91  R6B54:  Use unit_type in simplify dynassign for MAKE names.  EVW
+24:06:91  UREPLACE instead of UDYASSIGN. EVW
+20:08:91  Updated to version 7 of assembler modes. EVW
+17:12:91  BODYDATA removed. EVW
+03:03:92  Declaration attributes added. EVW
+ 5:05:92   New spec fo fndec_tfn. DJS
+04:11:92  Updated for 'chars' mode changes. JIT
+08:02:93  Comment altered as get_bodydate removed. EVW
+13:05:93  Remove replnames from FNDEC. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.028 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ It is expected that this can be cleaned up to use general methods
+  for writing transformation mechanisms, still to be provided by Liz.
+  I anticipate that this mechanism will involve a large structure
+  of procedures, with the only non-trivial ones being those needed
+  for particular modes which must be transformed.  I hope the
+  following set of procedures will remain in about the right form.
+
+  The algorithm used is somewhat heavy-handed, in that it often
+  produces extra, unnecessary levels of naming and connectivity.
+  These do not change the meaning of the circuit, and will be
+  removed again by the instantiation part of the translator, but
+  it might well be more efficient to avoid generating them in
+  the first place.  The following areas could be investigated
+  (in roughly decreasing order of likelyhood that anything could
+  be done):
+
+    - CONC, static indices and trims are moved into separate
+      functions if they are encountered by 'walk', although
+      elsewhere they are treated as 'trivial'.  This allows the
+      necessary addition of non-triviality when STRING types are
+      added, but remains over cautious for other types.
+
+    - Many LETs of the form LET name1 = name2 get generated.  It
+      would be possible to avoid this, using name2 where name1
+      would otherwise have been used.  Note, however, that care
+      is needed to ensure that the scopes are right (the present
+      approach avoids this question).
+
+    - No attempt is made to recognise duplicated functionality.
+      Therefore, for example, two identical functions are declared
+      for the restictions in  a//data + b//data.
+}
+
+
+{ We need our null identifier, distinct from those
+  used by other transformations, largely because new local function
+  declarations use the local name numbering of their parent function,
+  and therefore both the new functions, and the local names
+  concerned, need to be recognisable as having been introduced by
+  the KEXPAND transformation.
+}
+INT seed;
+
+PROC sim null id = ID: MAKEID ("__" + intchars (seed +:= 1));
+
+PROC reseed sim null id = VOID: seed := 0;
+
+
+
+{ This procedure produces a USERIES unit which is a transformation upon the
+  function input type to produce the function output type. USTR, UCONC and
+  UINDEX units are produced by this process. }
+PROC transform reform = (REF FNDEC fndec, REF ENVIRON e)REF USERIES:
+BEGIN
+
+   OP APPEND = (REF REF USTR a, REF USTR b)VOID:
+      IF a IS nilustr THEN
+         a := b
+      ELSE
+         REF USTR this unit := a;
+         WHILE rest OF this unit ISNT nilustr DO
+            this unit := rest OF this unit
+         OD;
+        rest OF this unit := b
+      FI;
+
+   {This procedure takes a unit and an assembler TYPE, and produces a list of
+    units, each of which is a set of operations which de-structure the original
+    unit down to it's ella primitives. ie it's flattened representation }
+   PROC flatten assem type =
+        (REF UNIT this unit, TYPE input type, REF ENVIRON e) REF USTR:
+   BEGIN
+      CASE input type IN
+        (REF TNAME tname):
+         BEGIN
+             REF TYPEDEC typedec = (types OF e)[typeno OF tname];
+             CASE body OF typedec IN
+              (REF TYPETAG typetag):
+                 flatten assem type (this unit, tag OF typetag, e)
+              OUT
+                 HEAP USTR := (this unit, nilustr)
+             ESAC
+         END,
+        (REF TROW  trow):
+         BEGIN
+            INT size = int(size OF trow);
+            REF USTR unit list := nilustr;
+            FOR i TO size DO
+               HEAP UNIT new unit := HEAP UINDEX := (this unit, MAKEFINT i);
+               unit list APPEND flatten assem type(new unit, elem OF trow, e)
+            OD;
+            unit list
+         END,
+        (REF TSTR  tstr):
+         BEGIN
+            REF USTR unit list := nilustr;
+            REF TSTR this str := tstr;
+            INT i :=0;
+            WHILE this str ISNT niltstr DO
+               HEAP UNIT new unit := HEAP UINDEX :=
+                           (this unit, MAKEFINT (i+:=1));
+               unit list APPEND flatten assem type
+                                (new unit, elem OF this str, e);
+               this str := rest OF this str
+            OD;
+            unit list
+         END,
+        (REF TBRACKET tbracket):
+           flatten assem type (this unit, type OF tbracket, e),
+        (REF TSTRING tstring):
+            HEAP USTR := (this unit, nilustr)
+        OUT sys fault ("Unexpected input type for reform");
+            nilustr
+      ESAC
+   END; {of flatten assem type}
+
+
+   {This procedure takes a flattened unit list as produced by 'flatten assem
+    type' along with an assembler TYPE, and produces a unit which represents
+    the unit list input re-structured in the form described by the TYPE. }
+   PROC build assem type = (REF REF USTR unit list, TYPE output type,
+                            REF ENVIRON e)UNIT:
+   BEGIN
+      CASE output type IN
+        (REF TNAME tname):
+         BEGIN
+            REF TYPEDEC typedec = (types OF e)[typeno OF tname];
+            CASE body OF typedec IN
+              (REF TYPETAG typetag):
+                 build assem type (unit list, tag OF typetag, e)
+              OUT
+                 HEAP UNIT result := elem OF unit list;
+                 unit list := rest OF unit list;
+                 result
+            ESAC
+         END,
+        (REF TROW trow):
+         BEGIN
+            INT size = int(size OF trow);
+            HEAP UNIT left unit := HEAP UROW :=
+                (MAKEFINT 1, build assem type(unit list, elem OF trow, e));
+
+            FOR i FROM 2 TO size DO
+               HEAP UNIT right unit := HEAP UROW :=
+                  (MAKEFINT 1, build assem type(unit list,elem OF trow, e));
+               left unit := HEAP UCONC := (FALSE, flatten both,
+                                           HEAP UNIT := left unit,
+                                           right unit)
+            OD;
+            left unit
+         END,
+        (REF TSTR  tstr):
+         BEGIN
+            REF USTR this unit := HEAP USTR :=
+                (build assem type (unit list, elem OF tstr, e), nilustr);
+            HEAP UNIT new unit := this unit;
+
+            REF TSTR this str := rest OF tstr;
+            WHILE this str ISNT niltstr DO
+               rest OF this unit := HEAP USTR :=
+                 (build assem type(unit list, elem OF this str,e), nilustr);
+               this unit := rest OF this unit;
+               this str := rest OF this str
+            OD;
+            new unit
+         END,
+        (REF TBRACKET tbracket):
+            build assem type(unit list, type OF tbracket, e),
+        (REF TSTRING tstrg):
+         BEGIN
+            HEAP UNIT result := elem OF unit list;
+            unit list := rest OF unit list;
+            result
+         END
+        OUT sys fault ("Unexpected output type in reform");
+            HEAP UNULL
+      ESAC
+   END; {of build assem type}
+
+
+   {Main body of reform expansion}
+   REF TFN tfn = fndec_tfn(fndec);
+
+
+   INT no_inputs = names_size(inputs OF fndec);
+   HEAP UNIT input unit :=
+      IF no_inputs = 1 THEN
+         HEAP UNAME := (usource, 1)
+      ELSE
+        REF USTR input str := nilustr;
+        FOR i TO no_inputs DO
+           HEAP UNAME uname := (usource, i);
+           input str APPEND (HEAP USTR :=  (uname, nilustr))
+        OD;
+        input str
+     FI;
+
+   REF USTR unit list := flatten assem type (input unit, from OF tfn, e);
+
+   HEAP USERIES :=
+      (nilseries, build assem type (unit list, to OF tfn, e))
+END; {of transform reform}
+
+
+{ 'is string type' decides whether the supplied type is the type of
+  an ella string (in the context of the supplied closure and environ)
+}
+PROC is string type = (TYPE t, REF ENVIRON e) BOOL:
+    CASE t IN
+        (REF TSTRING):  TRUE,
+        (REF TNAME tn):
+            BEGIN
+                TYPEDEC td = (types OF e)[typeno OF tn];
+                CASE body OF td IN
+                    (REF TYPETAG tt):  is string type (tag OF tt, e)
+                OUT
+                    FALSE
+                ESAC
+            END
+    OUT
+        FALSE
+    ESAC;
+
+
+{ 'unit function' simply asserts that the supplied FNBODY is a UNIT, and
+  recursively removes all levels of USERIES, asserting that they have
+  empty bodies.  It returns the resulting UNIT.
+  A sysfault is invoked if the function body is not of the correct form.
+}
+PROC unit function = (FNBODY fnbody) UNIT:
+    CASE fnbody IN
+        (REF UNITTAG u):
+            CASE tag OF u IN
+                (REF USERIES us):
+                    IF body OF us IS nil series THEN
+                        unit function ((HEAP UNITTAG t; tag OF t := output OF us; t))
+                    ELSE
+                        sys fault ("unit function: non-empty series body"); SKIP
+                    FI
+            OUT
+                tag OF u
+            ESAC
+    OUT
+        sys fault ("unit function: unexpected primitive function body"); SKIP
+    ESAC;
+
+
+{ When a compound construct is transformed, extra local function
+  declarations are generated.  This procedure simply adds space
+  for the entry for a new declaration to the given ENVIRON, fills
+  it with the supplied declaration (and fills in its function number),
+  and returns the corresponding function number.
+}
+PROC add new fn = (REF FNDEC new dec, REF ENVIRON environ) INT:
+BEGIN
+    INT upb = UPB (fns OF environ);
+    INT new = upb + 1;
+    HEAP VECTOR [new] REF FNDEC new fns;
+    new fns [:upb] := fns OF environ;
+    new fns [new] := new dec;
+    fns OF environ := new fns;
+    new
+END;
+
+
+{ This operators appends one series to another.  The original series
+  are given as pointers, and the left operand is modified.  The result
+  will usually be the modified left operand, except when it was NIL.
+}
+PRIO APPEND = 1;
+OP APPEND = (REF SERIES left, right) REF SERIES:
+    IF left IS nilseries THEN  right
+    ELIF right IS nilseries THEN  left
+    ELSE
+        REF SERIES scan := left;
+        WHILE rest OF scan ISNT nilseries DO
+            scan := rest OF scan
+        OD;
+        rest OF scan := right;
+        left
+    FI;
+
+
+{ The next procedure adds some new steps to a series, before a given
+  step.  The original series and the new piece are both represented
+  by REF SERIES, as is the point before which the new piece is to be
+  added.  The result is usually the same as the original outer series,
+  but will be different when this is empty.
+  (At the moment, this is a simple but perhaps expensive way of doing
+  it.  It would be better to keep at all times the pointer to the
+  step *after* which the new piece is to be added, as well as the
+  one before which it should be placed.)
+}
+PROC add steps = (REF SERIES outer, before, new) REF SERIES:
+    IF outer IS nilseries THEN  new
+    ELIF outer IS before THEN
+        new APPEND outer
+    ELSE
+        REF SERIES tail = new APPEND before;
+        REF SERIES after := outer;
+        WHILE rest OF after ISNT before DO
+            after := rest OF after
+        OD;
+        rest OF after := tail;
+        outer
+    FI;
+
+
+{ The following procedure decides whether the given UNIT is acceptable
+  to the translation of a CASE clause, either as the input, if 'output'
+  is FALSE, or as an output, if 'output' is TRUE.  The parameter 'name allowed'
+  is used initially to distinguish the situation in which the clause the the
+  whole body of a user defined function, which is the condition that translation
+  can handle user defined names.  'name allowed' may also be set FALSE in
+  the recursion, when a construct is reached which can be handled only if its
+  components are not names.  Obviously, this code must agree with that in
+  KEAMCASE.
+}
+PROC case translatable = (UNIT unit, BOOL output, name allowed) BOOL:
+    CASE unit IN
+        (REF UNAME):  name allowed,
+        (REF USTR str):
+            IF str IS nil ustr THEN  TRUE
+            ELSE
+                case translatable (elem OF str, output, name allowed)
+                ANDTH case translatable (rest OF str, output, name allowed)
+            FI
+    OUT
+        IF output THEN
+            CASE unit IN
+                (UNION (REF CNAME, REF CPRIM, REF CINT,
+                        REF CQUERY, REF CQUOTE)):  TRUE,
+                (REF UROW row):
+                    case translatable (elem OF row, output, name allowed),
+                (REF UASSOC ass):
+                    case translatable (assoc OF ass, output, FALSE),
+                (REF USTRING string):
+                    case translatable (char OF string, output, FALSE)
+            OUT
+                FALSE
+            ESAC
+        ELSE
+            FALSE
+        FI
+    ESAC;
+
+
+
+{ 'subunits' extracts the sub-units on which the given unit depends
+  and which the translation of that given unit cannot handle.  They
+  are therefore precisely the subunits which must be given new
+  LET names and passed as inputs into the new function representing
+  the outer unit.  They are returned as an array of references to
+  the original subunits.
+
+  Currently, the only UNIT for which there are any 'subunits'
+  acceptable to translation is the CASE clause.  A complication
+  is that user defined names are only acceptable if the clause is
+  the entire top-level functionality of the enclosing user function,
+  otherwise, only constants and structures thereof are acceptable
+  in the outputs.  The parameter 'whole body' conveys this information
+  initially, and the processing of the subunits can modify it by
+  showing that there are subunits which must be split off -- making the
+  user function compound.
+
+  This is implemented for only those types of unit for which it is
+  required, and therefore a system fault procedure must be supplied
+  in case of some error in the future.
+}
+PROC subunits = (REF UNIT unit, BOOL whole body) REF VECTOR [] REF UNIT:
+BEGIN
+    REF VECTOR [] REF UNIT parts := NIL;
+
+    CASE unit IN
+        (REF UCASE case):
+            BEGIN
+                REF UCHOICES choices := choices OF case;
+                INT index := 1;
+                BOOL whole := whole body
+                              ANDTH case translatable (input OF case,
+                                                       FALSE, whole body);
+                WHILE choices ISNT niluchoices DO
+                    index +:= 1;
+                    whole := whole ANDTH case translatable (output OF choices,
+                                                            TRUE, whole);
+                    choices := rest OF choices
+                OD;
+                parts := HEAP VECTOR [index] REF UNIT;
+
+                index := 0;
+                IF NOT case translatable (input OF case, FALSE, whole) THEN
+                    parts [index +:= 1] := input OF case
+                FI;
+                choices := choices OF case;
+                WHILE choices ISNT niluchoices DO
+                    IF NOT case translatable (output OF choices, TRUE, whole) THEN
+                        parts [index+:=1] := output OF choices
+                    FI;
+                    choices := rest OF choices
+                OD;
+                parts := parts [ : index]
+             END,
+
+        (REF UEXTRACT ext):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := extract OF ext
+             END,
+
+        (REF UASSOC ass):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := assoc OF ass
+             END,
+
+        (REF UDYINDEX dind):
+             parts := HEAP VECTOR [2] REF UNIT :=
+                  (unit OF dind, index OF dind),
+
+        (REF UREPLACE rep):
+              parts := HEAP VECTOR [3] REF UNIT :=
+                (unit OF rep, index OF rep, from OF rep),
+        (REF UMINST minst):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := right OF minst
+             END,
+
+        (REF UDINST dinst):
+             parts := HEAP VECTOR [2] REF UNIT :=
+                  (left OF dinst, right OF dinst),
+
+        (REF UINDEX ind):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := unit OF ind
+             END,
+
+        (REF UTRIM trim):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := unit OF trim
+             END,
+
+        (REF UCONC conc):
+             parts := HEAP VECTOR [2] REF UNIT :=
+                 (left OF conc, right OF conc),
+
+        (REF USTRING string):
+             BEGIN
+                 parts := HEAP VECTOR [1] REF UNIT;
+                 parts [1] := char OF string
+             END
+
+    OUT
+        sys fault ("kexpand: cannot find subunits of this type of unit")
+    ESAC;
+    parts
+END;
+
+
+{ Units appearing as function bodies are the objects which need
+  expansion, and in general we have to walk the complete tree
+  down to leaves which are constants or names.  This is a large
+  procedure, which contains several smaller mutually recursive
+  procedures which walk the tree but need access to the original
+  parameters.
+}
+PROC expand body = (REF FNDEC fndec, REF ENVIRON environ) VOID:
+BEGIN
+
+    { These values are used non-locally by many of the nested procedures: }
+
+    REF FNBODY fn body = fnbody OF fndec;
+
+
+    { The number of names in the enclosing function is changed
+      as a result of declaring new LETs, and new MAKEs of newly
+      created functions.
+      These additions, each causing a new heap allocation of slightly
+      more than the last have caussed fragmentation problems (R4B151).
+      A new mechanism allocates array space in blocks and then
+      assigns a ref trim to the fndec.
+    }
+    REF VECTOR [] NAMETYPE outer nametypes := nametypes OF fndec;
+      { A larger array to be trimmed to size for nametypes OF fndec }
+
+    PROC add nametypes = (INT n) VOID:
+    { Adds n new nametypes to nametypes of fndec }
+       BEGIN
+          IF n + UPB nametypes OF fndec > UPB outer nametypes THEN
+             HEAP VECTOR [2* (n + UPB nametypes OF fndec)] NAMETYPE new;
+             new [:UPB nametypes OF fndec] := nametypes OF fndec;
+             outer nametypes := new
+          FI;
+          nametypes OF fndec := outer nametypes [ :UPB nametypes OF fndec + n]
+       END;
+
+    { `atomic' indicates that, as far as we currently know, the
+      current function is atomic
+    }
+    BOOL atomic := TRUE;
+
+
+    { 'make lets' is used to construct LETs to newly created names
+      giving them the values of the supplied units.
+      The original UNITs are overwritten with UNAMEs referencing the
+      corresponding names.
+      The result contains a piece of SERIES giving the new LETs,
+      a USTR giving the names in the outer naming sequence, and
+      a REF VECTOR [] TYPE giving the types of the names used in
+      the new, inner sequence.
+      Note that the loop runs *down* the array of units, so as to
+      ensure that the list of lets is in the same order as the array
+      (the outer name numbers are reversed, but this does not matter).
+    }
+    PROC make lets = (VECTOR [] REF UNIT units)
+                         STRUCT (REF SERIES lets,
+                                 REF USTR actuals,
+                                 REF VECTOR [] NAMETYPE nametypes):
+    BEGIN
+        REF SERIES new lets := nilseries;
+        REF USTR actuals := nilustr;
+
+        INT num names := UPB nametypes OF fndec;
+        HEAP VECTOR [UPB units] NAMETYPE nametypes;
+
+        FOR i FROM UPB units BY -1 TO 1 DO
+            num names +:= 1;
+            HEAP NAMES names := (num names, nilnames);
+            HEAP LET let := (names, units [i]);
+            new lets := HEAP SERIES := (let, new lets);
+
+            nametypes [i] :=
+               (sim null id, unit_type (units [i], fndec, environ), attrnull);
+
+            HEAP UNAME u1 := (usource, i);
+            units [i] := u1;
+
+            HEAP UNAME u2 := (usource, num names);
+            actuals := HEAP USTR := (u2, actuals)
+        OD;
+
+        INT old upb := UPB nametypes OF fndec;
+        add nametypes (UPB nametypes);
+        (nametypes OF fndec) [old upb + 1:] := nametypes;
+
+        (new lets, actuals, nametypes)
+    END;
+
+
+    { This procedure makes the new declaration, given the body (as a UNIT),
+      the types of inputs (nametypes) and the output, and the number of
+      local names used.  (The ENVIRON is obtained non-locally.)
+      It also constructs a MAKE of the new function, and a JOIN of the
+      given arguments to it.  It returns a USERIES whose body contains
+      the declaration, the MAKE and the JOIN, and whose output is a UNAME
+      naming the created instance.
+    }
+    PROC make new function = (UNIT body,
+                              REF VECTOR [] NAMETYPE nametypes,
+                              TYPE output type,
+                              REF USTR actuals,
+                              INT num locals) USERIES:
+    BEGIN
+        { The body of the new function contains the UNIT given }
+        FNBODY fbody = MAKEUNITTAG body;
+
+        { The inputs and the output are all named 'sim null id' }
+        REF NAMES inputs := nilnames;
+        REF REF NAMES ptr := inputs;
+        FOR i TO UPB nametypes
+        DO REF REF NAMES (ptr) := HEAP NAMES := (i, nilnames);
+           ptr := rest OF ptr
+        OD;
+        HEAP NAMES outputs := (UPB nametypes+1, nilnames);
+
+        HEAP VECTOR [UPB nametypes + 1] NAMETYPE newnametypes;
+        FORALL new IN newnametypes[:UPB nametypes], old IN nametypes
+         DO new := (sim null id, type OF old, attrnull) OD;
+        newnametypes[UPB newnametypes] := (sim null id, output type, attrnull);
+
+        { Make the new function declaration }
+        HEAP FNDEC new dec :=
+            (localdec,              { local declaration }
+             FALSE,                 { Not a macro }
+             sim null id,           { No useful name }
+             nilmacspecs,           { No macro parameters }
+             attrnull,              { No attributes }
+             inputs,                { inputs of FNDEC }
+             outputs,               { output OF FNDEC }
+             newnametypes,          { inputs + output }
+             fbody,                 { Finally, its body }
+             nilusage);             { local declaration so no usage }
+
+        { Now, add an extra entry to the environ for the new local
+          declaration, and keep its index }
+        INT fnno = add new fn (new dec, environ);
+
+        HEAP FNNAME fndec step;
+        fnno OF fndec step := fnno;
+
+        INT upb = UPB nametypes OF fndec + 1;
+        HEAP MAKE make step :=
+            (nilformulas,
+             HEAP INSTANCE := (fnno, nullmacparams, attrnull),
+             HEAP NAMES := (upb, nilnames)
+            );
+        add nametypes (1);
+        (nametypes OF fndec) [upb] := (sim null id, output type, attrnull);
+
+        HEAP UNAME join rhs := (usink, upb);
+        HEAP JOIN join step := (actuals, join rhs);
+
+        HEAP UNAME result := (usource, upb);
+
+        (HEAP SERIES :=
+            (fndec step, HEAP SERIES :=
+            (make step, HEAP SERIES :=
+            (join step, nilseries))),
+         result)
+    END;
+
+
+    { The remaining procedures are mutually recursive.  The `top'
+      parameter for these is TRUE if there will be no more invocations
+      of `walk' or `walk series' in processing the current function.
+      In this case current value of `atomic' is known to be final.
+    }
+
+    PROC (REF UNIT, BOOL) REF SERIES walk;
+    PROC (REF USERIES, BOOL) VOID walk series;
+
+
+    { "isolate" is used to construct all the new declarations
+      and steps required to extract the atomic functionality for
+      a construct into a separate function.  The result is a
+      SERIES, which is a set of steps giving the new declarations.
+      The original is overwritten with the UNAME representing the
+      output of the new function.  The SERIES is further walked to
+      find any more expansions, except when all the parts were so
+      trivial as to definitely require no more work.
+
+      Note that if 'top' (the unit is the result of the enclosing
+      user function) and 'atomic' (there is nothing yet seen to
+      make the user function compound) then the primitive we are
+      about to isolate is the entire body of the enclosing user
+      function, and can be left alone *provided* the translator
+      can handle all its remaining subunits, including the possible
+      re-ordering of user inputs.  Currently, the only UNIT for which
+      there is anything to be gained is UCASE -- for which the
+      translator does handle user inputs quite generally, and can
+      handle structuring in the input unit and constants and
+      structure in the various outputs.  Cooperation with 'subunits'
+      is required, so that subunits acceptable to the translator
+      are never separated out.  This requires the initial value of
+      'top AND atomic' to be passed on (see the comment with 'subunits').
+
+      To optimise other atomic units, all that need be done is to
+      change 'subunits' to leave alone those units which the
+      corresponding 'translate' procedures have been modified to
+      handle.
+    }
+    PROC isolate = (REF UNIT unit, BOOL top) REF SERIES:
+    BEGIN
+        REF VECTOR [] REF UNIT parts = subunits (unit, top AND atomic);
+        IF UPB parts = 0 THEN
+            nil series
+        ELSE
+            TYPE type = unit_type (unit, fndec, environ);
+            REF SERIES prefix := nil series;
+            FOR i TO UPB parts DO
+                prefix := prefix APPEND walk (parts[i], FALSE)
+            OD;
+            atomic := FALSE;
+            STRUCT (REF SERIES lets,
+                    REF USTR actuals,
+                    REF VECTOR [] NAMETYPE nametypes) new = make lets (parts);
+            HEAP USERIES result :=
+                make new function (unit, nametypes OF new,
+                                   type, actuals OF new, UPB parts);
+            unit := output OF result;
+            prefix APPEND lets OF new APPEND body OF result
+        FI
+    END;
+
+
+    { 'expand implicit instance' has the same effect as `isolate' but
+      achieves this by replacing an impicit instance by explicit makes
+      and joins.  Note that the make is given a `null id' rather than a
+      `sim null id' as it is not really new.
+    }
+    PROC expand implicit instance = (REF UNIT unit) REF SERIES:
+    BEGIN
+        REF SERIES prefix := nil series;
+        TYPE output type = unit_type (unit, fndec, environ);
+        REF VECTOR [] REF UNIT parts = subunits (unit, FALSE);
+        FOR i TO UPB parts DO
+            prefix := prefix APPEND walk (parts[i], FALSE)
+        OD;
+        atomic := FALSE;
+        STRUCT (REF SERIES lets,
+                REF USTR actuals,
+                REF VECTOR [] NAMETYPE nametypes) new = make lets (parts);
+        INT fnno =
+            CASE unit IN
+            (REF UMINST m): fnno OF inst OF m,
+            (REF UDINST d): fnno OF inst OF d
+            ESAC;
+        HEAP MAKE make step := (
+            nilformulas,
+            HEAP INSTANCE := (fnno, nullmacparams, attrnull),
+            HEAP NAMES := (UPB nametypes OF fndec + 1, nilnames));
+        add nametypes (1);
+        (nametypes OF fndec) [UPB nametypes OF fndec]
+             := (null id, output type, attrnull);
+        HEAP UNAME join rhs := (usink, UPB nametypes OF fndec);
+        HEAP JOIN join step := (actuals OF new, join rhs);
+        HEAP UNAME output := (usource, UPB nametypes OF fndec);
+        unit := output;
+        prefix APPEND lets OF new APPEND
+            (HEAP SERIES := (make step,
+                HEAP SERIES := (join step, nilseries)))
+     END;
+
+
+    { Only *local* function declarations need to be walked, ie ones
+      which are given as direct references to the FNDEC in fns OF environ
+    }
+    PROC walk fnname = (FNNAME step) REF SERIES:
+    BEGIN
+        expand body ((fns OF environ)[fnno OF step], environ);
+        nilseries
+    END;
+
+
+    { 'walk series' goes down a series, walking each step found.
+      Its effect is the same as that described for 'walk' below.
+      It is the responsibility of this procedure to insert the
+      new series steps arising from processing any sub-units into
+      the enclosing series.  Because it adds any new steps to the
+      series it is given, it does not return a result.
+    }
+    walk series := (REF USERIES series, BOOL top) VOID:
+    BEGIN
+        REF SERIES steps := body OF series;
+        REF UNIT output = output OF series;
+        REF SERIES new := nilseries;
+
+        WHILE steps ISNT nilseries DO
+            atomic := FALSE;
+            REF STEP step = step OF steps;
+
+            CASE step IN
+                (REF LET let):        new := walk (unit OF let, FALSE),
+                (REF JOIN join):      new := walk (from OF join, FALSE),
+                (REF REPLJOIN rjoin):
+                    sys fault ("kexpand: multiple joins not expanded"),
+                (FNNAME fnname):      new := walk fnname (fnname),
+                (TNAME):              new := nilseries,
+                (ATTRNAME):           new := nilseries,
+                (FNAME):              new := nilseries,
+                (CNAME):              new := nilseries,
+                (REF MAKE):           new := nilseries
+            OUT
+                sys fault ("kexpand: unexpected series step (PRINT or FAULT)")
+            ESAC;
+
+            body OF series := add steps (body OF series, steps, new);
+
+            steps := rest OF steps
+        OD;
+
+        new := walk (output, top);
+        body OF series := add steps (body OF series, steps, new)
+
+    END;
+
+
+    { Structures need all the elements walked
+    }
+    PROC walk str = (REF USTR str) REF SERIES:
+    BEGIN
+        REF USTR scan := str;
+        REF SERIES new := nilseries;
+        WHILE scan ISNT nilustr DO
+            REF UNIT element = elem OF scan;
+            scan := rest OF scan;
+            new := new APPEND walk (element, FALSE)
+        OD;
+        new
+    END;
+
+
+    { 'walk' simply traverses the tree looking for things which might
+      need expansion.  If any change is made, the original unit is
+      overwritten with a new name, and a set of series steps is
+      returned which defines that name.
+
+      When a unit has been processed, it is guaranteed that it and all
+      its subunits (which may have been extracted to form parts of the
+      SERIES result) are either:
+
+        1 atomic functions, in which case they have been isolated into
+          separate function declarations, and access other atomic
+          functions only by their results being supplied as named input
+          parameters, or
+
+        2 constructs which simply make function instances and connect
+          signals.
+    }
+    walk := (REF UNIT unit, BOOL top) REF SERIES:
+    CASE unit IN
+    { Constants and Names }
+    (UNION ( REF CNAME, REF CPRIM, REF CINT, REF CQUERY,
+            REF CQUOTE, REF CVOID)):
+       (atomic := FALSE; nilseries),
+
+    (REF UNAME):
+       (IF top THEN atomic := FALSE FI; nilseries),
+
+    { Brackets }
+    (REF UATTR attr):
+        (unit:= unit OF attr; walk (unit, top)),
+    (REF UCHECK check):
+        (unit:= unit OF check; walk (unit, top)),
+    (REF UBRACKET bracket):
+        (unit:= unit OF bracket; walk (unit, top)),
+
+    { Non-atomic combinators }
+    (REF UROW row):          (atomic :=FALSE; walk (elem OF row, top)),
+    (REF USTR str):          (atomic :=FALSE; walk str (str)),
+
+    { Potentially atomic combinators }
+    (REF UINDEX index):
+        IF is string type (unit_type (unit OF index, fndec, environ), environ)
+        THEN  isolate (unit, top)
+        ELSE  atomic := FALSE; walk (unit OF index, top)
+        FI,
+    (REF UTRIM trim):
+        IF is string type (unit_type (unit OF trim, fndec, environ), environ)
+        THEN  isolate (unit, top)
+        ELSE  atomic := FALSE; walk (unit OF trim, top)
+        FI,
+    (REF UCONC conc):
+        IF is string type (unit_type (unit, fndec, environ), environ)
+        THEN  isolate (unit, top)
+        ELSE
+            atomic := FALSE;
+            REF SERIES lseries = walk (left OF conc, FALSE);
+            lseries APPEND walk (right OF conc, top)
+        FI,
+
+    (UNION (REF UCASE, REF UEXTRACT, REF UASSOC, REF UDYINDEX, REF UREPLACE,
+            REF USTRING)):
+        isolate (unit, top),
+
+    { Implicit instances }
+    (UNION (REF UMINST, REF UDINST)):
+        expand implicit instance (unit),
+
+    { Miscellaneous legal }
+    (REF USERIES series):    (walk series (series, top); nilseries),
+    { Illegal }
+    (REF UREPL repl):
+        (sys fault ("kexpand: replicator not expanded"); nilseries),
+    (REF UNULL):
+        (sys fault ("kexpand: UNULL encountered"); nilseries),
+    (REF UFN):
+        (sys fault ("kexpand: UFN encountered"); nilseries),
+    (REF UCOND):
+        (sys fault ("kexpand: IF not transformed out"); nilseries),
+    (REF USEQUENCE):
+        (sys fault ("kexpand: sequence not transformed out"); nilseries)
+
+    ESAC;
+
+    { Here is the top level action for expand body: }
+    CASE fn body IN
+        (REF UNITTAG u):
+            BEGIN
+                { All user functions are made into series, regardless
+                  of whether this is strictly necessary.
+                }
+                HEAP USERIES enclosed := (nilseries, tag OF u);
+                walk series (enclosed, TRUE);
+                tag OF u := enclosed;
+                IF atomic THEN tag OF u := unit function (u) FI
+            END,
+        (REF REFORM r):
+            BEGIN
+              REF USERIES reform := transform reform (fndec, environ);
+              walk series (reform, TRUE);
+              HEAP UNITTAG unittag;
+              tag OF unittag := reform;
+              fn body := unittag
+            END
+    OUT
+        SKIP
+    ESAC
+
+END;
+
+
+{ The overall transformation is performed on a function by function
+  basis, so it is given a reference to an OUTERFN (which must already
+  have all macro expansions, replicator and multiple join expansions, FNTYPE
+  removal and sequence elimination must have been done.
+
+  On exit from this procedure the body of the outer function and those
+  of all its inner functions are either:
+
+  Atomic, comprising a single ARITH, BIOP, ADELAY, IDELAY, RAM, UCASE,
+  UEXTRACT, UASSOC, UCONC (1), UTRIM (2), UINDEX (2), USTRING,
+  UDYINDEX or UREPLACE.
+
+  Structural, comprising a USERIES in which all the STEPs are
+  DECLARATIONs, LETs, MAKEs or JOINs and all the UNITs are either
+  constants, UNAMEs,UROWs, USTRs, UCONCs (3), UINDEXs (4) or UTRIMs (4).
+
+  Notes
+    (1) producing an ELLA-string
+    (2) acting on an ELLA-string
+    (3) Not (1)
+    (4) Not (2)
+
+  Note that the fault procedure supplied should be a system fault
+  procedure, since no user errors can be generated.
+}
+PROC expand to atomic = (REF OUTER f) REF OUTER:
+BEGIN
+
+    REF FNDEC fn = get_outerfn(f);
+    REF ENVIRON environ = environ OF f;
+
+    reseed sim null id;
+    expand body (fn, environ);
+
+    f
+END
+
+
+KEEP
+    expand to atomic
+FINISH

@@ -1,0 +1,669 @@
+DECS  timescale CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      basics,  assmodes,  closureprocs,  modeprocs,  transformprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: timescale.a68,v 34.2 1995/03/29 13:03:06 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+   ..:11:89   Timescaling Transformation. EVW
+23:03:90   INT sftimescale added to distinguish simulatefn FNs. EVW
+26:03:90   Correction to PROC scaled for SLOWER FNs. EVW
+05:04:89   Extra macro parameter placed after existing parameters. EVW
+03:05:90   CR 643.  Consequential changes for fntype work. EVW
+07:06:90   CR 642.  Updated to kernel.  EVW
+06:08:90   joincheck changed from VECTOR to list. EVW
+29:08:91   Updated to version 7 of assembler modes. EVW
+17:12:91   BODYDATA removed, MACSPEC altered. EVW
+23:01:92   old environ being altered instead of new. EVW
+03:03:92   declaration attibutes added. EVW
+ 5:05:92  New spec fo fndec_tfn. DJS
+28:07:92  Changes made for CONST / UNIT mode change. JIT
+04:11:92  Name changes for outer, local, macpar and explicit. JIT
+08:02:93  BODYPTR removed. EVW
+13:05:93  remove replnames from FNDEC. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.015 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+COMMENT
+   Restrictions: SEQPVAR must be transformed out, FNSETs not allowed by compiler
+
+   External Effect of transformation:
+    - FASTER(INST,n) replaced by  _SAMPLE{} INST
+    - SLOWER(INST,n) replaced by  INST _SAMPLE{}
+    - FNs containing timescaled regions are turned into a MACro whose first
+      parameter is the rate that FN is slowed down relative to the global clock
+    - DELAY times are multiplied by enclosing FN rate
+
+    - A global clock rate is calculated which is the lowest common multiple of
+      the rates in the circuit.
+COMMENT
+
+
+
+INT timescale = 8;  { sort of MACPARAM used to denote added macro parameter }
+INT sftimescale = 10;  { sort OF MACPARAM used to denote scaled simulatefn  }
+
+{ SCALE mode used to hold the scaling and rate information of FNDECs.
+  scale is the factor by which a FN is explicitly scaled i.e FASTER or SLOWER.
+  rate is the minimum number of global ticks needed for one FN tick
+}
+MODE SCALE = STRUCT (BOOL faster, FORMULA scale, INT rate);
+REF SCALE nilscale = NIL;
+
+{ INFO mode used to hold information on an OUTERFN.
+  scaled = TRUE if the OUTERFN contains scaled regions.
+  withtime = TRUE if the OUTERFN contains delays.
+  newclosno = 0 if OUTERFN not used by a scaled OUTERFN,
+  newclosno > 0 gives closureno of macro version of OUTERFN.
+
+  MACINFO mode contains INFO modes for a particular closureno.
+}
+MODE INFO = STRUCT (BOOL scaled, withtime, INT newclosno, REF SCALE scales);
+REF INFO nilinfo = NIL;
+
+ID samplename = HEAP VECTOR [7] CHAR := "_SAMPLE";
+ID periodname = HEAP VECTOR [7] CHAR := "_period";
+
+PROC sample_outer = (INT closureno) OUTER:
+BEGIN
+   {{ Creates the OUTERFN mode representing
+        MAC _SAMPLE {TYPE ty, CONST(ty):init, INT int skew} = (ty) -> ty:
+            SAMPLE(int, init, skew).
+   }}
+   TYPE type = MAKETNAME(1);
+   HEAP VECTOR [4] MACSPEC macspecs;
+   macspecs[1] := (explicitmacpar, MAKETNAME(1));
+   macspecs[2] := (explicitmacpar, MAKECNAME(1));
+   macspecs[3] := (explicitmacpar, MAKEFNAME(1));
+   macspecs[4] := (explicitmacpar, MAKEFNAME(2));
+   HEAP NAMES inputs := (1, nilnames);
+   HEAP NAMES outputs := (2, nilnames);
+   HEAP VECTOR [2] NAMETYPE nametypes;
+   nametypes[1] := (nullid, type, attrnull);
+   nametypes[2] := (nullid, type, attrnull);
+   HEAP USAGE usage := (0, closureno, 0, 0, FALSE, FALSE);
+   HEAP SAMPLE sample := (int2, MAKEFNAME(1), MAKECNAME(1), MAKEFNAME(2));
+   HEAP FNDEC fdec := (outerdec, TRUE, samplename, macspecs, attrnull, inputs,
+                       outputs, nametypes, sample, usage);
+
+   HEAP VECTOR [2] REF INTDEC ints;
+   ints[1] := HEAP INTDEC
+           := (macpardec, MAKEID "int", attrnull, fnull, nilusage);
+   ints[2] := HEAP INTDEC
+           := (macpardec, MAKEID "skew", attrnull, fnull, nilusage);
+
+   HEAP VECTOR [1] REF TYPEDEC types;
+   types[1] := HEAP TYPEDEC
+            := (macpardec, MAKEID "ty", attrnull, MAKETYPETAG tnull, nilusage);
+
+   HEAP VECTOR [1] REF CONSTDEC consts;
+   consts[1] := HEAP CONSTDEC
+             :=(macpardec, MAKEID "init", attrnull, MAKECTYPE type, nilusage);
+
+   HEAP VECTOR [1] REF FNDEC fns;
+   fns[1] := fdec;
+
+   (closureno, outerfn,
+       HEAP ENVIRON := (nullattrdecs, ints, types, consts, fns))
+END;
+
+PROC sample_fndec = (INT closureno) REF FNDEC:
+BEGIN
+   {{ Creates the FNDEC mode representing the use of MAC _SAMPLE{} = (ty) -> ty:
+   }}
+   HEAP NAMES inputs := (1, nilnames);
+   HEAP NAMES outputs := (2, nilnames);
+   HEAP VECTOR [2] NAMETYPE nametypes;
+   nametypes[1] := (nullid, MAKETMACPAR(1), attrnull);
+   nametypes[2] := (nullid, MAKETMACPAR(1), attrnull);
+   HEAP USAGE usage := (0, closureno, 0, 0, FALSE, FALSE);
+   HEAP FNDEC := (outerdec, TRUE, samplename, nullmacspecs, attrnull, inputs,
+                  outputs, nametypes, bodynull, usage)
+END;
+
+
+PROC make_sample_inst = (INT fnno, TYPE ty, UNIT init, FORMULA rate, skew)
+                                                                   INSTANCE:
+BEGIN
+   {{ Assumes that last fn in ENVIRON will be the SAMPLE macro }}
+   HEAP VECTOR [4] MACPARAM params;
+   params[1] := (explicitmacpar, MAKETYPETAG(ty));
+   params[2] := (explicitmacpar, MAKEUNITTAG(init));
+   params[3] := (explicitmacpar, MAKEFORMULATAG(rate));
+   params[4] := (explicitmacpar, MAKEFORMULATAG(skew));
+   (fnno, params, attrnull)
+END;
+
+
+
+PROC fmacpar_remove = (FORMULA f, TRANSFORMPROCS tprocs, FORMULA period,
+                                               DECLARATION decl) FORMULAC:
+BEGIN
+   { Used to set up OUTERFN version which will be used by simulatefn }
+   CASE f IN
+   (REF FNAME fn) CASE decl IN
+                  (FNAME fd) IF intno OF fn = intno OF fd
+                             THEN (period, TRUE)
+                             ELSE (f, FALSE)
+                             FI
+                  OUT (f, FALSE)
+                  ESAC
+   OUT (formula OF nulltprocs)(f, tprocs)
+   ESAC
+END;
+
+
+PROC terminals_unit = (REF NAMES inputs) UNIT:
+BEGIN
+   REF NAMES ns := inputs;
+   IF rest OF ns IS nilnames
+   THEN HEAP UNAME := (usource, nameno OF ns)
+   ELSE REF USTR us := nilustr;   REF REF USTR usptr := us;
+        WHILE ns ISNT nilnames
+        DO REF REF USTR (usptr) := HEAP USTR
+              := (HEAP UNAME := (usource, nameno OF ns), nilustr);
+           usptr := rest OF usptr;
+           ns := rest OF ns
+       OD;
+       us
+   FI
+END;
+
+
+PROC scaled = (BOOL faster, FORMULA scale, INT rate) REF SCALE:
+BEGIN
+   { scale is the explicit scaling factor of FASTER or SLOWER.
+     rate is the rate of the instance begin scaled, w.r.t the global clock
+   }
+   INT int_scale = int(scale);
+   INT scaled_rate =
+      IF faster             THEN rate * int_scale
+      ELIF (rate MOD int_scale) = 0
+                            THEN rate OVER int_scale
+      ELSE rate
+      FI;
+   HEAP SCALE := (faster, scale, scaled_rate)
+END;
+
+PROC multiply = (FORMULA fa, fb) FORMULA:
+BEGIN
+   INT b = int(fb);
+   IF   b = 0  THEN MAKEFINT(0)
+   ELIF b = 1  THEN fa
+   ELSE  HEAP FDOP := (fa, fmult, fb)
+   FI
+END;
+
+PROC divide = (FORMULA fa, fb) FORMULA:
+BEGIN
+   INT b = int(fb);
+   IF b = 1 THEN fa ELSE  HEAP FDOP := (fa, fidiv, fb) FI
+END;
+
+
+PROC lcm = (INT a, b) INT:
+BEGIN
+   { a is the lowest common multiple for the circuit so far. b is the rate
+     held for a declaration.
+   }
+   INT m := IF a > b THEN a ELSE b FI;
+   INT n := IF a > b THEN b ELSE a FI;
+   INT remainder := 0;
+   WHILE (remainder := m MOD n) /= 0
+   DO  m := n;  n := remainder OD;  {{ Greatest common divisor = n }}
+   (a OVER n) * b
+END;
+
+
+
+
+PROC outerfn_scale = (OUTER ofn, TRANSFORMPROCS tprocs,
+                      REF VECTOR [] REF INFO closureinfo,
+                      REF REF INFO outerfn_info, INT sampleclosureno) OUTERC:
+BEGIN
+   HEAP ENVIRON env := environ OF ofn;
+   REF REF VECTOR [] REF FNDEC envfns = fns OF env;
+   HEAP VECTOR [UPB envfns] REF SCALE environscales;
+
+   INT maxintno := UPB ints OF env;
+
+   BOOL envchanged := FALSE;
+   PROC newenviron = (BOOL add_sample) VOID:
+   BEGIN
+      { ENVIRON may be changed because closureno of INSTANCES have changed,
+        and/or local FNDEC have changed, and/or SAMPLE primitive added,
+        and/or FN has extra "INT _period" macro parameter
+      }
+      IF NOT envchanged OREL add_sample
+      THEN envchanged := TRUE;
+           INT inc = IF add_sample THEN 1 ELSE 0 FI;
+           HEAP VECTOR [UPB envfns + inc] REF FNDEC newenvfns;
+           newenvfns[1:UPB envfns] := envfns;
+           envfns := newenvfns
+      FI;
+      IF add_sample
+      THEN envfns[UPB envfns] := sample_fndec(sampleclosureno)
+      FI
+    END;
+
+
+    PROC instance_scale = (INSTANCE inst, TRANSFORMPROCS tprocs, REF INT rate,
+                           REF VECTOR [] REF SCALE scales) INSTANCEC:
+    BEGIN
+      REF SCALE scale = scales[fnno OF inst];
+
+      IF scale ISNT nilscale   { i.e instance is scaled }
+      THEN rate := lcm(rate, rate OF scale);
+
+           REF VECTOR [] MACPARAM params = macparams OF inst;
+           INT upb = IF params ISNT nilmacparams THEN UPB params + 1 ELSE 1 FI;
+           HEAP VECTOR [upb] MACPARAM newmacparams;
+           IF upb > 1 THEN newmacparams[:upb-1] := params FI;
+
+           newenviron(FALSE);
+           HEAP FNDEC idec := (fns OF env)[fnno OF inst];
+           macro OF idec := TRUE;
+           (fns OF env)[fnno OF inst] := idec;
+
+           FORMULA fn_rate = MAKEFNAME maxintno;
+           FORMULA inst_rate =
+             IF faster OF scale
+             THEN divide(fn_rate, scale OF scale)
+             ELSE multiply(fn_rate, scale OF scale)
+             FI;
+           newmacparams[upb] := (timescale, MAKEFORMULATAG inst_rate);
+           ((fnno OF inst, newmacparams, attr OF inst), TRUE)
+      ELSE (inst, FALSE)
+      FI
+   END;
+
+    PROC fnbody_scale = (FNBODY fnbody, TRANSFORMPROCS tprocs, INT fnno,
+                                        REF FNDEC fdec, REF INT rate) FNBODYC:
+    BEGIN
+       FORMULA fn_rate = MAKEFNAME maxintno;
+
+       CASE fnbody IN
+       (REF TIMESCALE ts)
+          ( newenviron(TRUE);
+            INSTANCEC ic = (instance OF tprocs)(inst OF ts, tprocs);
+            { NB instance_scale updates the value of rate }
+            environscales[fnno] := scaled(faster OF ts, scale OF ts, rate);
+
+            UNIT input = terminals_unit(inputs OF fdec);
+            INT sample_fnno = UPB fns OF env;
+            IF faster OF ts
+            THEN  FORMULA fastrate = multiply(fn_rate, scale OF ts);
+                  FORMULA fastskew = multiply(fn_rate, skew OF ts);
+                  HEAP UMINST inst := (i OF ic, input);
+                  TYPE insttype = unit_type(inst, fdec, env);
+                  INSTANCE fastsample =
+                     make_sample_inst(sample_fnno, insttype, init OF ts,
+                                      fastrate, fastskew);
+                  (MAKEUNITTAG(HEAP UMINST := (fastsample, inst)), TRUE)
+            ELSE
+                  FORMULA slowskew =
+                     multiply( divide(fn_rate, scale OF ts), skew OF ts);
+                  TYPE inputtype = from OF fndec_tfn(fdec);
+                  INSTANCE slowsample =
+                     make_sample_inst(sample_fnno, inputtype, init OF ts,
+                                      fn_rate, slowskew);
+                  HEAP UMINST sample := (slowsample, input);
+                  (MAKEUNITTAG(HEAP UMINST := (i OF ic, sample)), TRUE)
+            FI
+         ),
+      (REF UNITTAG ut)
+         ( FNBODYC fc = (fnbody OF nulltprocs)(fnbody, tprocs);
+           IF c OF fc
+           THEN  environscales[fnno] := HEAP SCALE := (TRUE, MAKEFINT(1), rate)
+           FI;
+           fc
+         ),
+      (REF ADELAY ad)
+         (  newenviron(FALSE);
+            FORMULA ambig = multiply(fn_rate, ambigtime OF ad),
+                    delay = multiply(fn_rate, delaytime OF ad);
+            environscales[fnno] := HEAP SCALE := (TRUE, MAKEFINT(1), 1);
+            ( HEAP ADELAY := (sort OF ad, init OF ad, ambig, ambig OF ad,
+                              delay), TRUE)
+         ),
+      (REF IDELAY id)
+         (  newenviron(FALSE);
+            FORMULA delaytime = multiply(fn_rate, delaytime OF id);
+            environscales[fnno] := HEAP SCALE := (TRUE, MAKEFINT(1), 1);
+            ( HEAP IDELAY := (init OF id, delaytime), TRUE)
+         ),
+      (REF SAMPLE sd)
+         ( newenviron(FALSE);
+           FORMULA interval = multiply(fn_rate, interval OF sd),
+                   skew = multiply(fn_rate, skew OF sd);
+           environscales[fnno] := HEAP SCALE := (TRUE, MAKEFINT(1), 1);
+           ( HEAP SAMPLE := (sort OF sd, interval, init OF sd, skew), TRUE)
+         )
+      OUT (fnbody OF nulltprocs)(fnbody, tprocs)
+      ESAC
+    END;
+
+    PROC (DECLARATION, TRANSFORMPROCS) DECLARATIONC declaration_scale ;
+
+    PROC seqstep_fault = (SEQSTEP s, TRANSFORMPROCS tprocs) SEQSTEPC:
+    (  CASE s IN
+       (REF SEQPVAR) sys fault("SEQPVAR must be have been removed")
+       OUT SKIP
+       ESAC;
+       (s, FALSE)
+    );
+
+    PROC fndec_scale = (REF FNDEC fdec, TRANSFORMPROCS tprocs, INT fnno) FNDECC:
+    BEGIN
+       maxintno PLUSAB 1;  { place in ENVIRON for INT _period }
+       INT rate := 1;
+       { rate is the working space for calculating the the global clock rate,
+         it is modified by instance_scale
+       }
+       TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+         ( seqstep_fault,
+           (FNBODY body, TRANSFORMPROCS tprocs) FNBODYC:
+              fnbody_scale(body, tprocs, fnno, fdec, rate),
+           (INSTANCE inst, TRANSFORMPROCS tprocs) INSTANCEC:
+              instance_scale(inst, tprocs, rate, environscales),
+           (DECLARATION dec, TRANSFORMPROCS tprocs) DECLARATIONC:
+              declaration_scale(dec, tprocs)
+         ));
+       FNBODYC bc = (fnbody OF newtprocs)(fnbody OF fdec, newtprocs);
+
+       IF c OF bc
+       THEN  REF VECTOR [] MACSPEC macspecs = macspecs OF fdec;
+             INT upb = IF macspecs ISNT nilmacspecs THEN UPB macspecs ELSE 0 FI;
+             HEAP VECTOR [upb + 1] MACSPEC newmacspecs;
+             IF upb > 0 THEN newmacspecs[:upb] := macspecs FI;
+             newmacspecs[upb+1] := (explicitmacpar, MAKEFNAME maxintno);
+
+             HEAP FNDEC newfdec := fdec;
+             macro OF newfdec := TRUE;
+             macspecs OF newfdec := newmacspecs;
+             fnbody OF newfdec := f OF bc;
+             IF usage OF fdec ISNT nilusage
+             THEN HEAP USAGE us := usage OF fdec;
+                  closureno OF us := newclosno OF outerfn_info;
+                  usage OF newfdec := us
+             FI;
+             (newfdec, TRUE)
+        ELSE maxintno MINUSAB 1;
+             (fdec, FALSE)
+        FI
+    END;
+
+    declaration_scale := (DECLARATION decl, TRANSFORMPROCS tprocs) DECLARATIONC:
+    BEGIN
+       CASE decl IN
+       (FNNAME fn)
+          ( REF FNDEC fd = (fns OF env)[fnno OF fn];
+            FNDECC fc = fndec_scale(fd, tprocs, fnno OF fn);
+            IF c OF fc
+            THEN newenviron(FALSE);
+                 (fns OF env)[fnno OF fn] := f OF fc
+            FI
+          )
+       OUT  SKIP
+       ESAC;
+       (decl, FALSE)
+    END;
+
+
+   environscales[1] := nilscale;
+   IF UPB envfns > 1
+   THEN FORALL scales IN environscales[2:], fns IN envfns[2:]
+        DO scales :=
+             IF sort OF fns = outerdec
+             THEN  scales OF closureinfo[closureno OF usage OF fns]
+             ELSE  nilscale
+             FI
+        OD
+   FI;
+
+   FNDECC fdecc = fndec_scale(get_outerfn(ofn), tprocs, 1);
+
+   scales OF outerfn_info := environscales[1];
+   IF c OF fdecc OREL UPB environscales > 1 THEN  newenviron(FALSE) FI;
+   envfns[1] := f OF fdecc;
+
+   REF VECTOR [] REF INTDEC ints = ints OF environ OF ofn;
+   IF maxintno > UPB ints
+   THEN HEAP VECTOR [maxintno] REF INTDEC newints;
+        IF UPB ints > 0 THEN newints[:UPB ints] := ints FI;
+        FORALL it IN newints[UPB ints + 1 :]
+        DO it := HEAP INTDEC
+              := (macpardec, periodname, attrnull, fnull, nilusage)
+        OD;
+        ints OF env := newints
+   FI;
+
+   IF UPB environscales > 1
+   THEN  FOR fnno FROM 2 TO UPB environscales
+         DO  IF sort OF envfns[fnno] = outerdec
+             THEN INT newclosno = newclosno OF
+                                closureinfo[closureno OF usage OF envfns[fnno]];
+                  IF newclosno > 0
+                  THEN HEAP FNDEC newcopy := envfns[fnno];
+                       usage OF newcopy := HEAP USAGE := usage OF envfns[fnno];
+                       closureno OF usage OF newcopy := newclosno;
+                       envfns[fnno] := newcopy
+                  FI
+             FI
+         OD
+   FI;
+   IF envchanged
+   THEN  ((newclosno OF outerfn_info, outerfn, env), TRUE)
+   ELSE  (ofn, FALSE)
+   FI
+END;
+
+PROC simulate_fn = (OUTER o, INT newclosureno, REF INFO info, OUTER original)
+                                                                         OUTER:
+BEGIN
+   REF SCALE scales = scales OF info;
+   INT scale = int(scale OF scales);
+   FORMULA outerfn_rate =
+      IF scale = 1 THEN MAKEFINT(rate OF scales)
+      ELIF faster OF scales
+      THEN MAKEFINT ((rate OF scales) % scale)
+      ELSE MAKEFINT ((rate OF scales) * scale)
+      FI;
+
+   REF FNDEC newfdec = get_outerfn(o);
+   REF VECTOR [] MACSPEC ms = macspecs OF newfdec;
+   INT upb = UPB ms;
+   DECLARATION decl = spec OF (ms[upb]);  { INT _period }
+   TRANSFORMPROCS rtprocs = make_newtprocs(nulltprocs,
+                              ( (FORMULA f, TRANSFORMPROCS tprocs) FORMULAC:
+                                fmacpar_remove(f, tprocs, outerfn_rate, decl)
+                             ));
+
+   OUTERC oc = (outer OF nulltprocs)(o, rtprocs);
+   REF FNDEC fdec = get_outerfn(o OF oc);
+   REF FNDEC orig = get_outerfn(original);
+   macro OF fdec := macro OF orig;
+   CASE decl IN
+   (FNAME fn) ( REF VECTOR [] REF INTDEC ints = ints OF environ OF o OF oc;
+                HEAP VECTOR [UPB ints] REF INTDEC newints := ints;
+                value OF newints[intno OF fn] := outerfn_rate;
+                ints OF environ OF o OF oc := newints
+              )
+   OUT sysfault("not INT parameter"); SKIP
+   ESAC;
+   HEAP VECTOR [upb] MACSPEC macspecs := macspecs OF fdec;
+   sort OF macspecs[upb] := sftimescale;
+   macspecs OF fdec := macspecs;
+   usage OF fdec := HEAP USAGE := usage OF fdec;
+   closureno OF usage OF fdec := newclosureno;
+   (newclosureno, outerfn, environ OF o OF oc)
+END;
+
+
+PROC transform_timescale = (CLOSURE oldclose, MESSAGEPROC msg) CLOSUREC:
+BEGIN
+   BOOL with_timescaling := FALSE;
+   HEAP CLOSURE newclosure := oldclose;
+
+   HEAP VECTOR [maxclosureno(oldclose)] REF INFO closureinfo;
+   FORALL c IN closureinfo DO c := HEAP INFO := (FALSE, FALSE, 0, nilscale) OD;
+
+   PROC trace_uses = (OUTER ofn) VOID:
+   BEGIN
+      { Traces fns used within OUTERFN, marking them as needing scaling }
+      FORALL fn IN (fns OF environ OF ofn)[2:]
+      DO  IF sort OF fn = outerdec
+          THEN INT cno = closureno OF usage OF fn;
+               REF INFO info = closureinfo[cno];
+               IF (newclosno OF info = 0) ANDTH
+                  (scaled OF info OREL withtime OF info)
+               THEN  newclosno OF info := reserve_next_closureno(newclosure);
+                     trace_uses(outer OF find_outers(cno, oldclose, msg))
+               FI
+          FI
+      OD
+   END;
+
+   INT nothing = 3, scaled = 1, withtime = 2;
+
+   PROC fnbody_sort = (FNBODY fbody) INT:
+      CASE fbody IN
+      (REF TIMESCALE)  scaled,
+      (REF ADELAY)     withtime,
+      (REF IDELAY)     withtime,
+      (REF SAMPLE)     withtime,
+      (REF BODYCHECK bc)  fnbody_sort(fnbody OF bc)
+      OUT nothing
+      ESAC;
+
+
+   REF OUTERS outers := outers OF oldclose;
+   WHILE outers ISNT nilouters
+   DO  OUTER ofn = outer OF outers;
+       IF sort OF ofn = outerfn
+       THEN  REF FNDEC fdec = get_outerfn(ofn);
+             REF INFO info = closureinfo[closureno OF ofn];
+             CASE fnbody_sort(fnbody OF fdec) IN
+             {scaled}    scaled OF info := TRUE,
+             {withtime}  withtime OF info := TRUE
+             OUT
+                 FORALL fn IN (fns OF environ OF ofn)[2:]
+                 DO  IF (sort OF fn = localdec)
+                     THEN CASE fnbody_sort(fnbody OF fn) IN
+                          {scaled}    scaled OF info := TRUE,
+                          {withtime}  withtime OF info := TRUE
+                          OUT SKIP
+                          ESAC
+                     ELIF sort OF fn = outerdec
+                     THEN REF INFO inf = closureinfo[closureno OF usage OF fn];
+                          IF scaled OF inf THEN scaled OF info := TRUE FI;
+                          IF withtime OF inf THEN withtime OF info := TRUE FI
+                     FI
+                 OD
+            ESAC;
+            IF NOT with_timescaling ANDTH scaled OF info
+            THEN with_timescaling := TRUE
+            FI
+       FI;
+       outers := rest OF outers
+   OD;
+   { at this stage you know whether an OUTERFN contains/uses TIMESCALE
+     functions, and also whether it contains/uses DELAY functions
+   }
+
+
+   IF with_timescaling
+   THEN  newclosure := copy_closure(newclosure, msg);
+         REF REF OUTERS newptr := outers OF newclosure;
+
+         outers := outers OF oldclose;
+         WHILE outers ISNT nilouters
+         DO OUTER outer = outer OF outers;
+            IF sort OF outer = outerfn ANDTH
+                 scaled OF closureinfo[closureno OF outer]
+            THEN trace_uses(outer)
+            FI;
+            outers := rest OF outers
+         OD;
+         { at this stage you know which OUTERFNs are used within scaled
+           functions - so now know which OUTERFNs to call outerfn_scale on.
+         }
+
+
+         INT sampleno = reserve_next_closureno(newclosure);
+         insert_outer(sample_outer(sampleno), newptr, newclosure, msg);
+         newptr := rest OF newptr; { points to next item }
+
+         outers := outers OF oldclose;
+         WHILE outers ISNT nilouters
+         DO OUTER o = outer OF outers;
+            IF sort OF o = outerfn
+            THEN REF INFO inf = closureinfo[closureno OF o];
+                 IF scaled OF inf OREL (newclosno OF inf > 0)
+                 THEN  OUTERC foc =
+                          outerfn_scale(o, nulltprocs, closureinfo,
+                                        closureinfo[closureno OF o], sampleno);
+                       IF scaled OF inf  { provides FN for use by simulatefn }
+                       THEN INT newfnno = reserve_next_closureno(newclosure);
+                            OUTER fs =  simulate_fn(o OF foc, newfnno,
+                                               closureinfo[closureno OF o], o);
+                            insert_outer(fs, newptr, newclosure, msg);
+                            newptr := rest OF newptr
+                       FI;
+                       IF (newclosno OF inf) > 0
+                       THEN insert_outer(o OF foc, newptr, newclosure, msg);
+                            newptr := rest OF newptr
+                       FI;
+                       IF scaled OF inf
+                       THEN free_outers(newptr, newclosure, msg)
+                       ELSE newptr := rest OF newptr
+                       FI
+                 ELSE  newptr := rest OF newptr
+                 FI
+            ELSE newptr := rest OF newptr
+            FI;
+            outers := rest OF outers
+         OD;
+
+         garbage_collect_closure(newclosure, msg);
+         (newclosure, TRUE)
+   ELSE  (oldclose, FALSE)
+   FI
+END;
+
+SKIP
+KEEP   timescale, sftimescale, transform_timescale
+FINISH
