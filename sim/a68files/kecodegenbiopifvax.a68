@@ -1,0 +1,1908 @@
+DECS kecodegenbiopifvax CONTEXT VOID USE putstrings, osinterface, basics,
+     kemassemvax, kecodegenservervax, kecodegenstackvax:
+
+{ " Id: kecodegenbiopifvax.sta,v 2.1 91/02/22 18:34:37 edcad Exp$" }
+configinfo A68CONFIG "$Id: kecodegenbiopifvax.a68,v 34.2 1995/03/29 13:04:45 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+30:06:89 ABS_S in-line optimisation didn't work for result size = 32 bits,
+            mnegl caused exception.
+            convert_real_2 workspace was wrong.
+            Bit string offsets of zero were pushed on the stack in ms push
+            rather than the correctly calculated values.
+            The output copy of oolbiopbs reversed the order of bytes.
+            R4B383.   SPT.
+10:01:90 F_TO_R and R_TO_F added.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{==============================================================================}
+{ Code generator for in-line biops and linkage to out-of-line routines.        }
+{==============================================================================}
+
+{ boolean deciding whether or not to optimise out-of-line biops }
+
+BOOL optimise on = TRUE;
+
+{------------------------------------------------------------------------------}
+{ definitions of out-of-line biops                                             }
+{------------------------------------------------------------------------------}
+{operator to return address of out of line routine as an INT, env is 0}
+OP (PROC VOID)STRUCT(MACHINEOFFSET addr, env) OOLROUTINE = BIOP 99;
+
+PROC VOID plus_us_1 = ALIEN "ADD_US";
+PROC VOID minus_us_1 = ALIEN "SUB_US";
+PROC VOID plus_s_1 = ALIEN "ADD_S";
+PROC VOID minus_s_1 = ALIEN "SUB_S";
+PROC VOID times_us_1 = ALIEN "TIMES_US";
+PROC VOID times_s_1 = ALIEN "TIMES_S";
+PROC VOID divide_s_1 = ALIEN "DIVIDE_S";
+PROC VOID divide_us_1 = ALIEN "DIVIDE_US";
+PROC VOID range_us_1 = ALIEN "RANGE_US";
+PROC VOID range_s_1 = ALIEN "RANGE_S";
+PROC VOID lt_us_1 = ALIEN "LT_US";
+PROC VOID lt_s_1 = ALIEN "LT_S";
+PROC VOID gt_us_1 = ALIEN "GT_US";
+PROC VOID gt_s_1 = ALIEN "GT_S";
+PROC VOID abs_s_1 = ALIEN "ABS_S";
+PROC VOID negate_s_1 = ALIEN "NEGATE_S";
+PROC VOID negate_us_1 = ALIEN "NEGATE_US";
+PROC VOID mod_s_1 = ALIEN "MOD_S";
+PROC VOID mod_us_1 = ALIEN "MOD_US";
+PROC VOID and_1 = ALIEN "AND";
+PROC VOID or_1 = ALIEN "OR";
+PROC VOID not_1 = ALIEN "NOT";
+PROC VOID xor_1 = ALIEN "XOR";
+PROC VOID sl_1 = ALIEN "SL";
+PROC VOID sr_us_1 = ALIEN "SR_US";
+PROC VOID sr_s_1 = ALIEN "SR_S";
+PROC VOID transform_us_1 = ALIEN "TRANSFORM_US_1";
+PROC VOID transform_s_1 = ALIEN "TRANSFORM_S_1";
+PROC VOID transform_us_2 = ALIEN "TRANSFORM_US_2";
+PROC VOID transform_s_2 = ALIEN "TRANSFORM_S_2";
+PROC VOID eq_us_1 = ALIEN "EQ_US";
+PROC VOID eq_s_1 = ALIEN "EQ_S";
+PROC VOID le_us_1 = ALIEN "LE_US";
+PROC VOID le_s_1 = ALIEN "LE_S";
+PROC VOID ge_us_1 = ALIEN "GE_US";
+PROC VOID ge_s_1 = ALIEN "GE_S";
+PROC VOID sqrt_us_1 = ALIEN "SQRT_US";
+PROC VOID convert_us_1 = ALIEN "CONVERT_US_1";
+PROC VOID convert_us_2 = ALIEN "CONVERT_US_2";
+PROC VOID change_real_1 = ALIEN "CHANGE_REAL_1";
+PROC VOID change_real_2 = ALIEN "CHANGE_REAL_2";
+PROC VOID convert_real_1 = ALIEN "CONVERT_REAL_1";
+PROC VOID convert_real_2 = ALIEN "CONVERT_REAL_2";
+PROC VOID f_to_r_1 = ALIEN "F_TO_R_1";
+PROC VOID f_to_r_2 = ALIEN "F_TO_R_2";
+PROC VOID r_to_f_1 = ALIEN "R_TO_F_1";
+PROC VOID r_to_f_2 = ALIEN "R_TO_F_2";
+PROC VOID divide_real_1 = ALIEN "DIVIDE_REAL_1";
+PROC VOID divide_real_2 = ALIEN "DIVIDE_REAL_2";
+PROC VOID eq_real_1 = ALIEN "EQ_REAL_1";
+PROC VOID eq_real_2 = ALIEN "EQ_REAL_2";
+PROC VOID gt_real_1 = ALIEN "GT_REAL_1";
+PROC VOID gt_real_2 = ALIEN "GT_REAL_2";
+PROC VOID lt_real_1 = ALIEN "LT_REAL_1";
+PROC VOID lt_real_2 = ALIEN "LT_REAL_2";
+PROC VOID minus_real_1 = ALIEN "MINUS_REAL_1";
+PROC VOID minus_real_2 = ALIEN "MINUS_REAL_2";
+PROC VOID negate_real_1 = ALIEN "NEGATE_REAL_1";
+PROC VOID negate_real_2 = ALIEN "NEGATE_REAL_2";
+PROC VOID plus_real_1 = ALIEN "PLUS_REAL_1";
+PROC VOID plus_real_2 = ALIEN "PLUS_REAL_2";
+PROC VOID times_real_1 = ALIEN "TIMES_REAL_1";
+PROC VOID times_real_2 = ALIEN "TIMES_REAL_2";
+{ Routines from "handle.c" so we can turn off interrupts during Apollo real
+  BIOPs }
+*APROC VOID setup_handler = ALIEN "SETUP_HANDLER";
+*APROC VOID reset_handler = ALIEN "RESET_HANDLER";
+
+{------------------------------------------------------------------------------}
+{ BIOP input parameter types                                                   }
+{------------------------------------------------------------------------------}
+INT bs =1, tv =2, ch =3, ee =4, ei =5, ds =6, sr =7, lr =8, i =9, q =10, r =11;
+
+{------------------------------------------------------------------------------}
+{ A set of operations which implement an unsigned reverse polish calculator,   }
+{ used to calculate workspace and result space required by out of line biops.  }
+{ The calculator will generate code to leave the result on top of the real     }
+{ machine stack if any of it's operands are unknown at code generation time    }
+{------------------------------------------------------------------------------}
+
+{ The VAX implementation uses signed rather than unsigned arithmetic.
+  This should cause no problem with the size of numbers encountered. }
+
+{ an operator which selects one of two AM stack locations,
+  in an attempt to avoid code generation by the calculator }
+PROC either = (REF STACKALLOCATOR s, STACKNUMBER a, b)STACKNUMBER:
+  CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (a)] )  IN
+  (UNKNOWNSTACKLOCATION): b
+   OUT                    a
+  ESAC;
+
+{ An operator to return the size of a given AM stack location }
+OP SIZE = (REF STACKALLOCATOR s, STACKNUMBER o) UNION(INT, OPERAND):
+   CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+   (UNKNOWNSTACKLOCATION): s SIZEOPERAND o
+   OUT (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )
+   ESAC;
+
+{ An operator to return the integer value of a given small AM stack location }
+OP VALUE = (REF STACKALLOCATOR s, STACKNUMBER o) UNION(INT, OPERAND):
+   BEGIN
+      CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] )  IN
+      (CONST ss): constant OF ss
+      OUT
+         BEGIN
+            s MAKEREADABLE o;
+            s SMALLOPERAND (s LOCATECOPY o)
+         END
+      ESAC
+   END;
+
+{ The arithmetic stack }
+MODE ARITHSTACKOBJECT = STRUCT(REF VECTOR [] INT locations,
+                               INT top,
+                               BOOL in line);
+
+MODE ARITHSTACK = REF ARITHSTACKOBJECT;
+
+   PROC arithstack = ARITHSTACK:
+      HEAP ARITHSTACKOBJECT := (HEAP VECTOR [100] INT, 0, FALSE);
+
+
+   { Push a value onto arith stack,
+       NOTE - sets in line = true, and writes arith stack contents
+       onto real machine stack when first OPERAND recieved.
+       (ie. don't known value of an OPERAND at code generation time.)}
+   OP PUSH = (ARITHSTACK s, UNION(INT, OPERAND) val)ARITHSTACK:
+      BEGIN
+         top OF s +:=1;
+
+         CASE val IN
+         (OPERAND oprnd)
+            BEGIN
+               IF NOT in line OF s THEN
+                  FOR i TO (top OF s)-1 DO
+                     assemble (pushl, LITL(locations OF s)[i])
+                  OD;
+                  in line OF s := TRUE
+               FI;
+               assemble (pushl, oprnd)
+            END,
+         (INT i)
+            BEGIN
+               IF in line OF s THEN
+                  assemble (pushl, LITL i)
+               ELSE
+                  IF top OF s > UPB locations OF s THEN
+                     HEAP VECTOR [UPB locations OF s + 100]INT newstack;
+                     newstack[1:UPB locations OF s] := locations OF s;
+                     locations OF s := newstack
+                  FI;
+                  (locations OF s)[top OF s] := i
+               FI
+            END
+         ESAC;
+         s
+      END;
+
+   { Remove one arith stack item }
+   OP POP = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         top OF s -:=1;
+         "arith stack underflow" ASSERT top OF s >= 0;
+         IF in line OF s THEN
+            assemble (addl2, (LITL 4, R sp))
+         FI;
+         s
+      END;
+
+  { Return value at top of stack, only valid if INLINE is FALSE}
+   OP TOS = (ARITHSTACK s)INT: (locations OF s)[top OF s];
+
+   {Return 'code generated' flag}
+   OP INLINE = (ARITHSTACK s)BOOL: in line OF s;
+
+   {Ensure that the stack is in the expected state}
+   OP CHECKSIZEIS = (ARITHSTACK s, INT size)VOID:
+      "Check size is: stack size incorrect" ASSERT top OF s = size;
+
+   { ADD two values at top of stack }
+   OP ADD = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: ADD" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             assemble(addl2, (RI sp, RD sp))
+          ELSE
+             (locations OF s)[top OF s -1] +:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Subtract value at top of stack from one below it }
+   OP SUB = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: SUB" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             assemble(subl2, (RI sp, RD sp))
+          ELSE
+             (locations OF s)[top OF s -1] -:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Multiply two values at top of stack }
+   OP MUL = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: MUL" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             assemble (mull2, (RI sp, RD sp))
+          ELSE
+             (locations OF s)[top OF s -1] *:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+  { Divide value at top of stack INTO value below it }
+   OP DIV = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: DIV" ASSERT top OF s > 1;
+          IF in line OF s THEN
+             assemble(divl2, (RI sp, RD sp))
+          ELSE
+             (locations OF s)[top OF s -1] %:= (locations OF s)[top OF s]
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+   { Find maximum of two values at top of stack }
+   OP MAX = (ARITHSTACK s)ARITHSTACK:
+      BEGIN
+         "Arith stack underflow: MAX" ASSERT top OF s > 1;
+          IF in line OF s THEN
+
+             MACHINELABEL over;
+             assemble(cmpl, (RI sp, RD sp));
+             ma bcc byte(lss, over);
+             assemble(movl, (sp DISP -4, RD sp));
+             fix machine label (over)
+          ELSE
+             (locations OF s)[top OF s -1] :=
+                IF (locations OF s)[top OF s] > (locations OF s)[top OF s -1]
+                THEN
+                   (locations OF s)[top OF s]
+                ELSE
+                   (locations OF s)[top OF s -1]
+                FI
+          FI;
+          top OF s -:=1;
+          s
+      END;
+
+{------------------------------------------------------------------------------}
+{ A set of routines to calculate workspace required by OOL code in longwords,  }
+{ and size of bit-string results, in bits.                                     }
+{ The general format of the routines is,                                       }
+{ Return TRUE & size if possible, else return FALSE and generate code to       }
+{ produce size at top of machine stack                                         }
+{------------------------------------------------------------------------------}
+MODE SPACEPROC = PROC (REF STACKALLOCATOR, REF INT)BOOL;
+
+PROC no space = (REF STACKALLOCATOR s, REF INT i)BOOL:
+   { used when no space is actualy required }
+   BEGIN
+     i := 0;
+     TRUE
+    END;
+
+PROC bsxbs logical ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+  { Calculates workspace for bitwise logicals on bit strings.
+    Both params must be same size.
+    size is: (n+31)/32 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE either (s, tos+1, tos+3));
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bs logical ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+  { Calculates workspace for bitwise logicals on single bit string.
+    size is: (n+31)/32 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE tos1);
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bsxbs logical rs = (REF STACKALLOCATOR s, REF INT resspc) BOOL:
+  { Calculates result size for bitwise logicals on bit strings.}
+  { result size = size of tos1 = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE either (s, tos+1, tos+3));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC bs logical rs = (REF STACKALLOCATOR s, REF INT resspc) BOOL:
+  { Calculates result size for bitwise logicals on single bit string.}
+  { result size = size of tos1 }
+   BEGIN
+      ARITHSTACK as := arithstack;
+      as := as PUSH (s SIZE tos1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC divide ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for divide on bit strings.
+    space required :- (n+7/8)*2 + (m+7/8)*3 + 2 bytes.
+    = (((n+7)/8)*2 + ((m+7)/8)*3 +5)/4  longwords
+    n= size of tos1, m= size of tos3.
+ }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 2); { ((n+7)/8)*2 }
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((m+7)/8)*3 }
+      as := ADD as;
+      as := ADD (as PUSH 5);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+
+PROC times rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+  { result size = size of tos1 + size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s SIZE (tos+3)));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC times ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     { result size = (((n+7)/8) + ((m+7)/8) + ((m+n+7)/8) +3)/4
+       where n = size of tos1, m= size of tos3}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := as PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC shift rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   {result size = m + p
+    where m = size of tos1, p = value of tos2 (ie shift count)}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH (s VALUE (tos+2)));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC plus ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = (((max (m, n)+1)+31)/32) *2
+     where m = size of tos1, n = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MAX (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH (1+31));
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 8);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC plus rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = max ( m, n) +1,
+     where m = size of tos1, n = size of tos3 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MAX (as PUSH (s SIZE (tos+3)));
+      as := ADD (as PUSH 1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC not rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { result size = size of tos1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_1 ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = ((m +7)/8 + p + 3)/4,
+     where m = size of tos1, p is value of tos2 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD (as PUSH (s VALUE (tos+2)));
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_2 ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+   { size = ((m +7)/8 + (p+7)/8) +3)/4
+     where m = size of tos1, p = value of tos2 }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s VALUE (tos+2));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC negate ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     {size = (size of tos1 +31) /32}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 31);
+      as := DIV (as PUSH 32);
+      as := MUL (as PUSH 16);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC negate rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = size of tos1 +1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC sqrt ws = (REF STACKALLOCATOR s, REF INT wrkspc)BOOL:
+     {size = (((((n+1)/2)+8)/8) + (((((n+1)/2)+7)/8)*6) +3)/4 bytes)
+      where n = size of tos1}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as := ADD (as PUSH 8);
+      as := DIV (as PUSH 8);
+      as := as PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 6);
+      as := ADD as;
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC sqrt rs = (REF STACKALLOCATOR s, REF INT resspc)BOOL:
+   { size = (size of tos1 +1) /2}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 1);
+      as := DIV (as PUSH 2);
+      as CHECKSIZEIS 1;
+      resspc := TOS as;
+      NOT INLINE as
+   END;
+
+
+PROC mod ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for mod on bit strings.
+    space required :- (n+7/8)*3 + (m+7/8)*3 + 4 bytes.
+    = (((n+7)/8)*3 + ((m+7)/8)*3 +7)/4  longwords
+    n= size of tos1, m= size of tos3.
+ }
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((n+7)/8)*3 }
+      as := as PUSH (s SIZE (tos+3));
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as := MUL (as PUSH 3); { ((m+7)/8)*3 }
+      as := ADD as;
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_real_1 ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for convert_real_1 from the formula:
+
+       (14m + 24p + 3q + 551) / 24 bytes
+
+   where m = size of tos+1, p = tos+4, q = tos+5
+}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+1));
+      as := MUL (as PUSH 14);
+      as := as PUSH (s VALUE (tos+4));
+      as := MUL (as PUSH 24);
+      as := ADD as;
+      as := as PUSH (s VALUE (tos+5));
+      as := MUL (as PUSH 3);
+      as := ADD as;
+      as := ADD (as PUSH 551);
+      as := DIV (as PUSH 24);  { # bytes }
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);  { # bytes aligned longwords # }
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+PROC convert_real_2 ws = (REF STACKALLOCATOR s, REF INT wrkspc) BOOL:
+{   Calculates workspace for convert_real_2 from the formula:
+
+       (8q + n + m + 180) / 8 bytes
+
+   where q = size of tos+3, m = tos+4, n = tos+5
+}
+   BEGIN
+      ARITHSTACK as := arithstack PUSH (s SIZE (tos+3));
+      as := MUL (as PUSH 8);
+      as := as PUSH (s VALUE (tos+5));
+      as := ADD as;
+      as := as PUSH (s VALUE (tos+4));
+      as := ADD as;
+      as := ADD (as PUSH 180);
+      as := DIV (as PUSH 8);  { # bytes }
+      as := ADD (as PUSH 3);
+      as := DIV (as PUSH 4);
+      as := MUL (as PUSH 4);  { # bytes aligned longwords # }
+      as CHECKSIZEIS 1;
+      wrkspc := TOS as;
+      NOT INLINE as
+   END;
+
+{------------------------------------------------------------------------------}
+{ A set of operations to push biop params onto the real machine stack          }
+{------------------------------------------------------------------------------}
+PROC ms_push bs = (REF STACKALLOCATOR s, STACKNUMBER o) INT:
+{ push representation for bitstring onto machine stack (from AM stack)}
+   BEGIN
+      { length, offset, address of first byte }
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] )  IN
+      (UNKNOWNSTACKLOCATION loc):
+         BEGIN
+            assemble (pushl, (s SIZEOPERAND o));
+            assemble (mnegl, (s SIZEOPERAND o, DR sp));
+            assemble (bicl2, (LITL ABS NOT 2r11111, RD sp));
+            assemble (pushal, s SMALLOPERAND (s LOCATECOPY o))
+         END
+       OUT
+         BEGIN
+            assemble (pushl, LITL((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) ));
+
+            {for bs indirected, - in memory & un-normalised
+             - have to get offset. All rest are zero }
+            CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((s LOCATECOPY o))] )  IN
+            (UNION(BSINDIRECTED, BSINDIRECTEDSUMCONST)):
+               assemble (pushl, LITL(s BITOFFSETOF (s LOCATECOPY o))),
+            (UNION(INDIRECTED, INDIRECTEDSUMCONST)):
+               assemble (pushl, LITL 0),
+            (UNION(INREGISTER, INMEMORY, CONST)):
+               BEGIN
+                  s FORCELOADOUT o;
+                  assemble (pushl, (LITL ABS
+                     (BIN (- ((bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (o)] ) )) AND 2r11111)))
+               END
+            OUT
+              simfault ("ms_push bs: unexpected AM stack state")
+            ESAC;
+
+            {push address of start of bit string}
+            assemble (pushal, s SMALLOPERAND (s LOCATECOPY o))
+         END
+      ESAC;
+      12 {bytes pushed}
+   END;
+
+
+PROC ms_push ei= (REF STACKALLOCATOR s, STACKNUMBER o) INT:
+{ push representation for ELLA integer onto machine stack (from AM tos)}
+   BEGIN
+        s FORCELOADOUT o;
+        assemble(pushal, s SMALLOPERAND o);
+        4 {bytes pushed}
+   END;
+
+PROC ms_push ds= (REF STACKALLOCATOR s, STACKNUMBER o) INT:
+{ push representation for ELLA decimal string onto machine stack (from AM tos)}
+   BEGIN
+      s FORCELOADOUT o;
+      ARITHSTACK as := arithstack PUSH (s SIZE o);
+      as := ADD (as PUSH 7);
+      as := DIV (as PUSH 8);
+      as CHECKSIZEIS 1;
+      IF NOT INLINE as THEN
+         assemble(pushl, LITL (TOS as))
+      FI;
+      assemble(pushal, s SMALLOPERAND o);
+      8 {bytes pushed}
+   END;
+
+PROC ms_push i = (REF STACKALLOCATOR s, STACKNUMBER o) INT:
+{ push representation for integer onto machine stack (from AM tos)}
+   BEGIN
+        s MAKEREADABLE o;
+        assemble(pushl, s SMALLOPERAND (s LOCATECOPY o));
+        4 {bytes pushed}
+   END;
+
+PROC ms_push r = (REF STACKALLOCATOR s, STACKNUMBER o) INT:
+{ push value of pointer for output into machine stack. }
+   BEGIN
+        s MAKEINDIRECTABLE o;
+        assemble(pushal, s INDIRECTSMALLOPERAND (s LOCATECOPY o));
+        4 {bytes pushed}
+   END;
+
+PROC ms_push = (REF STACKALLOCATOR s, STACKNUMBER o, INT param type) INT:
+   {tv, ch, ee, query have same representation, and are same size as
+     integer on machine stack.
+    sr, lr require same parameter format as ei.}
+   CASE param type IN
+     ms_push bs (s, o),
+     ms_push i  (s, o), {tv}
+     ms_push i  (s, o), {ch}
+     ms_push i  (s, o), {ee}
+     ms_push ei (s, o),
+     ms_push ds (s, o),
+     ms_push ei (s, o), {sr}
+     ms_push ei (s, o), {lr}
+     ms_push i  (s, o), {i}
+     ms_push i  (s, o), {q}
+     ms_push r  (s, o)  {r}
+   OUT
+      simfault ("ms_push: unknown case");
+     0
+   ESAC;
+
+{------------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns bit-string   }
+{------------------------------------------------------------------------------}
+PROC oolbiop bs = (REF STACKALLOCATOR s,
+                   SPACEPROC fixed ws,
+                   SPACEPROC fixed rs,
+                   PROC VOID biop,
+                   []INT in param type)VOID:
+
+   BEGIN
+      INT fws,
+          frs,
+          no bytes pushed := 0;
+
+      {remember current stack position}
+      assemble(movl, (R sp, R tempreg));
+
+      {allocate the required workspace}
+      IF fixed ws (s, fws) THEN
+         assemble(subl2, (LITL fws, R sp))
+      ELSE
+         assemble(subl2, (RI sp, R sp))
+      FI;
+
+      {ensure we can clear the stack after the call etc.}
+      assemble(pushl, R tempreg);
+
+      {save the workspace pointer, allocate result space(rounded to longwords)
+          including query flag}
+      assemble(moval, (4 DISP sp, R tempreg));
+      IF fixed rs (s, frs) THEN
+         assemble(subl2, (LITL ((((frs+31) OVER 32)*4)+4), R sp))
+      ELSE
+         assemble(addl2, (LITL 31, RD sp));
+         assemble(ashl, (LITB -5, RD sp));
+         assemble(ashl, (LITB 2, RD sp));
+         assemble(addl2, (LITB 4, RD sp));
+         assemble(subl2, (RI sp, R sp))
+      FI;
+
+      {r2-r11 are preserved during procedure calls and r0 is a temporary
+       register, so we need to save r1 and r12.}
+      assemble(pushr, LITW ABS 2r0001000000000010);
+
+      {push the workspace and result space pointers}
+      assemble(pushl, R tempreg);
+      assemble(pushal, (4 + 2*4) DISP sp);
+
+      no bytes pushed +:= 8;
+
+      {generate code to push the input parameters}
+      FOR j FROM UPB in param type BY -1 TO 1 DO
+        no bytes pushed +:= ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+      {call the biop}
+      assemble (calls, (LITL (no bytes pushed OVER 4),
+         ABSA (addr OF OOLROUTINE (biop))));
+      {inputs will have been removed from the stack automatically}
+
+      {restore saved registers}
+      assemble(popr, LITW ABS 2r0001000000000010);
+
+      {get the size of the result while AM parameters still exist}
+      BOOL rs is known  = fixed rs (s, frs);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      {push bit-string}
+      IF rs is known THEN
+         s PUSHNEWSTACKLOCATION frs
+      ELSE
+         PUSHNEWUNKNOWNSTACKLOCATION s;
+         assemble (movl, (RI sp, s SIZEOPERAND tos))
+      FI;
+
+
+      {push query flag}
+      s PUSHNEWSTACKLOCATION 32;
+      assemble(movl, (RI sp, s CURRENTOPERAND tos));
+
+      {copy ((frs+31) DIV 32) longwords from top
+       of machine stack to 2nd AM stack location}
+
+      CASE (location_type OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] )  IN
+      (SMALLSTACKLOCATION):
+         assemble (movl, (RI sp, s CURRENTOPERAND tos1))
+      OUT
+         s LOADINDEX tos1;
+         MACHINEOFFSET moveloop = location;
+         assemble(movl, ((RD sp) // tempreg,  s CURRENTOPERAND tos1));
+         s LOOPINDEX moveloop;
+
+         s LOADINDEX tos1;
+         assemble(moval, ((4 DISP sp) // tempreg, R sp))
+      ESAC;
+
+      {pointer to original stack position is at tos. Restore it}
+      assemble (movl, (RD sp, R sp))
+
+  END;
+
+{------------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns two-valued   }
+{------------------------------------------------------------------------------}
+PROC oolbiop tv = (REF STACKALLOCATOR s,
+                   SPACEPROC fixed ws,
+                   PROC VOID biop,
+                   []INT in param type)VOID:
+
+   BEGIN
+      INT fws,
+          no bytes pushed := 0;
+
+      {remember current stack position}
+      assemble(movl, (R sp, R tempreg));
+
+      {allocate the required workspace}
+      IF fixed ws (s, fws) THEN
+         assemble(subl2, (LITL fws, R sp))
+      ELSE
+         assemble(subl2, (RI sp, R sp))
+      FI;
+
+      {ensure we can clear the stack after the call etc.}
+      assemble(pushl, R tempreg);
+
+      { one word result}
+      assemble(subl2, (LITL 4, R sp));
+
+      {r2-r11 are preserved during procedure calls and r0 is a temporary
+       register, so we need to save r1 and r12. }
+      assemble(pushr, LITW ABS 2r0001000000000010);
+
+      {push workspace & result space pointers}
+      assemble(moval, ((8 + 2*4) DISP sp, DR sp));
+      assemble(moval, ((4 + 2*4) DISP sp, DR sp));
+
+      no bytes pushed +:= 8;
+
+      {generate code to push the input parameters}
+      FOR j FROM UPB in param type BY -1 TO 1 DO
+        no bytes pushed +:= ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+      {call the biop}
+      assemble (calls, (LITL (no bytes pushed OVER 4),
+         ABSA (addr OF OOLROUTINE (biop))));
+      {Inputs will have been removed from the stack automatically}
+
+      {restore saved registers}
+      assemble (popr, LITW ABS 2r0001000000000010);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      {push two valued}
+      s PUSHNEWSTACKLOCATION 32;
+      assemble(movl, (RI sp, s CURRENTOPERAND tos));
+
+      {pointer to original stack position is at tos. Restore it}
+      assemble (movl, (RD sp, R sp))
+
+   END;
+
+{------------------------------------------------------------------------------}
+{ operation to generate call to out-of-line routine which returns a structure  }
+{------------------------------------------------------------------------------}
+PROC oolbiop struct = (REF STACKALLOCATOR s,
+                       SPACEPROC fixed ws,
+                       PROC VOID biop,
+                       []INT in param type)VOID:
+
+   BEGIN
+      INT fws,
+          no bytes pushed := 0;
+
+      {Ensure that non of the items on the abstract machine stack are
+       dependant upon the memory we are going to write to}
+      FORCEALLLOAD s;
+
+      {remember current stack position}
+      assemble(movl, (R sp, R tempreg));
+
+      {allocate the required workspace}
+      IF fixed ws (s, fws) THEN
+         assemble(subl2, (LITL fws, R sp))
+      ELSE
+         assemble(subl2, (RI sp, R sp))
+      FI;
+
+      {ensure we can clear the stack after the call etc.}
+      assemble(pushl, R tempreg);
+
+      {r2-r11 are preserved during procedure calls and r0 is a
+       temporary register, so we need to save r1 and r12.}
+      assemble(pushr, LITW ABS 2r0001000000000010);
+
+      {no result space on real stack, push workspace.
+       result pointer will appear by virtue of input parameter, "r".}
+      assemble (moval, ((4 + 2*4) DISP sp, DR sp));
+
+      no bytes pushed +:= 4;
+
+      {generate code to push the input parameters}
+      FOR j FROM UPB in param type BY -1 TO 1 DO
+        no bytes pushed +:= ms_push (s, tos + j -1, in param type[j])
+      OD;
+
+*A    {disable interrupts for real routines during ool routine
+*A     also for other structured output BIOPs but these shouldn't
+*A     generate interrupts in any case, we assume that this will not touch
+*A     the parameters just pushed onto the stack }
+*A    assemble (calls, (LITL 0, ABSA(addr OF OOLROUTINE(setup_handler))));
+
+      {call the biop}
+      assemble (calls, (LITL (no bytes pushed OVER 4),
+         ABSA(addr OF OOLROUTINE(biop))));
+      {Inputs will have been removed from the stack automatically}
+
+*A    {reenable interrupts after ool routine}
+*A    assemble (calls, (LITL 0, ABSA(addr OF OOLROUTINE(reset_handler))));
+
+      {restore saved registers}
+      assemble(popr, LITW ABS 2r0001000000000010);
+
+      { remove the inputs from the AM stack}
+      FOR j TO UPB in param type DO
+        POP s
+      OD;
+
+      {pointer to original stack position is at tos. Restore it}
+      assemble (movl, (RD sp, R sp))
+
+   END;
+
+
+{------------------------------------------------------------------------------}
+{ A set of routines generate code for in-line biops                            }
+{------------------------------------------------------------------------------}
+PROC tvxtv and_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal logical AND upon two two-valued items. (guaranteed small) }
+   BEGIN
+      []OPERAND oprnd = GENERICDYOP ams;
+      assemble (mcoml, (oprnd[1], R tempreg));
+      assemble (bicl3, (R tempreg, oprnd[2], R tempreg));
+      assemble (bisl2, oprnd);
+      assemble (bicl2, (LITL ABS NOT 2r1, oprnd[2]));
+      assemble (bisl2, (R tempreg, oprnd[2]))
+   END;
+
+PROC tvxtv or_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal logical OR upon two two-valued items. (guaranteed small) }
+   BEGIN
+      []OPERAND oprnd = GENERICDYOP ams;
+      assemble (mcoml, (oprnd[1], R tempreg));
+      assemble (bicl3, (R tempreg, oprnd[2], R tempreg));
+      assemble (bisl2, oprnd);
+      assemble (bicl2, (LITL ABS NOT 2r10, oprnd[2]));
+      assemble (bisl2, (R tempreg, oprnd[2]))
+   END;
+
+PROC tvxtv not_2 = (REF STACKALLOCATOR ams) VOID:
+{ Optimal ones complement upon a two-valued item. (guaranteed small) }
+   BEGIN
+      []OPERAND oprnd = GENERICMONOP ams;
+      assemble (subl3, (oprnd[1], LITL 3, R tempreg));
+      assemble (mnegl, oprnd);
+      assemble (sbwc, (oprnd[2], oprnd[2]));
+      assemble (mcoml, (R tempreg, R tempreg));
+      assemble (bicl2, (R tempreg, oprnd[2]))
+   END;
+
+
+PROC eixei relation = (REF STACKALLOCATOR ams, BITS rel) VOID:
+{ NOT 'rel' relation upon two ELLA integers items. (guaranteed small) }
+   BEGIN
+      STACKNUMBER q_x  = tos;
+      STACKNUMBER ei_x = tos+1;
+      STACKNUMBER q_y  = tos+2;
+      STACKNUMBER ei_y = tos+3;
+      ams TRANSMUTESMALL ei_y;
+      ams TRANSMUTESMALL q_y;
+      ams TRANSMUTESMALL ei_x;
+      ams TRANSMUTESMALL q_x;
+
+      ams FORCEALLOCREGISTER ei_y;
+      ams MAKEREADABLE ei_x;
+      ams MAKEREADABLE q_x;
+      ams MAKEREADABLE q_y;
+
+      MACHINELABEL query1,query2,done1,done2,true;
+
+      assemble (tstl, (ams CURRENTOPERAND (ams LOCATECOPY q_x)));
+      ma bcc byte (eql, query1);
+      assemble (tstl, (ams CURRENTOPERAND (ams LOCATECOPY q_y)));
+      ma bcc byte (eql, query2);
+
+      assemble (cmpl, (ams CURRENTOPERAND (ams LOCATECOPY ei_x),
+         ams CURRENTOPERAND (ams LOCATECOPY ei_y)));
+      ma bcc byte (rel, true);
+      {false}
+      assemble (movl, (LITL 1, ams CURRENTOPERAND ei_y));
+      ma bra byte (done1);
+
+      fix machine label (true);
+      assemble (movl, (LITL 2, ams CURRENTOPERAND ei_y));
+      ma bra byte (done2);
+
+      fix machine label (query1); fix machine label (query2);
+      assemble (clrl, ams CURRENTOPERAND ei_y);
+
+      fix machine label (done1); fix machine label (done2);
+
+      POP ams; POP ams; POP ams
+   END;
+
+
+PROC eexee relation = (REF STACKALLOCATOR ams, BITS rel) VOID:
+{ NOT 'rel' relation upon two enumerated or char items. (guaranteed small) }
+   BEGIN
+      []OPERAND oprnd = GENERICDYOP ams;
+
+      MACHINELABEL query1,query2,done1,done2,true;
+
+      assemble (tstl, oprnd[1]); ma bcc byte (eql, query1);
+      assemble (tstl, oprnd[2]); ma bcc byte (eql, query2);
+
+      assemble (cmpl, oprnd);
+      ma bcc byte (rel, true);
+      {false}
+      assemble (movl, (LITL 1, oprnd[2]));
+      ma bra byte (done1);
+
+      fix machine label (true);
+      assemble (movl, (LITL 2, oprnd[2]));
+      ma bra byte (done2);
+
+      fix machine label (query1); fix machine label (query2);
+      assemble (clrl, oprnd[2]);
+
+      fix machine label (done1); fix machine label (done2)
+
+   END;
+
+
+{------------------------------------------------------------------------------}
+{ A set of optimising biop routines                                            }
+{------------------------------------------------------------------------------}
+{ Each routine takes a procedure which determines whether to optimise,
+  an optimise action and a default action. }
+
+PROC opt biop bs x bs bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE location_stack OF s TYPEOF (tos + 3) IN
+         (SMALLSTACKLOCATION):
+            IF optimise (s) THEN
+               s FORCEALLOCREGISTER tos + 2; s FORCEALLOCREGISTER tos;
+
+               assemble (mcoml, (s CURRENTOPERAND tos, s CURRENTOPERAND tos));
+               assemble (bicl2, (s CURRENTOPERAND tos,
+                  s CURRENTOPERAND (tos+2))); { Query action }
+
+               optimise action (s);
+
+               POP s; POP s
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         IF optimise (s) THEN
+            s FORCEALLOCREGISTER tos + 1;
+
+            { Query action is simply to return the same query value }
+
+            optimise action (s)
+         ELSE
+            default action (s)
+         FI
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs i bs = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs i }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE (symbolic_state OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - ((tos + 2))] )  IN
+         (CONST):
+            IF optimise (s) THEN
+               optimise action (s)
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC opt biop bs x bs tv = (REF STACKALLOCATOR s,
+   PROC (REF STACKALLOCATOR) BOOL optimise,
+   PROC (REF STACKALLOCATOR) VOID optimise action,
+   PROC (REF STACKALLOCATOR) VOID default action) VOID:
+
+   IF NOT optimise on THEN
+      default action (s)
+   ELSE
+      { q bs q bs }
+      CASE location_stack OF s TYPEOF (tos + 1) IN
+      (SMALLSTACKLOCATION):
+         CASE location_stack OF s TYPEOF (tos + 3) IN
+         (SMALLSTACKLOCATION):
+            IF optimise (s) THEN
+               optimise action (s)
+            ELSE
+               default action (s)
+            FI
+         OUT
+            default action (s)
+         ESAC
+      OUT
+         default action (s)
+      ESAC
+   FI;
+
+PROC always optimise = (REF STACKALLOCATOR s) BOOL: TRUE;
+
+{======================================================================}
+MODE BACTION
+{---------------------------------------}
+{ A routine to generate required code for BIOP }
+   = PROC (REF STACKALLOCATOR)VOID;
+
+   REF BACTION nilpaction = NIL;
+
+{ Short hands for often used identifiers }
+
+   MODE SA = STACKALLOCATOR;
+
+   OP CU = (REF SA s, STACKNUMBER o) OPERAND: s CURRENTOPERAND (s LOCATECOPY o);
+
+   OP FAR = (REF SA s, STACKNUMBER o) VOID:
+      s FORCEALLOCREGISTER o;
+
+   STACKNUMBER
+      tos2 = tos+2,
+      tos3 = tos+3;
+
+{======================================================================}
+MODE BIOPACTION
+{---------------------------------------}
+{ A biop name and associated code generation routine }
+   = STRUCT (LABEL biopname, REF BACTION biop_action);
+
+{======================================================================}
+MODE BIOPACTIONLIST
+{---------------------------------------}
+{ A list of biops and associated actions }
+   = REF [] BIOPACTION;
+
+   PROC biopactionlist = BIOPACTIONLIST:
+   {---------------------------------------}
+      HEAP [77] BIOPACTION :=
+      (
+       (label("EQ|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, eql)
+       ),
+       (label("GT|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, gtr)
+       ),
+       (label("GE|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, geq)
+       ),
+       (label("LT|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, lss)
+       ),
+       (label("LE|2"), HEAP BACTION := (REF SA ams)VOID:
+             eixei relation (ams, leq)
+       ),
+       (label("EQ|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, eql)
+       ),
+       (label("GT|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, gtru)
+       ),
+       (label("GE|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, gequ)
+       ),
+       (label("LT|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, lss)
+       ),
+       (label("LE|3"), HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, lequ)
+       ),
+       (label("TRANSFORM_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_us_1, (q, bs, i, i, r))
+       ),
+       (label("TRANSFORM_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_s_1, (q, bs, i, i, r))
+       ),
+       (label("TRANSFORM_US|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_us_2, (q, ei , i, r))
+       ),
+       (label("TRANSFORM_S|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             transform_s_2, (q, ei , i, r))
+       ),
+       (label("AND|2"), HEAP BACTION := (REF SA ams)VOID:
+              tvxtv and_2 (ams)
+       ),
+       (label("OR|2"), HEAP BACTION := (REF SA ams)VOID:
+              tvxtv or_2 (ams)
+       ),
+       (label("NOT|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+              tvxtv not_2 (ams)
+       ),
+       (label("XOR|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             eexee relation (ams, neq)
+       ),
+       (label("SL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    s MAKEREADABLE tos; s FAR tos1; s FAR tos2;
+                    assemble (movl, (s CU tos1, s CU tos2));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos2)] := (i));
+                    assemble (movl, (s CU tos, s CU tos1));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (32));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sl_1, (q, bs, i))
+                )
+       ),
+       (label("SR_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    s STOU tos1; s UTOS (tos1 GIVEN i);
+                    s MAKEREADABLE tos; s FAR tos1; s FAR tos2;
+                    assemble (movl, (s CU tos1, s CU tos2));
+                    assemble (movl, (s CU tos, s CU tos1));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (32));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos2)] := (i));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sr_us_1, (q, bs, i))
+                )
+       ),
+       (label("SR_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; shift rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; shift rs (s, i);
+                    s STOI tos1; s ITOS (tos1 GIVEN i);
+                    s MAKEREADABLE tos; s FAR tos1; s FAR tos2;
+                    assemble (movl, (s CU tos1, s CU tos2));
+                    assemble (movl, (s CU tos, s CU tos1));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos1)] := (32));
+                    (bit_length OF (stack_locations OF location_stack OF (s))
+            [top OF location_stack OF (s) - (tos2)] := (i));
+                    POP s
+                    ),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, shift rs,
+                      sr_s_1, (q, bs, i))
+                )
+       ),
+       (label("PLUS_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOU tos1; s STOU tos3;
+                    s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (addl2, (s CU tos1, s CU tos3));
+                    s UTOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                    oolbiop bs (s, plus ws, plus rs, plus_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("MINUS_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOU tos1; s STOU tos3;
+                    s FAR tos1; s FAR tos3;
+                    assemble (subl2, (s CU tos3, s CU tos1));
+                    assemble (movl, (s CU tos1, s CU tos3));
+                    s UTOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, plus ws, plus rs, minus_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NEGATE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; negate rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; negate rs (s,i); s STOU tos1;
+                    assemble (mnegl, (s CU tos1, s CU tos1));
+                    s ITOS (tos1 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs(ams, negate ws, negate rs,
+                     negate_us_1, (q, bs))
+                )
+       ),
+       (label("TIMES_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; times rs (s,i) ANDTH i <= 31),
+                (REF SA s) VOID:
+                   (INT i; times rs (s,i); s STOU tos1; s STOU tos3;
+                    s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (mull2, (s CU tos1, s CU tos3));
+                    s UTOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, times ws, times rs,
+                         times_us_1, (q, bs, q, bs))
+               )
+       ),
+       (label("DIVIDE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, divide ws,
+                              divide_us_1, (q, bs, q, bs, r))
+       ),
+       (label("MOD_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, mod ws,
+                              mod_us_1, (q, bs, q, bs, r))
+       ),
+       (label("RANGE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             range_us_1, (q, bs, i, r))
+       ),
+       (label("PLUS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOI tos1; s STOI tos3;
+                    s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (addl2, (s CU tos1, s CU tos3));
+                    s ITOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, plus ws, plus rs,
+                      plus_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("MINUS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; plus rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; plus rs (s,i); s STOI tos1; s STOI tos3;
+                    s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (subl3, (s CU tos3, s CU tos1, s CU tos3));
+                    s ITOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, plus ws, plus rs, minus_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NEGATE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; negate rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; negate rs (s,i); s STOI tos1;
+                    assemble (mnegl, (s CU tos1, s CU tos1));
+                    s ITOS (tos1 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs(ams, negate ws, negate rs,
+                     negate_s_1, (q, bs))
+                )
+       ),
+       (label("ABS_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; bs logical rs (s,i) ANDTH i <= 31),
+                (REF SA s) VOID:
+                   (INT i; bs logical rs (s,i); s STOI tos1;
+                    assemble (tstl, (s CU tos1));
+                    MACHINELABEL over; ma bcc byte (geq, over);
+                    assemble (mnegl, (s CU tos1, s CU tos1));
+                    fix machine label (over);
+                    s UTOS (tos1 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, bs logical ws, bs logical rs,
+                      abs_s_1, (q, bs))
+                )
+       ),
+       (label("TIMES_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; times rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   (INT i; times rs (s,i); s STOI tos1; s STOI tos3;
+                    s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (mull2, (s CU tos1, s CU tos3));
+                    s ITOS (tos3 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (s, times ws, times rs, times_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("DIVIDE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, divide ws,
+                              divide_s_1, (q, bs, q, bs, r))
+       ),
+       (label("SQRT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop bs (ams, sqrt ws, sqrt rs,
+                              sqrt_us_1, (q, bs ))
+       ),
+       (label("MOD_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+              oolbiop struct (ams, mod ws,
+                              mod_s_1, (q, bs, q, bs, r))
+       ),
+       (label("RANGE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             range_s_1, (q, bs, i, r))
+       ),
+       (label("EQ_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, eql)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      eq_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, gtru)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      gt_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, gequ)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      ge_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, lssu)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      lt_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LE_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOU tos1; sa STOU tos3;
+                    eixei relation (sa, lequ)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      le_us_1, (q, bs, q, bs))
+                )
+       ),
+       (label("EQ_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, eql)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      eq_s_1, (q, bs, q, bs))
+             )
+       ),
+       (label("GT_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, gtr)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      gt_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("GE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, geq)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      ge_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LT_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, lss)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      lt_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("LE_S|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs tv (ams, always optimise,
+                (REF SA sa) VOID:
+                   (sa STOI tos1; sa STOI tos3;
+                    eixei relation (sa, leq)
+                    ),
+                (REF SA s) VOID:
+                   oolbiop tv (ams, plus ws,
+                      le_s_1, (q, bs, q, bs))
+                )
+       ),
+       (label("CONVERT_US|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_1 ws,
+                             convert_us_1, (q, bs, i, r))
+       ),
+       (label("CONVERT_US|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_2 ws,
+                             convert_us_2, (q, ds, i, r))
+       ),
+       (label("AND|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (s MAKEREADABLE tos1; s FAR tos3;
+                    assemble (mcoml, (s CU tos3, s CU tos3));
+                    assemble (bicl3, (s CU tos3, s CU tos1, s CU tos3))),
+                (REF SA s) VOID:
+                   oolbiop bs (s, bsxbs logical ws, bsxbs logical rs,
+                      and_1, (q, bs, q, bs))
+                )
+       ),
+       (label("OR|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (s MAKEREADABLE tos1; s FAR tos3;
+                   assemble (bisl2, (s CU tos1, s CU tos3))),
+                (REF SA s) VOID:
+                   oolbiop bs (s, bsxbs logical ws, bsxbs logical rs,
+                      or_1, (q, bs, q, bs))
+                )
+       ),
+       (label("NOT|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs bs (ams,
+                (REF SA s) BOOL:
+                   (INT i; not rs (s,i) ANDTH i <= 32),
+                (REF SA s) VOID:
+                   { the strange order is to ensure lsbs are all zero }
+                   (assemble (mcoml, (s CU tos1, s CU tos1));
+                    INT i; not rs (s,i); s STOU tos1;
+                    s UTOS (tos1 GIVEN i)),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, no space, not rs,
+                      not_1, (q, bs))
+                )
+       ),
+       (label("XOR|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             opt biop bs x bs bs (ams, always optimise,
+                (REF SA s) VOID:
+                   (s MAKEREADABLE tos1; s FAR tos3;
+                   assemble (xorl2, (s CU tos1, s CU tos3))),
+                (REF SA s) VOID:
+                   oolbiop bs (ams, bsxbs logical ws, bsxbs logical rs,
+                      xor_1, (q, bs, q, bs))
+                )
+       ),
+       (label("CONVERT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_real_1 ws,
+                             convert_real_1, (q, bs, q, bs, i, i, r))
+       ),
+       (label("CONVERT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, convert_real_2 ws,
+                             convert_real_2, (q, ds, q, bs, i, i, r))
+       ),
+       (label("F_TO_R|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             f_to_r_1, (q, ds, r))
+       ),
+       (label("F_TO_R|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             f_to_r_2, (q, ds, r))
+       ),
+       (label("R_TO_F|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             r_to_f_1, (q, sr, i, r))
+       ),
+       (label("R_TO_F|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             r_to_f_2, (q, lr, i, r))
+       ),
+       (label("PLUS_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             plus_real_1, (q, sr, q, sr, r))
+       ),
+       (label("PLUS_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             plus_real_2, (q, lr, q, lr, r))
+       ),
+       (label("MINUS_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             minus_real_1, (q, sr, q, sr, r))
+       ),
+       (label("MINUS_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             minus_real_2, (q, lr, q, lr, r))
+       ),
+       (label("NEGATE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             negate_real_1, (q, sr, r))
+       ),
+       (label("NEGATE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             negate_real_2, (q, lr, r))
+       ),
+       (label("TIMES_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             times_real_1, (q, sr, q, sr, r))
+       ),
+       (label("TIMES_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             times_real_2, (q, lr, q, lr, r))
+       ),
+       (label("DIVIDE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             divide_real_1, (q, sr, q, sr, r))
+       ),
+       (label("DIVIDE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             divide_real_2, (q, lr, q, lr, r))
+       ),
+       (label("EQ_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             eq_real_1, (q, sr, q, sr))
+       ),
+       (label("EQ_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             eq_real_2, (q, lr, q, lr))
+       ),
+       (label("GT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             gt_real_1, (q, sr, q, sr))
+       ),
+       (label("GT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             gt_real_2, (q, lr, q, lr))
+       ),
+       (label("LT_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             lt_real_1, (q, sr, q, sr))
+       ),
+       (label("LT_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop tv (ams, no space,
+                             lt_real_2, (q, lr, q, lr))
+       ),
+       (label("CHANGE_REAL|1"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             change_real_1, (q, sr, r))
+       ),
+       (label("CHANGE_REAL|2"),
+          HEAP BACTION := (REF SA ams)VOID:
+             oolbiop struct (ams, no space,
+                             change_real_2, (q, lr, r))
+       )
+      );
+
+   PROC generate biop = (BIOPACTIONLIST bal,
+                         LABEL l,
+                         REF STACKALLOCATOR ams) BOOL:
+   {---------------------------------------}
+   { invokes action procedure associated with label (returns true),
+     or return false }
+      BEGIN
+         BOOL found := FALSE;
+
+         FOR i TO UPB bal WHILE NOT found DO
+         IF tag OF biopname OF (bal[i]) = tag OF l THEN
+            found := TRUE;
+            (biop_action OF (bal[i]))(ams)
+         FI OD;
+         found
+      END;
+
+{---------------------------------------}
+BIOPACTIONLIST bal;
+
+{---------------------------------------}
+PROC kecodegenbiopif init = VOID:
+   bal := biopactionlist;
+
+{---------------------------------------}
+PROC generate call biop = (REF STACKALLOCATOR ams, LABEL l) BOOL:
+      generate biop (bal, l, ams)
+
+
+KEEP kecodegenbiopif init, generate call biop
+FINISH
