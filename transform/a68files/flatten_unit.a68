@@ -1,0 +1,477 @@
+DECS flatten_unit CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs :
+
+configinfo A68CONFIG "$Id: flatten_unit.a68,v 34.2 1995/03/29 13:02:43 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   Transform to flatten units introduced.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{NOTE: This transform assumes the following sorts of UNIT have been removed:-
+ UFN, UASSOC, UEXTRACT, UPORTNAME, UDINST, UCOND, UREPL, USEQUENCE, UATTR,
+ UCHECK, UBRACKET. Also only single LETs should remain in SERIES}
+
+MODE LETLIST = STRUCT(INT nameno, UNIT unit, TYPE type, REF LETLIST rest);
+REF LETLIST nilletlist = NIL;
+
+PROC (UNIT) BOOL simple_unit;
+
+PROC exp_unit = (UNIT u) BOOL:
+  CASE u IN
+  (REF UMINST) FALSE,
+  (REF UTRIM) FALSE,
+  (REF UREPLACE) FALSE,
+  (REF UCASE) FALSE,
+  (REF USERIES) FALSE,
+  (REF UINDEX uin) simple_unit(unit OF uin),
+  (REF UDYINDEX udy) (simple_unit(unit OF udy) ANDTH exp_unit(index OF udy)),
+  (REF UROW uro) exp_unit(elem OF uro),
+  (REF USTR ust) IF ust IS nilustr
+                 THEN TRUE
+                 ELSE exp_unit(elem OF ust) ANDTH exp_unit(rest OF ust)
+                 FI,
+  (REF UCONC uco) (exp_unit(left OF uco) ANDTH exp_unit(right OF uco)),
+  (REF USTRING usg) exp_unit(char OF usg)
+  OUT TRUE
+  ESAC;
+
+simple_unit := (UNIT u) BOOL:
+  CASE u IN
+  (REF UNAME) TRUE,
+  (REF UINDEX uin) simple_unit(unit OF uin),
+  (REF UDYINDEX udy) (simple_unit(unit OF udy) ANDTH exp_unit(index OF udy))
+  OUT FALSE
+  ESAC;
+
+PROC const_unit = (UNIT u) BOOL:
+  CASE u IN
+  (REF CPRIM) TRUE,
+  (REF CINT) TRUE,
+  (REF CQUERY) TRUE,
+  (REF CVOID) TRUE,
+  (REF UROW urow) const_unit(elem OF urow),
+  (REF USTR ustr) IF ustr IS nilustr
+                  THEN TRUE
+                  ELSE const_unit(elem OF ustr) ANDTH const_unit(rest OF ustr)
+                  FI,
+  (REF USTRING strg) const_unit(char OF strg)
+  OUT FALSE
+  ESAC;
+
+PROC valid_input = (UNIT u) BOOL:
+  CASE u IN
+  (REF UNAME) TRUE,
+  (REF UINDEX uin) valid_input(unit OF uin),
+  (REF UDYINDEX udy) valid_input(unit OF udy) ANDTH const_unit(index OF udy)
+  OUT FALSE
+  ESAC;
+
+PROC make_indexes = (UNIT u, INT size) UNIT:
+  IF size <= 1
+  THEN u   {Should not have been called with this size}
+  ELSE REF USTR ustr := nilustr;
+       FOR i FROM size BY -1 TO 1
+         DO ustr := HEAP USTR := (HEAP UINDEX := (u, HEAP FINT := (i, nullid)),
+                                  ustr)
+         OD;
+       ustr
+  FI;
+
+PROC outer_transform = (OUTER outer, CLOSURE closure) OUTERC:
+BEGIN
+  IF sort OF outer = outerfn
+  THEN
+   REF ENVIRON env = environ OF outer;
+   REF FNDEC fndec = (fns OF env)[1];
+   REF LETLIST lets;
+   INT next_name;
+
+   PROC new_let = (UNIT u, TYPE t) UNIT:
+   BEGIN
+     UNIT result := HEAP UNAME := (usource, next_name);
+     lets := HEAP LETLIST := (next_name, u, t, lets);
+     next_name PLUSAB 1;
+     result
+   END;
+
+   PROC input_check = (UNITC uc, INT expected, TYPE ty) UNITC:
+   BEGIN
+     UNIT u = u OF uc;
+     BOOL valid := TRUE;
+     BOOL needs_indexing := FALSE;
+
+     IF expected = 1     {u represents a single input}
+     THEN IF NOT(const_unit(u) OREL valid_input(u)) 
+          THEN valid := FALSE 
+          FI
+     ELSE   {u represents more than 1 input - it may or may not be a structure}
+          CASE u IN
+          (REF USTR us) ( REF USTR ustr := us;
+                          WHILE valid ANDTH (ustr ISNT nilustr)
+                            DO IF NOT(const_unit(elem OF ustr) OREL
+                                      valid_input(elem OF ustr))
+                               THEN valid := FALSE
+                               FI;
+                               ustr := rest OF ustr
+                            OD
+                        ),
+          (REF UROW ur) IF NOT(const_unit(elem OF ur) OREL
+                               valid_input(elem OF ur))
+                        THEN valid := FALSE
+                        FI,
+          (REF USTRING ust) IF NOT(const_unit(char OF ust) OREL
+                                   valid_input(char OF ust))
+                            THEN valid := FALSE
+                            FI
+          OUT IF valid_input(u)
+              THEN needs_indexing := TRUE
+              ELSE valid := FALSE 
+              FI
+          ESAC
+     FI;
+     IF valid
+     THEN IF needs_indexing
+          THEN (make_indexes(u, expected), TRUE)
+          ELSE uc
+          FI
+     ELSE UNIT new_u = new_let(u, ty);
+          IF expected > 1
+          THEN (make_indexes(new_u, expected), TRUE)
+          ELSE (new_u, TRUE)
+          FI
+     FI
+   END;
+
+   PROC unit_check = (UNIT u, BOOL add_let, case_allowed, INT level)UNITC:
+   {Recursive calls should make add_let FALSE and increase level by 1}
+   BEGIN
+     PROC uchoices = (REF UCHOICES uc) UCHOICESC:
+       IF uc IS niluchoices
+       THEN (uc, FALSE)
+       ELSE UNITC uout = unit_check(output OF uc, FALSE, TRUE, level + 1);
+            UCHOICESC rest = uchoices(rest OF uc);
+            IF c OF uout OREL c OF rest
+            THEN (HEAP UCHOICES:= (check OF uc, sort OF uc, test OF uc,
+                                   u OF uout, u OF rest), TRUE)
+            ELSE (uc, FALSE)
+            FI
+       FI;
+
+     PROC ustr = (REF USTR st) USTRC:
+       IF st IS nilustr
+       THEN  (st, FALSE)
+       ELSE  UNITC uc = unit_check(elem OF st, FALSE, FALSE, level + 1);
+             USTRC usc = ustr(rest OF st);
+             IF c OF uc OREL c OF usc
+             THEN (HEAP USTR := (u OF uc, u OF usc), TRUE)
+             ELSE (st, FALSE)
+             FI
+       FI;
+
+     CASE u IN
+     (REF UNAME una)  (u, FALSE),
+     (REF UINDEX uin) 
+       ( UNITC uc = unit_check(unit OF uin, FALSE, FALSE, level + 1);
+         IF simple_unit(u OF uc)
+         THEN IF add_let
+              THEN UNIT new_u = new_let(HEAP UINDEX := (u OF uc, index OF uin),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELIF c OF uc
+              THEN (HEAP UINDEX := (u OF uc, index OF uin), TRUE)
+              ELSE (u, FALSE)
+              FI
+         ELSE UNIT simple = new_let(u OF uc, 
+                                    unit_type(unit OF uin, fndec, env));
+              IF add_let
+              THEN UNIT new_u = new_let(HEAP UINDEX := (simple, index OF uin),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELSE (HEAP UINDEX := (simple, index OF uin), TRUE)
+              FI
+         FI
+       ),
+     (REF UTRIM utr) 
+       ( UNITC uc = unit_check(unit OF utr, FALSE, FALSE, level + 1);
+         IF simple_unit(u OF uc)
+         THEN IF add_let OREL (level > 1) 
+              THEN UNIT new_u = new_let(HEAP UTRIM := (u OF uc, range OF utr),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELIF c OF uc
+              THEN (HEAP UTRIM := (u OF uc, range OF utr), TRUE)
+              ELSE (u, FALSE)
+              FI
+         ELSE UNIT simple = new_let(u OF uc, 
+                                    unit_type(unit OF utr, fndec, env));
+              IF add_let OREL (level > 1)
+              THEN UNIT new_u = new_let(HEAP UTRIM := (simple, range OF utr),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELSE (HEAP UTRIM := (simple, range OF utr), TRUE)
+              FI
+         FI
+       ),
+     (REF UDYINDEX udy) 
+       ( UNITC uc = unit_check(unit OF udy, FALSE, FALSE, level + 1);
+         UNITC ui = unit_check(index OF udy, FALSE, FALSE, level + 1);
+         IF simple_unit(u OF uc)
+         THEN IF add_let
+              THEN UNIT new_u = new_let(HEAP UDYINDEX := (u OF uc, u OF ui),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELIF c OF uc OREL c OF ui
+              THEN (HEAP UDYINDEX := (u OF uc, u OF ui), TRUE)
+              ELSE (u, FALSE)
+              FI
+         ELSE UNIT simple = new_let(u OF uc,
+                                    unit_type(unit OF udy, fndec, env));
+              IF add_let
+              THEN UNIT new_u = new_let(HEAP UDYINDEX := (simple, u OF ui),
+                                        unit_type(u, fndec, env));
+                   (new_u, TRUE)
+              ELSE (HEAP UDYINDEX := (simple, u OF ui), TRUE)
+              FI
+         FI
+       ),
+     (REF UREPLACE ure) 
+       ( UNITC uu = unit_check(unit OF ure, FALSE, FALSE, level + 1);
+         UNITC ui = unit_check(index OF ure, FALSE, FALSE, level + 1);
+         UNITC uf = unit_check(from OF ure, FALSE, FALSE, level + 1);
+         IF add_let OREL (level > 1)
+         THEN UNIT new_u = new_let(HEAP UREPLACE := (u OF uu, u OF ui, u OF uf),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF uu OREL c OF ui OREL c OF uf
+         THEN (HEAP UREPLACE := (u OF uu, u OF ui, u OF uf), TRUE)
+         ELSE (u, FALSE)
+         FI
+       ),
+     (REF UROW uro) 
+       ( UNITC uc = unit_check(elem OF uro, FALSE, FALSE, level + 1);
+         IF add_let
+         THEN UNIT new_u = new_let(HEAP UROW := (size OF uro, u OF uc),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF uc
+         THEN (HEAP UROW := (size OF uro, u OF uc), TRUE)
+         ELSE (u, FALSE)
+         FI
+       ),
+     (REF USTR ust) 
+       ( USTRC uc = ustr(ust);
+         IF add_let
+         THEN UNIT new_u = new_let(u OF uc, unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELSE (u OF uc, c OF uc)
+         FI
+       ),
+     (REF UCONC uco) 
+       ( UNITC ul = unit_check(left OF uco, FALSE, FALSE, level + 1);
+         UNITC ur = unit_check(right OF uco, FALSE, FALSE, level + 1);
+         IF add_let
+         THEN UNIT new_u = new_let(HEAP UCONC := (string OF uco, sort OF uco,
+                                                  u OF ul, u OF ur),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF ul OREL c OF ur
+         THEN (HEAP UCONC := (string OF uco, sort OF uco, u OF ul, u OF ur),
+               TRUE)
+         ELSE (u, FALSE)
+         FI
+       ),
+     (REF UMINST umi)
+       ( UNITC uc1 = unit_check(right OF umi, FALSE, FALSE, level + 1);
+         REF FNDEC instdec = find_fndec(MAKEFNNAME(fnno OF inst OF umi),
+                                        closure, env);
+         INT expected = names_size(inputs OF instdec);
+         UNITC uc2 = input_check(uc1, expected, 
+                                 unit_type(right OF umi, fndec, env));
+         IF add_let OREL (level > 1)
+         THEN UNIT new_u = new_let(HEAP UMINST := (inst OF umi, u OF uc2),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF uc2
+         THEN (HEAP UMINST := (inst OF umi, u OF uc2), TRUE)
+         ELSE (u, FALSE)
+         FI
+       ),
+     (REF UCASE uca)
+       ( UNITC inc = unit_check(input OF uca, FALSE, FALSE, level + 1);
+         UCHOICESC ucc = uchoices(choices OF uca);
+         IF add_let OREL ((level > 1) ANDTH NOT case_allowed)
+         THEN UNIT new_u = new_let(HEAP UCASE := (u OF inc, u OF ucc),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF inc  OREL  c OF ucc
+         THEN  (HEAP UCASE := (u OF inc, u OF ucc), TRUE)
+         ELSE (u, FALSE)
+         FI
+       ),
+     (REF USERIES use)  {Move all LETs to the top level}
+       ( REF SERIES steps := body OF use;
+         WHILE steps ISNT nilseries
+           DO CASE step OF steps IN
+              (REF LET let)
+                ( UNITC uc = unit_check(unit OF let, FALSE, TRUE, 1);
+                  lets := HEAP LETLIST := (nameno OF letnames OF let,
+                                            u OF uc, tnull, lets)
+                )
+              OUT global_msg(system, "Series should only contain LETs")
+              ESAC;
+              steps := rest OF steps
+           OD;
+         UNITC uout = unit_check(output OF use, FALSE, case_allowed, level + 1);
+         (u OF uout, TRUE)
+       ),
+     (REF USTRING usg)
+       ( UNITC uc = unit_check(char OF usg, FALSE, FALSE, level + 1);
+         IF add_let
+         THEN UNIT new_u = new_let(HEAP USTRING := (size OF usg, u OF uc),
+                                   unit_type(u, fndec, env));
+              (new_u, TRUE)
+         ELIF c OF uc
+         THEN (HEAP USTRING := (size OF usg, u OF uc), TRUE)
+         ELSE (u, FALSE)
+         FI
+       )
+     OUT (u, FALSE)   {These should only be constant units}
+     ESAC
+   END;
+
+   PROC fndec_trans = (REF FNDEC fdec, TRANSFORMPROCS tprocs)FNDECC:
+   BEGIN
+     IF fdec ISNT nilfndec
+     THEN CASE fnbody OF fdec IN
+          (REF UNITTAG tag)
+            ( BOOL changed := FALSE;
+              lets := nilletlist;
+              next_name := UPB nametypes OF fdec + 1;
+              UNIT output;
+              CASE tag OF tag IN
+              (REF USERIES us)
+                ( REF SERIES steps := body OF us;
+                  WHILE steps ISNT nilseries
+                    DO CASE step OF steps IN
+                       (REF LET let)
+                         ( UNITC uc = unit_check(unit OF let, FALSE, TRUE, 1);
+                           IF c OF uc THEN changed := TRUE FI;
+                           lets := HEAP LETLIST := (nameno OF letnames OF let,
+                                                    u OF uc, tnull, lets)
+                         )
+                       OUT global_msg(system, "Series should only contain LETs")
+                       ESAC;
+                       steps := rest OF steps
+                    OD;
+                    IF exp_unit(output OF us)
+                    THEN output := output OF us
+                    ELSE UNITC uc = unit_check(output OF us, TRUE, TRUE, 1);
+                         output := HEAP UNAME := (usource, next_name - 1);
+                         changed := TRUE
+                    FI
+                )
+              OUT IF exp_unit(tag OF tag)
+                  THEN output := tag OF tag
+                  ELSE UNITC uc = unit_check(tag OF tag, TRUE, TRUE, 1);
+                       output := HEAP UNAME := (usource, next_name - 1)
+                  FI;
+                  changed := TRUE   {body must be made into a USERIES}
+              ESAC;
+              IF changed
+              THEN {First create the new nametypes table}
+                REF VECTOR [] NAMETYPE old_nametypes := nametypes OF fdec;
+                REF VECTOR [] NAMETYPE new_nametypes :=
+                                          HEAP VECTOR [next_name - 1] NAMETYPE;
+                INT old_upb = UPB old_nametypes;
+                FOR i TO old_upb DO new_nametypes[i] := old_nametypes[i] OD;
+                REF LETLIST list := lets;
+                WHILE list ISNT nilletlist
+                  DO INT nameno = nameno OF list;
+                     IF nameno > old_upb
+                     THEN new_nametypes[nameno] := (oneline(("_fu_", nameno)),
+                                                    type OF list, attrnull)
+                     FI;
+                     list := rest OF list
+                  OD;
+                {Next create the USERIES for the body of the function}
+                REF SERIES steps := nilseries;
+                list := lets;
+                WHILE list ISNT nilletlist
+                  DO REF LET let := HEAP LET 
+                                 := (HEAP NAMES := (nameno OF list, nilnames),
+                                     unit OF list);
+                     steps := HEAP SERIES := (let, steps);
+                     list := rest OF list
+                  OD;
+                FNBODY fnbody = MAKEUNITTAG(HEAP USERIES := (steps, output));
+                (HEAP FNDEC := (sort OF fdec, macro OF fdec, fnname OF fdec,
+                                macspecs OF fdec, attr OF fdec,
+                                inputs OF fdec, outputs OF fdec,
+                                new_nametypes, fnbody, usage OF fdec), TRUE)
+              ELSE (fdec, FALSE)
+              FI
+            )
+          OUT (fdec, FALSE)
+          ESAC
+     ELSE (fdec, FALSE)
+     FI
+   END;
+
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (null_formula,
+                                                          null_attr,
+                                                          null_type,
+                                                          fndec_trans));
+
+   (outer OF nulltprocs)(outer, newtprocs)
+
+  ELSE (outer, FALSE)
+  FI
+END;
+
+
+PROC transform_flatten_unit = (CLOSURE closure, MESSAGEPROC msg )CLOSUREC:
+BEGIN
+  PROC outer = (OUTER o, TRANSFORMPROCS tprocs)OUTERC:
+                outer_transform(o, closure);
+
+  TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (outer));
+
+  (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP transform_flatten_unit
+FINISH

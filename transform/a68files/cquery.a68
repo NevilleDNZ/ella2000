@@ -1,0 +1,110 @@
+DECS cquery CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs :
+
+configinfo A68CONFIG "$Id: cquery.a68,v 34.2 1995/03/29 13:02:44 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   CQUERY transform introduced.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{A CQUERY is flattened so that ?(primative typename) is the only sort of CQUERY 
+ unit left.}
+
+PROC flatten = (TYPE ty, CLOSURE closure, REF ENVIRON env) UNITC:
+BEGIN
+  PROC to_ustr = (REF TSTR ts) USTRC:
+    IF ts IS niltstr
+    THEN (nilustr, TRUE)
+    ELSE UNITC unc = flatten(elem OF ts, closure, env);
+         USTRC usc = to_ustr(rest OF ts);
+         (HEAP USTR := (u OF unc, u OF usc), TRUE)
+    FI;
+
+  CASE ty IN
+  (REF TNAME tn)
+    ( REF TYPEDEC  typedec = find_typedec(tn, closure, env);
+      CASE body OF typedec IN
+      (REF TYPETAG tag)
+        ( (u OF flatten(tag OF tag, closure, env), TRUE) )
+      OUT (MAKECQUERY(ty), FALSE)
+      ESAC
+    ),
+  (REF TROW tr)
+    ( (HEAP UROW := (size OF tr, u OF flatten(elem OF tr, closure, env)), TRUE)
+    ),
+  (REF TSTR ts)
+    ( (u OF to_ustr(ts), TRUE) ),
+  (REF TSTRING tsg)
+    ( (HEAP USTRING := (size OF tsg, u OF flatten(char OF tsg, closure, env)),
+       TRUE)
+    )
+  OUT (MAKECQUERY(ty), FALSE)
+  ESAC
+END;
+
+PROC outer_transform = (OUTER outer, CLOSURE closure) OUTERC:
+BEGIN
+  REF ENVIRON env = environ OF outer;
+
+  PROC unit_trans = (UNIT u, TRANSFORMPROCS tprocs) UNITC:
+    CASE u IN
+    (REF CQUERY cq)
+      ( UNITC uc = flatten(querytype OF cq, closure, env);
+        IF c OF uc THEN uc ELSE (u, FALSE) FI
+      )
+    OUT (unit OF nulltprocs)(u, tprocs)
+    ESAC;
+        
+  TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (null_formula,
+                                                         null_attr,
+                                                         unit_trans));
+
+  (outer OF nulltprocs)(outer, newtprocs)
+END;
+
+
+PROC transform_cquery = (CLOSURE closure, MESSAGEPROC msg )CLOSUREC:
+BEGIN
+  PROC outer = (OUTER o, TRANSFORMPROCS tprocs)OUTERC:
+                outer_transform(o, closure);
+
+  TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (outer));
+
+  (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP transform_cquery
+FINISH

@@ -1,0 +1,448 @@
+DECS alias CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs, environprocs :
+
+configinfo A68CONFIG "$Id: alias.a68,v 34.2 1995/03/29 13:02:45 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   Started new transform to alias compound types.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE TYPELIST = STRUCT( REF TYPEDEC dec,
+                        REF TYPELIST rest ),
+     TSTRC = STRUCT( REF TSTR t, BOOL c );
+
+REF TYPELIST niltypelist = NIL;
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR alias_options;
+
+            {{  Requires the local transform to have been done first }}
+
+PROC transform_alias = (CLOSURE closure, MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+   CLOSUREC result := ( closure, FALSE );
+   REF CLOSURE thisclosure = cl OF result;
+   REF BOOL closure_changed = c OF result;
+   REF OUTERS closureptr := outers OF thisclosure;
+   INT aliascnt := 0;
+   INT closuretop = maxclosureno( closure );
+   VECTOR[ closuretop ]BOOL closuretags;    clear( closuretags );
+
+   PROC is_modified = (INT clno )BOOL:
+         IF clno <= 0
+         THEN  FALSE
+         ELSE  clno > closuretop OREL closuretags[ clno ]
+         FI;
+
+   PROC newclosure = REF CLOSURE:
+   BEGIN  IF NOT closure_changed
+          THEN closure_changed := TRUE;
+               thisclosure := copy_closure( thisclosure, msg);
+               closureptr := find_outers( closureno OF outer OF closureptr,
+                                          thisclosure, msg)
+          FI;
+          thisclosure
+   END;
+
+   PROC insert_newouter = (OUTER newouter, INT closureno )VOID:
+   BEGIN  REF REF OUTERS ptr := outers OF newclosure;
+          WHILE closureno OF outer OF ptr /= closureno DO ptr := rest OF ptr OD;
+          insert_outer( newouter, ptr, thisclosure, msg)
+   END;
+
+   PROC make_outer_type = (TYPE t,
+                           INT ntypes,
+                           REF TYPELIST typedecs,
+                           REF ENVIRON oldenv )OUTER:
+   BEGIN
+      VECTOR[ ntypes ]INT typemap;
+      VECTOR[ ntypes ]REF TYPEDEC decs;
+      INT newtypeno := 1;
+      clear( typemap );
+
+      PROC type = (TYPE type, TRANSFORMPROCS tprocs)TYPEC:
+      CASE type IN
+      (REF TNAME tn)
+      ( REF INT map = typemap[ typeno OF tn ];
+        IF map = 0 THEN
+            REF TYPELIST tl := typedecs;
+            map := newtypeno PLUSAB 1;
+            TO typeno OF tn - 1 DO tl := rest OF tl OD;
+            decs[ typeno OF tn] := t OF (typedec OF tprocs)( dec OF tl, tprocs)
+        FI;
+        IF map /=  typeno OF tn
+        THEN  (MAKETNAME map, TRUE)
+        ELSE  (tn, FALSE)
+        FI
+      )
+      OUT  (type OF nulltprocs)( type, tprocs)
+      ESAC;
+
+      TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( type ));
+      INT mpno;
+      INT newclosureno = reserve_next_closureno( newclosure);
+      REF TYPELIST tl := typedecs;
+      REF TYPEDEC dec = HEAP TYPEDEC :=
+           ( outerdec, oneline(( "_al_", newclosureno )),
+             attrnull, MAKETYPETAG t OF type( t, newtprocs ),
+             HEAP USAGE := usage OF dec OF tl );
+
+      closureno OF usage OF dec := newclosureno;
+                      
+      HEAP VECTOR [newtypeno] REF TYPEDEC newtypevec;
+      newtypevec[ 1 ] := dec;
+      FOR i TO ntypes
+      DO  mpno := typemap[i];
+          IF mpno = 0
+          THEN  SKIP
+          ELSE  newtypevec[ mpno] := HEAP TYPEDEC := decs[ i ]
+          FI;
+          tl := rest OF tl
+      OD;
+
+      discard_tprocs( newtprocs );
+      ( newclosureno, outertype, HEAP ENVIRON := ( attrs OF oldenv,
+                                                   nullintdecs,
+                                                   newtypevec,
+                                                   nullconstdecs,
+                                                   nullfndecs ))
+   END; { make_outer_type }
+
+   PROC same_alias = ( TYPE type1,
+                            type2,
+                       REF TYPELIST typedecs,
+                       REF VECTOR[ ]REF TYPEDEC types2 )BOOL:
+   BEGIN
+      CASE type1 IN
+      (REF TNAME tn1 )
+         CASE type2 IN
+         (REF TNAME tn2 )
+         (REF TYPELIST tl := typedecs;
+            TO typeno OF tn1 - 1 DO tl := rest OF tl OD;
+            REF USAGE u1 = usage OF dec OF tl,
+                      u2 = usage OF types2[ typeno OF tn2 ];
+
+            IF ( u1 IS nilusage ) OREL ( u2 IS nilusage )
+            THEN  FALSE
+            ELSE  closureno OF u1 = closureno OF u2
+            FI
+         )
+         OUT  FALSE
+         ESAC,
+      (REF TROW tr1 )
+         CASE type2 IN
+         (REF TROW tr2 )
+         (  ( formula_int( size OF tr1, msg ) =
+              formula_int( size OF tr2, msg )) ANDTH
+            same_alias( elem OF tr1, elem OF tr2, typedecs, types2 )
+         )
+         OUT  FALSE
+         ESAC,
+      (REF TSTR tstr1 )
+         CASE type2 IN
+         (REF TSTR tstr2 )
+         (BOOL same := TRUE;
+          REF TSTR ptr1 := tstr1,
+                   ptr2 := tstr2;
+          WHILE same ANDTH ( ptr1 ISNT niltstr ) ANDTH ( ptr2 ISNT niltstr )
+          DO same := same_alias( elem OF ptr1, elem OF ptr2, typedecs, types2 );
+             ptr1 := rest OF ptr1;
+             ptr2 := rest OF ptr2
+          OD;
+          same ANDTH ( ptr1 IS niltstr ) ANDTH ( ptr2 IS niltstr )
+         )
+         OUT  FALSE
+         ESAC,
+      (REF TSTRING trg1 )
+         CASE type2 IN
+         (REF TSTRING trg2 )
+         (  ( formula_int( size OF trg1, msg ) =
+              formula_int( size OF trg2, msg )) ANDTH
+            same_alias( char OF trg1, char OF trg2, typedecs, types2 )
+         )
+         OUT  FALSE
+         ESAC
+      OUT  FALSE
+      ESAC
+   END;
+
+   PROC find_outer_type = (TYPE newtype,
+                           REF TYPELIST typedecs,
+                           INT closureno )REF OUTERS:
+   BEGIN
+       REF OUTERS ptr := outers OF newclosure,
+                  result := nilouters;
+       REF VECTOR[ ]REF TYPEDEC tmptypes;
+
+       WHILE ( result IS nilouters ) ANDTH ( ptr ISNT nilouters ) ANDTH
+             closureno OF outer OF ptr /= closureno
+       DO  IF sort OF outer OF ptr = outertype
+           THEN  tmptypes := types OF environ OF outer OF ptr;
+                 CASE body OF tmptypes[1] IN
+                 (REF TYPETAG tg )
+                     IF same_alias( newtype, tag OF tg, typedecs, tmptypes )
+                     THEN  result := ptr
+                     FI
+                 OUT  SKIP
+                 ESAC
+           FI;
+           ptr := rest OF ptr
+       OD;
+       result
+    END;
+
+   PROC outer_alias = (OUTER outer, TRANSFORMPROCS outertprocs )OUTERC:
+   BEGIN
+   {{ Called for outer types and outer fns, consts are assumed to be transformed
+      out by the macro transformation }}
+
+   ENVIRONC ec := update_bodies( environ OF outer, thisclosure,
+                                 is_modified, msg );
+
+   INT ntypes = UPB types OF e OF ec;
+   BOOL dec_changed := FALSE;
+   REF TYPELIST typedecs := niltypelist;
+   REF REF TYPELIST dtail := typedecs;
+   INT newtypeno := ntypes;
+
+      PROC make_new_outer = (TYPE t, INT closureno )OUTER:
+      BEGIN
+         OUTER newouter = make_outer_type( t, newtypeno, typedecs, e OF ec );
+         insert_newouter( newouter, closureno);
+         newouter
+      END;
+
+      PROC addtypedec = (REF TYPEDEC t )VOID:
+      BEGIN REF REF TYPELIST( dtail ) := HEAP TYPELIST := ( t, niltypelist );
+            dtail := rest OF dtail
+      END;
+
+    { New declarations are temporarily made to look like local declarations so
+      that they do not require a usage.  They will be turned into outer decs
+      later. }
+
+      PROC make_alias = (TYPE t )TYPE:
+      BEGIN
+         REF OUTERS outersptr = find_outer_type( t, typedecs,
+                                                 closureno OF outer );
+         IF outersptr ISNT nilouters
+         THEN  REF TYPELIST tl := typedecs;
+               INT tcnt := 0, typeno := 0;
+               OUTER odec = outer OF outersptr;
+
+               WHILE typeno = 0 ANDTH ( tl ISNT niltypelist )
+               DO  tcnt PLUSAB 1;
+                   IF ( usage OF dec OF tl ISNT nilusage ) ANDTH
+                      closureno OF usage OF dec OF tl = closureno OF odec
+                   THEN  typeno := tcnt
+                   FI;
+                   tl := rest OF tl
+               OD;
+               IF typeno /= 0
+               THEN  MAKETNAME typeno
+               ELSE  REF TYPEDEC newtd = HEAP TYPEDEC :=
+                                               ( types OF environ OF odec )[1];
+                     sort OF newtd := localdec; { Temporarily make it look like
+                                                  a local dec.  It needs to be
+                                                  modified later. }
+
+                     addtypedec( newtd );
+                     MAKETNAME( newtypeno PLUSAB 1 )
+               FI
+         ELSE
+               OUTER newodec = make_new_outer( t, closureno OF outer );
+               REF TYPEDEC newtd = HEAP TYPEDEC :=
+                                             ( types OF environ OF newodec )[1];
+               sort OF newtd := localdec; { Temporarily make it look like
+                                            a local dec.  It needs to be
+                                            modified later. }
+               addtypedec( newtd );
+               MAKETNAME( newtypeno PLUSAB 1 )
+         FI
+      END;
+
+      PROC simple_type = (TYPE t )BOOL:
+      CASE t IN
+      (UNION( REF TNAME, REF TNULL, REF TVOID )) TRUE,
+      ( REF TBRACKET tbr ) simple_type( type OF tbr ),
+      ( REF TFN tfn ) ( msg( system, "simple_type: tfn" ); SKIP ),
+      ( REF TMACPAR ) ( msg( system, "simple_type: tmacpar" ); SKIP )
+      OUT
+          FALSE
+      ESAC;
+
+      PROC test_for_alias = (TYPE t, TRANSFORMPROCS tprocs )TYPEC:
+      BEGIN
+         PROC alias_tstr = (REF TSTR tstr )TSTRC:
+         IF tstr IS niltstr
+         THEN  ( tstr, FALSE )
+         ELSE TYPEC tyc = (type OF tprocs)( elem OF tstr, tprocs );
+              TSTRC rest = alias_tstr( rest OF tstr );
+              IF c OF rest OREL c OF tyc
+              THEN  (HEAP TSTR := ( t OF tyc, t OF rest ), TRUE )
+              ELSE  (tstr, FALSE )
+              FI
+         FI;
+
+         CASE t IN
+         (REF TROW trow )
+         (  TYPEC tc = (type OF tprocs)( elem OF trow, tprocs );
+
+            IF c OF tc
+            THEN  ( HEAP TROW := ( size OF trow, t OF tc ), TRUE )
+            ELSE  ( t, FALSE )
+            FI
+         ),
+         (REF TSTR tstr )
+         (  TSTRC tsc =  alias_tstr( tstr );
+
+            IF c OF tsc
+            THEN  ( t OF tsc, TRUE )
+            ELSE  ( t, FALSE )
+            FI
+         ),
+         ( REF TSTRING tstring )
+         (  TYPEC tc = (type OF tprocs)( char OF tstring, tprocs );
+
+            IF c OF tc
+            THEN  ( HEAP TSTRING := ( size OF tstring, t OF tc ), TRUE )
+            ELSE  ( t, FALSE )
+            FI
+         ),
+         ( REF TFN tfn ) ( msg( system, "test_for_alias: tfn" ); SKIP ),
+         ( REF TMACPAR ) ( msg( system, "test_for_alias: tmacpar" ); SKIP )
+         OUT
+           ( t, FALSE )
+         ESAC
+      END;
+
+      PROC type_alias = (TYPE t, TRANSFORMPROCS tprocs )TYPEC:
+      BEGIN
+        TYPEC tc = test_for_alias( t, tprocs );
+        IF NOT simple_type( t OF tc )
+        THEN  ( make_alias( t OF tc ), TRUE )
+        ELSE  tc
+        FI
+      END;
+
+      TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, ( type_alias ));
+
+      { Initially put all typedecs onto the list }
+      FORALL t IN types OF e OF ec
+      DO  IF sort OF t = localdec
+          THEN  msg( user, "You need to call the local transform first" )
+          FI;
+          addtypedec( t )
+      OD;
+
+      { Now transform these typedecs }
+
+      REF TYPELIST tl := typedecs;
+
+      INT tno :=  0;
+      TO  ntypes
+      DO  CASE body OF dec OF tl IN
+          (REF TYPETAG tt )
+          (  TYPEC tc = test_for_alias( tag OF tt, newtprocs );
+             IF c OF tc
+             THEN  dec_changed := TRUE;
+                   closuretags[ closureno OF outer ] :=
+                                                 ( sort OF outer = outertype );
+                   dec OF tl := HEAP TYPEDEC := dec OF tl;
+                   body OF dec OF tl := MAKETYPETAG t OF tc
+             FI
+          )
+          OUT SKIP
+          ESAC;
+          tl := rest OF tl
+      OD;
+
+     { Now transform the body of the outer }
+     IF sort OF outer = outerfn
+     THEN  FNDECC fdc = (fndec OF newtprocs)( (fns OF e OF ec)[1], newtprocs );
+           IF c OF fdc
+           THEN newfns( ec )[1] := f OF fdc;
+                dec_changed := TRUE
+           FI
+     FI;
+     discard_tprocs( newtprocs );
+
+     IF dec_changed OREL newtypeno /= ntypes
+     THEN  REF VECTOR[ ]REF TYPEDEC newtypevec = makenewtypes( ec, newtypeno );
+           TNAME tmptname;
+
+           FOR i WHILE typedecs ISNT niltypelist
+           DO  newtypevec[ i ] := dec OF typedecs;
+               typedecs := rest OF typedecs
+           OD;
+          { We now have a new environment for the types. }
+           FOR typeno TO newtypeno
+           DO  REF REF TYPEDEC tmpdec = (types OF e OF ec)[ typeno ];
+               typeno OF tmptname := typeno;
+               IF sort OF tmpdec = localdec
+               THEN  sort OF tmpdec := outerdec;
+                     tmpdec := find_typedec( tmptname, newclosure, e OF ec )
+               FI
+           OD;
+           OUTER newouter := outer;
+           environ OF newouter := e OF ec;
+           ( newouter, TRUE )
+     ELIF c OF ec
+     THEN  OUTER newouter := outer;
+           environ OF newouter := e OF ec;
+           ( newouter, TRUE )
+     ELSE  ( outer, FALSE )
+     FI
+   END;   { outer_alias }
+
+
+   IF outers OF closure ISNT nilouters
+   THEN
+       TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, outer_alias);
+
+       WHILE closureptr ISNT nilouters
+       DO flt_if_interrupted(msg);
+          OUTERC oc = (outer OF newtprocs)(outer OF closureptr, newtprocs);
+          IF c OF oc THEN newclosure; outer OF closureptr := o OF oc FI;
+          closureptr := rest OF closureptr
+       OD;
+       discard_tprocs( newtprocs )
+   FI;
+   result
+END;   { transform_alias }
+
+    SKIP
+KEEP transform_alias, alias_options
+FINISH
+

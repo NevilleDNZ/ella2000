@@ -1,0 +1,275 @@
+DECS environprocs CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs :
+
+configinfo A68CONFIG "$Id: environprocs.a68,v 34.2 1995/03/29 13:02:43 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   New module to contain some useful procedures
+                                  for handling environments.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+MODE ENVIRONC = STRUCT( REF ENVIRON e,
+                        BOOL c,
+                             ac, ic, tc, cc, fc ),
+     ENVMAP = STRUCT( INT mapno,
+                      REF ENVIRON env );
+
+OP MAKEENVIRONC = (REF ENVIRON e )ENVIRONC:
+                               ( e, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE );
+
+{{ This procedure creates a new environment if it is necessary.
+   It delivers the environment }}
+
+PROC newenviron = (REF ENVIRONC ec )REF ENVIRON:
+   IF c OF ec
+   THEN  e OF ec
+   ELSE  c OF ec := TRUE;
+         e OF ec := HEAP ENVIRON := e OF ec
+   FI;
+
+{{ The following procedures create a new vector in the given environment
+   if it is necessary.  It delivers the appropriate vector.
+}}
+
+PROC newattrs = (REF ENVIRONC ec )REF VECTOR[ ]REF ATTRDEC:
+   IF ac OF ec
+   THEN  attrs OF e OF ec  { Can call newenv direct }
+   ELSE  REF VECTOR[ ]REF ATTRDEC old = attrs OF e OF ec;
+         ac OF ec := TRUE;
+         attrs OF newenviron( ec ) := HEAP VECTOR[ UPB old ]REF ATTRDEC := old
+   FI;
+
+PROC newints = (REF ENVIRONC ec )REF VECTOR[ ]REF INTDEC:
+   IF ic OF ec
+   THEN  ints OF e OF ec  { Can call newenv direct }
+   ELSE  REF VECTOR[ ]REF INTDEC old = ints OF e OF ec;
+         ic OF ec := TRUE;
+         ints OF newenviron( ec ) := HEAP VECTOR[ UPB old ]REF INTDEC := old
+   FI;
+
+PROC newtypes = (REF ENVIRONC ec )REF VECTOR[ ]REF TYPEDEC:
+   IF tc OF ec
+   THEN  types OF e OF ec  { Can call newenv direct }
+   ELSE  REF VECTOR[ ]REF TYPEDEC old = types OF e OF ec;
+         tc OF ec := TRUE;
+         types OF newenviron( ec ) := HEAP VECTOR[ UPB old ]REF TYPEDEC := old
+   FI;
+
+PROC newconsts = (REF ENVIRONC ec )REF VECTOR[ ]REF CONSTDEC:
+   IF cc OF ec
+   THEN  consts OF e OF ec  { Can call newenv direct }
+   ELSE  REF VECTOR[ ]REF CONSTDEC old = consts OF e OF ec;
+         cc OF ec := TRUE;
+         consts OF newenviron( ec ) := HEAP VECTOR[ UPB old ]REF CONSTDEC := old
+   FI;
+
+PROC newfns = (REF ENVIRONC ec )REF VECTOR[ ]REF FNDEC:
+   IF fc OF ec
+   THEN  fns OF e OF ec  { Can call newenv direct }
+   ELSE  REF VECTOR[ ]REF FNDEC old = fns OF e OF ec;
+         fc OF ec := TRUE;
+         fns OF newenviron( ec ) := HEAP VECTOR[ UPB old ]REF FNDEC := old
+   FI;
+
+{{ The following procedures create new vectors in the given envronment
+   regardless of whether one has previously been made. The new size must be
+   given.
+}}
+
+PROC makenewattrs = (REF ENVIRONC ec, INT newsize )REF VECTOR[ ]REF ATTRDEC:
+    ( abort( "makenewattrs not yet implemented" ); nullattrdecs );
+
+PROC makenewints = (REF ENVIRONC ec, INT newsize )REF VECTOR[ ]REF INTDEC:
+    ( abort( "makenewints not yet implemented" ); nullintdecs );
+
+PROC makenewtypes = (REF ENVIRONC ec, INT newsize )REF VECTOR[ ]REF TYPEDEC:
+BEGIN  REF VECTOR[ ]REF TYPEDEC old = types OF e OF ec;
+       tc OF ec := TRUE;
+       types OF newenviron( ec ) := HEAP VECTOR[ newsize ]REF TYPEDEC;
+       (types OF e OF ec)[ : UPB old ] := old;
+       types OF e OF ec
+END;
+
+PROC makenewcontsts = (REF ENVIRONC ec, INT newsize )REF VECTOR[ ]REF CONSTDEC:
+    ( abort( "makenewcontsts not yet implemented" ); nullconstdecs );
+
+PROC makenewfns = (REF ENVIRONC ec, INT newsize )REF VECTOR[ ]REF FNDEC:
+    ( abort( "makenewfns not yet implemented" ); nullfndecs );
+
+
+{{  The procedure 'update_bodies' is used to update the bodies of types in an
+    environment when the outer declarations may have changed.  It is assumed
+    that the closure is being examined in declaration order and that this
+    procedure is being applied before any work is done to a particular
+    declaration.  It takes a reference to an ENVIRON and modifies its types
+    vector if necessary. The closure given must be the new closure so you will
+    have to process the closure directly rather than via the null transform
+    procedure.  The procedure parameter 'is-modified' is called with a closure
+    number and should deliver TRUE if that declaration has been altered during
+    the current closure transformation process, otherwise it should deliver
+    FALSE. It MUST deliver FALSE for the current declaration.
+    If it always delivers TRUE, except for the current declaration, all type
+    bodies will be updated, regardless of any real modification that may have
+    taken place.
+
+    The procedure delivers an ENVIRONC with field 'e' being a reference to the
+    resulting ENVIRON amd BOOL field 'c' set TRUE or FALSE according to whether
+    the ENVIRON has changed.
+
+    If the ENVIRON has changed it may be overwritten before being used to
+    create a new outer.  So can the elements of field 'types' of the environ. 
+    However the other fields of the environ cannot be changed without first
+    being copied. See the procedures above which handle cahnges to environments.
+}}
+
+PROC update_bodies = (REF ENVIRON old,
+                      CLOSURE closure,
+                      PROC( INT )BOOL is_modified,
+                      MESSAGEPROC msg )ENVIRONC:
+BEGIN ENVIRONC result := MAKEENVIRONC old;
+      REF REF ENVIRON new = e OF result;
+      REF BOOL changed = c OF result;
+      INT ntypes = UPB types OF new,
+          closuretop = maxclosureno( closure );
+      INT typecnt := 0;
+      BOOL has_changes := FALSE;
+      VECTOR[ closuretop ]ENVMAP closuremap;
+
+      FORALL cm IN closuremap DO cm := ( 0, nilenviron ) OD;
+
+     { Set closuremap as a look up table to translate closure numbers
+       into environment references and to refer to the environments of
+       all types needed
+     }
+
+      FORALL ty1 IN types OF new
+      DO  typecnt PLUSAB 1;
+          IF sort OF ty1 = outerdec
+          THEN  INT cln = closureno OF usage OF ty1;
+                REF ENVMAP map = closuremap[ cln ];
+                mapno OF map := typecnt;
+                IF is_modified( cln )
+                THEN  has_changes := TRUE;
+                      env OF map :=
+                            environ OF outer OF find_outers( cln, closure, msg )
+                FI
+          FI
+      OD;
+
+      REF ENVIRON outerenv := NIL;
+
+    { Count up how many types are needed which are not in the current
+      environment }
+
+      PROC count_map = (TYPE t, TRANSFORMPROCS tprocs )TYPEC:
+      CASE t IN
+      (REF TNAME tn)
+      ( TYPEDECC tdc = (typedec OF tprocs)((types OF outerenv)[typeno OF tn],
+                                            tprocs );
+
+        IF sort OF t OF tdc = outerdec
+        THEN  INT cln = closureno OF usage OF t OF tdc;
+              REF ENVMAP map = closuremap[ cln ];
+              IF mapno OF map = 0
+              THEN  has_changes := TRUE;
+                    map := ( typecnt PLUSAB 1,
+                           environ OF outer OF find_outers( cln, closure, msg ))
+              FI;
+              (t, FALSE)
+        ELSE  (t, FALSE)
+        FI
+      )
+      OUT (type OF nulltprocs)(t, tprocs)
+      ESAC;
+
+      TRANSFORMPROCS cnttprocs = make_newtprocs( nulltprocs, ( count_map ));
+
+      { This will analyse all typedecs until no more are added to the current
+        environment }
+      FOR envcnt TO closuretop
+      DO  REF ENVMAP map = closuremap[ envcnt ];
+          IF env OF map ISNT nilenviron
+          THEN  outerenv := env OF map;
+                (typedec OF nulltprocs)( (types OF outerenv)[1], cnttprocs )
+          FI
+      OD;
+      discard_tprocs( cnttprocs );
+
+      PROC type_update = (TYPE t, TRANSFORMPROCS tprocs )TYPEC:
+      CASE t IN
+      (REF TNAME tn)
+      ( TYPEDECC tdc = (typedec OF tprocs)((types OF outerenv)[typeno OF tn],
+                                            tprocs );
+        IF sort OF t OF tdc = outerdec
+        THEN  INT cln = closureno OF usage OF t OF tdc;
+              REF ENVMAP map = closuremap[ cln ];
+              IF mapno OF map /= typeno OF tn
+              THEN  (MAKETNAME mapno OF map, TRUE )
+              ELSE  (t, FALSE)  
+              FI
+        ELSE  (t, FALSE)
+        FI
+      )
+      OUT (type OF nulltprocs)(t, tprocs)
+      ESAC;
+
+      IF has_changes
+      THEN
+         TRANSFORMPROCS updatetprocs = make_newtprocs( nulltprocs,
+                                                       ( type_update ));
+         makenewtypes( result, typecnt );
+         FOR envno TO closuretop
+         DO  REF ENVMAP map = closuremap[ envno ];
+             IF env OF map ISNT nilenviron
+             THEN
+                 outerenv := env OF map;
+                 TYPEDECC tdc = (typedec OF nulltprocs)( (types OF outerenv)[1],
+                                                          updatetprocs );
+                 (types OF new)[ mapno OF map ] := t OF tdc
+             FI
+         OD;
+         discard_tprocs( updatetprocs )
+      FI;
+      result
+END;
+
+    SKIP
+KEEP ENVIRONC, MAKEENVIRONC( REF ENVIRON),
+     newenviron,
+     newattrs, newints, newtypes, newconsts, newfns,
+     makenewattrs, makenewints, makenewtypes, makenewcontsts, makenewfns,
+     update_bodies
+FINISH
+

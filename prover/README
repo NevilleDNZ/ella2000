@@ -1,0 +1,77 @@
+                    ELLA Prover Software and Documentation
+                    --------------------------------------
+
+    ************************************************************************
+    This Program (the ELLA Prover Software and documentation) is the 
+    property of the Secretary of State for Defence (United Kingdom) acting
+    through the Defence Research Agency (DRA). Use, reproduction, production
+    of amended versions and/or transfer of this Program is permitted
+    provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version be clearly marked to show the nature of the 
+       amendment and the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1995
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments, adaptions, modifications, translations and enhancements
+    thereof.
+
+    The authors may be contacted via email on ella@dra.hmg.gb or by writing
+    to ELLA Office, CIS3, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+The ELLA prover has been developed to aid the verification of hardware designs
+and it is being made available to the public for study purposes. It takes a 
+subset of the hardware design language ELLA as the design input and contains 
+additional syntax for inputting statements about how the design is thought to behave. These statements can be manipulated in an effort to prove them correct.
+
+The ELLA Prover and documentation consists of the following files :-
+
+prover		   the executable code
+
+prover.init	   an initialisation file needed by prover
+
+graphics.help	   the help file for the graphical version of the prover  
+
+non_graphics.help  the help file for the non-graphical version of the prover	
+
+EPManual.ps	   a postscript file of the ELLA Prover User Manual
+
+EPSubset.ps	   a postscript file of the ELLA Prover Subset - the subset of
+		   ELLA used for the prover
+
+
+To start the prover
+-------------------
+
+To start the prover on a Sun running UNIX, with OpenWindows for the graphical
+mode, use one of the following commands.
+
+For graphical mode use the command :-
+
+<pathname>prover \
+"DIAGFILE=<pathname>prover.log" "INITFILE=<pathname>prover.init" \
+"PROVER_HELP=<pathname>graphics.help" "FLAGS=fftffttff"
+
+For non-graphical mode use the command :-
+
+<pathname>prover \
+"DIAGFILE=<pathname>prover.log" "INITFILE=<pathname>prover.init" \
+"PROVER_HELP=<pathname>non_graphics.help" "FLAGS=fftffttft"
+
+If a pathname is omitted the current directory is assumed. The first parameter
+names a log file which can be re-run to repeat a session. The second and third
+parameters indicate where to find the initialisation and help files. The fourth
+parameter sets nine constants, the last of which indicates if the graphical or
+non-graphical version of the prover is to be started.

@@ -1,0 +1,106 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRMODES.STA }
+{ *2    21-JAN-1989 11:07:37 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *1    11-NOV-1988 15:50:38 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element ATTRMODES.STA }
+DECS attrmodes CONTEXT VOID
+USE  putstrings,  basics:
+
+{                    " Id: attrmodes.sta,v 1.1 91/10/14 14:26:00 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrmodes.a68,v 34.2 1995/03/29 13:03:17 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number   0.026 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{
+  Defines the modes for nodeset names and data.
+}
+{        ****************************************************   }
+
+{  Nodeset names }
+
+MODE DECNODE = STRUCT(ID decname,     {name of function, macro or type}
+                      INT level       {level of declaration}
+                     );
+
+MODE INSTNODE = STRUCT(DECNODE decnode,  {instance or signal type}
+                       ID instname       {instance or signal name}
+                      );
+
+MODE NODE = UNION(DECNODE, INSTNODE);
+
+MODE NODELIST = STRUCT(NODE node, REF NODELIST rest);
+
+REF NODELIST nilnodelist = NIL;
+
+MODE IMPNODE = STRUCT(ID region,              {imports region name}
+                      REF NODELIST nodes      {the nodeset name}
+                     );
+
+MODE NODESET = UNION(REF NODELIST, IMPNODE);   {mode for nodeset names}
+
+{                     **********************                }
+
+{  Attribute data  }
+
+MODE DATALIST = STRUCT(RVC data, REF DATALIST rest);  {mode for the data}
+
+REF DATALIST nildatalist = NIL;
+
+MODE ATTDATA = REF VECTOR [] REF DATALIST;
+                            { mode for attribute data; partitioned by class }
+ATTDATA nilattdata = HEAP VECTOR [0] REF DATALIST;
+
+{                     *************************            }
+
+{  Attributes  }
+
+MODE NODEDATA =
+     STRUCT(NODESET nodeset, REF DATALIST datalist, REF NODEDATA rest);
+                                          {Intermediate form for attributes}
+REF NODEDATA nilnodedata = NIL;
+
+MODE ATTRIBS = STRUCT(NODESET nodeset, ATTDATA attdata, REF ATTRIBS rest);
+
+REF ATTRIBS nilattribs = NIL;
+
+{                     ***********************                 }
+SKIP
+
+KEEP DECNODE, INSTNODE, NODE, NODELIST, IMPNODE, NODESET, nilnodelist,
+     DATALIST, ATTDATA, nildatalist, nilattdata,
+     NODEDATA, nilnodedata, ATTRIBS, nilattribs
+FINISH

@@ -1,0 +1,144 @@
+DECS tstr_trow CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs, environprocs :
+
+configinfo A68CONFIG "$Id: tstr_trow.a68,v 34.2 1995/03/29 13:02:42 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   TSTR(identical elements) -> TROW transform
+                                  introduced.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{Type structures with all their elements identical are to be replaced by a row.
+ For example, (bool, bool, bool) changes to [3]bool.}
+
+PROC transform_tstr_trow = (CLOSURE closure, MESSAGEPROC msg)CLOSUREC:
+BEGIN
+  CLOSUREC result := (closure, FALSE);
+  REF CLOSURE thisclosure = cl OF result;
+  REF BOOL closure_changed = c OF result;
+  REF OUTERS closureptr := outers OF thisclosure;
+  VECTOR[maxclosureno(closure)]BOOL closuretags;
+  FORALL ct IN closuretags DO ct := FALSE OD;
+
+  PROC newclosure = REF CLOSURE:
+  BEGIN IF NOT closure_changed
+        THEN closure_changed := TRUE;
+             thisclosure := copy_closure(thisclosure, msg);
+             closureptr := find_outers(closureno OF outer OF closureptr,
+                                       thisclosure, msg)
+        FI;
+        thisclosure
+  END;
+
+  PROC is_modified = (INT clno)BOOL: closuretags[clno];
+
+  PROC outer_transform = (OUTER outer, TRANSFORMPROCS otprocs) OUTERC:
+  BEGIN
+    ENVIRONC ec := update_bodies(environ OF outer, thisclosure,
+                                 is_modified, msg );
+ 
+    PROC tstr_trow = (TYPE ty, TRANSFORMPROCS tprocs) TYPEC:
+    CASE ty IN
+    (REF TSTR ts)
+      ( TSTRC tc = (tstr OF tprocs)(ts, tprocs); {Transform each element first}
+        TYPE first = simplify_type(elem OF t OF tc, e OF ec);
+        REF TSTR tstr := rest OF t OF tc;
+        BOOL same := TRUE;
+        INT count := 1;
+        WHILE (tstr ISNT niltstr) ANDTH same
+          DO IF NOT check_types(first, simplify_type(elem OF tstr, e OF ec),
+                                e OF ec, e OF ec, FALSE)
+             THEN same := FALSE
+             ELSE count PLUSAB 1
+             FI;
+             tstr := rest OF tstr
+          OD;
+        IF same
+        THEN REF FINT size := HEAP FINT := (count, nullid);
+             (HEAP TROW := (size, first), TRUE)
+        ELSE (t OF tc, c OF tc)
+        FI
+      )
+    OUT (type OF nulltprocs)(ty, tprocs)
+    ESAC;
+
+    TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (null_formula,
+                                                           null_attr,
+                                                           tstr_trow));
+
+    IF sort OF outer = outertype
+    THEN TYPEDECC tdecc = (typedec OF newtprocs)((types OF e OF ec)[1],
+                                                 newtprocs);
+         IF c OF tdecc
+         THEN closuretags[closureno OF outer] := TRUE;
+              newtypes(ec)[1] := t OF tdecc
+         FI
+    ELIF sort OF outer = outerfn
+    THEN FOR i TO UPB fns OF e OF ec
+           DO FNDECC fdecc = (fndec OF newtprocs)((fns OF e OF ec)[i],
+                                                  newtprocs);
+              IF c OF fdecc
+              THEN newfns(ec)[i] := f OF fdecc
+              FI
+           OD
+    FI; {There should only be types and functions present}
+ 
+    discard_tprocs(newtprocs);
+
+    IF c OF ec
+    THEN ((closureno OF outer, sort OF outer, e OF ec), TRUE)
+    ELSE (outer, FALSE)
+    FI
+ 
+  END; {outer_transform}
+
+
+  IF outers OF closure ISNT nilouters
+  THEN TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (outer_transform));
+
+       WHILE closureptr ISNT nilouters
+       DO flt_if_interrupted(msg);
+          OUTERC oc = (outer OF newtprocs)(outer OF closureptr, newtprocs);
+          IF c OF oc THEN newclosure; outer OF closureptr := o OF oc FI;
+          closureptr := rest OF closureptr
+       OD;
+       discard_tprocs(newtprocs)
+  FI;
+  result
+END;
+
+SKIP
+KEEP transform_tstr_trow
+FINISH

@@ -1,0 +1,302 @@
+DECS associated CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs, environprocs :
+
+configinfo A68CONFIG "$Id: associated.a68,v 34.2 1995/03/29 13:02:45 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   Started new transform to turn associated
+                                  types into a combination of simple types.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{{  This must be done after the local to global transformation and after the
+    type alias ttansform. The names transform must be applied after this one.
+
+    e.g TYPE assoc  = NEW (tag1&bool | novalue | tag2&int).
+
+  will need to be transformed to
+
+        TYPE tagtype = NEW (tag1 | novalue | tag2).
+        TYPE assoc = (tagtype, bool, int).
+
+   tag1 & f  will transform to  (tag1, f, ?int)
+
+   unit\\tag1 will transform to unit[2]
+
+}}
+
+VECTOR[ 0 ]VECTOR[ 0 ]CHAR associated_options;
+
+            {{  Requires the local transform to have been done first }}
+
+VECTOR [0] INT nullaltmap;
+
+PROC transform_associated = (CLOSURE outerclosure, MESSAGEPROC msg ) CLOSUREC:
+BEGIN
+   CLOSUREC result := ( outerclosure, FALSE );
+   REF CLOSURE thisclosure = cl OF result;
+   REF BOOL closure_changed = c OF result;
+   INT closuretop = maxclosureno( outerclosure );
+   REF OUTERS closureptr := outers OF thisclosure;
+   INT associatedcnt := 0;
+   VECTOR[ closuretop ]REF VECTOR [] INT altmaps;
+
+   FORALL av IN altmaps DO av := nullaltmap OD;
+
+ {{   Altmaps is a lookup table that will have an entry for each associated type
+    in a closure.  Each entry is a reference to a vector of INTs which map
+    each altno to the position it corresponds to in the structured type that
+    replaces the original associated type,
+      For instance the above example will will give a vector with the following
+    values:-
+            (2, 0, 3)
+    since alt 1 will index element 2,
+          alt 2 will not index any element as it is not associated,
+          alt 3 will index element 3.
+
+     Altmaps is also used to indicate whether a type is a transformed associated
+   type, only such types will have a vector with UPB > 0.
+
+ }}
+
+   PROC newclosure = REF CLOSURE:
+   BEGIN  IF NOT closure_changed
+          THEN closure_changed := TRUE;
+               thisclosure := copy_closure( thisclosure, msg);
+               closureptr := find_outers( closureno OF outer OF closureptr,
+                                          thisclosure, msg)
+          FI;
+          thisclosure
+   END;
+
+   PROC is_modified = (INT clno )BOOL:
+                              clno <= closuretop ANDTH UPB altmaps[ clno ] > 0;
+
+   PROC transform_outertype = (REF ENVIRONC ec, INT closureno )VOID:
+   BEGIN
+      BOOL has_assoc := FALSE;
+      REF VECTOR [] ALTERNATIVE assoc_alts;
+
+      CASE body OF (types OF e OF ec)[1] IN
+      (REF VECTOR [] ALTERNATIVE alts )
+      (  FORALL alt IN alts WHILE NOT has_assoc
+         DO  has_assoc := CASE assoc OF alt IN
+                          (REF TNULL ) FALSE
+                          OUT          assoc_alts := alts;
+                                       TRUE
+                          ESAC
+         OD
+      )
+      OUT  SKIP
+      ESAC;
+
+      IF has_assoc
+      THEN  
+         INT ntypes = UPB types OF e OF ec;
+         INT newtypeno = ntypes + 1;
+         REF VECTOR[ ]REF TYPEDEC newtypevec =
+                              HEAP VECTOR[ ntypes ]REF TYPEDEC :=
+                              types OF e OF ec;
+         REF VECTOR[ ]REF TYPEDEC newtypes = makenewtypes( ec, newtypeno );
+         INT newclno = reserve_next_closureno( newclosure );
+         REF TYPEDEC newdec = HEAP TYPEDEC := newtypes[1];
+         REF TYPEDEC tagdec = HEAP TYPEDEC := newdec;
+
+         REF VECTOR [] ALTERNATIVE newalts :=
+                         HEAP VECTOR[ UPB assoc_alts ]ALTERNATIVE := assoc_alts;
+         REF VECTOR[ ]INT altmap = HEAP VECTOR[ UPB assoc_alts ]INT;
+         INT altno := 0, altindex := 1;
+         REF TSTR tstr := HEAP TSTR := ( MAKETNAME newtypeno, niltstr );
+         REF REF TSTR ttail := rest OF tstr;
+
+         newtypes[1] := newdec;
+         newtypes[ newtypeno ] := tagdec;
+         altmaps[ closureno ] := altmap;
+
+         FORALL alt IN newalts
+         DO  altno PLUSAB 1;
+             CASE assoc OF alt IN
+             (REF TNULL ) altmap[ altno ] := 0
+             OUT
+                REF REF TSTR( ttail ) := HEAP TSTR := ( assoc OF alt, niltstr );
+                ttail := rest OF ttail;
+                assoc OF alt := tnull;
+                altmap[ altno ] := altindex PLUSAB 1
+             ESAC
+         OD;
+         body OF tagdec := newalts;
+         body OF newdec := MAKETYPETAG( tstr );
+
+         typename OF tagdec := oneline(( "atag_", typename OF newdec ));
+         usage OF tagdec := HEAP USAGE := usage OF tagdec;
+         closureno OF usage OF tagdec := newclno;
+         attr OF tagdec := attrnull;
+         newtypevec[1] := tagdec;
+
+         OUTER newouter = ( newclno, outertype,
+                                     HEAP ENVIRON := ( nullattrdecs,
+                                                       nullintdecs,
+                                                       newtypevec,
+                                                       nullconstdecs,
+                                                       nullfndecs ));
+         REF REF OUTERS ptr := outers OF newclosure;
+
+         WHILE ( ptr ISNT nilouters ) ANDTH
+               closureno OF outer OF ptr /= closureno
+         DO  ptr := rest OF ptr  OD;
+         insert_outer( newouter, ptr, thisclosure, msg)
+      FI
+   END;
+
+   PROC transform_outerfn = ( REF ENVIRONC ec )VOID:
+   BEGIN
+      REF VECTOR[ ]REF TYPEDEC typedecs = types OF e OF ec;
+
+      PROC convert_assoc = (UNIT u, INT typeno, altno, UNIT oldelem )UNITC:
+      BEGIN
+         REF TYPEDEC dec = typedecs[ typeno ];
+         REF VECTOR[ ]INT map = altmaps[ closureno OF usage OF dec ];
+
+         IF UPB map > 0
+         THEN
+            INT index = map[ altno ];
+            BOOL is_const = CASE oldelem IN (REF CTYPE) TRUE OUT FALSE ESAC;
+            INT newtypeno := typeno;
+            REF TSTR tstr := CASE body OF dec IN
+                             (REF TYPETAG ttg )
+                                CASE tag OF ttg IN
+                                (REF TSTR str )
+                                (   CASE elem OF str IN
+                                    (REF TNAME strtn )
+                                          newtypeno := typeno OF strtn
+                                     OUT SKIP
+                                     ESAC;
+                                     rest OF str
+                                 )
+                                 OUT niltstr
+                                 ESAC
+                             OUT     niltstr
+                             ESAC;
+            REF USTR newstr := HEAP USTR :=
+                                         ( HEAP CPRIM := ( newtypeno, altno ),
+                                           nilustr );
+            REF REF USTR utail := rest OF newstr;
+            INT cnt := 1;
+            UNIT newelem;
+
+            WHILE tstr ISNT niltstr
+            DO  newelem := IF ( cnt PLUSAB 1 ) = index
+                           THEN  oldelem
+                           ELIF is_const
+                           THEN  MAKECTYPE elem OF tstr
+                           ELSE  MAKECQUERY elem OF tstr
+                           FI;
+                REF REF USTR( utail ) := HEAP USTR := ( newelem, nilustr );
+                utail := rest OF utail;
+                tstr := rest OF tstr
+            OD;
+            ( newstr, TRUE )
+         ELSE
+            ( u, FALSE )
+         FI
+      END;
+
+      PROC unit_associated = (UNIT u, TRANSFORMPROCS tprocs )UNITC:
+      CASE u IN
+      (REF UASSOC ua )
+         convert_assoc( u, typeno OF ua, altno OF ua,
+                        u OF (unit OF tprocs)( assoc OF ua, tprocs )),
+      (REF UEXTRACT ue )
+      (REF TYPEDEC uetd = typedecs[ typeno OF ue ];
+       REF VECTOR [] INT uemap = altmaps[ closureno OF usage OF uetd ];
+       UNITC ueuc = (unit OF tprocs)( extract OF ue, tprocs );
+
+         ( HEAP UINDEX := ( u OF ueuc,
+                            HEAP FINT := ( uemap[ altno OF ue ], nullid )),
+           TRUE )
+      ),
+      (REF CPRIM cpr )
+         convert_assoc( u, typeno OF cpr, primno OF cpr, unull )
+      OUT  (unit OF nulltprocs)( u, tprocs )
+      ESAC;
+
+      TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs,
+                                                    ( unit_associated ));
+
+     { Now transform the body of the outer if it is a function }
+
+      FNDECC fdc = (fndec OF newtprocs)( (fns OF e OF ec)[1], newtprocs );
+      IF c OF fdc THEN newfns( ec )[1] := f OF fdc FI
+   END;
+
+   PROC outer_associated = (OUTER outer, TRANSFORMPROCS outertprocs )OUTERC:
+   BEGIN
+   {{ Called for outer types and outer fns, consts are assumed to be transformed
+      out by the macro transformation }}
+     REF ENVIRON oldenv = environ OF outer;
+     ENVIRONC ec := update_bodies( oldenv, thisclosure, is_modified, msg ); 
+
+     IF sort OF outer = outertype
+     THEN  transform_outertype( ec, closureno OF outer )
+     ELIF sort OF outer = outerfn
+     THEN  transform_outerfn( ec )
+     FI;
+
+     IF c OF ec
+     THEN  OUTER newouter := outer;
+           environ OF newouter := e OF ec;
+           ( newouter, TRUE )
+     ELSE  ( outer, FALSE )
+     FI
+   END;   { outer_associated }
+
+   IF outers OF outerclosure ISNT nilouters
+   THEN
+       TRANSFORMPROCS newtprocs = make_newtprocs( nulltprocs, outer_associated);
+
+       WHILE closureptr ISNT nilouters
+       DO flt_if_interrupted(msg);
+          OUTERC oc = (outer OF newtprocs)(outer OF closureptr, newtprocs);
+          IF c OF oc THEN outer OF closureptr := o OF oc FI;
+          closureptr := rest OF closureptr
+       OD;
+       discard_tprocs( newtprocs )
+   FI;
+   result
+END;   { transform_associated }
+
+    SKIP
+KEEP transform_associated, associated_options
+FINISH
+

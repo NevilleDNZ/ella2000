@@ -1,0 +1,97 @@
+DECS delay CONTEXT VOID USE putstrings, basics, messageproc, assmodes, 
+     modeprocs, transformprocs, osinterface, closureprocs :
+
+configinfo A68CONFIG "$Id: delay.a68,v 34.2 1995/03/29 13:02:44 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+21:03:95  33.001  DJS   Release   DELAY transform introduced.
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{A DELAY function must have only one input and one output.}
+
+PROC delay_body = (FNBODY fnbody)BOOL:
+  CASE fnbody IN
+  (REF ADELAY) TRUE,
+  (REF IDELAY) TRUE
+  OUT FALSE
+  ESAC;
+
+PROC make_nametype = (REF VECTOR [] NAMETYPE nametypes, INT first, last)
+                                                                      NAMETYPE:
+  IF first = last
+  THEN HEAP NAMETYPE := nametypes[first]
+  ELSE REF TSTR ty := niltstr;
+       FOR i FROM last BY -1 TO first
+         DO ty := HEAP TSTR := (type OF nametypes[i], ty) OD;
+       (nullid, ty, attrnull)
+  FI;
+
+PROC transform_delay = (CLOSURE closure, MESSAGEPROC msg )CLOSUREC:
+BEGIN
+  PROC fndec_trans = (REF FNDEC fdec, TRANSFORMPROCS tprocs)FNDECC:
+  BEGIN
+    IF fdec ISNT nilfndec
+    THEN IF delay_body(fnbody OF fdec) ANDTH UPB (nametypes OF fdec) > 2
+         THEN REF VECTOR [] NAMETYPE old_nametypes := nametypes OF fdec;
+              REF VECTOR [] NAMETYPE new_nametypes := HEAP VECTOR [2] NAMETYPE;
+              INT no_inputs = names_size(inputs OF fdec);
+              INT no_outputs = names_size(outputs OF fdec);
+              new_nametypes[1] := make_nametype(old_nametypes, 1, no_inputs);
+              new_nametypes[2] := make_nametype(old_nametypes, no_inputs + 1,
+                                                no_inputs + no_outputs);
+              (HEAP FNDEC := (sort OF fdec, macro OF fdec, fnname OF fdec,
+                              macspecs OF fdec, attr OF fdec,
+                              HEAP NAMES := (1, nilnames),
+                              HEAP NAMES := (2, nilnames), new_nametypes,
+                              fnbody OF fdec, usage OF fdec), TRUE)
+         ELSE (fdec, FALSE)
+         FI
+    ELSE (fdec, FALSE)
+    FI
+  END;
+
+
+  TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (null_formula,
+                                                         null_attr,
+                                                         null_type,
+                                                         null_unit,
+                                                         fndec_trans));
+
+  (closure OF nulltprocs)(closure, newtprocs, msg)
+END;
+
+SKIP
+KEEP transform_delay
+FINISH

@@ -1,0 +1,244 @@
+DECS kecodegenalienifvax
+CONTEXT VOID
+USE
+*4  vmsinterface,
+    basics,
+    cif,
+    kecodegenservervax,
+    kecodegenstackvax,
+    kemassemvax
+:
+
+{  " Id: kecodegenalienifvax.sta,v 2.2.1.1 91/11/22 14:24:50 aap Exp$" }
+configinfo A68CONFIG "$Id: kecodegenalienifvax.a68,v 34.2 1995/03/29 13:04:43 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.002 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+    This module provides the communication between the abstract machine and
+    the code generator that is required for aliens, but not explicitly
+    required by BIOPs.  (BIOPs use two tables with a common key of mode LABEL).
+}
+
+{ What we need to know about an alien ... }
+MODE
+    ALIENEVALFN = INT,          { a function address }
+    ALIENINFO = STRUCT(
+        LABEL label int,        { invented for abstract m/c call
+				  passing integer parameter}
+        LABEL label callinst,   { invented for abstract m/c call
+				  passing callinst ptr }
+        INT workspace size,     { in bytes, returned by finder }
+        ALIENEVALFN eval fn,    { evaluation function, returned by finder }
+        INT history,            { time dependency, = amount of history required }
+        INT decl id             { returned by finder }
+    ),
+    ALIENLIST = STRUCT(REF ALIENINFO info, REF ALIENLIST next);
+
+{ Some constants ... }
+ALIENEVALFN nil alien eval fn = 0;
+REF ALIENINFO nil alien info = NIL;
+REF ALIENLIST nil alien list = NIL;
+
+{
+    Action values - used in call array and passed to evaluation function
+    to indicate current phase.
+
+    The values must tally with the C definition of ACI_EVAL_ACTION.
+}
+
+INT
+    initialise action = 1,
+    reinitialise action = 2, { not used }
+    evaluate action = 3,
+    save action = 4,
+    restore action = 5,
+    terminate action = 6;
+
+{
+    The list of all alien functions returned by the finder, plus procedures
+    for adding entries and looking up entries using the label as key.
+}
+REF ALIENLIST aliens := nil alien list;
+
+PROC remember alien = (REF ALIENINFO new alien)VOID:
+{ adds new alien to front of list }
+BEGIN
+    aliens := HEAP ALIENLIST := ( new alien, aliens )
+END;
+
+PROC lookup alien = (LABEL l)REF ALIENINFO:     { return NIL if not found }
+BEGIN
+    REF ALIENLIST this alien := aliens;
+    WHILE (this alien ISNT nil alien list)
+    ANDTH
+      ( (lab OF l /= lab OF label int OF info OF this alien) OREL
+        (tag OF l /= tag OF label int OF info OF this alien) )
+    ANDTH
+      ( (lab OF l /= lab OF label callinst OF info OF this alien) OREL
+        (tag OF l /= tag OF label callinst OF info OF this alien) )
+    DO
+        this alien := next OF this alien
+    OD;
+    ( this alien ISNT nil alien list | info OF this alien | nil alien info )
+END;
+
+
+{
+    Algol interface onto the finder provided by the alien code implementor.
+    The C definition is given in N045.50.11.
+}
+PROC alien finder = (
+    VECTOR [] CHAR name,
+    VECTOR [] INT input types,
+    INT output type,
+    VECTOR [] INT macparams,
+    FLTPROC flt
+) REF ALIENINFO:
+IF
+    PROC (
+%4      CCHARPTR,       { name }
+*4      VALUE,          { name }
+%4      INT,            { UPB name }
+*4      VALUE,          { UPB name }
+%4      CINTPTR,        { input types }
+*4      VALUE,          { input types }
+%4      INT,            { UPB input types }
+*4      VALUE,          { UPB input types }
+%4      INT,            { output type }
+*4      VALUE,          { output type }
+%4      CINTPTR,        { macro parameters }
+*4      VALUE,          { macro parameters }
+%4      INT,            { UPB macro parameters }
+*4      VALUE,          { UPB macro parameters }
+        REF INT,        { workspace }
+        REF INT,        { history }
+        REF INT         { decl_id }
+    ) ALIENEVALFN finder =
+%4      ALIEN "built_in_finder";
+*4      ALIEN "BUILT_IN_FINDER";
+    HEAP ALIENINFO alien info;
+    workspace size OF alien info := 0;
+    history OF alien info := 0;
+    (eval fn OF alien info :=
+        finder(
+%4          VCTOCHARPTR (name+2r"0"),
+*4          MAKEVALUE ABS VCTOCHARPTR (name+2r"0"),
+%4          UPB name,
+*4          MAKEVALUE UPB name,
+%4          VITOINTPTR input types,
+*4          MAKEVALUE ABS VITOINTPTR input types,
+%4          UPB input types,
+*4          MAKEVALUE UPB input types,
+%4          output type,
+*4          MAKEVALUE output type,
+%4          VITOINTPTR macparams,
+*4          MAKEVALUE ABS VITOINTPTR macparams,
+%4          UPB macparams,
+*4          MAKEVALUE UPB macparams,
+            workspace size OF alien info,
+            history OF alien info,
+            decl id OF alien info
+        )) = nil alien eval fn
+THEN
+    flt("Can't find the alien function named " + name );
+    nil alien info
+ELSE
+    remember alien(alien info);
+    alien info
+FI;
+
+PROC generate call alien = (REF STACKALLOCATOR s, LABEL l) BOOL:
+IF
+    REF ALIENINFO alien = lookup alien(l);
+    alien ISNT nil alien info
+THEN
+
+      {remember current stack position}
+      assemble(movl, (R sp, R tempreg));
+
+      {ensure we can clear the stack after the call etc.}
+      assemble(pushl, R tempreg);
+
+      {r2-r11 are preserved during procedure calls and r0 is a temporary
+       register, so we need to save r1 and r12.}
+      assemble(pushr, LITW ABS 2r0001000000000010);
+
+      {stack the arguments for the alien code }
+      IF lab OF l = lab OF label callinst OF alien
+      THEN
+        { 'real' callinst ptr }
+        assemble(movl,(R callinstpointer,R tempreg));
+        assemble(subl2,(R globalpointer,R tempreg));
+        assemble(pushl,R tempreg)
+      ELSE
+        { 'callinst ptr' masquerades as integer }
+        s MAKEREADABLE tos1;
+        assemble(pushl,s SMALLOPERAND (s LOCATECOPY tos1))
+      FI;
+
+      s MAKEREADABLE tos;
+      assemble(pushl,s SMALLOPERAND (s LOCATECOPY tos));
+
+      {call the alien's evaluation function}
+      assemble (calls, (LITL 2, ABSA (eval fn OF alien)));
+
+      {inputs will have been removed from the stack automatically}
+
+      {restore saved registers}
+      assemble(popr, LITW ABS 2r0001000000000010);
+
+      {pointer to original stack position is at tos. Restore it}
+      assemble (movl, (RD sp, R sp));
+
+    TRUE
+ELSE
+    FALSE
+FI
+
+KEEP
+    ALIENINFO, nil alien info,
+    alien finder,
+    ALIENEVALFN,
+    generate call alien,
+    initialise action,
+    reinitialise action,
+    evaluate action,
+    save action,
+    restore action,
+    terminate action
+FINISH
