@@ -1,0 +1,301 @@
+DECS  attrreader  CONTEXT VOID  USE   messageproc,  putstrings,  basics,
+      commandsyntax,  commandreader,  kernelreader,  attrmodes:
+
+{                    " Id: attrreader.sta,v 1.1 91/10/14 14:26:03 edcad Exp $" }
+configinfo A68CONFIG "$Id: attrreader.a68,v 34.2 1995/03/29 13:03:18 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+23:02:89  Experimental attributes reader for the new Kernel Interface.
+             Operates by breaking a nodeset into smaller syntactic units making
+             it simpler (and hopefully quicker) to extract using get_nodeset.
+             The alternative would be to parse and extract the whole object as
+             a single entity to be re-scanned in the get procedure.  DCT
+15:12:89  "read_quoted_string" moved to kernelreader.  DCT
+12:01:90  "read_period" moved to kernelreader and help added.  DCT
+19:01:90  Read of ident checked after ":" and "/".  DCT
+18:07:90  Wrong READCONTROL parameter for rd_fnname.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number   0.026 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Attributes nodeset reader }
+
+COMMENT
+   Syntax in terms of existing readers with VALUE representations:
+
+   <impname>   = /<ident>             - <ident>           { no space between }
+   <decname>   = <ident> | <fnname>   - <ident|fnname>    { considered atomic }
+   <colonname> = :<ident>             - <ident>           { no space between }
+   <brkint>    = (<int>)              - <int_str>
+   <node>      = <decname> [<brkint>] [<colonname>]
+   <perod>     = .                    - "."               { from kernelreader }
+   <nodeset>   = {<impname> | <node>} [<period> <node>]*
+COMMENT
+
+INT  impname_no,  decname_no,  brkint_no,  colonname_no,  node_no,  nodeset_no;
+COMMANDSYNTAX  nodeset_syntax = nodeset_no;
+
+{ <impname>, <decname>, <colonname> and <brkint> are considered private }
+
+STR  impname_str = importname_str,
+     decname_str = declname_str,
+     brkint_str = ( VECTOR [UPB int_str + 2] CHAR  ans;
+                    ans[1]:= "(";  ans[2 : UPB int_str + 1]:= int_str;
+                    ans[UPB ans]:= ")";  ans { mutter ! } ),
+     colonname_str = ( VECTOR [UPB ident_str + 1] CHAR  ans;
+                       ans[1]:= ":";  ans[2 :]:= ident_str;
+                       ans { mutter ! } ),
+     node_str = "<node>",
+     nodeset_str = "<nodeset>",
+     node_help = "The name of a particular instance in the current ELLA FN.",
+     nodeset_help = "The name of an instance including a path through the"
+                    " circuit hierarchy to reach a particular version.";
+
+PROC  check = (CHAR  c) BOOL: { Additional separators for <nodeset>s }
+   c = "("  OREL  c = "."  OREL  c = ":";
+
+
+PROC  rd_ident = (BOOL  first,  STR  name,  MESSAGEPROC  msg) RVC:
+   check_separator( read_ident_basic((first, FALSE), name, msg),
+                    name, check, msg );
+
+PROC  rd_fnname = (MESSAGEPROC  msg) RVC:
+   check_separator( read_fnname_basic(get_first, msg),
+                    fnname_str, check, msg );
+
+
+PROC  read_impname = (MESSAGEPROC  msg) RVC:
+   IF first_char(msg) = "/"  { read_importname will not permit "." following }
+   THEN  RVC  id = rd_ident(FALSE, impname_str, msg);
+         IF NOT legal_read(id)
+         THEN  msg(user, ident_str + " expected after ""/"" in " + impname_str)
+         FI;
+         id
+   ELSE  nothing_read
+   FI;
+
+PROC  read_decname = (MESSAGEPROC  msg) RVC:
+   { cf read_declname in kernelreaders - do not need to distinguish }
+   IF RVC  ident = rd_ident(TRUE, ident_str, msg);
+      ident IS nilstr
+   THEN  read_failed;  { must reset reader when implementing alt by hand }
+         rd_fnname(msg)
+   ELSE  ident
+   FI;
+
+PROC  read_colonname = (MESSAGEPROC  msg) RVC:
+   IF first_char(msg) = ":"
+   THEN  RVC  id = rd_ident(FALSE, colonname_str, msg);
+         IF NOT legal_read(id)
+         THEN  msg( user,
+                    ident_str + " expected after "":"" in " + colonname_str )
+         FI;
+         id
+   ELSE  nothing_read
+   FI;
+
+PROC  read_brkint = (MESSAGEPROC  msg) RVC:
+   IF first_char(msg) = "("
+   THEN  RVC  int = read_int_basic(get_first, msg);
+         IF (int IS nilstr)  OREL  UPB int = 0
+         THEN  msg(user, int_str + " expected after ""("" in " + brkint_str);
+               nilstr
+         ELIF put_back_char(msg);
+              first_char(msg) = ")"
+         THEN  int
+         ELSE  msg(user, """)"" expected in " + brkint_str);
+               nilstr
+         FI
+   ELSE  nothing_read
+   FI;
+
+
+
+
+PROC  is_nodeset = (VALUE  v) BOOL:
+   sort OF v = impname_no  OREL  sort OF v = decname_no;
+
+
+PROC  get_nodeset = (VALUES  vals,  REF INT  index, MESSAGEPROC  msg) NODESET:
+BEGIN
+   { Note:  All error messages will occur after a successful parse -
+            give more information to show context ? }
+
+   BOOL  foundtype:= FALSE,    { set TRUE when first type node encountered }
+         firstnode:= TRUE;     { only TRUE for first node }
+   INT  lastlevel:= 1;         { detects missing declaration levels }
+
+   PROC  read_node = NODE:
+   BEGIN
+      IF foundtype THEN  msg(user, "Type node followed by further nodes")  FI;
+      IF (index PLUSAB 1) > UPB vals THEN  msg(system, "read_node:  none")  FI;
+      check_value(vals[index], decname_no, msg);
+      DECNODE  decnode =
+         ( value OF vals[index],
+           IF index < UPB vals  ANDTH  sort OF vals[index + 1] = brkint_no
+           THEN  chars to int(value OF vals[index PLUSAB 1], HEAP BOOL)
+           ELSE  1
+           FI
+         );
+      foundtype:= letter((decname OF decnode)[1]);
+      IF firstnode  ANDTH  level OF decnode /= 1
+      THEN  msg(user, "Declaration level of first node must be 1")
+      ELIF level OF decnode < 1
+      THEN  msg( user, "Declaration level of " + decname OF decnode +
+                       " is less than 1" )
+      ELIF level OF decnode - lastlevel > 1
+      THEN  msg( user, "Missing declaration level before node containing " +
+                       decname OF decnode )
+      FI;
+      firstnode:= FALSE;
+      lastlevel:= level OF decnode;
+      IF index < UPB vals  ANDTH  sort OF vals[index + 1] = colonname_no
+      THEN  INSTNODE (decnode, value OF vals[index PLUSAB 1])
+      ELSE  decnode
+      FI
+   END;
+
+   PROC  read_nodelist = REF NODELIST:
+      HEAP NODELIST:=
+         ( read_node,
+           IF index < UPB vals  ANDTH  is_period(vals[index + 1])
+           THEN  index PLUSAB 1;
+                 read_nodelist
+           ELSE  nilnodelist
+           FI
+         );
+
+   IF index < UPB vals
+   THEN  IF sort OF vals[index + 1] = impname_no
+         THEN  IMPNODE ( value OF vals[index + 1],
+                         ( index PLUSAB 2;   { Skip over period }
+                           read_nodelist ) )
+         ELSE  read_nodelist
+         FI
+   ELSE  msg(system, "read_nodeset:  none");
+         nilnodelist
+   FI
+END;
+
+
+{ Delimited data strings }
+
+INT  data_no;
+COMMANDSYNTAX  data_syntax = data_no;
+STR  data_str = "<data>",
+     data_help = "A delimited data string.  The first (non separating)"
+                 " character is assumed to be a delimiter.  Any subsequent"
+                 " characters are accepted as part of the data item until the"
+                 " next delimiter is read.  The delimiter may occur in the"
+                 " string if it is repeated.";
+
+PROC  read_data = (MESSAGEPROC  msg) RVC:
+   IF CHAR  delim = first_char(msg);
+      delim = sep
+   THEN  nothing_read
+   ELSE  check_read( delimited_read( delim, "Missing " + data_str +
+                                     " delimiter", msg ),
+                     data_str, msg )
+   FI;
+
+PROC  is_data = (VALUE  v) BOOL:  sort OF v = data_no;
+
+PROC  get_data = (VALUE  v,  MESSAGEPROC  msg) RVC:
+BEGIN
+   check_value(v, data_no, msg);
+   value OF v
+END;
+
+
+{ Aliased readers for the attribute system }
+
+INT  class_no,  password_no;
+STR  class_str = "<class>",  password_str = "<password>",
+     class_help = "A class is similar to an indentifier (lower case).",
+     password_help = "A password string is similar to an identifier.";
+COMMANDSYNTAX  class_syntax = class_no,  password_syntax = password_no;
+
+PROC  read_class = (MESSAGEPROC  msg) RVC:
+   read_ident_basic(first_and_check, class_str, msg);
+
+PROC  read_password = (MESSAGEPROC  msg) RVC:
+   read_ident_basic(first_and_check, password_str, msg);
+
+PROC  is_class = (VALUE  v) BOOL:  sort OF v = class_no;
+PROC  is_password = (VALUE  v) BOOL:  sort OF v = password_no;
+
+PROC  get_class = (VALUE  v,  MESSAGEPROC  msg) RVC:
+BEGIN
+   check_value(v, class_no, msg);
+   value OF v
+END;
+
+PROC  get_password = (VALUE  v,  MESSAGEPROC  msg) RVC:
+BEGIN
+   check_value(v, password_no, msg);
+   value OF v
+END;
+
+
+
+PROC  add_attribute_readers = (REF READERS  readers) REF READERS:
+   add_readers( readers,
+                ( (impname_no, read_impname, impname_str, nullstr),
+                  (decname_no, read_decname, decname_str, nullstr),
+                  (colonname_no, read_colonname, colonname_str, nullstr),
+                  (brkint_no, read_brkint, brkint_str, nullstr),
+                  ( node_no,
+                    prod((decname_no, opt(brkint_no), opt(colonname_no))),
+                    node_str, node_help ),
+                  ( nodeset_no,
+                    prod(( opt(prod((impname_no, period_syntax))),
+                           node_no,
+                           opt(star(prod((period_syntax, node_no)))) )),
+                    nodeset_str, nodeset_help ),
+                  (data_no, read_data, data_str, data_help),
+                  (class_no, read_class, class_str, class_help),
+                  (password_no, read_password, password_str, password_help)
+                )
+              )
+
+
+
+KEEP  nodeset_str,     nodeset_syntax,     is_nodeset,     get_nodeset,
+      data_str,        data_syntax,        is_data,        get_data,
+      class_str,       class_syntax,       is_class,       get_class,
+      password_str,    password_syntax,    is_password,    get_password,
+      add_attribute_readers
+FINISH
