@@ -1,0 +1,233 @@
+DECS  closureprocs  CONTEXT VOID  USE  putstrings,  messageproc,  assmodes:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: closureprocs.a68,v 34.2 1995/03/29 13:02:53 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1991
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:09:91  First created.  DCT
+16:10:91  IDSTABLE removed.  DCT
+23:10:91  Disturbed copy_closure when new_closure was removed.  DCT
+
+   Created to reconcile the conflict between declaration order, the need to
+   locate an OUTER by "index" rather than reference and the need to avoid HEAP
+   fragmentation.  A simple (public) linear linked list (of OUTERS) is used to
+   define declaration order.  The members of that list are held in fixed length
+   VECTORs chained together in a list (OUTERSLIST) defining closure number
+   order.  The closure number assigned never changes.  A free list is
+   maintained of discarded OUTERS.  The .ELA file is written in declaration
+   order.  A garbage collector is provided for regenerating the freelist.  The
+   optimisations used in this Module need not be seen nor copied by other
+   systems.  To ensure the integrity of these optimisations, the procedures
+   used in this Module should be used wherever possible.
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.003 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+INT  n_outers = 512;         { Optimised closure number look-up  (private) }
+
+
+{ Procedures for processing OUTER }
+
+PROC  maxclosureno = (CLOSURE  closure) INT:  max_closureno OF closure;
+
+
+PROC  find_outers = ( INT  closureno,  CLOSURE  closure,
+                      MESSAGEPROC  msg ) REF OUTERS:
+   IF closureno <= 0  OREL  closureno > max_closureno OF closure
+   THEN  msg( system, oneline(( "find_outers:  closureno ", closureno,
+                                " out of range ", max_closureno OF closure )));
+         SKIP
+   ELSE  INT  index = ((closureno - 1) MOD n_outers) + 1,
+              pos = (closureno - 1) OVER n_outers;
+         REF OUTERSLIST  optr:= outerslist OF closure;
+         TO pos DO  optr:= rest OF optr  OD;
+         (outers OF optr)[index]
+   FI;
+
+
+PROC  new_outers = (CLOSURE  closure) REF OUTERS:
+   IF freelist OF closure IS nilouters
+   THEN  { Create a new entry - first locate the last element }
+         INT  n:= max_closureno OF closure PLUSAB 1;
+         REF REF OUTERSLIST  ptr:= outerslist OF closure;
+         WHILE n > n_outers
+         DO  ptr:= rest OF ptr;  n MINUSAB n_outers  OD;
+         IF n = 1
+         THEN  { Need a new block from the HEAP }
+               REF REF OUTERSLIST (ptr):= HEAP OUTERSLIST:=
+                  (HEAP VECTOR [n_outers] OUTERS, nilouterslist);
+               FORALL outers IN outers OF ptr
+               DO  outers:= (nullouter, nilouters)  OD
+         FI;
+         REF OUTERS  new = (outers OF ptr)[n];
+         { Set up closureno so that the garbage collector can recover it
+           if necessary and add it to the freelist }
+         closureno OF outer OF new:= max_closureno OF closure;
+         new
+   ELSE  REF OUTERS  recycled = freelist OF closure;
+         REF REF OUTERS (freelist OF closure):= rest OF freelist OF closure;
+         recycled
+   FI;
+
+
+
+
+PROC  reserve_next_closureno = (CLOSURE  closure) INT:
+   closureno OF outer OF new_outers(closure);
+
+
+PROC  insert_outer = ( OUTER  new,  REF REF OUTERS  ptr,
+                       CLOSURE  closure,  MESSAGEPROC  msg )  REF REF OUTERS:
+BEGIN
+   { This procedure inserts a new OUTER before the current one (in
+     declaration order).  }
+   REF OUTERS  outers = find_outers(closureno OF new, closure, msg);
+   ptr:= outers:= (new, ptr);
+   rest OF outers
+END;
+
+
+PROC  free_outers = ( REF REF OUTERS  ptr,  CLOSURE  closure,
+                      MESSAGEPROC  msg ) VOID:
+BEGIN   { Removes the current OUTERS }
+   IF ptr IS nilouters
+   THEN  msg(system, "remove_outer:  no OUTERS left")
+   FI;
+   REF OUTERS  free = ptr;
+   ptr:= rest OF ptr;
+   sort OF outer OF free:= 0;
+   environ OF outer OF free:= REF ENVIRON (NIL);
+   rest OF free:= freelist OF closure;
+   freelist OF closure:= free
+END;
+
+
+
+{ General closure procedures }
+
+PROC  make_closure = CLOSURE:
+   HEAP CLOSUREDAT:= (0, nilouters, nilouters, nilouterslist);
+
+
+PROC  garbage_collect_closure = (CLOSURE  closure,  MESSAGEPROC  msg) INT:
+BEGIN   { Delivers the size of the free list }
+   VECTOR [max_closureno OF closure] BOOL  free;
+   FORALL f IN free DO  f:= TRUE  OD;
+
+   { Trace }
+   REF OUTERS  ptr:= outers OF closure;
+   WHILE ptr ISNT nilouters
+   DO  free[closureno OF outer OF ptr]:= FALSE;
+       ptr:= rest OF ptr
+   OD;
+
+   { Scavenge }
+   INT  rec:= 0;
+   REF REF OUTERS  freelist:= freelist OF closure;
+   FOR i TO UPB free
+   DO  IF free[i]
+       THEN  rec PLUSAB 1;
+             REF OUTERS  unused = find_outers(i, closure, msg);
+             unused:= ((i, 0, REF ENVIRON (NIL)), nilouters);
+             freelist:= rest OF (REF REF OUTERS (freelist):= unused)
+       FI
+   OD;
+
+   rec
+END;
+
+
+{ Procedure to create a copy of a closure when a change has been detected.
+  Before a change has ocurred, the "new closure" should reference the old one
+  and the "new current outers ptr" should be equivalent to the old one.
+
+  Typical usage:
+
+  PROC  transform = (CLOSURE  old, ...) CLOSUREC:
+  BEGIN
+     CLOSURE  new:= old;
+     {* REF } REF OUTERS  ptr:= outers OF new;  { Used to scan old + build new }
+     BOOL  changed_closure:= FALSE;
+
+     PROC  check = VOID:   { Call this procedure when a change is detected }
+        IF NOT changed_closure
+        THEN  changed_closure:= TRUE;
+              new:= copy_closure(new { = old}, msg);
+              { ptr still points to the old list - find the same object in new }
+              ptr:= find_outers(closureno OF outer OF ptr, new, msg)
+        FI;
+
+  {* Use extra REF when insertions or "free_outers" are required.
+     (It is recommended that a triple REF is used normally).
+     Keep a separate pointer if old closure information is required after
+     it has changed. }
+}
+
+PROC  copy_closure = (CLOSURE  old,  MESSAGEPROC  msg) CLOSURE:
+BEGIN
+   HEAP CLOSUREDAT  new:= old;
+
+   { Now copy chains into new HEAP locations }
+
+   REF OUTERSLIST  optr:= outerslist OF old;
+   REF REF OUTERSLIST  nptr:= outerslist OF new;
+   WHILE optr ISNT nilouterslist
+   DO  nptr:= rest OF ( REF REF OUTERSLIST (nptr):= HEAP OUTERSLIST:=
+                        ( HEAP VECTOR [UPB outers OF optr] OUTERS:=
+                            outers OF optr, nilouterslist ) );
+                    { Note that the rest OF fields still point to old... }
+       optr:= rest OF optr
+   OD;
+
+   { Now update declaration order list }
+
+   REF REF OUTERS  ptr:= outers OF new;   { currently points to old... }
+   WHILE ptr ISNT nilouters
+   DO  REF REF OUTERS (ptr):= find_outers(closureno OF outer OF ptr, new, msg);
+       ptr:= rest OF ptr
+   OD;
+
+   { Use the garbage collector to rebuild the freelist }
+
+   garbage_collect_closure(new, msg);
+
+   new
+END
+
+KEEP  maxclosureno,  find_outers,  new_outers,  reserve_next_closureno,
+      insert_outer,  free_outers,
+      make_closure,  garbage_collect_closure,  copy_closure
+FINISH
