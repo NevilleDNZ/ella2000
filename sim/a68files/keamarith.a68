@@ -1,0 +1,416 @@
+DECS keamarith  CONTEXT VOID USE  putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, kebasics:
+
+{  " Id: keamarith.sta,v 2.1 91/02/22 18:33:59 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamarith.a68,v 34.2 1995/03/29 13:04:32 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:09:88  Module created by splitting the existing module 'keamgen',
+              removing translation of arith only to this module.
+ 4:01:89  Allow non-integer output types.  Bug 81.  PAR.
+ 4:01:89  Handle user defined inputs (so that all user ARITH functions
+              are atomic).  By-product of bug 55.  PAR.
+ 4:01:89  Exceptions corrected: set for -ve sqrt, evaluation flag
+              always left on exit, only arithmetic errors (not ^C) cause
+              query output.  To keep code size down, the query setting
+              code has been removed into a subroutine, generated if
+              'no ariths yet' is true.  Bug 80.  PAR.
+ 5:01:89  Call sequence to SQRT_US code corrected.  Bug 92.  PAR.
+14:01:89  ARITH handle ELLA-character outputs.  Bug 122.  BJE.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.006 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Flag to indicate whether the query generation subroutine has been
+  compiled yet.  This is set TRUE in initialisation by KEAMGEN, and
+  is set false below as soon as an ARITH is seen.
+}
+BOOL no ariths yet := TRUE;
+
+
+{ The call to a BIOP for the arith square root operator is set up by
+  this procedure
+}
+PROC arith sqrt = (INT d) VOID:
+BEGIN
+    LABEL ok = new label;
+    am local (0);
+    am pushint (0);
+    am lt;
+    am jumpno (0, ok);
+    am global (ws, global interrupted label);
+    am local (0);
+    am pushint (arithmetic error);          { If there has already been        }
+    am iand;                                {  an arithmetic error, either     }
+    am test;                                {  in a previous function or       }
+    am not;                                 {  this, then leave interrupted    }
+    am jumpno (d, arith exception label);   {  showing general arith error,    }
+    am pushint (arithmetic error + sqrt error); {  else set sqrt error (which  }
+    am ior;                                     {  is also an arith error!)    }
+    am store (ws, global interrupted label);
+    am drop (d-1);
+    am jump (arith exception label);
+
+    am label (d, ok);
+    am itos (ws * bits per byte);           { Value part }
+    am pushint (1);                         { Query flag }
+    am call (2, label ("SQRT_US|1"));
+    am drop (1);                            { Drop query flag }
+    am stoi
+END;
+
+
+
+{ The instructions to carry out dyadic arithmetic operations, assuming
+  operands on the stack and result going to the stack, are put together
+  by this procedure:
+}
+PROC arith dyad = (INT sort) VOID:
+    CASE sort IN
+        {plus}    am add,
+        {minus}   am sub,
+        {mult}    am mul,
+        {idiv}    am div,
+        {eq}      am eq,
+        {ne}      am neq,
+        {le}      am le,
+        {ge}      am ge,
+        {lth}     am lt,
+        {gth}     am gt,
+        {and}     am and,
+        {or}      am or,
+        {UNUSED}  SKIP,
+        {sl}      am shl,
+        {sr}      am shr,
+        {iand}    am iand,
+        {ior}     am ior,
+        {mod}     am mod
+    ESAC;
+
+
+{ Similarly, for monadic operators:
+}
+PROC arith monad = (INT sort, d) VOID:
+    CASE sort IN
+        {plus}    SKIP,
+        {minus}   am neg,
+        {not}     am not,
+        {UNUSED}  SKIP,
+        {inot}    am com,
+        {sqrt}    arith sqrt (d),
+        {abs}     am abs
+    ESAC;
+
+
+{ Generation of code for ARITH function bodies.
+  The parameter 'd' to these translation routines is the depth of the
+  abstract machine stack at the start of the code about to be generated.
+}
+PROC arith body= (FORMULA body, VECTOR [] WIRE input wires,
+                  VECTOR [] INT input types, INT d) VOID:
+    CASE body IN
+        (REF FINT i):
+            am push int (int OF i),
+        (REF FARITH a):
+            BEGIN
+                INT ip no = nameno OF a;
+                INT prim no := 1;
+                FOR i TO ip no - 1 DO
+                    prim no +:= UPB blocks OF input wires [ip no]
+                OD;
+                INT size = lookup type size (input types [prim no]);
+                INT offset = size unit + ws * prim no;
+                am local (d-1);        { Copy instance pointer }
+                am pushint (offset);
+                am add;                { Address of input pointer }
+                am global (ws, indirect);
+                am pushint (size unit);{ Size of query flag }
+                am add;
+                am global (size - size unit, indirect)
+            END,
+        (REF FDOP dop):
+            BEGIN
+                arith body (left OF dop, input wires, input types, d);
+                arith body (right OF dop, input wires, input types, d+1);
+                arith dyad (sort OF dop)
+            END,
+        (REF FMOP mop):
+            BEGIN
+                arith body (right OF mop, input wires, input types, d);
+                arith monad (sort OF mop, d+1)
+            END,
+        (REF FCOND cond):
+            BEGIN
+                LABEL else part label = new label;
+                LABEL end label = new label;
+                arith body (cond OF cond, input wires, input types, d);
+                am jumpno (0, else part label);
+                    arith body (true OF cond, input  wires, input types, d);
+                am jump (end label);
+                am label (d, else part label);
+                    arith body (false OF cond, input wires, input types, d);
+                am label (d, end label)
+            END
+    ESAC;
+
+
+{ 'arith input check' tests to see whether any input is query, and
+  if so jump to the place where a query result is set.
+  Note that the signal representation for *any* ELLA type has query
+  represented by zero in its first 'size unit' bytes, so this code
+  is in fact valid even for (unused!) non-integer inputs (in which
+  the function is still required to be strict).
+}
+PROC arith input check = (VECTOR [] INT type indices, INT d) VOID:
+BEGIN
+    INT offset := size unit + ws;
+    FOR i TO UPB type indices DO
+        am local (d-1);                    { copy instance pointer }
+        am pushint (offset);
+        am add;                            { addr of this input }
+        am global (ws, indirect);          { pointer to first word of value }
+        am global (size unit, indirect);   { the actual query flag }
+        am test;
+        am jump no (0, set query output label);{ set query if zero }
+        offset +:= ws
+    OD
+END;
+
+
+{ Standard setting of query output, called from the output
+  checking code when the result is out of range for the output
+  type, or when an exception has occurred.
+  The parameters to this routine are:
+      Instance ptr
+      State to leave in evaluation flag
+      Offset of fanout list
+      Offset of output
+}
+REF VECTOR [] CHAR arith query exit;
+
+PROC translate query exit = VOID:
+BEGIN
+    arith query exit := MAKEID "Arith_query";
+    HEAP PARAMS params := ((instance ptr, 0), HEAP PARAMS :=
+                           ((integer, 0), HEAP PARAMS :=
+                            ((integer, 0), HEAP PARAMS :=
+                             ((integer, 0), nil params))));
+    am generate named code ((0, arith query exit), params, nil params);
+
+    am local (3);                     { Instance ptr }
+    am add;                           { Address of output }
+    am local (0);
+    am global (size unit, indirect);  { Previous query flag }
+    am test;
+    am jumpno (2, unchanged query label);
+
+    am pushint (0);                   { Store the query }
+    am store (size unit, indirect);
+    am local (2);                     { Instance ptr }
+    am add;                           { Address of fanout list }
+    am fanout (0);
+
+    am label (2, unchanged query label);
+    am store (size unit, indirect);   { New evaluation flag }
+    am ret (0)
+
+END;
+
+
+{ The end of an ARITH function needs to do certain checks, and
+  possibly call standard code for setting the result to query.
+  If the code is entered at the top, we know the result is a defined
+  integer, and if entered a label 'set query output label' or
+  'arith exception label', we are to set the result to query.
+  'd' is stack depth for code entered at the top.
+}
+PROC arith output check = (INT offset, type index, d) VOID:
+BEGIN
+    IF d /= 2 THEN sys fault ("arith output check") FI;
+    STYPE type = lookup type (type index);
+    INT size = lookup type size (type index);
+    INT lwb, upb, value part offset;
+    CASE type IN
+        (REF SENUM e):
+            BEGIN
+                lwb := upb := 1;
+                REF SENUM scan := rest OF e;
+                WHILE scan ISNT nil senum DO
+                    upb +:= 1;
+                    scan := rest OF scan
+                OD;
+                value part offset := 0
+             END,
+        (REF SCHAR c):
+            BEGIN
+                lwb := 1;
+                upb := UPB char OF c;
+                value part offset := 0
+             END,
+        (REF SINT int):
+            BEGIN
+                lwb := lwb OF int;
+                upb := upb OF int;
+                value part offset := size unit
+            END
+    ESAC;
+
+    {(res:cp)}
+
+    am global (ws, global interrupted);
+    am pushint (arithmetic error);
+    am iand;
+    am test;
+    am not;
+    am jump no (1, arith exception label);
+    {(res:cp)}
+
+    am local (0);                      { copy the result }
+    am pushint (lwb);
+    am ge;
+    am jump no (1, set query output label);
+    am local (0);
+    am pushint (upb);
+    am le;
+    am jump no (1, set query output label);
+    {(res:cp)}
+
+    am local (1);
+    am pushint (offset);
+    am add;                            { Address of output }
+    {(oa:res:cp)}
+
+    IF value part offset /= 0 THEN
+        am local (0);
+        am global (size unit, indirect);   { Previous query flag }
+        am test;
+        am jump no (0, new result label)
+    FI;
+
+    am local (0);
+    IF value part offset /= 0 THEN
+        am pushint (value part offset);    { Address of actual number in output }
+        am add
+    FI;
+    am global (ws, indirect);          { Previous result }
+    am local (2);                      { Copy of new result }
+    am neq;                            {(res /= @(oa+su):oa:res:cp)}
+    am jump no (1, old result label);  { Equal, skip setting result }
+    {(oa:res:cp)}
+
+    am label (3, new result label);
+    {(oa:res:cp)}
+
+    am local (0);
+    IF value part offset /= 0 THEN
+        am pushint (value part offset);    { Address of actual number in output }
+        am add
+    FI;
+    {(oa+vpo:oa:res:cp)}
+
+    am local (2);                      { Else copy of new result }
+    am store (ws, indirect);
+    IF value part offset /= 0 THEN
+        am pushint (1);                    { Set the query flag for it }
+        am store (size unit, indirect)
+    ELSE
+        am drop (1)
+    FI;
+    {(res:cp)}
+
+    am local (1);                      { Address of evaluation flag }
+    am pushint (0);                    {   reset it to indicate change }
+    am store (size unit, indirect);
+
+    am label (2, old result label);
+    {(res:cp)}
+
+    translate end function (offset + size, 2);
+
+    { -------------------------------------------------------------------- }
+    { Query exits (out of range, or exceptions) }
+
+    am label (1, arith exception label);  { set query and 'interrupted' }
+                {=====================}
+    {(cp)}
+
+    am pushint (1);
+    am jump (query label);
+
+    am label (1, set query output label);  { set query result}
+                {======================}
+    {(cp)}
+
+    am pushint (0);
+    am label (2, query label);
+    am pushint (offset + size);
+    am pushint (offset);
+    am call (4, (0, arith query exit));
+    am ret (0)
+
+END;
+
+
+
+{ Complete translation of an ARITH function.
+}
+PROC translate arith = (ARITH body, ID name, FNDEC declaration,
+                        VECTOR [] WIRE input wires,
+                        VECTOR [] INT input types, INT output type,
+                        ENVIRON environ, CLOSURE closure,
+                        FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+    IF no ariths yet THEN
+        translate query exit;
+        no ariths yet := FALSE
+    FI;
+
+    INT output offset = size unit                   { for the flag }
+                        + ws                        { for input count }
+                        + UPB input types * ws;     { the inputs }
+    translate start function (name);
+    arith input check (input types, 1);
+    arith body (output OF body, input wires, input types, 1);
+        { Stack initially one element deep, now has result at tos }
+    arith output check (output offset, output type, 2);
+    INT fixed part size = output offset + lookup type size (output type);
+    (fixed part size, output offset, combinatorial)
+END
+
+
+KEEP
+    no ariths yet, translate arith
+FINISH
