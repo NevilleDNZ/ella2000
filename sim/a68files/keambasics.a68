@@ -1,0 +1,604 @@
+DECS keambasics  CONTEXT VOID USE  putstrings, basics,
+*6   kecodegenvax,
+*7   kecodegen68k,
+*R   kecodegensparc,
+     kebasics:
+
+{ " Id: keambasics.sta,v 2.1 91/02/22 18:34:02 edcad Exp$" }
+configinfo A68CONFIG "$Id: keambasics.a68,v 34.2 1995/03/29 13:04:33 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement the interface to the abstract
+              machine code generator in the kernel of the new simulator
+ 4:01:89  Interrupt levels defined here.  Bug 80.  PAR.
+ 5:01:89  Missing commas inserted in a CASE clause!  PAR.
+ 2:02:89  Changed parameters to 'cg initialise'.  R4B034 and
+              Arch design CR 35.  PAR.
+10:04:89  MODE and KEEPlist changes for R4B134.  PAR.
+02:05:89  Modified USE list for variants of kecodegen. BGH
+11:05:89  Added size unit alignment procedure for SPARC. R4B324. MDR.
+06:06:89  Stricter checks on AM parameters to protect the translator. SPT.
+14:06:89  Exported up from am version. MDR.
+04:12:89  'cg extend space' added to keep list.  PAR.
+04:12:89  Parameter to 'am callinst' generalised.  PAR.
+06:12:90  Taken the zero length row of char in a new label, off the heap.
+              MDR.
+11:06:93  FLTPROC added to keep list.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.013 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ This module provides a little added value in the generation of
+  abstract machine code.  It provides for diagnostic printing,
+  and hooks which could be used for storage of abstract machine
+  code to a file if this method were used for storing the simulator
+  state.
+
+  Each abstract machine instruction is represented by a procedure
+  which calls a general purpose procedure to do any necessary output,
+  and then calls the procedure required to generate target code for it.
+
+  Those abstract machine operations which affect the environment are
+  also channelled through this module with diagnostic printing; other
+  code generator procedures are simply kept.
+}
+
+
+{ Machine parameters. }
+{ =================== }
+
+
+{ The abstract machine always assumes 8 bits per byte
+}
+INT bits per byte = 8;
+
+
+{ The following vary between different versions of the abstract machine
+}
+INT ws;
+BOOL am version up;
+PROC (WORD) {=-}REF{=+}WORD up;
+INT size unit;
+PROC (OFFSET, REF INT) OFFSET al;
+
+
+{ The possible procedures to convert a WORD to upwards storage
+}
+PROC identity = (WORD word) {=-}REF{=+}WORD:  {=-}HEAP WORD := {=+}word;
+
+PROC reverse = (WORD word) {=-}REF{=+}WORD:
+BEGIN
+    INT top = UPB word + 1;
+    FOR i TO UPB word % 2 DO
+        CHAR upper = word [top - i];
+        word [top - i] := word [i];
+        word [i] := upper
+    OD;
+    {=-}HEAP WORD := {=+}word
+END;
+
+
+{ A likely procedure for converting an arbitrary location to the
+  next one up with the correct alignment for storing the object.
+  The given size is adjusted according to the minimum size we are
+  prepared to handle.
+}
+PROC byte alignment = (OFFSET a, REF INT size) OFFSET:
+BEGIN
+    size +:= (- size) MOD size unit;
+    a
+END;
+
+PROC size unit alignment = (OFFSET a, REF INT size) OFFSET:
+BEGIN
+    size +:= (- size) MOD size unit;
+    a + ((- a) MOD size unit)
+END;
+
+{ Interrupt levels }
+{ ================ }
+
+{ These values define bits which may be set in the global interrupted
+  word to indicate the type of interrupt.  Not all combinations of bits
+  are valid:  if 'sqrt error' is set, then so too must be 'arithmetic error';
+  likewise 'soft interrupt' remains set when 'hard interrupt' is added.
+}
+INT soft interrupt   = 1,
+    hard interrupt   = 2,
+    sqrt error       = 4,
+    arithmetic error = 8,
+    any exception    = 15;
+
+
+{ Label Generation }
+{ ================ }
+
+
+{ The code generator supplies the following to generate textual labels
+  from the name:
+}
+COMMENT
+PROC (VECTOR [] CHAR) LABEL label;
+COMMENT
+
+
+{ Generation of new unique labels.
+}
+INT label seed := 0;
+VECTOR [0] CHAR dummytag;
+PROC new label = LABEL:  (label seed +:= 1, dummytag);
+
+
+{ Procedures are provided to enable part of the label sequence to be
+  repeated in a controlled way, using a stack of saved seeds.  The point
+  to which we wish to go back should be marked with 'mark label sequence';
+  then we can later go back to this point using 'repeat label sequence';
+  finally, to resume at the end point, we should use 'continue label sequence'.
+  A sequence which has been 'mark'ed must always be 'continue'd, but there
+  need not be a 'repeat'.
+}
+MODE LABSTACK = STRUCT (INT top, BOOL repeating, REF LABSTACK rest);
+
+REF LABSTACK label stack := NIL;
+
+PROC mark label sequence = VOID:
+    label stack := HEAP LABSTACK := (label seed, FALSE, label stack);
+
+PROC repeat label sequence = VOID:
+    IF
+        (label stack ISNT REF LABSTACK (NIL))
+        ANDTH NOT repeating OF label stack
+    THEN
+        repeating OF label stack := TRUE;
+        INT repeat at = top OF label stack;
+        top OF label stack := label seed;
+        label seed := repeat at
+    ELSE
+        sys fault ("label stack")
+    FI;
+
+PROC continue label sequence = VOID:
+BEGIN
+    IF repeating OF label stack THEN
+        label seed := top OF label stack
+    FI;
+    label stack := rest OF label stack
+END;
+
+
+{ Housekeeping }
+{ ============ }
+
+
+{ A procedure and variable to be used for diagnostics
+}
+PROC (RVC) VOID put diag;
+BOOL show am code := FALSE;
+
+
+{ On initialisation, most of the added processing handles the abstract
+  machine parameters.  Alignment (the combination of 'al' and 'size unit')
+  is restricted, in particular there is a general restriction that the
+  alignment of an object of size 'size unit' (and all smaller objects,
+  therefore) must itself be to boundaries of 'size unit' or a divisor
+  of it, and another that the 'ws' parameter must be a multiple of
+  the 'size unit'.  There is also currently a restriction that only
+  byte alignment and size unit alignment are implemented.
+}
+PROC am initialise = (PROC (RVC) VOID diag, INT level, FLTPROC flt) VOID:
+BEGIN
+    put diag := diag;
+    show am code := diagnose am code <= BIN level;
+    label seed := 0;
+    AMVERSION version = cg initialise (diag, level, flt);
+    ws := ws OF version;
+    am version up := up OF version;
+    IF up OF version THEN
+        up := reverse
+    ELSE
+        up := identity
+    FI;
+    size unit := size unit OF version;
+    IF ws MOD size unit /= 0 THEN
+        sys fault ("Word size must be a multiple of the size unit")
+    FI;
+    IF ws /= size unit THEN
+        sys fault ("Word size and size unit must be equal")
+    FI;
+    FOR i TO UPB al OF version WHILE 2^i <= size unit DO
+        IF size unit MOD (al OF version) [i] /= 0 THEN
+            sys fault ("Alignment stricter than size unit in abstract machine version")
+        FI
+    OD;
+    IF UPB al OF version = 1 ANDTH (al OF version) [1] = 1 THEN
+        al := byte alignment
+    ELIF UPB al OF version = 3 ANDTH (al OF version)[1] = 1 ANDTH
+         (al OF version)[2] = 2 ANDTH (al OF version)[3] = 4
+    THEN
+       al := size unit alignment
+    ELSE
+        sys fault ("Cannot translate for this abstract machine version!")
+    FI
+END;
+
+
+PROC am closedown = (FLTPROC flt) VOID:  cg closedown (flt);
+
+
+{ The operands to code generation procedures can always be put into
+  a single element of the mode AMOP:
+}
+MODE { O1 would be VOID, but you can't say that! }
+     O2   = STRUCT (INT n, WORD w),
+     O3   = INT,
+     O4   = STRUCT (INT n, ADDRESS a),
+     O5   = LABEL,
+     O6   = STRUCT (INT n, LABEL lab),
+     O7   = STRUCT (LABEL lab, REF PARAMS pin, pout),
+     O8   = STRUCT (LABEL lab, OFFSET loc),
+     O9   = STRUCT (INT n, m, ADDRESS a),
+     O10  = STRUCT (ADDRESS a, LABEL lab),
+     AMOP = UNION (VOID, O2, O3, O4, O5, O6, O7, O8, O9, O10);
+
+
+{ We need to be able to convert operands to text:
+}
+PRIO TEXT = 2;
+
+OP TEXT = (LABEL label) VECTOR [] CHAR:
+    IF lab OF label /= 0 THEN
+        "(Lab " + intchars (lab OF label) + ")"
+    ELSE
+        "(Tag """ + tag OF label + """)"
+    FI;
+
+OP TEXT = (ADDRESS address) VECTOR [] CHAR:
+    CASE address IN
+        (OFFSET offset):  "(Offset " + intchars (offset) + ")",
+        (LABEL label):  TEXT label,
+        (VOID):  "Indirect"
+    ESAC;
+
+OP TEXT = (WORD word) VECTOR [] CHAR:
+BEGIN
+    REF VECTOR [] CHAR ans := HEAP VECTOR [1] CHAR := "[";
+    FOR i TO UPB word - 1 DO
+        ans := MAKEID (ans + intchars (ABS word [i]) + ",")
+    OD;
+    ans + intchars (ABS word [UPB word]) + "]"
+END;
+
+OP TEXT = (REF PARAMS params) VECTOR [] CHAR:
+    IF params IS nil params THEN  ""
+    ELSE
+        CASE sort OF head OF params + 1 IN
+            " Unknown",
+            " Fixed (" + intchars (size OF head OF params) + ")",
+            " Instance ptr",
+            " Boolean",
+            " Integer"
+        ESAC
+        + TEXT tail OF params
+    FI;
+
+
+{ Data for instructions }
+{ ===================== }
+
+VECTOR [] VECTOR [] CHAR am names =
+   ("	Halt",       "	Add",        "	Sub",        "	Mul",
+    "	Div",        "	Mod",        "	Neg",        "	Abs",
+    "	Iand",       "	Ior",        "	Shl",        "	Shr",
+    "	Com",        "	Test",       "	Eq",         "	Neq",
+    "	Gt",         "	Ge",         "	Lt",         "	Le",
+    "	And",        "	Or",         "	Not",        "	Pushstring ",
+    "	Pushint	 ",  "	Drop	 ",  "	Local	 ",  "	Global	 ",
+    "	Store	 ",  "	Bstring	 ",  "	Bstore	 ",  "  Itos	 ",
+    "	Utos	 ",  "	Stoi",       "	Stou",       "	Jump	 ",
+    "	Jump no	 ",  "	Label	 ",  "	Repeat",     "	Loop",
+    "	Callinst ",  "	Call	 ",  "	Enter",      "	Fanout	 ",
+    "	Ret	 ",
+    "generate named code ",          "generate named data ",
+    "generate param types ",         "generate ",
+    "generate end decls ",           "generateca ",
+    "generate endca ");
+
+
+INT halt instr          = 1,        add instr           = 2,
+    sub instr           = 3,        mul instr           = 4,
+    div instr           = 5,        mod instr           = 6,
+    neg instr           = 7,        abs instr           = 8,
+    iand instr          = 9,        ior instr           = 10,
+    shl instr           = 11,       shr instr           = 12,
+    com instr           = 13,       test instr          = 14,
+    eq instr            = 15,       neq instr           = 16,
+    gt instr            = 17,       ge instr            = 18,
+    lt instr            = 19,       le instr            = 20,
+    and instr           = 21,       or instr            = 22,
+    not instr           = 23,       pushstring instr    = 24,
+    pushint instr       = 25,       drop instr          = 26,
+    local instr         = 27,       global instr        = 28,
+    store instr         = 29,       bstring instr       = 30,
+    bstore instr        = 31,       itos instr          = 32,
+    utos instr          = 33,       stoi instr          = 34,
+    stou instr          = 35,       jump instr          = 36,
+    jump no instr       = 37,       label instr         = 38,
+    repeat instr        = 39,       loop instr          = 40,
+    callinst instr      = 41,       call instr          = 42,
+    enter instr         = 43,       fanout instr        = 44,
+    ret instr           = 45,
+    generate named code op  = 46,   generate named data op  = 47,
+    generate param types op = 48,   generate op             = 49,
+    generate end decls op   = 50,   generateca op           = 51,
+    generate endca op       = 52;
+
+
+{ Output procedure }
+{ ================ }
+
+{ It is the responsibility of this procedure to handle all output of
+  abstract machine code other than its translation to target machine code
+}
+PROC xput = (INT instruction, AMOP operands) VOID:
+IF show am code THEN
+    put diag (MAKEID
+        (am names [instruction]
+        +
+        CASE operands IN
+            (VOID):    "",
+            (O2 nw):   intchars (n OF nw) + " " + TEXT w OF nw,
+            (O3 n):    intchars (n),
+            (O4 na):   intchars (n OF na) + " " + TEXT a OF na,
+            (O5 lab):  TEXT lab,
+            (O6 nl):   intchars (n OF nl) + " " + TEXT lab OF nl,
+            (O7 lpp):  "(" + TEXT lab OF lpp + ", "
+                           + TEXT pin OF lpp + ", " + TEXT pout OF lpp + ")",
+            (O8 ln):   "(" + TEXT lab OF ln + ", " +  intchars (loc OF ln) + ")",
+            (O9 nma):  intchars (n OF nma) + " " + intchars (m OF nma) + " "
+                           + TEXT a OF nma,
+            (O10 al):  TEXT a OF al + " " + TEXT lab OF al
+        ESAC
+        + ","))
+FI;
+
+
+{ Interface procedures with added value }
+{ ===================================== }
+
+PROC am halt = VOID:
+    (xput (halt instr, EMPTY);  generate halt);
+
+PROC am add = VOID:
+    (xput (add instr, EMPTY);  generate add);
+
+PROC am sub = VOID:
+    (xput (sub instr, EMPTY);  generate sub);
+
+PROC am mul = VOID:
+    (xput (mul instr, EMPTY);  generate mul);
+
+PROC am div = VOID:
+    (xput (div instr, EMPTY);  generate div);
+
+PROC am mod = VOID:
+    (xput (mod instr, EMPTY);  generate mod);
+
+PROC am neg = VOID:
+    (xput (neg instr, EMPTY);  generate neg);
+
+PROC am abs = VOID:
+    (xput (abs instr, EMPTY);  generate abs);
+
+PROC am iand = VOID:
+    (xput (iand instr, EMPTY);  generate iand);
+
+PROC am ior = VOID:
+    (xput (ior instr, EMPTY);  generate ior);
+
+PROC am shl = VOID:
+    (xput (shl instr, EMPTY);  generate shl);
+
+PROC am shr = VOID:
+    (xput (shr instr, EMPTY);  generate shr);
+
+PROC am com = VOID:
+    (xput (com instr, EMPTY);  generate com);
+
+PROC am test = VOID:
+    (xput (test instr, EMPTY);  generate test);
+
+PROC am eq = VOID:
+    (xput (eq instr, EMPTY);  generate eq);
+
+PROC am neq = VOID:
+    (xput (neq instr, EMPTY);  generate neq);
+
+PROC am gt = VOID:
+    (xput (gt instr, EMPTY);  generate gt);
+
+PROC am ge = VOID:
+    (xput (ge instr, EMPTY);  generate ge);
+
+PROC am lt = VOID:
+    (xput (lt instr, EMPTY);  generate lt);
+
+PROC am le = VOID:
+    (xput (le instr, EMPTY);  generate le);
+
+PROC am and = VOID:
+    (xput (and instr, EMPTY);  generate and);
+
+PROC am or = VOID:
+    (xput (or instr, EMPTY);  generate or);
+
+PROC am not = VOID:
+    (xput (not instr, EMPTY);  generate not);
+
+PROC am pushstring = (INT n, WORD w) VOID:
+    (xput (pushstring instr, O2 (n, w));  generate pushstring (n, w));
+
+PROC am pushint = (INT n) VOID:
+    (xput (pushint instr, (n));  generate pushint (n));
+
+PROC am drop = (INT n) VOID:
+    (xput (drop instr, (n));  generate drop (n));
+
+PROC am local = (INT n) VOID:
+    (xput (local instr, (n));  generate local (n));
+
+PROC am global = (INT n, ADDRESS a) VOID:
+    (xput (global instr, O4 (n, a));  generate global (n, a));
+
+PROC am store = (INT n, ADDRESS a) VOID:
+    (xput (store instr, O4 (n, a));  generate store (n, a));
+
+PROC am bstring = (INT n, m, ADDRESS a) VOID:
+    (xput (bstring instr, O9 (n, m, a));  generate bstring (n, m, a));
+
+PROC am bstore = (INT n, ADDRESS a) VOID:
+    (xput (bstore instr, O4 (n, a));  generate bstore (n, a));
+
+PROC am itos = (INT n) VOID:
+    (xput (itos instr, (n));  generate itos (n));
+
+PROC am utos = (INT n) VOID:
+    (xput (utos instr, (n));  generate utos (n));
+
+PROC am stoi = VOID:
+    (xput (stoi instr, EMPTY);  generate stoi);
+
+PROC am stou = VOID:
+    (xput (stou instr, EMPTY);  generate stou);
+
+PROC am jump = (LABEL lab) VOID:
+    (xput (jump instr, (lab));  generate jump (lab));
+
+PROC am jump no = (INT n, LABEL lab) VOID:
+    (xput (jump no instr, O6 (n, lab));  generate jump no (n, lab));
+
+PROC am label = (INT n, LABEL lab) VOID:
+    (xput (label instr, O6 (n, lab));  generate label (n, lab));
+
+PROC am repeat = VOID:
+    (xput (repeat instr, EMPTY);  generate repeat);
+
+PROC am loop = VOID:
+    (xput (loop instr, EMPTY);  generate loop);
+
+PROC am callinst = (ADDRESS inst, LABEL lab) VOID:
+    (xput (callinst instr, O10 (inst, lab));  generate callinst (inst, lab));
+
+PROC am call = (INT n, LABEL lab) VOID:
+    (xput (call instr, O6 (n, lab));  generate call (n, lab));
+
+PROC am enter = VOID:
+    (xput (enter instr, EMPTY);  generate enter);
+
+PROC am fanout = (INT n) VOID:
+    (xput (fanout instr, (n));  generate fanout (n));
+
+PROC am ret = (INT n) VOID:
+    (xput (ret instr, (n));  generate ret (n));
+
+
+PROC am generate named code = (LABEL lab, REF PARAMS pin, pout) VOID:
+BEGIN
+    xput (generate named code op, O7 (lab, pin, pout));
+    generate named code (lab, pin, pout)
+END;
+
+PROC am generate named data = (LABEL lab, OFFSET loc) VOID:
+BEGIN
+    xput (generate named data op, O8 (lab, loc));
+    generate named data (lab, loc)
+END;
+
+PROC am generate param types = (LABEL lab, REF PARAMS pin, pout) VOID:
+BEGIN
+    xput (generate param types op, O7 (lab, pin, pout));
+    generate param types (lab, pin, pout)
+END;
+
+
+PROC am generate = (FLTPROC flt) VOID:
+    (xput (generate op, EMPTY);  generate (flt));
+
+PROC am generate end decls = VOID:
+    (xput (generate end decls op, EMPTY);  generate end decls);
+
+PROC am generateca = (FLTPROC flt) VOID:
+    (xput (generateca op, EMPTY);  generateca (flt));
+
+PROC am generate endca = VOID:
+    (xput (generate endca op, EMPTY);  generate endca)
+
+
+KEEP
+    FLTPROC,
+    PARAM, PARAMS, unknown, fixed, instance ptr, boolean, integer, nil params,
+    ALIENINFO, nil alieninfo, alien finder,
+    initialise action,
+    reinitialise action,
+    evaluate action,
+    save action,
+    restore action,
+    terminate action,
+
+    ADDRESS, OFFSET, indirect,
+
+    soft interrupt, hard interrupt, sqrt error, arithmetic error,
+    any exception,
+
+    LABEL, label, new label, mark label sequence, repeat label sequence,
+    continue label sequence,
+
+    am initialise, am closedown, bits per byte, ws, size unit, al, up,
+    am version up,
+    am halt, am add, am sub, am mul, am div, am mod, am neg, am abs,
+    am iand, am ior, am shl, am shr, am com, am test, am eq, am neq,
+    am gt, am ge, am lt, am le, am and, am or, am not, am pushstring,
+    am pushint, am drop, am local, am global, am store, am bstring,
+    am bstore, am itos, am utos, am stoi, am stou, am jump, am jump no,
+    am label, am repeat, am loop, am callinst, am call, am enter,
+    am fanout, am ret,
+    am generate named code, am generate named data, am generate param types,
+    am generate, am generate end decls,
+    am generateca, am generate endca,
+
+    cg setup space, cg extend space, cg poke, cg peek,
+    cg simulate, cg clear interrupts,
+    cg save state, cg restore state, cg sizes, cg poke int, cg peek int
+FINISH

@@ -1,0 +1,374 @@
+DECS keamtrim CONTEXT VOID USE putstrings, messageproc, assmodes, basics,
+     kesymbols, keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{ " Id: keamtrim.sta,v 2.1 91/02/22 18:34:22 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamtrim.a68,v 34.2 1995/03/29 13:04:40 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+28:10:88  Module created
+01:12:88  Correction to validation of output type in `translate index'
+07:12:88  Bug 58. MDR.
+03:02:89  R4B088.  BJE.
+08:02:89  Fix for R4B101.  PAR.
+06:06:89  Changes for VAX.  SPT.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+14:09:89  Enclosing string length in copy trimmed input needs to
+             be multiplied by bits per byte.  R4B464.  SPT.
+11:06:93  spec of formula_int changed.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedures `translate trim' and `translate
+   index' that generate code to simulate the trimming and indexing of
+   ELLA-strings.  These operations are handled statically for
+   ELLA-structures, so they will not appear here.
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{ PROC f_int extracts an integer from a formula - if any other form of formula
+  is present a system error is generated indicating in which routine the error
+  occurred.  DCT }
+
+PROC  f_int = (FORMULA  f,  STR  where) INT:
+   formula_int( f, (MSGNO no, VECSTR params) VOID:
+                      IF error_msg(no)
+                      THEN  sys fault(oneline(( where, ":  ", text OF
+                                                  translate_msg(no, params) )))
+                      FI );
+
+
+
+{ copy a section of the input at 'in offset' to 'out offset',
+  the section starts at 'input post offset' and is 'trim size' bytes
+  long.
+  AM stack before call
+    (cp: s)
+  AM stack after call
+    (cp: s)  }
+PROC copy trimmed input = (INT input type, input post offset,
+                           trim size, in offset, out offset,
+                           flag adjust, d) VOID:
+BEGIN
+    { (cp) }
+    am local (d-1);                    { Instance ptr }
+    am pushint (out offset + size unit);
+    am add;                            { Where to write output }
+    INT dd := d + 1;
+    { (oa: cp) }
+
+
+    { Get input value to move }
+    am pushint (input post offset * bits per byte);
+                                       { Bit offset for "Bstring" }
+    dd +:= 1;
+    { ([0: ]oa: cp) }
+    am local (dd - 1);                 { Instance ptr }
+    am pushint (in offset);   { Where to get input ptr }
+    am add;
+    am global (ws, indirect);          { the actual input ptr }
+    { (ia: [0: ]oa: cp) }
+
+    am pushint (size unit);
+    am add;
+
+    am bstring (bits per byte * trim size,
+        (lookup type size (input type) - size unit) * bits per byte,
+        indirect);
+    translate compare and set flag (trim size, 1, flag adjust, d+2);
+    am bstore (bits per byte * trim size, indirect)
+
+   { (cp) }
+END;
+
+
+{ Trimming is a straightforward combinatorial operation.
+
+  Note that we assume that a character within one string occupies one
+  byte.  For this not to hold we would need a character with more than
+  255 distinct values which can certainly not be the case while they are
+  chosen from the ASCII printable character set (nor for that matter ECBDIC)
+}
+PROC translate trim = (UTRIM body, ID name, FNDEC declaration,
+                       VECTOR [] INT input types, INT output type,
+                       ENVIRON environ, CLOSURE closure,
+                       FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   IF UPB input types /= 1 THEN
+      sys fault ("translate trim: wrong input count")
+   FI;
+   BOOL bit string =
+      CASE lookup type (output type) IN
+         (REF SSTRING s): UPB char OF t OF s = 2
+      OUT sys fault ("translate trim: wrong output sort"); FALSE
+      ESAC;
+
+   INT input offset = size unit + ws;
+   INT output offset = input offset + ws;
+   INT fixed part size = output offset + lookup typesize (output type);
+
+   STR  tt = "translate trim";
+   INT lwb = f_int(lwb OF range OF body, tt);
+   INT upb = f_int(upb OF range OF body, tt);
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);
+                                               { (cp: s) }
+
+   { Check query flag }
+   am local (0);
+   am pushint (input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);            { (flag: cp: s) }
+   am test;                                    { (ip /= ?: cp: s) }
+   am jumpno (0, output query);                { (cp: s) }
+
+   { Output trimmed input }
+
+   { First set query flag true.  Note that the manipulation of the
+     evaluation flag can be to writing the body as the body of an
+     unknown ELLA-string is different from the bodies of all known
+     strings, in the case that we are dealing with a non bit string.
+     Otherwise  we must clear the evaluation flag if the query flag was
+     previously false.
+   }
+   am local (0);
+   am pushint (output offset);
+   am add;
+   IF bit string THEN
+      am local (0);                            { (op: op: cp: s) }
+      am global (ws, indirect);                { (old flag: op: cp: s) }
+      am test;                                 { (old flag /= 0: op: cp: s) }
+      am not;                                  { (old flag = 0: op: cp: s) }
+      LABEL same label = new label;
+      am jumpno (0, same label);
+         am local (1);
+         am pushint (0);
+         am store (size unit, indirect);
+      am label (2, same label)                 { (op: cp: s) }
+   FI;
+   am pushint (1);
+   am store (size unit, indirect);
+
+   { Now write the body }
+   IF bit string THEN
+      INT slice bit size = upb - lwb + 1;
+
+      { Load output pointer for later }
+      am local (0);
+      am pushint (output offset+size unit);
+      am add;                                  { (op: cp: s) }
+
+      { Load in trimmed bit string }
+      am pushint (lwb - 1);                    { bit offset }
+      am local (2);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);                { string flag pointer }
+      am pushint (size unit);
+      am add;                                  { string body pointer }
+      am bstring (slice bit size,
+         (lookup type size(input types[1]) - sizeunit) * bits per byte,
+         indirect);
+                                               { (slice: op: cp: s) }
+
+      { Update flag and output }
+      LABEL same label = new label;
+      am pushint (0);
+      am local (2);
+      am bstring (slice bit size, slice bit size, indirect);
+                                              { (old slice: slice: op: cp: s) }
+      am local (1);
+      am neq;                                  { (changed: slice: op: cp: s) }
+      am jumpno (0, same label);
+         am local (2);
+         am pushint (0);
+         am store (size unit, indirect);
+      am label (3, same label);                { (slice: op: cp: s) }
+      am bstore (slice bit size, indirect)     { (cp: s) }
+   ELSE
+      copy trimmed input (input types[1], lwb -1, upb - lwb +1,
+                          input offset, output offset,
+                          reset flag, 1)
+   FI;
+   am jump (end);
+
+   { Output query }
+   am label (1, output query);                 { (cp: s) }
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   { Check and reset evaluation flag and perform fanout }
+   am label (1, end);                          { (cp: s) }
+   translate end function (fixed part size, 1); { (s) }
+
+   (fixed part size, output offset, combinatorial)
+END; { translate trim }
+
+
+{ Indexing is very similar to trimming of course but, because a single
+  element ELLA-string is not the same shape as an ELLA-character there
+  are enough differences to warrant a separate procedure.
+
+  We make the same assumption about character sizes, though.
+}
+PROC translate index = (UINDEX body, ID name, FNDEC declaration,
+                        VECTOR [] INT input types, INT output type,
+                        ENVIRON environ, CLOSURE closure,
+                        FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   IF UPB input types /= 1 THEN
+      sys fault ("translate index: wrong input count")
+   FI;
+   BOOL bit string =
+      CASE lookup type (output type) IN
+         (REF SCHAR c): UPB char OF c = 2
+      OUT sys fault ("translate index: wrong output sort"); FALSE
+      ESAC;
+
+   INT input offset = size unit + ws;
+   INT output offset = input offset + ws;
+   INT fixed part size = output offset + lookup typesize (output type);
+
+   INT ix = f_int(index OF body, "translate index");
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);
+                                                  { (cp: s) }
+
+   { Check query flag }
+   am local (0);
+   am pushint (input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);            { (flag: cp: s) }
+   am test;                                    { (ip /= ?: cp: s) }
+   am jumpno (0, output query);                { (cp: s) }
+
+   { Output trimmed input }
+
+   IF bit string THEN
+      { Load output pointer for later }
+      am local (0);
+      am pushint (output offset);
+      am add;                                  { (op: cp: s) }
+
+      { Load in indexed element as a 1-bit string }
+      am pushint (ix - 1);                     { bit offset }
+      am local (2);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);                { string flag pointer }
+      am pushint (size unit);
+      am add;                                  { string body pointer }
+      am bstring (1,
+         (lookup type size(input types[1]) - size unit) * bits per byte,
+         indirect);                { (bit: op: cp: s) }
+
+      { Convert to int representation of character }
+      am stou;
+      am pushint (1);
+      am add;                                  { (char: op: cp: s) }
+
+      { Update flag and output }
+      translate compare and set flag (size unit, 1, reset flag, 3);
+      am store (size unit, indirect)           { (cp: s) }
+
+   ELSE
+      { Load output pointer for later }
+      am local (0);
+      am pushint (output offset);
+      am add;                                  { (op: cp: s) }
+
+      { Load in indexed element as a 8-bit string }
+      am pushint ((ix - 1) * bits per byte);   { bit offset }
+      am local (2);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);                { string flag pointer }
+      am pushint (size unit);
+      am add;                                  { character pointer }
+      am bstring (bits per byte,
+         (lookup type size(input types[1]) - sizeunit) * bits per byte,
+         indirect);
+                                               { (char: op: cp: s) }
+
+      { Convert to int representation of character }
+      am stou;
+
+      { Update flag and output }
+      translate compare and set flag (size unit, 1, reset flag, 3);
+      am store (size unit, indirect)           { (cp: s) }
+
+   FI;
+   am jump (end);
+
+   { Output query }
+   am label (1, output query);                 { (cp: s) }
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   { Check and reset evaluation flag and perform fanout }
+   am label (1, end);                          { (cp: s) }
+   translate end function (fixed part size, 1); { (s) }
+
+   (fixed part size, output offset, combinatorial)
+END; { translate index }
+
+SKIP
+
+KEEP
+    translate trim, translate index
+
+FINISH
