@@ -1,0 +1,434 @@
+DECS  ketranslate  CONTEXT VOID  USE  putstrings, messageproc, osinterface,
+      options, basics, testmode, ioprocs, assmodes, closureprocs, timescale,
+      openinterface, keambasics, kebasics, kesymbols, kexpand, keinstance:
+
+{ " Id: ketranslate.sta,v 2.1 91/02/22 18:35:33 edcad Exp$" }
+configinfo A68CONFIG "$Id: ketranslate.a68,v 34.3 1995/03/29 13:04:42 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement translation to code
+              in the kernel of the new simulator
+22:11:88  Mode change for `translate function' reflected here
+01:12:88  Full closure assembled.  Bug 22.  BJE.
+09:12:88  Extra numbering passed to 'translate function'.  PAR.
+18:01:89  No functions in closure error trapped with user fault.  Bug 91.
+              BJE.
+07:02:89  Attempt to simulate closure of macro trapped with user fault.
+              R4B084.  BJE.
+16:02:89  'diagnose outer fns' used to isolate R4B129.  PAR.
+16:03:89  Tidying calls to tables implemented.  R4B135.  PAR.
+17.03.89  R4B240, R4B239.  EPI usage added.  AAP
+07:04:89  Apollo stack switching code added.  R4B278.  PAR.
+12:09:89  CR 642. From basics RVC to putstrings, sysfault to osinterface.
+              Updated to RSRE kernel.  EVW
+17:12:89  *9 to allow simulator to be called from asscommands. EVW
+13:03:90  Hierarchic Timescaling :
+                - Enabled timescaling transformation in PROC translate.
+                - Added timescale to USE list.
+                - PROC translate changed so that only sfntimescale fns go
+                  into the symbols table and they don't get scrubbed if
+                  used by another function.                             MHC
+09:04:90  Hierarchic Timescaling - Change to ordering of transformations
+                after RSRE sequence/macro transformation bug fix.       MHC
+16:03:90  GC diagnostics added.  AAP
+              'closure' set to nil and garbage collected before
+                'construct calls' called.  AAP
+06:09:90  Set trace parameter to FALSE for second call to macro expansion.
+              To avoid 2 sets of trace messages being printed. MDR.
+11:12:90  Assclosure added to use list for firstseed etc. JIT
+14:01:91  Second call of macro and multi-makes transforms added.  DCT
+27:03:91  translatemsg no longer needed with new messageproc module.
+              updated for KEEPSAKE changes (extra msg needed).  DCT
+08:04:91  Call of get_allimports now needed after call of get_allbodies. JIT
+03:07:91  R6B53:  KEXPAND fails on shared ref from fntype transform -
+                      now write/read to/from .ela to remove shared refs -
+                      garbage collection called on a size threshold.  DCT
+04:07:91  Epi removed for VMS - too many ids for RS front end.  DCT
+08:10:91  Updated to version of assembler modes. EVW
+08:07:92  R6B120 Add portname transform.  DJS
+08:20:92  Suppress name of temporary dump file in testmode.  DJS
+13:11:92  Constant outer changed to outerdec. JIT
+08:02:93  Merged assembling of specs and bodies. EVW
+09:02:93  Simulator now always works of .ELA file (includes seed info). EVW
+20:05:93  Type conflict (not allowed in ANSI C) for Agc_collect.  DCT
+10:06:93  OSIF2 + completion of separataion from ELLA.  DCT
+02:07:93  heapdebug removed from use list.  DCT
+13:08:93  epi commented out.  DCT
+15:09:93  close of .ela file in wrong place in proc translate.  DJS
+11:10:93  find_seedinfo - wrong item looked at - dump if 1st item is fn. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.034 
+24:01:95  33.002  DJS   CmodesMod  Changes to openinterface for cmodes, closure
+                                  seeds mechanism changed. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+PROC  flt_msg = (MSGNO  no,  VECSTR  params,  PROC (STR) VOID  flt) VOID:
+   IF cli_msg(no)
+   THEN  { flt = cli_msg - allow interception }
+         flt(text OF translate_msg(no, params))
+   ELSE  global_msg(no, params)
+   FI;
+
+MODE SEEDINFO = STRUCT (ID declname, REF VECTOR [] BOOL status,
+                        REF SEEDINFO rest);
+REF SEEDINFO nilseedinfo = NIL;
+
+PROC is_assembled = (REF VECTOR [] BOOL seeds) BOOL:
+BEGIN
+   BOOL assembled := FALSE;
+   FORALL s IN seeds WHILE NOT assembled  DO assembled := s OD;
+   assembled
+END;
+
+INT notfound = 0, simdecl = 2, probedecl = 3, simandprobedecl = 4;
+
+PROC find_seedinfo = (REF VECTOR [] REF SEEDINFO seedinfo,
+                      INT ctno, RVC declname, MESSAGEPROC msg) INT:
+BEGIN
+   IF ctno > 0
+   THEN REF SEEDINFO si := seedinfo[ctno];
+        BOOL found := FALSE;
+        WHILE (si ISNT nilseedinfo) ANDTH NOT found
+        DO IF declname OF si = declname
+           THEN found := TRUE
+           ELSE si := rest OF si
+           FI
+        OD;
+        IF found
+        THEN  REF VECTOR [] BOOL status = status OF si;
+              BOOL is_sub = UPB status > 1 ANDTH is_assembled(status[2:]);
+              BOOL is_first = status[1];
+              IF is_first ANDTH is_sub THEN simandprobedecl
+              ELIF is_first THEN simdecl
+              ELIF is_sub THEN probedecl
+              ELSE notfound
+              FI
+         ELSE notfound
+         FI
+   ELSE notfound
+   FI
+END;
+
+
+{ Sift out the circuit fns from the probes.}
+PROC compactcircuitfns = (REF VECTOR [] INT list,REF VECTOR [] INT seedtypes)
+    VECTOR [] INT:
+BEGIN
+    INT i := 0;
+    FOR j TO UPB list DO
+       IF list[j] > 0 ANDTH
+          (seedtypes[j] = simdecl OR
+           seedtypes[j] = simandprobedecl)
+       THEN
+          i +:= 1
+       FI
+    OD;
+    VECTOR [i] INT ans;
+    i := 0;
+    FOR j TO UPB list DO
+       IF list[j] > 0 ANDTH
+          (seedtypes[j] = simdecl OR
+           seedtypes[j] = simandprobedecl)
+       THEN
+          ans[i +:= 1] := list [j]
+       FI
+    OD;
+    ans
+END;
+
+{ Sift out the probe fns from the circuit's. }
+PROC compactprobefns = (REF VECTOR [] INT list, REF VECTOR [] INT seedtypes)
+    VECTOR [] INT:
+BEGIN
+    INT i := 0;
+    FOR j TO UPB list DO
+       IF (seedtypes[j] = probedecl) OR
+          (seedtypes[j] = simandprobedecl)
+       THEN
+          i +:= 1
+       FI
+    OD;
+    VECTOR [i] INT ans;
+    i := 0;
+    FOR j TO UPB list DO
+       IF (seedtypes[j] = probedecl) OR
+          (seedtypes[j] = simandprobedecl)
+       THEN
+          ans[i +:= 1] := ABS list [j]
+       FI
+    OD;
+    ans
+END;
+
+{Check to see if any simulatable functions exist}
+PROC closure is empty = (CLOSURE closure, REF VECTOR [] REF SEEDINFO seeds,
+                         FLTPROC flt) BOOL:
+BEGIN
+  BOOL empty := TRUE;
+  REF OUTERS outers := outers OF closure;
+  WHILE empty ANDTH (outers ISNT nilouters)
+  DO  IF (sort OF outer OF outers = outerfn)
+      THEN REF FNDEC fdec = (fns OF environ OF outer OF outers)[1];
+           INT status = find_seedinfo( seeds, contextno OF usage OF fdec,
+                                           fnname OF fdec,
+                                           (MSGNO  no, VECSTR params) VOID:
+                                           flt_msg(no, params, flt) );
+           IF (status = simdecl) OREL (status = simandprobedecl)
+           THEN
+              empty := FALSE
+           FI
+      FI;
+      outers := rest OF outers
+  OD;
+  empty
+END;
+
+
+
+{ This is the complete translation loop for the simulator.
+  If the supplied function name is non-null, only the closure of
+  that declaration is translated, otherwise the entire context is
+  translated, and the name of the last function returned in 'function'.
+  The return value is the simulator's function number for the
+  'function'.
+
+  Array `fnnos' is used during the translation loop (calls to `expand
+  to atomic' and `translate function') to accumulate information which
+  can be used to collect the complete list of root functions
+  (functions which are not invoked by any other function) which are
+  then bundled together by `translate top level' for instantiation  by
+  `construct calls'.  After the outer (index i) loop has completed,
+  `fnnos [k]' ( k <= i) contains the symbol table index for OUTERFN k
+  in the context, if no function seen so far uses it, or -(symbol table index)
+  if the function has been used.  (Actually -1 also marks a completely unused
+  macro).
+
+  Note that the algorithm assumes no forward references, ie functions
+  are only used by functions with higher indexes.   Note also that
+  OUTERFNS corresponding to macros are not dealt with separately.  The
+  algorithm ensures that they will always be marked -1.
+}
+
+
+INT seeds_version_no = 230293,
+    seeds_signature = 2222;
+
+PROC translate = ( FILE  file,  { Open interface file containing closure }
+                   INT diagnostic level,
+                   PROC (RVC) VOID report,
+                   FLTPROC flt ) INT:
+BEGIN
+   { No need to worry about closing "file" after an error as the simulator
+     will abort if an error occurs during start up.  14:06:93   DCT
+   }
+
+   FLTPROC my flt = (STR msg) VOID:
+   BEGIN
+      { epi_send_message(m_epi_m_assembly_error,msg);
+        epi_notify(m_epi_s_assembly_error,msg);
+      } flt(msg)
+   END;
+
+   MESSAGEPROC  msg = (MSGNO no, VECSTR str) VOID:
+      flt_msg(no, str, my flt);
+
+   INT  size = 512;
+   VECTOR [size] CHAR  buffer;
+   INT  pos:= size, end:= 0;
+
+   PROC get_char = CHAR:
+      IF pos >= end
+      THEN  IOSTATUS  reply = read_buffer(file, buffer, end, msg);
+            IF reply = io_eof  ANDTH  end = 0
+            THEN  { io_error caught by msg previously }
+                  msg(user, "Premature end of dump stream file");
+                  " "
+            ELSE  pos:= 0;
+                  get_char
+            FI
+      ELSE  buffer[pos PLUSAB 1]
+      FI;
+
+
+   PROC get_seedinfo = ( ASSEMREADER reader,
+                         MESSAGEPROC msg ) REF VECTOR [] REF SEEDINFO:
+   BEGIN
+      INT maxseedno = inassemint( reader, msg);
+      TO  maxseedno
+      DO inassemint( reader, msg); {ctno}
+         inassemid( reader, msg) {seed FN name}
+      OD;
+      INT maxctno = inassemint( reader, msg);
+      HEAP VECTOR [maxctno] REF SEEDINFO seedinfo;
+      FOR ctno TO UPB seedinfo
+      DO INT maxdecls = inassemint( reader, msg);
+         REF SEEDINFO si := nilseedinfo;
+         TO maxdecls
+         DO ID declname = inassemid( reader, msg);
+            HEAP VECTOR [maxseedno] BOOL status;
+            FORALL b IN status DO b := inassembool( reader, msg) OD;
+            si := HEAP SEEDINFO := (declname, status, si)
+         OD;
+         seedinfo[ctno] := si
+      OD;
+      seedinfo
+   END;
+
+
+   put(screen, ( "Reading ELLA from open interface file ",
+                 testmode_file_name(file), newline ));
+
+   ASSEMREADER  reader = read_signature(get_char, msg);
+   EXTERNALCLOSURE  new_modes = read_closure(reader, msg);
+   CLOSURE  closure = closure OF new_modes;
+   REF VECTOR [] REF SEEDINFO seedinfo = get_seedinfo(reader, msg);
+
+   close_file(file, msg);
+
+   banner(facility);
+   newline(screen);
+
+   IF UPB head_data OF new_modes > 0
+   THEN  FORALL line IN head_data OF new_modes
+         DO  put(screen, (line, newline))  OD;
+         newline(screen)
+   FI;
+
+   IF closure is empty(closure, seedinfo, flt) THEN
+      STR msg = "Closure contains no simulatable functions";
+    { epi_notify(m_epi_s_closure_empty,msg); }
+      flt (msg)
+   FI;
+
+   INT max = maxclosureno(closure);
+   VECTOR [max]INT fnnos, seedtypes;
+   FORALL f IN fnnos, s IN seedtypes DO f := -1; s := -1 OD;
+   INT simfn fnno := -1;
+
+   REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO IF sort OF outer OF outers = outerfn
+      THEN OUTER fn := outer OF outers;
+           REF FNDEC fdec := (fns OF environ OF fn)[1];
+           INT closureno = closureno OF usage OF fdec;
+
+           INT seed = find_seedinfo( seedinfo, contextno OF usage OF fdec,
+                                     fnname OF fdec, msg );
+           seedtypes[closureno] := seed;
+
+           IF NOT (omit expansion <= BIN diagnostic level)
+           THEN
+*H               put(out, ( time_str, "+++ starting expand to atomic(",
+*H                          fnname OF fdec, ")", newline ));
+                 fn := expand to atomic (fn);
+                 fdec := (fns OF environ OF fn)[1];
+*H               put(out, ( time_str, "+++ finished expand to atomic(",
+*H                          fnname OF fdec, ")", newline ));
+                 SKIP
+           FI;
+           IF diagnose outer fns <= BIN diagnostic level THEN
+               report (fnname OF fdec)
+           FI;
+           INT symboltable_fnno =
+               translate function (fnbody OF fdec, fdec,
+                                   environ OF fn, closure, diagnostic level,
+                                   closureno, - 1, my flt);
+           BOOL want := TRUE;
+
+           {Don't add fn into symbol table if it's of type timescale,   }
+           {since we are only interested in simulateable timescaled fns }
+           {We have to remember the j vector so that we don't scrub this}
+           {type of function later, if something else uses it. Otherwise}
+           {we would lose a function that has been marked as sftimescale}
+
+           IF macspecs OF fdec ISNT nilmacspecs
+           THEN
+              FORALL macspec IN macspecs OF fdec
+              DO  IF (sort OF macspec = timescale) THEN
+                     want := FALSE
+                  FI
+              OD
+           FI;
+
+           IF want THEN
+             IF seed = simdecl OREL seed = simandprobedecl
+             THEN simfn fnno := symboltable_fnno
+             FI;
+             fnnos [closureno] := symboltable_fnno;
+             add seedtype(fnnos[closureno], seed)
+           FI;
+
+           { Discard fnbody to enable garbage collection }
+           fnbody OF fdec := bodynull;
+           incremental table cleanup;
+
+           {Guard this with a check in case it is a timescaled fn }
+
+           IF (fnnos [closureno] /= -1) ANDTH (UPB (fns OF environ OF fn) > 1)
+           THEN FORALL binding IN (fns OF environ OF fn)[2:]
+                DO IF (sort OF binding = outerdec)
+                   THEN INT used = closureno OF usage OF binding;
+                        fnnos[used] := -fnnos[used]
+                   FI
+                OD
+           FI
+     ELSE  SKIP { OUTER TYPE }
+     FI;
+     outers := rest OF outers
+   OD;
+
+   {Find the simulated function}
+   VECTOR [] INT circuit fnnos = compactcircuitfns(fnnos, seedtypes);
+   INT top fnno = translate top level (circuit fnnos);
+
+   STRUCT (INT code size, data size, dynamic stack size, static stack size)
+       cg size data = cg sizes;
+
+   INT  code_data_size = code size OF cg size data + data size OF cg size data;
+
+*H put(out, (time_str, "+++ starting construct calls", newline));
+   construct calls (top fnno, compactprobefns(fnnos, seedtypes), my flt);
+*H put(out, (time_str, "+++ finished construct calls", newline));
+*H print_stats;
+*H put(out, (time_str, "+++ starting final table cleanup", newline));
+   final table cleanup;
+*H put (out, (time_str, "+++ finished final table cleanup", newline));
+*H print_stats;
+   simfn fnno
+END
+
+
+KEEP  notfound, simdecl, probedecl, simandprobedecl, translate
+FINISH

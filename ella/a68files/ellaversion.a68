@@ -1,0 +1,62 @@
+DECS  ellaversion  CONTEXT VOID  USE  putstrings,  osinterface:
+
+configinfo A68CONFIG "$Id: ellaversion.a68,v 34.6 1995/04/03 15:39:18 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+20:04:90  Version information separated from ENVIRON.  DCT
+28:10:93  Add version_msg, separate version id into two.  DJS
+29:11:93  MODE VERSION added to osinterface - format changed.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  32.003 
+02:12:94  33.002  DJS   SepTrans   Upadte version number 
+24:01:95  33.003  DJS   CmodesMod  Update version, new form for openinterface. 
+29:03:95  34.004  ELLA  Modcprght Change copyright header
+29:03:95  34.005  ELLA  Release   Increment version number to correspond with
+                                  RCS number.
+03:04:95  34.006  ELLA  Release   Correct date of release, version_date.
+??:??:??   ?.???  ????
+COMMENT
+
+{{{{ ****       Do not modifiy the format of this file.       **** }}}}
+
+STR  version_id   = "Update 34.4",
+     version_msg  = "Release March 1995",
+     version_date = "31st March 1995 14:00";
+
+PROC  ellaversion = VERSION:  ( "ELLA", version_id, version_date, version_msg,
+                                "Please make a copy of your library and any "
+                                "other relevant files and report details" )
+
+KEEP  ellaversion
+FINISH
+

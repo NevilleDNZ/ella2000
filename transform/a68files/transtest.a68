@@ -1,0 +1,153 @@
+PROGRAM  transtest  CONTEXT VOID  USE  putstrings, messageproc, options,
+      testmode,  osinterface,  basics,  ioprocs,  variables,  printissue,
+      assmodes,  commandsyntax,  commandreader,  commandcaller,  globalcommands,
+      command,  kernelreader,  openinterface, asscommands
+BEGIN
+
+configinfo A68CONFIG "$Id: transtest.a68,v 33.1 1994/06/94 08:30:00 snell Exp";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+26:11:93  Dummy program to use standard transform modules.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.009 
+30:08:94  33.001  DJS   SepTrans  Name changed to transtest and asscommands
+                                  incorporated. 
+24:01:95  33.002  DJS   CmodesMod  Output an integer zero for closure seeds. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+STR  name = "TRANSFORM TEST",  ellasysdir = "ELLSYSDIR";
+PROC get_assclosure = (VALUES names, MESSAGEPROC msg) EXTERNALCLOSURE:
+   ( NIL, NIL );
+PROC write_closureseeds = ( ASSEMWRITER w, MESSAGEPROC msg )VOID:
+    outassemint( 0, w, msg );
+PROC zero_ctnos = VOID: SKIP;
+PROC check_sim_closure = (CLOSURE assclosure, MESSAGEPROC msg)BOOL: SKIP;
+VECTOR[ 10 ]CHAR lbn := "No_library",
+                 ctn := "No_context";
+
+initialise_osinterface( ( name { facility name - used in error messages },
+                          "32.03", "17:03:94", "",
+                          "Sorry, its failed - Er Er Er Er....." ), TRUE );
+
+COMMANDENV  env;   { holds information about the current command context }
+PROC get_prompt = RVC: prompt OF current_context OF stack OF env;
+
+PROC assemble_prelude = (VALUES names, MESSAGEPROC msg) VOID:
+   transform_prelude( names, FALSE, lbn, ctn,
+                      get_assclosure, write_closureseeds, zero_ctnos,
+                      check_sim_closure, msg );
+
+PROC assemblefile_prelude = (VALUES names, MESSAGEPROC msg) VOID:
+   transform_prelude( names, TRUE,  lbn, ctn,
+                      get_assclosure, write_closureseeds, zero_ctnos,
+                      check_sim_closure, msg );
+
+initialise_ioprocs(get_prompt);
+
+BOOL  silent, testmode;
+RVC  ass_fname:= nullstr,  in_fname:= nullstr;
+
+PROC  reset = VOID:
+BEGIN
+   ass_fname:= in_fname:= nullstr;
+   silent:= testmode:= FALSE
+END;
+
+PROC  check_arg = (STR  arg,  PROC STR  next) BOOL: { OK }
+   IF arg = "-t" THEN  testmode:= TRUE
+   ELIF arg = "-s" THEN  silent:= TRUE
+   ELIF arg = "-i"
+   THEN  filename_arg(next, "Input", infile_type, in_fname, TRUE)
+   ELIF UPB arg >= 1  ANDTH  arg[1] = "-"
+   THEN  put(err, ("Unexpected option """, arg, """", newline));  FALSE
+   ELIF UPB ass_fname > 0
+   THEN  put(err, ("Extra argument """, arg, """", newline));  FALSE
+   ELSE  filename_arg(arg, "Open interface", assfile_type, ass_fname, TRUE)
+   FI;
+
+
+PROC  no_more = (BOOL  ok) BOOL: { OK }
+   IF ok  ANDTH  UPB ass_fname > 0
+   THEN  TRUE { arguments successfully parsed }
+   ELSE  put(screen, ( newline, "   <file> = open interface file from ELLA",
+                       newline, "-i <file> = start reading input commands "
+                       "from <file>", lines(2) ));
+         FALSE
+   FI;
+
+
+parse_arguments( "Give ELLA open interface file name ([-i <file>] <file>): ",
+                 reset, check_arg, no_more );
+
+print_title(silent);
+set_testmode(testmode);
+
+{ Set up input if required }
+
+IF UPB in_fname > 0 THEN  io_input(in_fname, global_msg)  FI;
+
+
+COMMANDVEC  globals = make_globalcommands( ellasysdir, ".lis", print_issue,
+                                           REF COMMANDENV: env );
+
+REF COMPOUND  outer_command =
+   make_compound
+      ( HEAP SIMPLE:= ( MAKERVC "OUTER", nullstr, no parameters,
+                        normal access, finish,
+                        MAKERVC "Transform test programme", nullcommand ) ,
+        "Transform Test",
+        HEAP RVC:= MAKERVC "Transtest",
+        make_asscommands( globals, FALSE,
+                          assemble_prelude, assemblefile_prelude ),
+        globals,
+        nullcommand
+      );
+
+INT filename_no = CASE filename_syntax IN(REF INT i ) i ESAC;
+VECTOR [1] VALUE values :=(VALUE( filename_no, ass_fname));
+
+assemblefile_prelude( values, global_msg );
+
+env:= initialise_commands( report_error, set_default_msg, global_msg,
+                           call_command, make_kernel_readers, outer_command,
+                           no_parameters );
+
+REF BOOL (private OF env):= TRUE;
+interpret_commands(env);
+put(screen, (name, " finished", newline));
+
+SKIP
+END
+FINISH

@@ -1,0 +1,480 @@
+DECS  assclosure CONTEXT VOID  USE  basics, putstrings, messageproc,
+      databasebuffers, libmodes, libinterface, attrdecls, assmodes,  assemble,
+      closureprocs, testmode, openinterface:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: assclosure.a68,v 34.3 1995/03/29 13:03:13 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1990
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+10:07:90  Seperated from LIBINTERFACE. EVW
+19:11:90  Declaration attributes merged onto update 26. JIT
+17:01:91  libmessages updated for EPI.  DCT
+30:01:91  Testmode incorporated.  DJS
+21:02:91  KEEPSAKEBUFFERS now main interface to KEEPSAKE.  DCT
+08:04:91  Call of add_import moved from get_allbodies into the new PROC
+             get_allimports. JIT
+31:07:91  Version 7 of assmodes. EVW
+21:10:91  New CLOSURE mode.  DCT
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+03:03:92  Attribute declarations added. EVW
+08:02:93  merge assembleing specs and bodies. EVW
+25:08:93  printclosure renamed checkclosure. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.012 
+24:01:95  33.002  DJS   CmodesMod  Changes to make osinterface compatible with
+                                  cmodes, no longer have special sections,
+                                  closure seeds simply added to end of file. 
+29:03:95  34.003  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC check_library_open = (MESSAGEPROC msg) VOID:
+{{ used by programs outside ELLA }}
+   IF database OF discfile IS nildb
+   THEN  msg(lib_msg(28), nullmsg {"ELLA library not opened"})
+   FI;
+
+PROC  title = RVC:
+   oneline(("Context  ", CTOS(currentct OF library)," assembled from library  ",
+            name OF library, " (", version_str(version OF library), ")  ",
+            date_time(seconds)  ));
+
+
+PROC create_next_closure = (CREGION cr, MESSAGEPROC msg) INT:
+BEGIN
+   INT closureno := 0;
+   IF check_text(context OF cr, msg)  ANDTH
+      ( closureno := next_closure_details(cr, TRUE, TRUE, FALSE, msg);
+        closureno < 0 )
+   THEN  msg(lib_msg(128), CTOS cr
+             {"Context * can't be assembled - try ""checkclosure""})
+   ELSE  save_library(msg);
+         { Garbage collect the old ids hash table if the library changes }
+         IF assembler_libno < version OF library
+         THEN  idstable:= HEAP VECTOR [ids_hash_size] REF IDS;
+               FORALL ids IN idstable DO  ids:= nilids  OD;
+               assembler_libno:= version OF library
+         FI
+   FI;
+   closureno
+END;
+
+PROC create_closure = (CREGION cr, MESSAGEPROC msg) INT:
+BEGIN
+   zero_ctnos;
+   create_next_closure(cr, msg)
+END;
+
+MODE SEARCHLIST = STRUCT (CTNAME ctn, RVC id, INT seedno, REF SEARCHLIST rest);
+REF SEARCHLIST nilsearch = NIL;
+
+PROC expand_uses = (CREGION cr, RVC name, INT seedno,
+                    REF REF SEARCHLIST searchlist, MESSAGEPROC msg) VOID:
+BEGIN
+   REF USES uses;
+   REF IMPORTS i := get_imports(cr);
+   REF VECTOR [] DECL decls = get_decls(context OF cr, msg);
+   INT index = check_decl(context OF cr, name, msg);
+   DECL decl = decls[index];
+   IF NOT (assemble OF decl)[seedno]
+   THEN  IF import OF decl
+         THEN  WHILE rename OF binding OF i /= name DO i := rest OF i OD;
+               searchlist := HEAP SEARCHLIST :=
+                 (ctn OF binding OF i, name OF binding OF i, seedno, searchlist)
+         FI;
+         uses := uses OF decl;
+         WHILE uses ISNT niluses
+         DO  expand_uses(cr, name OF uses, seedno, searchlist, msg);
+             uses := rest OF uses
+         OD;
+         (assemble OF decls[index])[seedno] := TRUE    {{ updates decls }}
+   FI
+END;
+
+PROC find_closureno = (RVC name, INT contextno, sort, CLOSURE closure) INT:
+BEGIN
+   REF OUTERS os := outers OF closure;
+   INT closureno := -1;
+   WHILE (closureno = -1) ANDTH (os ISNT nilouters)
+   DO  IF (sort OF outer OF os = sort)
+       THEN CASE sort IN
+            {outerattr}
+              ( REF ATTRDEC adec = (attrs OF environ OF outer OF os)[1];
+                IF (attrname OF adec = name) ANDTH
+                   (contextno OF usage OF adec = contextno)
+                THEN  closureno := closureno OF usage OF adec
+                FI
+              ),
+            {outerint}
+              ( REF INTDEC idec = (ints OF environ OF outer OF os)[1];
+                IF (intname OF idec = name) ANDTH
+                   (contextno OF usage OF idec = contextno)
+                THEN  closureno := closureno OF usage OF idec
+                FI
+              ),
+            {outertype}
+              ( REF TYPEDEC tdec = (types OF environ OF outer OF os)[1];
+                IF (typename OF tdec = name) ANDTH
+                   (contextno OF usage OF tdec = contextno)
+                THEN  closureno := closureno OF usage OF tdec
+                FI
+              ),
+            {outerconst}
+              ( REF CONSTDEC cdec = (consts OF environ OF outer OF os)[1];
+                IF (constname OF cdec = name) ANDTH
+                   (contextno OF usage OF cdec = contextno)
+                THEN  closureno := closureno OF usage OF cdec
+                FI
+              ),
+            {outerfn}
+              ( REF FNDEC fdec = (fns OF environ OF outer OF os)[1];
+                IF (fnname OF fdec = name) ANDTH
+                   (contextno OF usage OF fdec = contextno)
+                THEN  closureno := closureno OF usage OF fdec
+                FI
+              )
+           ESAC
+       FI;
+       os := rest OF os
+   OD;
+   closureno
+END;
+
+PROC environ_closurenos = (REF ENVIRON env, CLOSURE closure) VOID:
+BEGIN
+   {{ This procedure alters the "closureno"s in the ENVIRON }}
+   REF USAGE us;
+   FORALL attr IN attrs OF env
+   DO  IF attr ISNT nilattrdec
+       THEN us := usage OF attr;
+            IF (us ISNT nilusage) ANDTH (closureno OF us = 0)
+            THEN closureno OF us := find_closureno(attrname OF attr,
+                                          contextno OF us, outerattr, closure)
+            FI
+       FI
+   OD;
+   FORALL int IN ints OF env
+   DO  IF int ISNT nilintdec
+       THEN us := usage OF int;
+            IF (us ISNT nilusage) ANDTH (closureno OF us = 0)
+            THEN closureno OF us := find_closureno(intname OF int,
+                                          contextno OF us, outerint, closure)
+            FI
+       FI
+   OD;
+   FORALL type IN types OF env
+   DO  IF type ISNT niltypedec
+       THEN us := usage OF type;
+            IF (us ISNT nilusage) ANDTH (closureno OF us = 0)
+            THEN closureno OF us := find_closureno(typename OF type,
+                                            contextno OF us, outertype, closure)
+            FI
+       FI
+   OD;
+   FORALL const IN consts OF env
+   DO  IF const ISNT nilconstdec
+       THEN us := usage OF const;
+            IF (us ISNT nilusage) ANDTH (closureno OF us = 0)
+            THEN closureno OF us := find_closureno(constname OF const,
+                                          contextno OF us, outerconst, closure)
+            FI
+       FI
+   OD;
+   FORALL fn IN fns OF env
+   DO  IF fn ISNT nilfndec
+       THEN us := usage OF fn;
+            IF (us ISNT nilusage) ANDTH (closureno OF us = 0)
+            THEN closureno OF us := find_closureno(fnname OF fn,
+                                           contextno OF us, outerfn, closure)
+            FI
+       FI
+   OD
+END;
+
+PROC add_closurenos = (CLOSURE closure) VOID:
+BEGIN
+   REF OUTERS os := outers OF closure;
+   WHILE os ISNT nilouters
+   DO environ_closurenos(environ OF outer OF os, closure);
+      os := rest OF os
+   OD
+END;
+
+
+PROC is_assembled = (REF VECTOR [] BOOL seeds) BOOL:
+BEGIN
+   BOOL assembled := FALSE;
+   FORALL s IN seeds WHILE NOT assembled  DO assembled := s OD;
+   assembled
+END;
+
+MODE CLOSURESEEDS = STRUCT (CREGION cregion, RVC fnname, REF CLOSURESEEDS rest);
+REF CLOSURESEEDS nilclosureseed = NIL;
+
+PROC generate_closure = (REF CLOSURESEEDS seeds, BOOL with_body,
+                                                 MESSAGEPROC msg) CLOSURE:
+BEGIN
+   REF SEARCHLIST searchlist := nilsearch;
+   REF VECTOR [] DECL decls;
+   REF VECTOR [] DISCPTR bodies;
+   CREGION cr;
+   REF SEARCHLIST slist;
+   CLOSURE  closure = make_closure;
+   REF REF OUTERS nextouter := outers OF closure;
+
+   INT contextno := 0;
+   INT maxseedno := 0;
+
+   zero_ctnos;
+   REF CLOSURESEEDS ss := seeds;
+   WHILE ss ISNT nilclosureseed
+   DO maxseedno PLUSAB 1;
+      CREGION crg = cregion OF ss;
+      contextno := create_next_closure(crg, msg);
+      ss := rest OF ss
+   OD;
+
+   FOR ctno FROM contextno BY -1 TO 1
+   DO  cr := ctno_region(ctno);
+       decls := get_decls(context OF cr, msg);
+       FORALL d IN decls
+       DO HEAP VECTOR [maxseedno] BOOL assinfo;
+          FORALL a IN assinfo DO a := FALSE OD;
+          assemble OF d := assinfo
+       OD;
+
+       ss := seeds;
+       FOR seedno WHILE ss ISNT nilclosureseed
+       DO  IF  cr = cregion OF ss
+           THEN  IF ( fnname OF ss IS nilid ) OREL UPB fnname OF ss = 0
+                 THEN FORALL dc IN decls
+                      DO IF NOT import OF dc ANDTH (sort OF dc = kfn)
+                         THEN expand_uses(cr, name OF dc, seedno,searchlist,msg)
+                         FI
+                      OD
+                 ELSE expand_uses(cr, fnname OF ss, seedno, searchlist, msg)
+                 FI
+           FI;
+           ss := rest OF ss
+       OD;
+
+       slist := searchlist;
+       WHILE (slist ISNT nilsearch)
+       DO IF ctn OF slist = CTN cr
+          THEN expand_uses(cr, id OF slist, seedno OF slist, searchlist, msg)
+          FI;
+          slist := rest OF slist
+       OD
+   OD;
+
+   FOR cno TO contextno
+   DO  cr := ctno_region(cno);
+       decls := get_decls(context OF cr, msg);
+       IF with_body
+       THEN bodies := data OF get_declattribute(context OF cr, body_key, msg)
+       FI;
+       FOR i TO UPB decls
+       DO  DECL decl = decls[i];
+           IF is_assembled(assemble OF decl)
+           THEN BUFFER specbuff = make buffer(discfile, il OF decl, validread),
+                       bodybuff = IF with_body
+                                  THEN read buffer(discfile, bodies[i])
+                                  ELSE nilbuffer
+                                  FI;
+                INT  closureno = reserve_next_closureno(closure);
+                OUTER outer = assemble(cno, closureno, export OF decl,
+                                       specbuff, bodybuff, msg);
+                nextouter := insert_outer(outer, nextouter, closure, msg)
+           FI
+      OD
+   OD;
+   add_closurenos(closure);
+   closure
+END;
+
+PROC declaration_closure = (CREGION cr, RVC declname, BOOL with_body,
+                                                      MESSAGEPROC msg) CLOSURE:
+   generate_closure(HEAP CLOSURESEEDS := (cr, declname, nilclosureseed),
+                    with_body, msg);
+
+PROC context_closure = (CREGION cr, BOOL with_bodies, MESSAGEPROC msg) CLOSURE:
+   generate_closure(HEAP CLOSURESEEDS := (cr, nullstr, nilclosureseed),
+                    with_bodies, msg);
+
+PROC context_specs = (REF CONTXT ct, BOOL with_bodies, MESSAGEPROC msg) CLOSURE:
+BEGIN
+   CLOSURE  closure = make_closure;
+   REF REF OUTERS nextouter := outers OF closure;
+   IF check_text(ct, msg)
+   THEN  REF VECTOR [] DECL decls = get_decls(ct, msg);
+         REF VECTOR [] DISCPTR bodies =
+             IF with_bodies
+             THEN data OF get_declattribute(ct, body_key, msg)
+             ELSE NIL
+             FI;
+         FOR i TO UPB decls
+         DO  DECL decl = decls[i];
+             BUFFER specbuff = make buffer(discfile, il OF decl, validread),
+                    bodybuff = IF with_bodies
+                               THEN read buffer(discfile, bodies[i])
+                               ELSE nilbuffer
+                               FI;
+             INT  closureno = reserve_next_closureno(closure);
+             OUTER outer = assemble(1, closureno, export OF decl, specbuff,
+                                    bodybuff, msg);
+             nextouter := insert_outer(outer, nextouter, closure, msg)
+        OD
+    FI;
+    add_closurenos(closure);
+    closure
+END;
+
+PROC declaration_spec = (REF CONTXT ct, RVC declname, BOOL with_body,
+                         MESSAGEPROC msg) OUTER:
+BEGIN
+   IF check_text(ct, msg)
+   THEN  INT declno = check_decl(ct, declname, msg);
+         DECL decl = (get_decls(ct, msg))[declno];
+         DISCPTR body =
+             IF with_body
+             THEN (data OF get_declattribute(ct, body_key, msg))[declno]
+             ELSE nilptr
+             FI;
+         BUFFER specbuff = make buffer(discfile, il OF decl, validread),
+                bodybuff = IF with_body
+                           THEN read buffer(discfile, body)
+                           ELSE nilbuffer
+                           FI;
+         assemble(1, 1, export OF decl, specbuff, bodybuff, msg)
+   ELSE  SKIP
+   FI
+END;
+
+
+PROC find_import = (INT ctno, RVC rename, MESSAGEPROC msg) REF IMPORT:
+BEGIN
+   CREGION cr = ctno_region(ctno);
+   REF BINDING binding = check_binding(cr, rename, msg);
+   IF name OF binding = nullstr
+   THEN  nilimport
+   ELSE  CTNAME ctn = ctn OF binding;
+         REF CONTXT ct = get_context(context OF ctn);
+         CREGION icr = get_region(ct, import OF ctn);
+         HEAP IMPORT := (name OF binding, ctno OF region OF icr, ctn)
+   FI
+END;
+
+PROC add_import = (OUTER outer, MESSAGEPROC msg) VOID:
+(  { overwrites parameter - delivered for convenience }
+   IF sort OF outer = outerfn
+   THEN REF FNDEC fdec = (fns OF environ OF outer)[1];
+        IF import OF usage OF fdec
+        THEN  REF IMPORT imp =
+                 find_import(contextno OF usage OF fdec, fnname OF fdec, msg);
+              fnbody OF fdec := imp
+        FI
+   ELSE msg(system, "add_import")
+   FI
+);
+
+
+
+PROC get_allimports = (CLOSURE closure, MESSAGEPROC msg) CLOSURE:
+BEGIN
+   { overwrites parameter - delivered for convenience }
+   REF OUTERS outers := outers OF closure;
+   WHILE outers ISNT nilouters
+   DO  OUTER o = outer OF outers;
+       IF sort OF o = outerfn
+       THEN REF FNDEC fdec = (fns OF environ OF o)[1];
+            IF import OF usage OF fdec
+            THEN add_import(o, msg)  { updates outer OF outers }
+            FI
+       FI;
+       outers := rest OF outers
+   OD;
+   closure
+END;
+
+PROC write_closureseeds = (REF CLOSURESEEDS seeds,
+                           ASSEMWRITER writer,
+                           MESSAGEPROC msg) VOID:
+BEGIN
+
+PROC (ID, ASSEMWRITER, MESSAGEPROC  )VOID outid =
+   IF write_idstable OF writer THEN  outassemid ELSE  outassemstr FI;
+
+   INT maxseedno := 0;
+   REF CLOSURESEEDS s := seeds;
+   WHILE s ISNT nilclosureseed DO s := rest OF s; maxseedno PLUSAB 1 OD;
+   s := seeds;
+   outassemint(maxseedno, writer, msg);
+   WHILE s ISNT nilclosureseed
+   DO  outassemint(ctno OF region OF cregion OF s, writer, msg);
+       outid(fnname OF s, writer, msg);
+       s := rest OF s
+   OD;
+
+   INT maxctno = find_maxctno;
+   outassemint(maxctno, writer, msg);
+   FOR ctno TO maxctno
+   DO CREGION cr = ctno_region(ctno);
+      IF context OF cr ISNT nilcontxt
+      THEN  REF VECTOR [] DECL decls = get_decls(context OF cr, msg);
+            INT number := 0;
+            FORALL decl IN decls
+              DO IF is_assembled(assemble OF decl) THEN number PLUSAB 1 FI OD;
+            outassemint(number, writer, msg);
+            FORALL decl IN decls
+            DO IF is_assembled(assemble OF decl)
+               THEN outid(name OF decl, writer, msg);
+                    FORALL b IN assemble OF decl
+                    DO outassembool(b, writer, msg) OD
+               FI
+            OD
+      ELSE outassemint(0, writer, msg)
+      FI
+   OD
+END;
+
+
+SKIP
+KEEP  check_library_open,  title,
+      create_closure,
+      generate_closure,  declaration_closure,  context_closure,  context_specs,
+      declaration_spec,  add_import, get_allimports,
+      find_import,
+      CLOSURESEEDS, nilclosureseed, write_closureseeds, is_assembled
+
+FINISH
