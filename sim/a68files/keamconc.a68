@@ -1,0 +1,546 @@
+DECS keamconc CONTEXT VOID USE putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{ " Id: keamconc.sta,v 2.1 91/02/22 18:34:08 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamconc.a68,v 34.2 1995/03/29 13:04:35 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+28:10:88  Module created
+09:12:88  Bug 62 fixed. MDR.
+03:02:89  R4B088.  BJE.
+13:03:89  R4B221 incorrect local offset supplied to translate
+                    push partial input.  SPT.
+09:06:89  Corrected for up. MDR.
+02:07:89  R4B416 push partial input should use enclosing string
+             length.  SPT.
+03:08:89  R4B419 translate compare and set flag passed bit length
+             rather than byte length required.
+             copy trimmed strings was passed output size.  It should
+             have the size of the query flag removed.
+             Use of source enc size in bstring instructions should be
+             multiplied by bits per byte.
+             Zero sized bstrings now  avoided in copy string to string
+             output.
+             translate compare and set flag passed wrong stack depth in
+             copy string to string output.
+             dest ls end offset wrong in copy string to string output.  SPT.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+30:08:89  R4B449 The B ptr in the body of translate conc is inherited
+             as the C ptr.  Fine for 68k etc but not for VAX. Correct
+             code is hidden in the move b part but this is *conditional*.
+             So move it out.  SPT.
+17:03:92  flattenneither removed. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedure `translate conc' that generates
+   code to simulate the ELLA CONC operator on ELLA-strings.  The
+   operation is handled statically for ELLA-structures, so they will not
+   appear here.
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{Proc to copy a char onto the end of the output area,
+ we have to be careful to avoid writing further than the end
+of the output area as bstore has a minimum output width of
+size unit (32 bits).  Has no net effect on am stack.}
+
+PROC copy char to string output = (INT input offset, output offset,
+                                   enclosing len, msb offset, flag adjust, d)VOID:
+BEGIN
+   INT byte offset = msb offset MOD ws;
+   INT shift amount = ((ws-1) - byte offset) * bits per byte;
+   INT al offset = (msb offset OVER ws) * ws;
+   INT aligned out =
+        IF am version up  THEN
+           output offset + enclosing len - ws - al offset
+        ELSE
+           output offset + al offset
+        FI;
+
+
+   { (cp) }
+   am local (d-1);
+   am pushint (aligned out);
+   am add;
+   { (ao:cp) }
+
+   am local (0);
+   am global (ws, indirect);
+   { (@ao: ao: :cp) }
+
+   am pushint (255); {one's compliment of character mask}
+
+   am pushint (shift amount);
+   am shl;
+   am com;
+   { (mask: @ao: ao:cp) where mask is a ws object with all bits
+     set except for a character width of bits in the place
+     where we will OR our new character }
+
+   am and;
+   { (@ao': ao: cp) }
+
+   am local (d+1);
+   am pushint (input offset);
+   am add;
+   am global (ws, indirect);
+   am global (ws, indirect);
+   { (char: @ao': ao: cp) }
+
+   am pushint (shift amount);
+   am shl;
+   { (char': @ao': ao: cp) }
+
+   am or;
+   { (new aligned output: ao: cp) }
+
+   translate compare and set flag (ws, 1, flag adjust, d+2);
+   am store (ws, indirect)
+   { (cp) }
+
+END;
+
+{ msb offset is a bit offset from the msb of the enclosing output string.
+  alignment & ws constraignts have to be allowed for}
+PROC copy string to string output = (INT in offset, out offset, source size,
+                                     dest msb offset, dest enc size, flag adjust, d) VOID:
+BEGIN
+    INT source enc size = ((source size + (ws-1))OVER ws)*ws;
+    INT dest msb al offset = (dest msb offset OVER ws) * ws;
+    INT dest ms word offset
+           = IF am version up THEN
+                out offset + dest enc size - ws - dest msb al offset
+             ELSE
+                out offset + dest msb al offset
+             FI;
+    INT dest msb overlap = ws - dest msb offset MOD ws;
+    INT dest ls end offset =
+             IF am version up THEN
+                dest ms word offset -
+                   ((source size - dest msb overlap + ws - 1 ) OVER ws) * ws
+             ELSE
+                dest ms word offset + ws
+             FI;
+    INT dest ls end bit size = (source size - dest msb overlap)*bits per byte;
+    INT dest msb bit overlap = dest msb overlap * bits per byte;
+
+    {Concatinate msb segment}
+    {(cp)}
+    am pushint (0);
+    am local (d);                    { Instance ptr }
+    am pushint (in offset);
+    am add;
+    am global(ws, indirect);         { input pointer }
+    am pushint (size unit);          { allow for query flag}
+    am add;
+    {(ia:cp)}
+    am bstring(dest msb bit overlap, source enc size * bits per byte, indirect);
+    am stou;
+    {(@ia:cp)}
+
+    IF ws - dest msb overlap /= 0 THEN
+       am pushint (0);
+       am local (d+1);
+       am pushint (dest ms word offset);
+       am add;
+       {(oa:0:@ia:cp)}
+       am bstring((ws - dest msb overlap) * bits per byte, ws * bits per byte, indirect);
+       am stou;
+       {(@oa:@ia:cp)}
+       am pushint (dest msb bit overlap);
+       am shl;
+       am or
+    FI;
+
+    am utos (32);
+    {(@oa shl dest msb bit overlap | @ia: cp)}
+
+    {(ms dest word: cp)}
+    am local (d);
+    am pushint (dest ms word offset);
+    am add;
+    am local (1);
+    {(ms dest word: oa: ms dest word: cp)}
+    translate compare and set flag (ws, 1, flag adjust, d+3);
+    am bstore (ws * bits per byte, indirect);
+    {(ms dest word: cp)}
+    am drop (1);
+    {(cp)}
+
+    IF source size > dest msb overlap THEN
+
+       {now write rest of string}
+       am local(d-1);
+       am pushint (dest ls end offset);
+       am add;
+       {(oa: cp)}
+
+       am pushint (dest msb bit overlap); { bit offset }
+
+       am local (d+1);
+       am pushint(in offset);
+       am add;
+       am global(ws, indirect);         { input pointer }
+       am pushint (size unit);          { allow for query flag}
+       am add;
+       {(ia: dest msb overlap: oa: cp)}
+       am bstring(dest ls end bit size, source enc size * bits per byte, indirect);
+       {(@ia: oa: cp)}
+       translate compare and set flag (dest ls end bit size OVER bits per byte,
+           1, flag adjust, d+2);
+       am bstore(dest ls end bit size, indirect)
+       {(cp)}
+   FI
+END;
+
+PROC copy trimmed strings = (VECTOR [] INT input types, INT in offset,
+                             out offset, enclosing len, flag adjust, d) VOID:
+BEGIN
+    INT get from := in offset;
+    INT write to := 0;
+    INT size;
+    FOR i TO UPB input types DO
+       size :=
+         CASE lookup type (input types[i]) IN
+            (REF SCHAR char):
+               BEGIN
+                  copy char to string output
+                     (get from, out offset, enclosing len, write to,
+                      flag adjust, d);
+                  1
+               END,
+            (REF SSTRING str):
+               BEGIN
+                  copy string to string output
+                     (get from, out offset, no OF str, write to,
+                      enclosing len, flag adjust, d);
+                  no OF str
+               END
+         ESAC;
+        get from +:= ws;
+        write to +:= size
+    OD
+END;
+
+
+
+{ CONC is a purely combinatorial function.  No local instance data is
+  required.  The two inputs may be single ELLA-characters or
+  ELLA-strings (this is distinguished by `sort OF body').  If either
+  input is unknown then we must output an unknown value; otherwise the
+  output is a known string formed by concatenating the characters of
+  the two inputs.
+
+  It simplifies the function to note that it is possible to test
+  whether an ELLA-character or an ELLA-string is known by comparing
+  its first `size unit' bytes against 0, without needing to know which
+  sort it is.
+}
+PROC translate conc = (UCONC body, ID name, FNDEC declaration,
+                       VECTOR [] INT input types, INT output type,
+                       ENVIRON environ, CLOSURE closure,
+                       FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   IF UPB input types /= 2 THEN
+      sys fault ("translate conc: wrong input count")
+   FI;
+   BOOL bit string =
+      CASE lookup type (output type) IN
+         (REF SSTRING s): UPB char OF t OF s = 2
+      OUT sys fault ("translate conc: wrong output sort"); FALSE
+      ESAC;
+
+   INT output size = lookup type size (output type);
+   INT left input size =
+         CASE lookup type (input types[1]) IN
+            (REF SSTRING s): no OF s,
+            (REF SCHAR c): 1
+         OUT sys fault ("translate conc: wrong left input sort"); 0
+         ESAC;
+   INT right input size =
+      CASE lookup type (input types[2]) IN
+            (REF SSTRING s): no OF s,
+            (REF SCHAR c): 1
+         OUT sys fault ("translate conc: wrong right input sort"); 0
+         ESAC;
+
+   INT left input offset = size unit + ws;
+   INT right input offset = left input offset + ws;
+   INT output offset = right input offset + ws;
+   INT fixed part size = output offset + output size;
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);
+                                               { (cp: s) }
+
+   { Check query flags }
+   am local (0);
+   am pushint (left input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);            { (flag: cp: s) }
+   am test;                                    { (ip /= ?: cp: s) }
+   am jumpno (0, output query);                { (cp: s) }
+   am local (0);
+   am pushint (right input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);            { (flag: cp: s) }
+   am test;                                    { (ip /= ?: cp: s) }
+   am jumpno (0, output query);                { (cp: s) }
+
+   { Output concatenation of inputs }
+
+   { First set query flag true.  Note that the manipulation of the
+     evaluation flag can be left to writing the body as the body of an
+     unknown ELLA-string is different from the bodies of all known
+     strings, in the case that we are dealing with a non bit string.
+     Otherwise  we must clear the evaluation flag if the query flag was
+     previously false.
+   }
+   am local (0);
+   am pushint (output offset);
+   am add;
+   IF bit string THEN
+      am local (0);                            { (op: op: cp: s) }
+      am global (ws, indirect);                { (old flag: op: cp: s) }
+      am test;                                 { (old flag /= 0: op: cp: s) }
+      am not;                                  { (old flag = 0: op: cp: s) }
+      LABEL same label = new label;
+      am jumpno (0, same label);
+         am local (1);
+         am pushint (0);
+         am store (size unit, indirect);
+      am label (2, same label)                 { (op: cp: s) }
+   FI;
+   am pushint (1);
+   am store (size unit, indirect);
+
+   { Now write the body }
+   IF bit string THEN
+      { Because write must be in `ws' units, we will in general have
+        to produce the output in 3 parts: A containing bits from the
+        left input only; B containing bits from both inputs and C
+        containing bits from the right hand part only.  Any of these
+        parts may be empty, depending upon the exact sizes.
+
+        NB all the sizes in this case are in *bits*.}
+      INT l = left input size;
+      INT r = right input size;
+
+      BOOL l is char = (sort OF body = flattenright);
+      BOOL r is char = (sort OF body = flattenleft);
+
+      { `a' and `c' are the number of bits in parts A and C, while
+        `b1' and `b2' are the number of bits in B that come from the
+        left and right inputs respectively. B <= ws*bits per byte}
+      INT wsb = ws * bits per byte;
+      INT b1 = l MOD wsb;
+      INT a = l - b1;
+      INT b2 =
+         IF b1 = 0 THEN 0
+         ELIF r + b1 < wsb THEN r
+         ELSE wsb - b1
+         FI;
+      INT c = r - b2;
+
+      { Here is a simple code macro used four times below to collect
+        some of the bits of one of the inputs to the function. A
+        single character input is converted to a 1-bit string
+      }
+      PROC translate push partial input =
+          (BOOL is char, INT input offset, bit offset, bit size, bit length, d) VOID:
+         IF is char THEN
+            am local (d - 1);
+            am pushint (input offset);
+            am add;
+            am global (ws, indirect);
+            am global (size unit, indirect);
+            am pushint (1);
+            am sub;
+            am utos (1)
+         ELSE
+            am pushint (bit offset);
+            am local (d);
+            am pushint (input offset);
+            am add;
+            am global (ws, indirect);
+            am pushint (size unit);
+            am add;
+            am bstring (bit size, bit length, indirect)
+         FI;
+
+      { Collect output offset }
+      am local (0);
+      IF NOT am version up THEN
+         am pushint (output offset + size unit);     { (A ptr: cp: s) }
+         am add
+      ELSE
+         am pushint (output offset + output size - (a OVER bits per byte) );
+         am add
+         { (A ptr: cp: s) }
+      FI;
+
+      { Move partition A (if required) }
+      IF a > 0 THEN
+         am local (0);                            { (A ptr: A ptr: cp: s) }
+         translate push partial input
+            (l is char, left input offset, 0, a, l, 3);
+                                                  { (A: A ptr: A ptr: cp: s) }
+         am pushint (0);
+         am local (2);
+         am bstring (a, a, indirect);                { (Old A: ...) }
+         am local (1);                            { (A: Old A: ...) }
+         am neq;                                  { (Changed: ...) }
+         LABEL same label = new label;
+         am jumpno (0, same label);               { (A: A ptr: A ptr: cp: s) }
+            am local (3);
+            am pushint (0);
+            am store (size unit, indirect);
+         am label (4, same label);
+         am bstore (a, indirect);                 { (A ptr: cp: s) }
+         IF NOT am version up THEN
+            am pushint (a OVER bits per byte);
+            am add
+         FI
+      FI;
+      IF am version up THEN
+         am pushint (ws);
+         am sub
+      FI;                                         { (B ptr: cp: s) }
+
+      { Move partition B (if required) }
+      IF b1 > 0 THEN
+         am local (0);                            { (B ptr: B ptr: cp: s) }
+         translate push partial input
+            (l is char, left input offset, a, b1, l, 3);
+                                                  { (B1 right justified: ...) }
+         am stou;
+         am pushint (wsb - b1);
+         am shl;                                  { (B1: B ptr: B ptr: cp: s) }
+         translate push partial input
+            (r is char, right input offset, 0, b2, r, 4);
+                                                  { (B2 right justified: ...) }
+         am stou;
+         IF b1 + b2 < wsb THEN
+            am pushint (wsb - b1 - b2);
+            am shl
+         FI;                                      { (B2: B1: ... }
+         am or;
+         am local (1);
+         am global (ws, indirect);                { (Old value:...) }
+         am local (1);
+         am neq;
+         LABEL same label = new label;
+         am jumpno (0, same label);               { (B': B ptr: B ptr: cp: s) }
+            am local (3);
+            am pushint (0);
+            am store (size unit, indirect);
+         am label (4, same label);
+         am store (ws, indirect);                 { (B ptr: cp: s) }
+         IF NOT am version up THEN
+            am pushint (ws);
+            am add
+         FI
+      FI;
+      IF am version up THEN
+         am drop (1);
+         am local (0);
+         am pushint (output offset + size unit);
+         am add
+      FI;                                         { (C ptr: cp: s) }
+
+      { Move partition C (if required) }
+      IF c > 0 THEN
+         translate push partial input
+            (r is char, right input offset, b2, c, r, 2);
+                                                  { (C: C ptr: cp: s) }
+         am pushint (0);
+         am local (2);
+         am bstring (c, c, indirect);                { (Old C: ...) }
+         am local (1);                            { (C: Old C: ...) }
+         am neq;                                  { (Changed: ...) }
+         LABEL same label = new label;
+         am jumpno (0, same label);               { (C: C ptr: cp: s) }
+            am local (2);
+            am pushint (0);
+            am store (size unit, indirect);
+         am label (3, same label);
+         am bstore (c, indirect)
+      ELSE
+         am drop (1)
+      FI                                          { (cp: s) }
+
+   ELSE
+        copy trimmed strings (input types, left input offset,
+                              output offset + size unit,
+                              output size - size unit,
+                              resetflag, 1)
+   FI;
+   am jump (end);
+
+   { Output query }
+   am label (1, output query);                 { (cp: s) }
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   { Check and reset evaluation flag and perform fanout }
+   am label (1, end);                          { (cp: s) }
+   translate end function (fixed part size, 1); { (s) }
+
+   (fixed part size, output offset, combinatorial)
+END; { translate conc }
+
+SKIP
+
+KEEP
+    translate conc
+
+FINISH
