@@ -1,0 +1,106 @@
+COM
+
+                           ELLA Prover : version 1.0
+
+    ************************************************************************
+    This Software is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Software is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version be clearly marked to show the nature of the 
+       amendment and the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1995
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments, adaptions, modifications, translations and enhancements
+    thereof.
+
+    The authors may be contacted via email on ella@dra.hmg.gb or by writing
+    to ELLA Office, CIS3, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+MOC
+
+
+# ------------------- Pure boolean functions ----------------------------- #
+
+FN IS_TRUE = (bool: a) -> _boolean: CASE a OF t : _true ELSE _false ESAC.  
+
+FN SYS_TILDA = (_boolean: a) -> _boolean: 
+  CASE a OF _true : _false ELSE _true ESAC.
+
+FN SYS_JOIN = (_boolean: a b) -> _boolean: CASE a OF _true : b ELSE _false ESAC.
+
+FN SYS_UNION = (_boolean: a b) -> _boolean: CASE a OF _true : _true ELSE b ESAC.
+
+FN SYS_NOT = (_boolean: a) -> _boolean:
+  CASE a OF _true : _false ELSE _true ESAC.
+
+FN SYS_AND = (_boolean: a b) -> _boolean: CASE a OF _true : b ELSE _false ESAC.
+
+FN SYS_OR = (_boolean: a b) -> _boolean: CASE a OF _true : _true ELSE b ESAC.
+
+FN SYS_IMPLIES = (_boolean: a b) -> _boolean: 
+  CASE a OF _true : b ELSE _true ESAC.
+
+# ---------------------- bool functions ---------------------------------- #
+
+FN NOT1 = (bool: a) -> bool:
+  CASE a OF t : f, f : t ELSE a ESAC.
+
+MAC NOT_N{INT n} = ([n]bool: a) -> [n]bool: 
+  IF n = 1
+    THEN [n](NOT1 a[1])
+    ELSE (NOT1 a[1]) CONC (NOT_N{n-1}a[2..n])
+  FI.
+
+# -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   - #
+
+FN AND1 = (bool: a b) -> bool:
+  CASE (a, b)
+    OF (t, t) : t
+ELSEOF (bool, f) | (f, bool) : f
+  ELSE ?bool
+  ESAC.
+
+
+MAC AND_N{INT n} = ([n]bool: a) -> bool:
+    IF n = 1 THEN a[1] ELSE a[1] AND1 AND_N{n-1}(a[2..n]) FI.
+
+FN NAND = (bool: a b) -> bool: NOT1 (a AND1 b).
+
+MAC NAND_N{INT n} = ([n]bool: a) -> bool: NOT1(AND_N{n} a).
+
+# -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   - #
+
+FN OR1 = (bool: a b) -> bool:
+  CASE (a, b)
+    OF (f, f) : f
+ELSEOF (bool, t) | (t, bool) : t
+  ELSE ?bool
+  ESAC.
+
+
+MAC OR_N{INT n} = ([n]bool: a) -> bool:
+    IF n = 1 THEN a[1] ELSE a[1] OR1 OR_N{n-1}(a[2..n]) FI.
+
+FN NOR = (bool: a b) -> bool: NOT1 (a OR1 b).
+
+MAC NOR_N{INT n} = ([n]bool: a) -> bool: NOT1(OR_N{n} a).
+
+# -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   - #
+
+FN SEL = (bool: a b c) -> bool: CASE a OF t : b ELSE c ESAC.
+
