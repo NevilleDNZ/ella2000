@@ -1,0 +1,286 @@
+DECS attrtrans CONTEXT VOID
+USE  putstrings,  basics, messageproc,
+     attrmodes, assmodes, transformprocs, closureprocs:
+
+configinfo A68CONFIG "$Id: attrtrans.a68,v 34.2 1995/03/29 13:02:52 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:11:91  Module to translate from attributes in assembler modes to
+             ELLANET representation.  EVW
+03:03:92  Attribute declarations added. EVW
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.002 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT unique_no := 0;
+
+PROC make_name = (INT no) ID:
+   IF no = -1
+   THEN unique_no PLUSAB 1;  oneline(("_aa", unique_no))
+   ELSE oneline(("_a", no))
+   FI;
+
+{ NOTE basenodeset is held in reverse order to facilitate latter copying
+       and appending }
+
+PROC extend_basenodeset = (REF NODESET base, ID fnname, REF INT depth) VOID:
+BEGIN
+   DECNODE node = (fnname, depth PLUSAB 1);
+   base :=
+     CASE base IN
+     (REF NODELIST nl) HEAP NODELIST := (node, nl),
+     (IMPNODE ip)      IMPNODE (region OF ip,
+                                HEAP NODELIST := (node, nodes OF ip))
+   ESAC
+END;
+
+PROC reduce_basenodeset = (REF NODESET base, REF INT depth) VOID:
+BEGIN
+   depth MINUSAB 1;
+   base :=
+     CASE base IN
+     (REF NODELIST nl)
+        ( REF NODELIST ns := nl; ns := rest OF ns;  ns ),
+     (IMPNODE ip)
+        ( REF NODELIST ni := nodes OF ip;  ni := rest OF ni;
+          IMPNODE (region OF ip, ni)
+        )
+   ESAC
+END;
+
+PROC add_nodeset = (NODESET basenodeset, NODE node) NODESET:
+  { need to copy base and then add new last element }
+BEGIN
+   REF NODELIST newnodelist := HEAP NODELIST := (node, nilnodelist);
+   CASE basenodeset IN
+   (REF NODELIST nd)
+      ( REF NODELIST nl := nd;
+        WHILE nl ISNT nilnodelist
+        DO newnodelist := HEAP NODELIST := (node OF nl, newnodelist);
+           nl := rest OF nl
+        OD;
+        newnodelist
+      ),
+   (IMPNODE in)
+      ( REF NODELIST nl := nodes OF in;
+        WHILE nl ISNT nilnodelist
+        DO newnodelist := HEAP NODELIST := (node OF nl, newnodelist);
+           nl := rest OF nl
+        OD;
+        IMPNODE (region OF in, newnodelist)
+      )
+   ESAC
+END;
+
+
+PROC translate_data = (REF IDS attrdata) REF DATALIST:
+BEGIN
+   REF DATALIST dlist := nildatalist;
+   REF REF DATALIST ptr := dlist;
+   REF IDS data := attrdata;
+   WHILE data ISNT nilids
+   DO  REF REF DATALIST (ptr) := HEAP DATALIST := (id OF data, nildatalist);
+       ptr := rest OF ptr;
+       data := rest OF data
+   OD;
+   dlist
+END;
+
+REF NODEDATA closurenodedata := NIL;
+REF REF NODEDATA nodedataptr := closurenodedata;
+
+PROC add_nodedata = (NODESET nodeset, REF DATALIST data) VOID:
+BEGIN
+   REF REF NODEDATA (nodedataptr) := HEAP NODEDATA
+                                  := (nodeset, data, nilnodedata);
+   nodedataptr := rest OF nodedataptr
+END;
+
+INT declattr = 1, nonameattr = 2, instattr = 3, nameattr = 4;
+
+PROC add_node = (NODESET basenodeset, INT depth, REF IDS attrdata,
+                                      INT sort, ID attrname, fnname) VOID:
+BEGIN
+   NODE node = IF sort = instattr
+               THEN INSTNODE ((attrname, depth), fnname)
+               ELSE DECNODE (attrname, depth)
+               FI;
+   NODESET nodeset = IF (sort = declattr) ANDTH (attrname = nullid)
+                     THEN basenodeset
+                     ELSE add_nodeset(basenodeset, node)
+                     FI;
+   REF DATALIST datalist := translate_data(attrdata);
+   add_nodedata(nodeset, datalist)
+END;
+
+
+PROC fndec_translate = (REF FNDEC fdec, TRANSFORMPROCS tprocs, REF ENVIRON env,
+                        ID classname, REF NODESET basenodeset, REF INT depth)
+                                                                FNDECC:
+BEGIN
+   PROC attribute_translate = (ATTR a, ID othername, INT sort, ID instname)
+                                                                         ATTRC:
+   BEGIN
+      CASE a IN
+      (REF ATTRNAME an)
+         ( REF ATTRDEC adec = (attrs OF env)[attrno OF an];
+           CASE value OF adec IN
+           (REF ATTRNAME vn)
+              attribute_translate(vn, othername, sort, instname),
+           (REF ATTRDATA vd)
+              attribute_translate(vd, attrname OF adec, sort, instname),
+           (REF ATTRBRACKET vb)
+              attribute_translate(attr OF vb, othername, sort, instname),
+           (REF ATTRSTR vs)
+              ( REF ATTRSTR vss := vs;
+                WHILE vss ISNT nilattrstr
+                DO attribute_translate(elem OF vss, othername, sort, instname);
+                   vss := rest OF vss
+                OD
+              ),
+           (REF ATTRNULL) SKIP
+           ESAC
+         ),
+      (REF ATTRDATA ad)
+         IF (classname OF ad = classname)
+         THEN ID name = CASE sort IN
+                        {declattr}    nullid,
+                        {nonameattr}  make_name(-1)
+                        OUT  othername
+                        ESAC;
+              add_node(basenodeset, depth, strings OF ad, sort, name, instname)
+         FI,
+      (REF ATTRSTR as)
+         ( REF ATTRSTR atts := as;
+           WHILE atts ISNT nilattrstr
+           DO  attribute_translate(elem OF atts, othername, sort, instname);
+               atts := rest OF atts
+           OD
+        ),
+      (REF ATTRBRACKET ab)
+        attribute_translate(attr OF ab, othername, sort, instname)
+      OUT SKIP
+      ESAC;
+      (a, FALSE)
+   END;
+
+
+   PROC names_translate = (REF NAMES n, TRANSFORMPROCS tprocs) NAMESC:
+   BEGIN
+      REF NAMES names := n;
+      WHILE names ISNT nilnames
+      DO NAMETYPE nt = (nametypes OF fdec)[nameno OF names];
+         attribute_translate(attr OF nt, name OF nt, nameattr, nullid);
+         names := rest OF names
+      OD;
+      (n, FALSE)
+   END;
+
+   PROC step_translate = (STEP step, TRANSFORMPROCS tprocs) STEPC:
+      CASE step IN
+      (REF MAKE mk)
+         ( INSTANCEC ic = (instance OF tprocs)(inst OF mk, tprocs);
+           REF NAMES makenames := makenames OF mk;
+           ID fnname = fnname OF (fns OF env)[fnno OF inst OF mk];
+           WHILE makenames ISNT nilnames
+           DO NAMETYPE nt = (nametypes OF fdec)[nameno OF makenames];
+              attribute_translate(attr OF nt, name OF nt, instattr, fnname);
+              makenames := rest OF makenames
+           OD;
+           (mk, FALSE)
+         )
+      OUT (step OF nulltprocs)(step, tprocs)
+      ESAC;
+
+
+   TRANSFORMPROCS newtprocs := make_newtprocs(tprocs,
+      ( step_translate,
+        names_translate,
+        (ATTR a, TRANSFORMPROCS tp) ATTRC:
+             attribute_translate(a, nullid, nonameattr, nullid)
+     ));
+
+   extend_basenodeset(basenodeset, fnname OF fdec, depth);
+   attribute_translate(attr OF fdec, nullid, declattr, nullid);
+   NAMESC ic = (names OF newtprocs)(inputs OF fdec, newtprocs),
+          oc = (names OF newtprocs)(outputs OF fdec, newtprocs);
+   (fnbody OF nulltprocs)(fnbody OF fdec, newtprocs);
+   reduce_basenodeset(basenodeset, depth);
+   (fdec, FALSE)
+END;
+
+PROC outer_translate = (OUTER o, TRANSFORMPROCS tprocs, ID classname) OUTERC:
+BEGIN
+   REF ENVIRON env = environ OF o;
+   INT depth := 0;  { records depth of inner declarations }
+   NODESET basenodeset := nilnodelist;
+
+   PROC declaration_translate = (DECLARATION dec, TRANSFORMPROCS tprocs)
+                                                             DECLARATIONC:
+      CASE dec IN
+      (FNNAME fn)
+         ( REF FNDEC fdec = (fns OF env)[fnno OF fn];
+           fndec_translate(fdec, tprocs, env, classname, basenodeset, depth);
+           (dec, FALSE)
+         )
+      ESAC;
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+      ( declaration_translate,
+        (REF FNDEC f, TRANSFORMPROCS tprocs) FNDECC:
+           fndec_translate(f, tprocs, env, classname, basenodeset, depth)
+      ));
+   (outer OF nulltprocs)(o, newtprocs)
+END;
+
+PROC translate_textattributes =
+      (CLOSURE closure, ID classname, MESSAGEPROC msg) REF NODEDATA:
+BEGIN
+   ID cname =
+       IF classname = MAKEID "_textattributes" THEN nullid ELSE classname FI;
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs,
+    (  (OUTER o, TRANSFORMPROCS tp) OUTERC: outer_translate(o, tp, cname)
+    ));
+   closurenodedata := nilnodedata;
+   CLOSUREC cl = (closure OF nulltprocs)(closure, newtprocs, msg);
+   closurenodedata
+END;
+
+SKIP
+
+
+KEEP translate_textattributes
+FINISH
