@@ -1,0 +1,495 @@
+DECS keamdelay CONTEXT VOID USE putstrings, basics, kesymbols, keambasics,
+     keamstandard, keconv, kebasics:
+
+{ " Id: keamdelay.sta,v 2.2 91/02/26 14:40:59 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamdelay.a68,v 34.2 1995/03/29 13:04:35 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:09:88  Module created to implement DELAY atomic functions
+18:11:88  Bugs 29 & 30, fix to delay setting. MDR.
+12:12:88  Bugs 5, 33 & 43. MDR.
+10:01:89  Bug 97. TEMPORARY fix for Bug 95. MDR.
+19:01:97  Event time(s) now cleared at initialisation.  Bug 125.  BJE.
+23:01:89  Fix of 10:01:89 removed, since delays now sorted, and unit
+              delays optimised to take advantage of sorting.  Bug 95.
+              R4B035.  PAR.
+07:02:89  Fix for R4B089.  PAR.
+24:08:89  Parameters to 'translate copy inputs' changed.  R4B150.  PAR.
+11:05:90  Added next event setting. MDR.
+16:11:90  Optimised delay setting to avoid copying inputs that
+              have'nt changed. MDR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.010 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Code sequences }
+{ ============== }
+
+
+{ A normal delay has two calls (apart from initialisation).
+  The first is the event setting call.  This will only happen
+  if the evaluation flag of the instance is set (and this
+  can come about either because of the normal fanout
+  mechanism, or because of event setting itself).  If an event is set,
+  ie the current inputs imply that the state of the delay should
+  change at some future time, the time and nature of the event are
+  encoded in the instance data, AND THE EVALUATION FLAG IS LEFT SET.
+
+  ** The eval flag is set to 2 for a pending event, and set to 1 by
+  fanouts of other functions when some inputs have changed. It is set
+  to 0 when no events are pending. **
+
+  (it is only reset if there is no event pending).
+  The event handling call, which only takes place if the evaluation
+  flag is set, updates the outputs at the required ELLA time, AND
+  DOES THE FANOUT IF NECESSARY (and it may reset the flag if there
+  is no event remaining -- however, this optimisation is not yet
+  applied to general delays).
+
+  Unit delays are special, and more optimised.  Event handling calls
+  are sorted by *reverse* data flow (see KEINSTANCE), and therefore
+  the inputs to an event handler cannot change as a result of this
+  phase until after that handler has been processed.  This is important
+  to the correct operation of the evaluation flags even in the general
+  case, but additionally allows unit delays (with unit intermediate time,
+  too) to be implemented *just* by event handlers, simply copying their
+  inputs to their outputs.
+
+  A combinatorial phase is only required for delays with 0 intermediate
+  time. The intermediate value is copied to the output area whenever the input
+  value differs from that within the holding area. Care has to be taken to
+  ensure that the last value produced by event handling is output whenever
+  the input value is changed back to be the same as that in the holding
+  area without any intervening time advances. This requires that event
+  handling produces two copies of the output value.
+
+  Event setting and handling are processed in the normal manner, ie setting
+  the event to occur at circuit time + intermediate time, and handling the
+  event when this time is reached. As circuit time is advanced between event
+  setting and event handling, an intermediate time event of circuit time + 0
+  is always ignored by event handling.
+
+}
+
+
+{ Initialisation is accomplished by a call to this procedure.
+  The different shape of unit delay instances is accomodated by the
+  use of the parameter 'unit'.
+}
+PROC delay initialiser = (SVALUE init, INT type, hold offset, BOOL unit,
+                          []INT output offsets,
+                          []INT event offsets) VOID:
+BEGIN
+   IF NOT unit THEN
+      translate output constant (init, type, hold offset, leave flag, 1)
+   FI;
+   FOR i TO UPB output offsets DO
+      translate output constant (init, type, output offsets[i], leave flag, 1)
+   OD;
+   FOR i TO UPB event offsets DO
+      am local (0);
+      am pushint (event offsets [i]);
+      am add;
+      am pushint (0);
+      am store (ws, indirect)
+   OD;
+   am ret (0)
+END;
+
+{Combinatorial phase used for delays with 0 intermediate time.
+ Copy intermediate value to output iff inputs have changed,
+ The evaluation flag must be left set to ensure correct delay setting.
+ No net effect on AM stack.}
+PROC translate cl phase = (SVALUE ambig, VECTOR [] INT input types,
+                           INT output type, input offset, hold offset,
+                           [] INT output offsets, INT fixed part size) VOID:
+BEGIN
+   { (cp) }
+
+   LABEL changed input label = new label;
+   LABEL do fanout label = new label;
+   INT compare with := hold offset;
+
+   FOR i TO UPB input types DO
+      INT data size = lookup type size (input types[i]);
+
+      IF data size /= ws THEN
+         am pushint (0);
+         am local (1)
+     ELSE
+         am local (0)
+      FI;
+      am pushint (input offset + (i-1)*ws);
+      am add;
+      am global (ws, indirect);
+      { (@(cp+io): [0:] cp) }
+
+      IF data size = ws THEN
+         am global (ws, indirect)
+      ELSE
+         am bstring (data size * bits per byte,
+                     data size * bits per byte, indirect)
+      FI;
+      { (newdata: cp) }
+
+      IF data size /= ws THEN
+         am pushint (0);
+         am local (2)
+      ELSE
+         am local (1)
+      FI;
+      am pushint (compare with);
+      am add;
+      { (cp+cw: [0:] newdata: cp) }
+
+      IF data size = ws THEN
+         am global (ws, indirect)
+      ELSE
+         am bstring (data size * bits per byte,
+                     data size * bits per byte, indirect)
+      FI;
+      { (olddata: newdata: cp) }
+
+      am eq;
+      am jumpno (0, changed input label);
+
+      compare with +:= data size
+   OD;
+   { (cp) }
+       translate copy value (output type, output offsets[1], output offsets[2],
+                             reset flag, 1 );
+       am jump (do fanout label);
+
+   am label (1, changed input label);
+   { (cp) }
+
+       translate output constant (ambig, output type, output offsets[2],
+                                  reset flag, 1);
+
+   am label (1, do fanout label);
+   am local (0);
+   am global (ws, indirect);
+   am test;
+   am not;
+   am jumpno (1, unchanged output label);
+
+      { ensure flag is set at the end of combinatorial phase }
+      am local (0);
+      am pushint (1);
+      am store (ws, indirect);
+
+      am fanout (fixed part size);
+
+   am label (0, unchanged output label);
+
+   am ret(0)
+END;
+
+{ Unit delays only require an event handler function, which simply copies
+  the inputs to the outputs, propagating the evaluation flag in the
+  normal way.
+}
+PROC unit delay handler = (VECTOR [] INT input types, INT output type,
+                          input offset, output offset, fixed part size) VOID:
+BEGIN
+    { Copy inputs, resetting flag if necessary }
+    translate copy inputs (input types, input offset,
+                           lookup type (output type),
+                           output offset, reset flag, 1);
+
+    translate end function (fixed part size, 1)
+END;
+
+
+{ This procedure generates the code to set the specified event a given
+  number of time units ahead.
+}
+PROC set event = (INT event type, ahead, hold offset, d) VOID:
+BEGIN
+    am local (d-1);                             { Instance ptr }
+    am pushint (hold offset + ws * event type); { Appropriate event time addr }
+    am add;
+    am global (ws, global time label);          { Current time }
+    am pushint (ahead);
+    am add;                                     { Time for event }
+    am store (ws, indirect)
+END;
+
+
+{ This procedure compiles a test of the specified type of event, to see
+  whether there is any event handling to do.  The code generated leaves
+  'Yes' on the abstract machine stack if the event is due, else 'No'.
+}
+PROC event due = (INT event type, hold offset, d) VOID:
+BEGIN
+    am local (d-1);                             { Instance ptr }
+    am pushint (hold offset + ws * event type); { Appropriate event time addr }
+    am add;
+    am global (ws, indirect);                   { The event time }
+    am global (ws, global time label);          { The current time }
+    am eq
+END;
+
+
+{ The possible event types in the above are:
+}
+INT intermediate event = -1,
+    output event       = -2;
+{Evaluation flag states. A fanout to this function == 'new event'.}
+INT no event      = 0,
+    new event     = 1,
+    pending event = 2;
+
+PROC general delay setter = (VECTOR [] INT input types, INT int time, del time,
+                             output type, hold offset) VOID:
+BEGIN
+    LABEL no event label = new label;
+
+    INT first input = size unit + ws;
+
+    am local (0);
+    am global (size unit, indirect);            { Flag }
+    am pushint (new event);
+    am eq;
+    am jumpno (0, no event label);
+
+    am local (0);
+    am pushint (0);
+    am store (size unit, indirect);
+
+    translate copy inputs (input types, first input,
+                           lookup type (output type),
+                           hold offset, set flag, 1);
+
+    am local (0);                               { Instance ptr }
+    am global (size unit, indirect);            { Flag }
+    am test;
+    am jumpno (0, no event label);
+        set event (output event, del time, hold offset, 1);
+        am local (0);                           { Instance ptr }
+        am pushint (hold offset + ws * intermediate event);
+        am add;
+        am global (ws, indirect);               { Intermediate event time }
+        am global (ws, global time label);      { The current time }
+        am le;
+        am jumpno (0, no event label);
+            { ie, if current intermediate event time < circuit time }
+            set event (intermediate event, int time, hold offset, 1);
+    am label (1, no event label);
+    translate set next event (hold offset + ws * intermediate event, 1);
+    translate set next event (hold offset + ws * output event, 1);
+    am pushint (pending event);                 { Leave flag set }
+    am store (size unit, indirect);
+    am ret (0)
+END;
+
+
+{ Code for a general delay event handler
+}
+PROC general delay handler = (SVALUE ambig, INT hold offset, output type,
+                              [] INT output offsets, INT fixed part size) VOID:
+BEGIN
+    LABEL check intermediate label = new label;
+    LABEL end handler label = new label;
+    LABEL do fanout label = new label;
+    LABEL check outputs same label = new label;
+
+    event due (output event, hold offset, 1);
+    am jumpno (0, check intermediate label);
+        FOR i TO UPB output offsets DO
+           INT flag state =
+              IF i = UPB output offsets THEN reset flag ELSE leave flag FI;
+           translate copy value (output type, hold offset, output offsets[i],
+                                 flag state, 1)
+        OD;
+        am pushint (no event); {eval flag will be reset, as no events now pending}
+        am jump (do fanout label);
+
+    am label (1, check intermediate label);
+    {eval flag will be set, as at least an output event pending}
+    am pushint (pending event);
+    CASE ambig IN
+        (SVNULL):  SKIP   { Leave current output in IDELAY case }
+    OUT
+        event due (intermediate event, hold offset, 2);
+        am jumpno (0, check outputs same label);
+            FOR i TO UPB output offsets DO
+              INT flag state =
+                 IF i = UPB output offsets THEN reset flag ELSE leave flag FI;
+              translate output constant (ambig, output type, output offsets[i],
+                                         flag state, 2)
+            OD;
+            am jump (do fanout label);
+
+        am label (2, check outputs same label);
+        IF UPB output offsets = 2 THEN
+           {ensure both output areas have same value at end of event handling}
+           translate copy value (output type, output offsets[2],
+                                 output offsets[1], leave flag, 2)
+        FI
+    ESAC;
+    am label (2, do fanout label);
+    { (ef: cp) }
+
+    am local (1);
+    am global (ws, indirect);
+    am test;
+    am not;
+    am jumpno (2, end handler label);
+
+    am local (1);
+    am fanout (fixed part size);
+
+    am label (2, end handler label);
+    { (ef: cp) }
+
+    am store (size unit, indirect); {evaluation flag set iff an event
+                                     is still pending }
+    am ret (0)
+END;
+
+
+{ Complete translation of an ambiguity delay function.
+}
+PROC translate adelay = (ADELAY body, ID name, FNDEC declaration,
+                        VECTOR [] INT input types, INT output type,
+                        ENVIRON environ, CLOSURE closure,
+                        FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+    INT int time = int (ambigtime OF body);
+    INT time = int (delaytime OF body);
+    BOOL unit = time = 1 AND int time /= 0;
+    INT data size = lookup type size (output type);
+    INT input offset = size unit + ws;
+    INT event offset = input offset + UPB input types * ws;
+    [] INT event offsets =
+           IF unit THEN LOC [0] INT
+           ELSE (event offset, event offset + ws)
+           FI;
+    INT hold offset = event offset + UPB event offsets * ws;
+    [] INT output offsets =
+           IF int time = 0 THEN
+               (hold offset + data size, hold offset + 2*datasize)
+           ELIF unit THEN  hold offset
+           ELSE  hold offset + data size
+           FI;
+    INT fixed part size = output offsets[UPB output offsets] + data size;
+
+    BITS cl phase needed := BIN (0);
+
+    translate start initialiser (name);
+    delay initialiser (convert const (init OF body, environ, closure),
+                       output type, hold offset, unit, output offsets,
+                       event offsets);
+
+    IF int time = 0 THEN
+        translate start function (name);
+        SVALUE ambig = convert const (ambig OF body, environ, closure);
+        translate cl phase(ambig, input types, output type, input offset,
+                           hold offset, output offsets, fixed part size);
+        cl phase needed := combinatorial
+    FI;
+
+    IF NOT unit THEN
+        translate start event setter (name);
+        general delay setter (input types, int time, time, output type, hold offset)
+    FI;
+
+    translate start event handler (name);
+    IF unit THEN
+        unit delay handler (input types, output type, input offset,
+                            output offsets [1], fixed part size)
+    ELSE
+        SVALUE ambig = convert const (ambig OF body, environ, closure);
+        general delay handler (ambig, hold offset, output type,
+                               output offsets, fixed part size)
+    FI;
+
+    (fixed part size, output offsets [UPB output offsets],
+     IF unit THEN  unit delay  ELSE  general delay OR cl phase needed  FI)
+END;
+
+
+{ Complete translation of a idelay function.
+}
+PROC translate idelay = (IDELAY body, ID name, FNDEC declaration,
+                        VECTOR [] INT input types, INT output type,
+                        ENVIRON environ, CLOSURE closure,
+                        FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+    INT time = int (delaytime OF body);
+    BOOL unit = time = 1;
+    INT data size = lookup type size (output type);
+    INT input offset = size unit + ws;
+    INT event offset = input offset + UPB input types * ws;
+    [] INT event offsets =
+           IF time = 1 THEN LOC [0] INT
+           ELSE (event offset, event offset + ws)
+           FI;
+    INT hold offset = event offset + UPB event offsets * ws;
+    INT output offset = IF unit THEN  hold offset
+                        ELSE  hold offset + data size
+                        FI;
+    INT fixed part size = output offset + data size;
+
+    translate start initialiser (name);
+    delay initialiser (convert const (init OF body, environ, closure),
+                       output type, hold offset, unit, output offset,
+                       event offsets);
+
+    IF NOT unit THEN
+        translate start event setter (name);
+        general delay setter (input types, -1, time, output type, hold offset)
+    FI;
+
+    translate start event handler (name);
+    IF unit THEN
+        unit delay handler (input types, output type, input offset,
+                            output offset, fixed part size)
+    ELSE
+        SVNULL ambig;
+        svnull OF ambig := 0;
+        general delay handler (ambig, hold offset, output type, output offset, fixed part size)
+    FI;
+
+    (fixed part size, output offset,
+     IF unit THEN  unit delay  ELSE  general delay  FI)
+END
+
+
+KEEP
+    translate adelay, translate idelay
+FINISH
