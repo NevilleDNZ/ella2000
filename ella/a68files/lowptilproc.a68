@@ -1,0 +1,416 @@
+DECS lowptilproc CONTEXT VOID USE  putstrings, messageproc, basics,
+     osinterface, databasebuffers, libmodes, libinterface, attrdecls, ioprocs,
+     sidanalyser:
+
+{ " Id: lowptilproc.sta,v 1.1 91/10/14 14:30:30 edcad Exp $" }
+configinfo A68CONFIG "$Id: lowptilproc.a68,v 34.2 1995/03/29 13:03:30 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+14:11:88  PROC vnull added.  MGH
+07:02:89  CR 642. Updated to new kernel. EVW
+30:11:89  CR 636. Updated to KEEPSAKE. JIT
+18:12:89  PROC alien added. JIT
+04:01:90  PROC sample added. JIT
+29:01:90  PROC faster and PROC slower added. JIT
+06:02:89  Multiple lets, constant macro parameters added. MGH
+18:04:90  PROC vfn removed (UIO).  MGH
+27:06:90  Fntypes, multiple joins & makes, named outputs, void type. MGH
+17:07:90  Consequential changes of declaration attributes. EVW
+16:10:90  cttype changed to read in `type' data rather than int.  MGH
+19:11:90  Declaration attributes merged onto update 26. JIT
+21:02:91  KEEPSAKE now referenced through KEEPSAKEBUFFERS only.  DCT
+22:04:91  R6B17:  Ctrans side effects removed.  DCT
+24:04:91          "failure" changed for ELLA compiler error recovery.  DCT
+06:05:91  PROC vreplace added. JIT
+27:08:91  seqelseof etc rationlised. EVW
+20:11:91  Module keepsakebuffers renamed databasebuffers.  DCT
+19:03:92  Attribute declaration and use added. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+02:06:92  Void added.  MGH
+01:03:93  Const index, trim, cond, repl, conc and attributes added. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.023 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+     REF VECTOR [] DISCPTR ptrs;
+     INT ptrcount := 0;
+
+     INT eoflib = 125;
+
+     INT integer1;
+     ID  identifier1;
+
+     BOOL monitor := FALSE, exit := FALSE;
+
+     PROC print = (VECTOR [] OUTMODE line) VOID: put(out, line);
+
+     PROC fault = (INT i, t1) VOID:
+     (print((newline,"failure ... i= ",i,"    t1= ",t1,"   "));
+      exit := TRUE
+     );
+
+     PROC read monitorchar = (BUFFER buffer)CHAR:
+     ( CHAR c =read char(buffer);
+       IF monitor THEN print(c) FI;
+       c
+     );
+
+     BUFFER buffer;
+
+     INT t1 := 0;
+
+     PROC displacements =(DISCPTR dp, MESSAGEPROC msg) VOID:  SKIP;
+{     BEGIN
+          VECTOR [size(database OF discfile, dp)] INT d;
+          read_ints(database OF discfile, d, dp);
+          print(("displacements:", newline));
+          FOR i TO UPB d
+          DO flt_if_interrupted(msg);
+             IF charsleft(out) < 20 THEN print(newline) FI;
+             print((d[i], " "))
+          OD;
+          print(newline);
+          print(newline)
+     END;
+}
+
+PROC reader = LEX:
+   IF exit
+   THEN  (eoflib, EMPTY)
+   ELSE  t1 := read il tok(buffer);
+         integer1 := int OF buffer;
+         identifier1 := ident OF buffer;
+         (t1, EMPTY)
+   FI;
+
+PROC failure = (INTERNALS error pos) VOID:
+   fault(type OF lex OF error pos, stind OF error pos);
+
+PROC fail = (VECTOR [] OUTMODE line) VOID: put(out, line);
+
+PROC return = RESULT: (exit := TRUE; HEAP RESULT := ABS exit);
+
+PROC identifier = VOID: print((identifier1, " "));
+PROC integer = VOID: print((integer1," "));
+
+PROC iconst = VOID: print("iconst ");
+PROC iconsttext = VOID: print("iconsttext ");
+PROC iname = VOID: print("iname ");
+PROC idop = VOID: print("idop ");
+PROC imop = VOID: print("imop ");
+PROC icond = VOID: print("icond ");
+PROC iparam = VOID: print("iparam ");
+PROC ivarmult = VOID: print("ivarmult ");
+PROC icheck = VOID: print("icheck ");
+PROC idef = VOID: print(("idef ", integer1, " "));
+PROC ibracket = VOID: print("ibracket ");
+PROC inull = VOID: print("inull ");
+PROC tnull = VOID: print("tnull ");
+PROC tvoid = VOID: print("tvoid ");
+PROC tnamed = VOID: print("tnamed ");
+PROC trow = VOID: print("trow ");
+PROC tst = VOID: print("tst ");
+PROC tparam = VOID: print("tparam ");
+PROC tbracket = VOID: print("tbracket ");
+PROC tfn = VOID: print("tfn ");
+PROC cnamed = VOID: print("cnamed ");
+PROC cprim = VOID: print("cprim ");
+PROC cprimi = VOID: print("cprimi ");
+PROC cprimr = VOID: print("cprimr ");
+PROC cprimu = VOID: print("cprimu ");
+PROC cst = VOID: print("cst ");
+PROC crow = VOID: print("crow ");
+PROC cnull = VOID: print("cnull ");
+PROC cttype = VOID: print(("ctype "));
+PROC cquery = VOID: print("cquery ");
+PROC cbracket = VOID: print("cbracket ");
+PROC calt = VOID: print("calt ");
+PROC cparam = VOID: print(("cparam ", integer1, " "));
+PROC cvoid = VOID: print("cvoid ");
+PROC cindex = VOID: print("cindex ");
+PROC ctrim = VOID: print("ctrim ");
+PROC crepl = VOID: print(("crepl ", integer1, " "));
+PROC ccond = VOID: print("ccond ");
+PROC cconc = VOID: print(("cconc ", integer1, " "));
+PROC cattr = VOID: print("cattr ");
+PROC pidalts = VOID: print("pidalts ");
+PROC prange = VOID: print("prange ");
+PROC pstring = VOID: print("pstring ");
+PROC pchar = VOID: print(("pchar ", identifier1, " "));
+PROC pcharange = VOID: print(("pcharange ", identifier1, " "));
+PROC zero = VOID: print("zero ");
+PROC end = VOID: print("end ");
+PROC fnstart = VOID: print("fnstart ");
+PROC macparam = VOID: print("macparam ");
+PROC inst = VOID: print("inst ");
+PROC normal = VOID: print("normal ");
+PROC brief = VOID: print("brief ");
+PROC fnend = VOID: print("fnend ");
+PROC biop = VOID: print(("biop ", identifier1, " "));
+PROC alien = VOID: print(("alien ", identifier1, " "));
+PROC idelay = VOID: print(("idelay ", integer1, " "));
+PROC adelay = VOID: print(("adelay ", integer1, " "));
+PROC sample = VOID: print(("sample ", integer1, " "));
+PROC faster = VOID: print("faster ");
+PROC slower = VOID: print("slower ");
+PROC ram = VOID: print(("ram ", integer1, " "));
+PROC reform = VOID: print("reform ");
+PROC imported = VOID: print("import ");
+PROC vconc = VOID: print("vconc ");
+PROC vconst = VOID: print("vconst ");
+PROC vprim = VOID: print("vprim ");
+PROC vprimi = VOID: print("vprimi ");
+PROC vprimc = VOID: print("vprimc ");
+PROC vname = VOID: print("vname ");
+PROC vtrim = VOID: print("vtrim ");
+PROC vindex = VOID: print("vindex ");
+PROC vtermindex = VOID: print("vtermindex ");
+PROC vcallm = VOID: print("vcallm ");
+PROC vcalld = VOID: print("vcalld ");
+PROC vunn = VOID: print("vunn ");
+PROC vsharp = VOID: print("vsharp ");
+PROC vrow = VOID: print("vrow ");
+PROC vcase = VOID: print("vcase ");
+PROC vcaseend = VOID: print("vcaseend ");
+PROC vquery = VOID: print("vquery ");
+PROC vcoll = VOID: print("vcoll ");
+PROC vif = VOID: print("vif ");
+PROC vthen = VOID: print("vthen ");
+PROC velse = VOID: print("velse ");
+PROC vfi = VOID: print("vfi ");
+PROC vvarmult = VOID: print("vvarmult ");
+PROC vvarmultend = VOID: print("vvarmultend ");
+PROC vseq = VOID: print("vseq ");
+PROC vpar = VOID: print("vpar ");
+PROC vdynindex = VOID: print("vdynindex ");
+PROC vdynend = VOID: print("vdynend ");
+PROC vdynassign = VOID: print("vdynassign ");
+PROC vbracket = VOID: print("vbracket ");
+PROC vnull = VOID: print("vnull ");
+PROC vvoid = VOID: print("vvoid ");
+PROC vreplace = VOID: print("vreplace ");
+PROC attid = VOID: print("attid ");
+PROC attdata = VOID: print("attdata ");
+PROC kattr = VOID: print("kattr ");
+PROC attbracket = VOID: print("attbracket ");
+PROC attstr = VOID: print("attstr ");
+PROC attnull = VOID: print("attnull ");
+PROC attrname = VOID: print("attrname ");
+PROC vnormal = VOID: print("vnormal ");
+PROC vnoelse = VOID: print("vnoelse ");
+PROC velseof = VOID: print("velseof ");
+PROC seqend = VOID: print("seqend ");
+PROC seqnull = VOID: print("seqnull ");
+PROC seqvoid = VOID: print("seqvoid ");
+PROC seqlet = VOID: print("seqlet ");
+PROC seqvar = VOID: print("seqvar ");
+PROC seqper = VOID: print("seqper ");
+PROC seqassign = VOID: print("seqassign ");
+PROC seqbecomes = VOID: print("seqbecomes ");
+PROC seqassignend = VOID: print("seqassignend ");
+PROC seqcase = VOID: print("seqcase ");
+PROC seqif = VOID: print("seqif ");
+PROC seqthen = VOID: print("seqthen ");
+PROC seqelse = VOID: print("seqelse ");
+PROC seqfi = VOID: print("seqfi ");
+PROC seqrow = VOID: print("seqrow ");
+PROC seqvarmult = VOID: print("seqvarmult ");
+PROC seqvarmultend = VOID: print("seqvarmultend ");
+PROC typename = VOID: print("typename ");
+PROC intname = VOID: print("intname ");
+PROC constname = VOID: print("constname ");
+PROC unchecked = VOID: print("unchecked ");
+PROC parend = VOID: print("parend ");
+PROC bmake = VOID: print("bmake ");
+PROC bmakeend = VOID: print("bmakeend ");
+PROC bjoinend = VOID: print("bjoinend ");
+PROC bjoin = VOID: print("bjoin ");
+PROC bfor = VOID: print("bfor ");
+PROC multjoin = VOID: print("multjoin ");
+PROC bend = VOID: print("bend ");
+PROC ptypename = VOID: print("ptypename ");
+PROC pintname = VOID: print("pintname ");
+PROC pconstname = VOID: print("pconstname ");
+PROC biddec2 = VOID: print("biddec2 ");
+PROC pidalts2 = VOID: print("pidalts2 ");
+PROC prange2 = VOID: print("prange2 ");
+PROC idelay2 = VOID: print("idelay2 ");
+PROC adelay2 = VOID: print("adelay2 ");
+PROC pt = VOID: print("pt ");
+PROC ptend = VOID: print("ptend ");
+PROC ptflt = VOID: print("ptflt ");
+PROC ptfltend = VOID: print("ptfltend ");
+PROC bvvarmult = VOID: print("bvvarmult ");
+PROC bjoinsbjoin = VOID: print("bjoinsbjoin ");
+PROC bvvarmultend = VOID: print("bvvarmultend ");
+PROC str = VOID: print("str ");
+PROC kilend = VOID: print(("kilend ", newline));
+PROC ktype = VOID: print("ktype ");
+PROC kint = VOID: print("kint ");
+PROC kint2 = VOID: SKIP;
+PROC kconst = VOID: print("kconst ");
+PROC kfn = VOID: print((newline, "kfn "));
+PROC kend = VOID: print("kend ");
+PROC fn = VOID: print((newline,"fn "));
+PROC fncall = VOID: (IF ptrcount = UPB ptrs THEN exit := TRUE FI;
+               ptrcount PLUSAB 1;
+               WHILE NOT exit ANDTH isnilptr(discfile, ptrs[ptrcount])
+               DO print(("NIL pointer",newline));
+                  ptrcount PLUSAB 1 ;
+                  IF ptrcount > UPB ptrs THEN exit := TRUE FI
+               OD;
+               IF ptrcount <= UPB ptrs ANDTH NOT exit
+                 THEN buffer := read buffer(discfile, ptrs[ptrcount])
+                 ELSE exit := TRUE
+               FI
+               );
+PROC start = VOID: SKIP;
+PROC keep = VOID: SKIP;
+PROC endofkeep = VOID:
+    ( print((newline,"End of keeps",newline));
+      WHILE ptrcount <= UPB ptrs ANDTH NOT exit
+                        ANDTH isnilptr(discfile, ptrs[ptrcount])
+      DO print(("NIL pointer",newline)); ptrcount PLUSAB 1 ;
+                 IF ptrcount > UPB ptrs THEN exit := TRUE FI
+      OD;
+      IF ptrcount <= UPB ptrs ANDTH NOT exit
+        THEN buffer:=read buffer(discfile,ptrs[ptrcount])
+        ELSE exit := TRUE
+      FI
+    );
+PROC vstring = VOID: print("vstring ");
+PROC vprimch = VOID: print(("vprimch ", integer1, " "));
+PROC vprimst = VOID: print(("vprimst ", integer1, " "));
+PROC cstring = VOID: print("cstring ");
+PROC cprimch = VOID: print(("cprimch ", integer1, " "));
+PROC cprimst = VOID: print(("cprimst ", integer1, " "));
+PROC cprimchr = VOID: print(("cprimchr ", integer1, " "));
+PROC tstring = VOID: print("tstring ");
+
+PROC fnptilstart = (REF CONTXT ct, REF VECTOR [] CHAR spec, DISCPTR dp,
+                                                     MESSAGEPROC msg) VOID:
+BEGIN
+   exit := FALSE;
+   save_library(msg);
+   IF NOT check_text(ct, msg)
+   THEN  exit := TRUE
+   ELSE  ptrs :=HEAP VECTOR [1]DISCPTR;
+         ptrs[1] := dp;
+         ptrcount := 1;
+         HEAP VECTOR [UPB spec + 1] CHAR newspec;
+         newspec[:UPB spec] := spec;
+         newspec[UPB newspec] := REPR 0;
+         buffer := start write(discfile, newspec)
+                {{ not going to write - just using PROC to set up read buffer }}
+   FI
+END;
+
+PROC lowptilstart = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+       exit := FALSE;
+{       resetlow;}
+       save_library(msg);
+       IF NOT check_text(ct, msg)
+         THEN exit := TRUE
+         ELSE print(("Intermediate Language in context """, name OF ct));
+              print((""" of library """, name OF library, """", newline));
+              ptrs := HEAP VECTOR [ndiscptrs(discfile, val OF ct, msg)] DISCPTR;
+              myreaddiscptrs(discfile, ptrs, val OF ct, msg);
+              displacements(ptrs[3], msg);
+              ptrcount := 6;
+              buffer := read buffer(discfile, ptrs[4])
+       FI
+END;
+
+
+PROC ptsize = (REF CONTXT ct, MESSAGEPROC msg) VOID:
+BEGIN
+   IF check_text(ct, msg)
+   THEN  INT sz := 0, s := 0, specsize := 0;
+         REF VECTOR [] DECL decls = get_decls(ct, msg);
+
+         put(out, ("Function block sizes", newline));
+         REF DECLATTRIBUTES set = get_declattribute(ct, body_key, msg);
+         FORALL decl IN decls, body IN data OF set
+         DO  specsize PLUSAB  UPB (il OF decl);
+             s := IF isnilptr(discfile, body)
+                  THEN 0
+                  ELSE nchars(discfile, body, msg)
+                  FI;
+             put(out, (name OF decl, " = ", s, newline));
+             sz PLUSAB s
+         OD;
+
+         put(out, ("spec size =", specsize,",    total bodies size =", sz,
+                   newline))
+   FI
+END
+
+
+KEEP fnptilstart, lowptilstart, ptsize, reader, failure, return, fail,
+     exit, print, ptrcount, ptrs,
+
+   integer, identifier,
+   start,   keep,   fn,   fncall,   endofkeep,   kend,
+   kconst,   kfn,   kint,  kint2,   ktype,
+   kilend,   icheck,   idef,   inull,   ibracket,   ivarmult,  iparam,
+   icond,   imop,  idop,   iname,   iconst,  iconsttext,   zero,   tstring,
+   tbracket,   tfn,   tparam,   tst,   trow,   tnamed,   tnull,   pstring,
+   prange,   pidalts,   pcharange,   pchar,   fnend,   fnstart,  end,
+   macparam,   normal,   imported,   biop,   reform,
+   ram,   adelay,   idelay,   vvarmult,   vvarmultend,   vprimst,   vprimch,
+   vstring,   vbracket,   vdynindex,   vdynend,   vpar,   parend,   vseq,
+   vif,   vthen,   velse,   vfi,   vcoll,
+   vquery,   vcase,   vcaseend,   vrow,   vsharp,   vunn,   vconst,   vcalld,
+   vcallm,   vindex,   vtrim,   vname,   vprimi,   vprim,   vconc,   pintname,
+   ptflt,   ptfltend,   pt,   ptend,   adelay2,   idelay2,   prange2,
+   pidalts2,   biddec2,   ptypename,   bfor,   multjoin,   bend,   bjoin,
+   bmake,   bmakeend,   str,   bvvarmult,   bjoinsbjoin,   bvvarmultend,
+   seqend,   intname,   seqvarmult,   seqvarmultend,   seqif,   seqthen,
+   seqelse,   seqfi,   seqcase,   seqassign,   seqbecomes,   seqassignend,
+   seqper,   seqvar,   seqlet,   seqvoid,   seqnull,   seqrow,  typename,
+   cprimchr,   cprimst,   cprimch,   cstring,
+   cindex,  ctrim,   crepl,  ccond,  cconc,  cattr,
+   cquery,   cttype,   cbracket,   calt,   cnull,   crow,   cst,   cprimu,
+   cprimr,   cprimi,   cprim,   unchecked,   vnoelse,   vnormal,   velseof,
+   cnamed,   constname,    pconstname,  vnull, cparam, vdynassign, vprimc,
+   alien, sample, faster, slower, bjoinend, tvoid, vvoid, vreplace, kattr,
+   attrname, attid, attdata, attbracket, attstr, attnull, brief, inst,
+   cvoid, vtermindex
+
+FINISH
