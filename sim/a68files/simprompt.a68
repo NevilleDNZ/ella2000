@@ -1,0 +1,66 @@
+DECS simprompt CONTEXT VOID USE  putstrings, basics:
+
+{ " Id: simprompt.sta,v 2.1 91/02/22 18:37:09 edcad Exp$" }
+configinfo A68CONFIG "$Id: simprompt.a68,v 34.2 1995/03/29 13:05:02 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+17:10:88  Module created for release 4.  BJE
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module exists for the sole purpose of holding a variable `sim prompt'
+   which is used both by ETI (module SIMCMD) and EPI (various EPI*) modules
+   and the two values for it which are set up initially.
+}
+
+{
+   The simulator prompt is a field in the command structure, set up in
+   ELLA.STA.  It is changed to indicate past mode simulation.  This variable
+   supplies access to the prompt
+}
+REF ID sim prompt;
+
+{
+  These preserve its original value and a modified value for past mode.
+}
+ID present sim prompt, past sim prompt;
+
+SKIP
+
+KEEP
+   sim prompt, present sim prompt, past sim prompt
+
+FINISH
