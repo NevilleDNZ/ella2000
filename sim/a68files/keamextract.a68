@@ -1,0 +1,127 @@
+DECS keamextract CONTEXT VOID USE putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{  " Id: keamextract.sta,v 2.1 91/02/22 18:34:13 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamextract.a68,v 34.2 1995/03/29 13:04:36 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+27:10:88  Module created
+14:01:89  Bug 100 fixed.  BJE.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedure `translate extract' that generates
+   code to simulate the ELLA extract or restrict operator "//"
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{ An extract operation converts one input to an output.  It is a
+  purely combinatorial function.  No local instance data is
+  required.  The behaviour of the function is simple:
+
+  IF tag = chosen tag THEN output associated value
+  ELSE output query
+  FI
+
+  The input association is broken into tag and associated type using the
+  assumptions that the former is `size unit' bytes and that the
+  latter starts at the next byte.
+}
+PROC translate extract = (UEXTRACT body, ID name, FNDEC declaration,
+                          VECTOR [] INT input types, INT output type,
+                          ENVIRON environ, CLOSURE closure,
+                          FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   IF UPB input types /= 1 THEN
+      sys fault ("translate extract: invalid inputs")
+   FI;
+
+   INT output size = lookup type size (output type);
+   INT input offset = size unit + ws;
+   INT output offset = input offset + (UPB input types * ws);
+   INT fixed part size = output offset + output size;
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);
+                                                  { (cp: s) }
+
+   { Collect and check tag }
+   am local (0);
+   am pushint (input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);               { (tag: cp: s) }
+   am pushint (altno OF body);
+   am eq;                                         { (tag = chosen tag: cp: s) }
+   am jumpno (0, output query);                   { (cp: s) }
+
+   { Output associated type of input }
+   translate copy trimmed inputs (output size, size unit, input offset,
+                                  output offset, reset flag, 1);
+   am jump (end);
+
+   { Output query }
+   am label (1, output query);                    { (cp: s) }
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   { Check and reset evaluation flag and perform fanout }
+   am label (1, end);                             { (cp: s) }
+   translate end function (fixed part size, 1);   { (s) }
+
+   (fixed part size, output offset, combinatorial)
+END; { translate extract }
+
+SKIP
+
+KEEP
+    translate extract
+
+FINISH

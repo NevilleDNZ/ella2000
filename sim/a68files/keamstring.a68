@@ -1,0 +1,258 @@
+DECS keamstring CONTEXT VOID USE  putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{ " Id: keamstring.sta,v 2.1 91/02/22 18:34:21 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamstring.a68,v 34.2 1995/03/29 13:04:39 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+01:12:88  Module created to correct bug 47.  BJE.
+07:12:88  Completed module. Bug 47. MDR.
+03:02:89  R4B088.  BJE.
+04:08:89  'Genericquery' used for query output.  R4B150.  PAR.
+
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedure `translate string' that generates
+   code to simulate the ELLA-text of the form `STRING [n] name', ie
+   the construction of an ELLA-string by replicating an ELLA-charcter.
+   Unlike rowing this cannot be performed at assembly time.
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{ Procedure to fill the output area of an instance with the value at the
+ top of the AM stack.
+ Transforms the AM stack from
+  (data: s: cp: ss)
+ to
+   (s: cp: ss)
+}
+PROC fill output area = (INT output offset, input byte size,
+                         output byte size, d) VOID:
+{ The output byte size comes from the type size and so is
+  longer than required.  Padding bytes would normally be zero,
+  and instead also receive the input value.  This is not a problem
+  because the padding bytes will not be examined.  It is positively
+  beneficial because the direction of encoding can be ignored. }
+BEGIN
+   { (data: s: cp :ss) }
+   am local (d-1);
+   am pushint (output offset + output byte size);
+   am add;
+   { (end addr: data: s: cp :ss) }
+
+   am local (d);
+   am pushint (output offset);
+   am add;
+   { (curr addr: last addr: data: s: cp :ss) }
+
+   { If value is being changed then clear evaluation flag }
+   am pushint (0);
+   am local (1);
+   am bstring  (input byte size * bits per byte,
+                input byte size * bits per byte, indirect);
+   am local (3);
+   am neq;
+   LABEL same label = new label;
+   am jumpno (0, same label);
+      am local (d+1);
+      am pushint (0);
+      am store (size unit, indirect);
+   am label (d+2, same label);              { (op: cp: s) }
+
+   am repeat;
+      am local (0);
+      am local (3);
+      am bstore (input byte size * bits per byte, indirect);
+      { (curr addr: last addr: data: s: cp :ss) }
+
+      am pushint (input byte size); { curr addr +:= input byte size}
+      am add;
+
+      am local (1);
+      am local (1);
+      am gt;      { (curr addr < last addr: ca: la: data: s: cp :ss) }
+   am loop;
+
+   am drop (3)
+   { (s: cp :ss) }
+END;
+
+{ This is a purely combinatorial function.  No local instance data is
+  required.  The input must be a single ELLA-character.  If it is
+  unknown then we must output an unknown value; otherwise the
+  output is a known string formed by replicating the input.
+
+}
+PROC translate string = (USTRING body, ID name, FNDEC declaration,
+                         VECTOR [] INT input types, INT output type,
+                         ENVIRON environ, CLOSURE closure,
+                         FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   IF UPB input types /= 1 THEN
+      sys fault ("translate string: wrong input count")
+   FI;
+   BOOL bit string =
+      CASE lookup type (output type) IN
+         (REF SSTRING s): UPB char OF t OF s = 2
+      OUT sys fault ("translate string: wrong output sort"); FALSE
+      ESAC;
+
+   INT output size = lookup type size (output type);
+   INT input size = lookup type size (input types [1]);
+
+   INT input offset = size unit + ws;
+   INT output offset = input offset + ws;
+   INT fixed part size = output offset + output size;
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);               { (cp: s) }
+
+   { Check query flags }
+   am local (0);
+   am pushint (input offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);               { (flag: cp: s) }
+   am test;                                       { (ip /= ?: cp: s) }
+   am jumpno (0, output query);                   { (cp: s) }
+
+   { Output replication of inputs }
+
+   { First set query flag true.  Note that the manipulation of the
+     evaluation flag can be left to writing the body as the body of an
+     unknown ELLA-string is different from the bodies of all known
+     strings, in the case that we are dealing with a non bit string.
+     Otherwise  we must clear the evaluation flag if the query flag was
+     previously false.
+   }
+   am local (0);
+   am pushint (output offset);
+   am add;
+   IF bit string THEN
+      am local (0);                            { (op: op: cp: s) }
+      am global (ws, indirect);                { (old flag: op: cp: s) }
+      am test;                                 { (old flag /= 0: op: cp: s) }
+      am not;                                  { (old flag = 0: op: cp: s) }
+      LABEL same label = new label;
+      am jumpno (0, same label);
+         am local (1);
+         am pushint (0);
+         am store (size unit, indirect);
+      am label (2, same label)                 { (op: cp: s) }
+   FI;
+   am pushint (1);
+   am store (size unit, indirect);
+
+   { Now write the body }
+   IF bit string THEN
+      { (cp: s) }
+      am pushint (1);
+
+      am local (1);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);
+      am global (ws, indirect);
+      { (data: 1: cp: s) }
+
+      am sub;
+      am itos (bits per byte * size unit);
+      { (data': cp: s) where data' is a string of 'size unit' bits,
+         all set to 0 if the input character was 1
+         or all set to 1 if the input character was 2 }
+
+      fill output area (output offset + size unit, size unit,
+                        output size - size unit, 2)
+   ELSE
+      { (cp: s) }
+      am local (0);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);
+      am global (ws, indirect);
+
+      { (data: cp: s) }
+      am local (0);
+
+      { (data: data: cp: s) }
+      FOR i FROM 2 TO size unit DO
+         am pushint (bits per byte );
+         am shl;
+         am local (1);
+         am or
+      OD;
+      am utos (bits per byte * size unit);
+      { (data': data: cp: s) where data' is a string of 'size unit'
+        input characters }
+
+      fill output area (output offset + size unit, size unit,
+                        output size - size unit, 3);
+      am drop (1)
+   FI;
+   am jump (end);
+
+   { Output query }
+   am label (1, output query);                   { (cp: s) }
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   { Check and reset evaluation flag and perform fanout }
+   am label (1, end);                             { (cp: s) }
+   translate end function (fixed part size, 1);   { (s) }
+
+   (fixed part size, output offset, combinatorial)
+END; { translate string }
+
+SKIP
+
+KEEP
+    translate string
+
+FINISH
