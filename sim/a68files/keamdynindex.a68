@@ -1,0 +1,265 @@
+DECS keamdynindex CONTEXT VOID USE assmodes, basics, kesymbols,
+     keambasics, keamstandard, kebasics, keconv, kesignals:
+
+{ sccsid = "  Id: keamdynindex.sta,v 2.1 91/02/22 18:34:12 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamdynindex.a68,v 34.2 1995/03/29 13:04:36 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:10:88 Module created to translate dynamic indexing primitives.
+01:12:88 Bug 40. MDR.
+19:12:88 Bug 72. BJE.
+01:03:89 'elemprims' used in indexation of inputs, and
+            'output increment' actually incremented!  R4B149.  PAR.
+08:03:89 Fixes to dynamic indexing: callinst offset and use of
+            input offset cf index offset.  R4B202 MDR.
+18:07:89 R4B321. Corrected mistaken stack depth parameter to
+            translate compare and set flag.  SPT.
+20:07:89 R4B341. Various mistakes in bit string dynamic indexing
+            and no steps to ensure strings or bit strings will work on VAX. SPT.
+04:08:89 'Genericquery' used for query output.  R4B150.  PAR.
+31:01:91 Remerged for Release 6.  DCT
+08:10:91 Updated to version 7 of assembler modes. EVW
+ 5:05:92   New spec fo fndec_tfn. DJS
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.011 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ procedure to copy one row element from input environment to fn's output.
+  Expect index into inputs on AM tos and callinst ptr at depth d
+  am stack before generated code :- ( Miranda notation. tos is leftmost )
+  (ix : .. :cp )
+
+  am stack after generated code :-
+  ( .. :cp)
+}
+PROC copy from indexed input = (INT elemprims, VECTOR [] INT inputs,
+                                INT input offset, output offset, d) VOID:
+BEGIN
+   am pushint (1);                      { (1: ix: ..: cp) }
+   am sub;                              { (ix-1: ..: cp) }
+   am pushint (ws * elemprims);         { (ws*ep: ix-1: ..: cp) }
+   am mul;                              { (ws*ep*(ix-1): ..: cp) }
+   am pushint (input offset);           { (io: ws*ep*(ix-1): ..: cp) }
+   am add;                              { (io+ws*ep*(ix-1): ..: cp) }
+   am local (d-1);                      { (cp: io+ws*ep*(ix-1): ..: cp) }
+   am add;                              { (cp+io+ws*ep*(ix-1): ..: cp) }
+
+   { cp+io+ws*ep*(ix-1) is the initial value of the input address `ia' }
+   INT output increment := 0;
+   FOR j TO elemprims DO
+      INT typesize = lookup type size (inputs[j]);
+      am pushint (output offset + output increment);
+      output increment +:= typesize;
+      am local (d);
+      am add;                           { (cp+oo+oi: ia: ..: cp) }
+
+      INT am stack increment := 0;
+      IF typesize /= ws THEN
+         am pushint (0);                { Bit offset for 'Bstring' case }
+         am stack increment := 1
+      FI;
+      am local (1+am stack increment);  { (ia:[ 0:] cp+oo+oi: ia: ..: cp) }
+      am global (ws, indirect);         { (@ia:[ 0:] cp+oo+oi: ia: ..: cp) }
+
+      IF typesize = ws THEN
+         am global (ws, indirect);
+         translate compare and set flag (typesize, 1 , reset flag, d+2);
+         am store (ws, indirect)
+      ELSE
+         INT bitsize = typesize * bits per byte;
+         am bstring (bitsize, bitsize, indirect);
+         translate compare and set flag (typesize, 1 , reset flag, d+2);
+         am bstore (bitsize, indirect)
+     FI;                                { (ia:  ..: cp) }
+
+     am pushint (ws);
+     am add                             { ia +:= ws }
+  OD;                                   { (ia:  ..: cp) }
+
+  am drop (1)                           { ( ..: cp) }
+END;
+
+
+{ Complete translation of an DYNINDEX function.
+}
+PROC translate dynindex = (UDYINDEX body, ID name, FNDEC declaration,
+                           VECTOR [] INT input types, INT output type,
+                           REF ENVIRON environ, CLOSURE closure,
+                           FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+
+   { The instance data for dynamic indexing is in the format specified
+     in KEAMSTANDARD. Given that 0 bytes of function specific storage exist,
+     the following are offsets into the instance space for any dynamic
+     indexing primitive.}
+   INT number of inputs = UPB input types;
+   INT input offset = size unit + ws;
+   INT index offset = input offset + ((number of inputs - 1) * ws);
+   INT output offset = input offset + (number of inputs * ws);
+
+   STYPE unit = lookup type (output type);
+   INT elem prims = raw signal width (unit);
+   TYPE inputs = from OF fndec_tfn(HEAP FNDEC := declaration );
+   INT string size;
+   BOOL string =
+      CASE inputs IN (REF TSTR tstr):
+          CASE elem OF tstr IN (REF TSTRING tstring):
+             BEGIN string size := int (size OF tstring); TRUE END
+          OUT FALSE
+          ESAC
+      ESAC;
+
+   { Generation of code for DYNINDEX function bodies.
+   }
+
+   LABEL output query = new label;
+   LABEL end = new label;
+
+   translate start function (name);
+
+   { Check if index is known }
+   am local (0);                        { (cp: cp) }
+   am pushint (index offset);
+   am add;
+   am global (ws, indirect);
+   am global (size unit, indirect);     { (ix query flag: cp) }
+   am test;                             { (ix /= ?: cp) }
+   am jump no (0, output query);        { (cp) }
+
+   IF string THEN
+      { Load output pointer for later }
+      am local (0);
+      am pushint (output offset);
+      am add;                              { (op: cp) }
+
+      { Check if input is known }
+      am local (1);
+      am pushint (input offset);
+      am add;
+      am global (ws, indirect);
+      am global (size unit, indirect);  { (input query flag: op: cp) }
+      am test;                          { (ip /= ?: op: cp) }
+      am jump no (1, output query);     { (op: cp) }
+
+      SCHAR c = CASE unit IN (REF SCHAR schar): schar ESAC;
+      IF UPB char OF c = 2 THEN { Bit string }
+         { Load index value }
+         am local (1);                  { (cp: op: cp) }
+         am pushint (index offset);
+         am add;
+         am global (ws, indirect);
+         am pushint (size unit);
+         am add;
+         am global (ws, indirect);      { (ix: op: cp) }
+
+         { Load in indexed element as a 1-bit string }
+         am pushint (1);
+         am sub;                        { (ix-1: op : cp) }
+         am local (2);
+         am pushint (input offset);
+         am add;
+         am global (ws, indirect);      { string flag pointer }
+         am pushint (size unit);
+         am add;                        { string body pointer }
+         am bstring (1, string size, indirect);      { (bit: op: cp) }
+
+         { Convert to int representation of character }
+         am stou;
+         am pushint (1);
+         am add;                        { (char: op: cp) }
+
+         { Update flag and output }
+         translate compare and set flag (size unit, 1, reset flag, 3);
+         am store (size unit, indirect) { (cp) }
+
+      ELSE
+         { Load index value }
+         am local (1);                  { (cp: op: cp) }
+         am pushint (index offset);
+         am add;
+         am global (ws, indirect);
+         am pushint (size unit);
+         am add;
+         am global (ws, indirect);      { (ix: op: cp) }
+
+         am pushint (1);
+         am sub;                        { (ix-1: op : cp) }
+         am pushint (bits per byte);
+         am mul;
+
+         am local (2);
+         am pushint (input offset);
+         am add;
+         am global (ws, indirect);      { string flag pointer }
+         am pushint (size unit);
+         am add;                        { string body pointer }
+         am bstring (bits per byte, string size * bits per byte, indirect);
+                                        { (bit: op: cp) }
+
+         am stou;
+         translate compare and set flag (size unit, 1, reset flag, 3);
+         am store (size unit, indirect) { (cp) }
+      FI
+   ELSE
+      am local (0);                   { (cp: cp) }
+      am pushint (index offset);
+      am add;
+      am global (ws, indirect);
+      am pushint (ws);
+      am add;
+      am global (ws, indirect);       { (ix: cp) }
+      copy from indexed input(elem prims, input types, input offset,
+                              output offset, 2)
+   FI;                                  { (cp) }
+   am jump (end);
+
+   am label (1, output query);
+   INT data size = lookup type size (output type);
+   am pushint (output offset);
+   am pushint (data size);
+   am call (3, label ("Genericquery"));
+   am drop (2);
+
+   am label (1, end);
+
+   INT fixed part size = output offset + lookup type size (output type);
+   translate end function (fixed part size, 1);
+   (fixed part size, output offset, combinatorial)
+END {translate dynindex}
+
+KEEP
+    translate dynindex
+FINISH
+
