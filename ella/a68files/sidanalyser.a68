@@ -1,0 +1,236 @@
+DECS  sidanalyser  CONTEXT VOID:
+
+{ " Id: sidanalyser.sta,v 1.1 91/10/14 14:31:14 edcad Exp $" }
+configinfo A68CONFIG "$Id: sidanalyser.a68,v 34.2 1995/03/29 13:03:32 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+18:04:91  Module produced to remove duplication from assmble, compile and
+             lowptil.  The sid analyser with Ctrans side effects removed.  DCT
+22:04:91  Need to keep sid_convert separate (as before) for efficiency.  DCT
+24:04:91  Modified to reinstate ELLA compiler syntax recovery.  DCT
+15:05:91  Modified for extended actions.  DJS
+20:05:91  Modified to use short bits in 'sid_code'.  DJS
+15:01:92  Modified analyser for new sid code, SID instruction now has OP
+             code coded in least sig 3 bits, arg in remainder, EXIT and
+             READNEXT instructions have same OP code (7) but have arguments of
+             1 and 0 resp`ly.  DJS
+20:01:92  Correction to mask in 'checkinsert'. DJS
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  29.007 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+MODE LEXVAL = UNION (INT, VOID),
+     LEX    = STRUCT (INT type, LEXVAL val),
+     RESULT = INT;
+
+MODE INTERNALS = STRUCT ( INT test_index,
+                          VECTOR [0] SHORT BITS sid_code,
+                          REF INT index, stind,
+                          REF LEX lex,
+                          REF REF VECTOR [] INT sidstack,
+                          VECTOR [0] BITS sid_blwds,
+                          INT sid_mult );
+
+
+PROC analyser = ( INT  sid_mult,
+                  VECTOR [] SHORT BITS sid_code,
+                  VECTOR [] BITS sid_blwds,
+                  PROC VOID  sid_initstacks,
+                  PROC LEX reader,
+                  PROC (INTERNALS) VOID syntax_error,
+                  PROC (INT, INT, LEXVAL, INT) VOID  sid_actions,
+                  PROC (INT, INT, LEXVAL, INT) RESULT  sid_returns
+                ) UNION (VOID, RESULT):
+BEGIN
+  REF VECTOR [] INT sidstack := HEAP VECTOR [100] INT;
+  INT stind := 1, index := 1;
+  LEX lex;
+  UNION (VOID, RESULT) result := EMPTY;
+
+  sid_initstacks;
+
+  BOOL  continue:= TRUE;
+  INT arg, cb;
+  BITS val;
+
+  WHILE continue
+  DO
+     val := LENG sid_code[index];
+     arg := ABS( val SHR 3 );
+     CASE ABS( val AND 16r7 ) + 1
+     IN
+        {call}
+               (IF stind = UPB sidstack THEN
+                   REF VECTOR [] INT x = HEAP VECTOR [UPB sidstack + 100] INT;
+                   x[:UPB sidstack] := sidstack;
+                   sidstack := x
+                FI;
+                sidstack[stind +:= 1] := index + 1;
+                index := arg
+               ),
+
+        {goto long}
+               index:= arg,
+
+        {skip if symbol = terminal}
+                 IF type OF lex + 1 = arg
+                 THEN index +:= 2
+                 ELSE index +:= 1
+                 FI,
+
+        {skip if symbol < terminal set}
+                 IF cb := arg * sid_mult + type OF lex;
+                    ABS(( sid_blwds[ cb % 32 + 1 ] SHL ( cb MOD 32 ))) < 0
+                 THEN index +:= 2
+                 ELSE index +:= 1
+                 FI,
+
+        {action}
+                (
+                 sid_actions(arg, index +:= 1, val OF lex, stind)
+                ),
+
+        {return}
+                (
+                 result := sid_returns(arg,
+                                       index+:=1, val OF lex, stind
+                                      );
+                 continue:= FALSE
+                ),
+
+        {fail}
+                (syntax_error(( arg, sid_code, index, stind, lex, sidstack,
+                                sid_blwds, sid_mult ));
+                 continue:= FALSE
+                ),
+
+        {reader}
+                 (IF arg = 0 THEN
+                     lex := reader;
+                     index +:= 1
+                ELSE
+        {exit}
+                     index := sidstack[stind];
+                     stind -:= 1
+                  FI)
+
+     OUT
+        SKIP
+     ESAC
+  OD;
+
+  result
+END;
+
+
+
+PROC checkinsert = (INT t1, INTERNALS error) BOOL:
+BEGIN
+  LEX lex := (t1, EMPTY);
+  BOOL result := FALSE;
+  REF VECTOR [] INT sidstack := sidstack OF error;
+  VECTOR [] BITS sid_blwds = sid_blwds OF error;
+  VECTOR [] SHORT BITS sid_code = sid_code OF error;
+  INT stind := stind OF error, index := test_index OF error;
+  INT sid_mult = sid_mult OF error;
+
+  BOOL  continue:= TRUE;
+  INT arg, cb;
+  BITS val;
+  WHILE continue
+  DO
+     val := LENG sid_code[index];
+     arg := ABS( val SHR 3 );
+     CASE ABS( val AND 16r7 ) + 1
+     IN
+        {call}
+               (IF stind = UPB sidstack THEN
+                   REF VECTOR [] INT x = HEAP VECTOR [UPB sidstack + 10] INT;
+                   x[:UPB sidstack] := sidstack;
+                   sidstack := x
+                FI;
+                sidstack[stind +:= 1] := index + 1;
+                index := arg
+               ),
+
+        {goto long}
+               index:= arg,
+
+        {skip if symbol = terminal}
+                 IF type OF lex + 1 = arg
+                 THEN index +:= 2
+                 ELSE index +:= 1
+                 FI,
+
+        {skip if symbol < terminal set}
+                 IF cb := arg * sid_mult + type OF lex;
+                    ABS(( sid_blwds[ cb % 32 + 1 ] SHL ( cb MOD 32 ))) < 0
+                 THEN  index +:= 2
+                 ELSE  index +:= 1
+                 FI,
+
+        {action}
+                 index +:=1,
+
+        {return}
+                 continue:= FALSE,
+
+        {fail}
+                (
+                 result := FALSE; continue:= FALSE
+                ),
+
+        {reader} (IF arg = 0 THEN
+                    result := TRUE;
+                    continue:= FALSE
+                ELSE
+        {exit}
+                    index := sidstack[stind];
+                    IF stind /= 1 THEN stind -:= 1 FI
+                  FI)
+
+     OUT
+        SKIP
+     ESAC
+  OD;
+
+  result
+END
+
+
+KEEP  LEX,  LEXVAL,  RESULT,  INTERNALS,  analyser,  checkinsert
+FINISH
