@@ -1,0 +1,124 @@
+{ DEC/CMS REPLACEMENT HISTORY, Element NETPUTPKD.STA }
+{ *3    10-AUG-1989 12:31:10 ELLADEV "Definitive release 4.0, first provisional release 4.1. BGH" }
+{ *2    21-JAN-1989 11:21:20 ELLADEV "Provisional for Release 4.0 BGH" }
+{ *1    11-NOV-1988 15:59:12 ELLADEV "First draft for Release 4, stored in CMS lib [elladev.cms.ella_server]" }
+{ DEC/CMS REPLACEMENT HISTORY, Element NETPUTPKD.STA }
+{ DEC/CMS REPLACEMENT HISTORY, Element NETPUTPKD.STA}
+{ *3    15-MAR-1988 16:38:22 ELLADEV "Porting changes for UNIX Release 3"}
+{ *2     1-DEC-1987 14:45:02 ELLADEV "R3B110 fix."}
+{ *1     3-AUG-1987 14:20:37 ELLADEV "CR215: ELLANET dumper utilities module"}
+{ DEC/CMS REPLACEMENT HISTORY, Element NETPUTPKD.STA}
+
+{
+MODIFICATION-RECORDS-ARE
+  ISSUE[02.01 ] APPROVED-BY[DEVC] ON[23-APR-1987] FOR-JOB[LIFESPAN--QA]-
+    comment[Initial Package.   JER]
+  ISSUE[2.1A]      MOD-BY       [DINO]    ON[16-APR-1987]
+  ISSUE[0.0Z]      CREATED-BY   [DINO]    ON[16-APR-1987]
+END-OF-MODIFICATION-RECORDS
+}
+{ Amendment R3B110 30Nov87 TK : Stop crash on ABS of smallest integer.
+  Release 3 porting changes 19Jan88 BGH : basics added to USE list to
+  provide definition of maxint. BGH
+}
+
+DECS netputpkd CONTEXT VOID USE putstrings, basics :
+
+{                    " Id: netputpkd.sta,v 1.1 91/10/14 14:30:45 edcad Exp $" }
+configinfo A68CONFIG "$Id: netputpkd.a68,v 34.2 1995/03/29 13:03:31 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+01:12:87 26.1? TK R3B110 Stop crash on ABS of smallest integer
+15:03:88 26.2? BGH Release  basics added to USE list to provide definition of maxint
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number   0.026 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+INT charsize=8,charsinword=4;
+INT maxchar=ABS(BIN 1 SHL charsize);
+INT cibound=maxchar-charsinword *2;
+INT cilimit=cibound-1;
+BITS cimask=BIN (maxchar-1);
+
+PROC putpkdint=(PROC (CHAR) VOID putchar,INT i)VOID :
+BEGIN
+    IF i>=0 ANDTH i<cibound THEN
+        putchar(REPR i)
+{ Amendment R3B110 30Nov87 TK : Stop crash on ABS of smallest integer. }
+    ELIF i = - max int - 1
+    THEN putchar(REPR(cilimit + 2*charsinword));
+         putchar(REPR ABS (BIN 1 SHL (charsize-1)));
+         FOR j TO charsinword-1 DO putchar(REPR 0) OD
+{ Amended 30Nov87 TK : Stop crash on ABS of smallest integer. }
+    ELSE
+    [1:charsinword]CHAR intchars;
+    INT pos:=0;
+    INT sign=IF i < 0 THEN charsinword ELSE 0 FI;
+    BITS k:=BIN ABS i;
+
+        WHILE k/=BIN 0
+        DO
+        BITS j=k AND cimask;
+
+            intchars[pos PLUSAB 1]:=REPR ABS j;
+            k:=k SHR charsize
+        OD;
+        putchar(REPR ( cilimit + pos + sign ));
+        FOR j FROM pos BY -1 TO 1 DO putchar(intchars[j]) OD
+    FI
+END;
+
+PROC putpkdname=(PROC(CHAR)VOID putchar,
+                 VECTOR[ ]CHAR i)VOID :
+BEGIN
+INT top := UPB i;
+
+    WHILE top>0 ANDTH i[top]=" " DO top MINUSAB 1 OD;
+    putchar(REPR top);
+    FOR j TO top DO putchar(i[j]) OD
+END;
+
+PROC putpkdtext =( PROC(CHAR)VOID putchar, VECTOR [] CHAR r) VOID :
+BEGIN
+INT top:=UPB r;
+
+    putpkdint( putchar, top );
+    FOR j TO top DO putchar( r[j] ) OD
+END;
+
+    SKIP
+KEEP putpkdint, putpkdname, putpkdtext
+FINISH
+
