@@ -1,0 +1,896 @@
+DECS simnode CONTEXT VOID USE putstrings, basics, messageproc, commandsyntax,
+     kernelreader, simreader, ioprocs, kernel, simtable:
+
+{ " Id: simnode.sta,v 2.2 91/02/26 14:36:55 edcad Exp$" }
+configinfo A68CONFIG "$Id: simnode.a68,v 34.2 1995/03/29 13:05:00 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:05:87  Module created to implement analysis of Node Names.
+             (CR 356)   PAR
+15:05:88  Module renamed SIMNODE as part of the restructuring of the shell
+             to accomodate the new simulator kernel for release 4.  At the same
+             time the module has undergone the following changes.
+             - now uses the kernel interface module
+             - mode of 'node' field of 'PATH' is now the mode 'BIND'
+             - PROC 'node' no longer has a 'search right' argument and has
+               been rewritten
+             - variables 'monitoring pointer' and 'simulated function' added
+09:09:88  Some commented out text finally removed;  parsing generalised
+             to allow text other than from the command line to be processed
+17:11:88  `rd id' renamed `rd name' for consistency with the
+             READPROCS procedure and corrected.  BJE
+22:11:88  Miscellaneous bugs in `string node name' corrected.  BJE
+13:12:88  Matching bugs in `id rd int' and `rd name' corrected.  BJE.
+             EPI CR 72
+13:12:88  Error in `absolute node name' corrected.  BJE.  EPI CRs 54 and 68.
+17:01:89  List of operator symbols corrected.  BJE.
+18:01:89  Error in `absolute node name' corrected.  BJE(AAP).  EPI CR 85.
+15:02:89  Error in `if rd int' corrected.  BJE(AAP).  R4B127.
+01:03:89  Trap attempt to gopast simulated function. R4B180. MDR.
+08:03:89  Error in `absolute node name' corrected.  BJE(AAP).  R4B178.
+15:03:89  `rd int basic' radix check corrected. MDR. R4B228.
+12:12:89  Changes for Probe functions. MDR.
+10:01:90  CR642  Kernel Interface:  node name replaced by get_nodename.  DCT
+16:05:91  Merged with R5 v 2.2 from CG.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.016 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module handles everything to do with node names.  Nodenames describe
+   paths down the instantiation hierarchy of the circuit.  These in turn
+   define nodes in this hierarchy relative to the current monitoring pointer,
+   which is represented by a global variable in this module.   Whenever the
+   simulated function is initialised (by entry to the simulator or call to the
+   "simulatefn" command) the monitoring pointer is set to point to the
+   simulated function.  The simulated function is also represented by a global
+   variable in this module.  Nodenames are represented in the concrete sytnax
+   of the simulator command language and this module contains routines to parse
+   this syntax and also to check that the parsed nodename describes a real
+   node.
+}
+
+
+{ USEFUL STRING OPERATIONS }
+{ ======================== }
+
+
+{ These procedures should be available in BASICS }
+
+
+{ 'before' returns that portion of the STR argument which precedes the first
+  occurrence of the CHAR (if any - or the whole string otherwise).
+}
+PROC before = (CHAR c, STR string) STR:
+BEGIN
+   INT index := LWB string;
+   INT upb = UPB string;
+   WHILE index <= upb ANDTH string [index] /= c DO
+      index +:= 1
+   OD;
+   string [ : index-1]
+END;
+
+
+{ 'after' returns that portion of the STR argument which follows the first
+  occurrence of the CHAR (if any - or an empty string otherwise).
+}
+PROC after = (CHAR c, STR string) STR:
+BEGIN
+   INT index := LWB string;
+   INT upb = UPB string;
+   WHILE index <= upb ANDTH string [index] /= c DO
+      index +:= 1
+   OD;
+   IF index < upb THEN
+      string [index+1 : ]
+   ELSE
+      ""
+   FI
+END;
+
+
+{ 'NEW' returns a reference to newly reserved storage, initialised to the
+  given STRing or CHARacter.
+}
+OP NEW = (STR str) REF STR:
+   HEAP VECTOR [UPB str] CHAR := str;
+
+
+OP NEW = (CHAR str) REF STR:
+   HEAP VECTOR [1] CHAR := str;
+
+
+
+{ SPECIAL CHARACTERS IN NODENAMES }
+{ =============================== }
+
+
+CHAR open bracket char  = "(",
+     close bracket char = ")",
+     this pointer char  = "_",
+     go past char       = ";",
+     go in char         = ".",
+     eof char           = REPR 3;      { Used internally only }
+
+
+
+{ CONVERSION OF NODENAMES TO TEXT }
+{ =============================== }
+
+
+{ 'NODENAME' converts a pointer of mode PATH to textual form (as printed
+  by 'print pointer', and as stored in the history file).
+}
+OP NODENAME = (REF PATH pointer) STR:
+   IF pointer ISNT nilpath THEN
+      IF repeat OF pointer /= 1 THEN  intchars (repeat OF pointer) + " "
+      ELSE  ""
+      FI
+      +
+      name OF pointer
+      +
+      IF op OF pointer = go in THEN  " " + go in char
+      ELIF rest OF pointer ISNT nilpath THEN  " " + go past char
+      ELSE  ""
+      FI
+      +
+      IF rest OF pointer ISNT nilpath THEN  " " + NODENAME (rest OF pointer)
+      ELSE  ""
+      FI
+   ELSE
+      ""
+   FI;
+
+
+
+{ SYNTACTIC ANALYSIS OF NODE NAMES }
+{ ================================ }
+
+
+{ Basic Constructors for Parse Trees }
+{ ---------------------------------- }
+
+
+{ 'make path' constructs a new element of mode PATH, with just the 'repeat'
+   'name' and 'bind' fields set to non-trivial values.
+}
+PROC make path = (INT repeat, ID name, REF BIND bind) REF PATH:
+   HEAP PATH := (repeat, name, nilid, no op, bind, nilpath);
+
+
+{ 'continue path' sets the 'op' and 'rest' fields of an existing path to the
+  supplied values.
+}
+PROC continue path = (REF PATH this, OPERATOR op, REF PATH rest) REF PATH:
+BEGIN
+   op OF this := op;
+   rest OF this := rest;
+   this
+END;
+
+
+{ Analysis of Command Line Names }
+{ ------------------------------ }
+
+{ The input text is assumed to comprise the following tokens (separated by
+  blank space): <number> <node> <char>.  'node name common' parses the string
+  with input provided by its first four procedure arguments.  These have the
+  names and modes of the procedures that do the relevant job for command line
+  reading but can be reassigned to read from a character array say.
+}
+PROC node name common = (
+   PROC (REF INT, FLTPROC) BOOL if rd int,
+   PROC (FLTPROC) ID rd name,
+   PROC (FLTPROC) CHAR first char,
+   PROC VOID put back char,
+   FLTPROC flt
+) REF PATH:
+BEGIN
+
+   { 'node name base' handles the following syntax:
+
+     <node name>         ::=  ( <node name> )
+                         ::=  <root name>
+                         ::=  <root name> . <full node name>
+                         ::=  <root name> ; <full node name>
+                         ::=  <full node name>
+
+    <root name>          ::= _
+                             <name>
+
+    <root name> is a name which may be looked up in simtable.
+    See E.N0045.50.27. The table includes a mapping of '_' onto
+    the current monitoring pointer path.
+   }
+   PROC node name base = REF PATH:
+   BEGIN
+
+   { 'root or nearby name' handles the following syntax:
+           <root or nearby name>  ::=  <number> <name>
+                                  ::= _
+                                  ::=  <name>}
+   PROC root or nearby name = REF PATH:
+      IF INT j;  if rd int (j, flt) THEN
+         {nearby name}
+         make path (j, rd name (flt), nilbind)
+      ELSE
+         {root name}
+         ID name =
+            IF first char(flt) = this pointer char THEN
+               monitoring pointer name
+            ELSE
+               put back char;
+               rd name(flt)
+            FI;
+          make path (1, name, nilbind)
+      FI;
+
+      { 'nearby node name' handles the following syntax:
+           <nearby node name>  ::=  <number> <name>
+                               ::=  <name>
+      }
+      PROC nearby node name = REF PATH:
+         IF INT j;  if rd int (j, flt) THEN
+            make path (j, rd name (flt), nilbind)
+         ELSE
+            make path (1, rd name (flt), nilbind)
+         FI;
+
+
+      { 'full node name' handles the following syntax:
+           <full node name>    ::=  <nearby node name> ; <full node name>
+                               ::=  <nearby node name> . <full node name>
+                               ::=  <nearby node name>
+      }
+     PROC full node name = REF PATH:
+      BEGIN
+         REF PATH left = nearby nodename;
+         CHAR next = first char (flt);
+         IF next = go past char THEN
+            continue path (left, go past, full node name)
+         ELIF next = go in char THEN
+            continue path (left, go in, full node name)
+         ELSE
+            put back char;
+            left
+         FI
+      END;
+
+
+      CHAR start = first char (flt);
+      IF start = open bracket char THEN
+         REF PATH name = node name base;
+         CHAR next = first char (flt);
+         IF next /= close bracket char THEN
+            flt ("Node name should have closing bracket");
+            nilpath
+         ELSE
+            name
+         FI
+      ELSE
+         put back char;
+         REF PATH root path = root or nearby name;
+         CHAR next = first char(flt);
+         IF next = go in char OREL next = go past THEN
+            continue path (root path, next, full node name)
+         ELSE
+            put back char
+         FI;
+         root path
+      FI
+   END; {node name base}
+
+  node name base
+END; {node name common}
+
+{ 'node name' parses a node name input from the command line
+  (pre Kernel Interface using procedures from readprocs - now get_nodename
+PROC node name = (FLTPROC flt) REF PATH:
+   node name common (if rd int, rd name, first char, put back char, flt);
+}
+
+{ "get_nodename" takes a VALUES parameter and a REF INT index.  Procedure
+  parameters are defined for "node name common" that step through the VALUES.
+  "index" should refer to the last item read (or zero) at the start and will
+  be updated to point to the last component of the node name accepted.
+}
+
+PROC  get_nodename = (VALUES  vs,  REF INT  index,  MESSAGEPROC  msg) REF PATH:
+BEGIN
+
+   PROC  if rd int = (REF INT  int,  FLTPROC  flt) BOOL:
+      IF is_int(vs[index + 1])
+      THEN  int:= get_int(vs[index PLUSAB 1], msg);
+            TRUE
+      ELSE  FALSE
+      FI;
+
+   PROC  rd name = (FLTPROC  flt) ID:
+      IF is_simname(vs[index PLUSAB 1])
+      THEN  value OF vs[index]
+      ELSE  msg(system, "simname expected");  nullstr
+      FI;
+
+   PROC  first char = (FLTPROC  flt) CHAR:
+      IF (index PLUSAB 1) > UPB vs
+      THEN  " "
+      ELSE  VALUE  v = vs[index];
+            IF UPB value OF v > 0   { Not "null" }
+            THEN  (value OF v)[1]   { Successful match would be one of ".;()_" }
+            ELSE  " "
+            FI
+      FI;
+
+   PROC  put back char = VOID:  index MINUSAB 1;
+
+   node name common( if rd int, rd name, first char, put back char,
+                     (STR  str) VOID:  msg(user, str)
+                   )
+END;
+
+
+{ 'string node name' parses a node name supplied as a string.  The string
+  terminator is its upper bound.  The white space characters are those
+  known by the Unix C routine 'isspace()': horiz tab (^I), line feed (^J),
+  vertical tab (^K), form feed (^L), carriage return (^M) and space.
+
+  This is an EPI convention so I think it is reasonable to keep this routine
+  separate from the different space recognisers for ELLA-text and ETI.  There
+  is a good argument that isspace should go somewhere more central, especially
+  as it assumes the ASCII character set.
+
+  A null character is appended to the string as an EOS marker as parsing
+  requires one character look ahead.  I assume that this character cannot exist
+  within a string.  If it did and if the string up to this character formed
+  a legal node name then no error would be raised for trailing garbage.
+}
+PROC string node name = (REF VECTOR [] CHAR oldstring, FLTPROC flt) REF PATH:
+BEGIN
+   HEAP VECTOR [UPB oldstring + 1] CHAR string;
+   string [:UPB oldstring] := oldstring;
+   string [UPB oldstring + 1] := REPR 0;
+
+   { ix indexes the next character to be read }
+   INT ix := 1;
+
+   PROC instring = (CHAR c, VECTOR [] CHAR string) INT:
+   BEGIN
+      INT ans := 0; { default value implies not found }
+      FOR i TO UPB string DO IF c = string[i] THEN ans := i FI OD;
+      ans
+   END;
+
+   { 'white space' is ASCII dependent but I don't think anything else is }
+   VECTOR [] CHAR white space =
+      (REPR 9, REPR 10, REPR 11, REPR 12, REPR 13, " ");
+   VECTOR [] CHAR lc or dd or vs = "abcdefghijklmnopqrstuvwxyz0123456789_";
+   VECTOR [] CHAR lower case letters = lc or dd or vs [1:26];
+   VECTOR [] CHAR uc or dd or vs = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+   VECTOR [] CHAR upper case letters = uc or dd or vs [1:26];
+   VECTOR [] CHAR dec digits = lc or dd or vs [27:36];
+   VECTOR [] CHAR opsymbols = "+-*/%<>=:.^|";
+
+   PROC is white space = (CHAR c) BOOL: instring (c, white space) /= 0;
+
+   PROC is dec digit = (CHAR c) BOOL: instring (c, dec digits) /= 0;
+
+   PROC uppercase = (CHAR c) CHAR:
+   IF INT i = instring (c, lower case letters); i /= 0 THEN
+      upper case letters [i]
+   ELSE
+      c
+   FI;
+
+   PROC first char = (FLTPROC flt) CHAR:
+   BEGIN
+      WHILE ix <= UPB string ANDTH is white space (string [ix]) DO ix +:= 1 OD;
+      IF ix > UPB string THEN
+         flt (string [:ix-1] + " ? - unexpected EOS")
+      FI;
+      CHAR ans = string [ix];
+      ix +:= 1;
+      ans
+   END;
+
+   PROC put back char = VOID: ix -:= 1;
+
+   PROC rd int basic = (INT radix, BOOL negative, FLTPROC flt) INT:
+   BEGIN
+      VECTOR [] CHAR hex digits = "0123456789ABCDEF";
+      IF radix /= 2 ANDTH radix /= 8 ANDTH radix /= 10 ANDTH radix /= 16 THEN
+        flt (string [:ix] + " ? - invalid radix")
+      FI;
+      INT ans := 0;
+      BOOL ok := FALSE;
+      INT digit value;
+      WHILE
+         digit value := instring (string[ix], hex digits[:radix]) - 1;
+         digit value /= -1 ANDTH digit value < radix
+      DO
+         ok := TRUE;
+         IF negative THEN
+            IF ans < (minint + digit value) OVER radix THEN
+               flt(string[:ix] + " ? - integer out of range")
+            FI;
+            ans := ans * radix - digit value
+         ELSE
+            IF ans > (maxint - digit value) OVER radix THEN
+               flt(string[:ix] + " ? - integer out of range")
+            FI;
+            ans := ans * radix + digit value
+         FI;
+         ix +:= 1
+      OD;
+      IF NOT ok THEN
+        flt (string [:ix] + " ? - integer expected")
+      FI;
+      ans
+   END;
+
+   PROC if rd int = (REF INT int, FLTPROC flt) BOOL:
+   BEGIN
+      BOOL negative := FALSE;
+      WHILE ix <= UPB string ANDTH is white space (string [ix]) DO ix +:= 1 OD;
+      IF ix > UPB string THEN
+         FALSE
+      ELIF
+         CHAR c = string[ix];
+         is dec digit (c) OREL
+             ((c = "+" OREL c = "-") ANDTH ix < UPB string
+                ANDTH is dec digit(string[ix+1]) )
+      THEN
+         IF c = "+" THEN ix +:= 1
+         ELIF c = "-" THEN negative := TRUE; ix +:= 1
+         FI;
+         INT int1 = rd int basic (10, negative, flt);
+         IF string [ix] = "r" OR string [ix] = "R" THEN
+            ix +:= 1;
+            INT radix = IF negative THEN - int1 ELSE int1 FI;
+            int := rd int basic (radix, negative, flt)
+         ELSE
+            int := int1
+         FI;
+         TRUE
+      ELSE
+         FALSE
+      FI
+   END;
+
+   PROC rd name = (FLTPROC flt) ID:
+   BEGIN
+      CHAR c1 = first char (flt);
+      INT start = ix - 1;
+      IF instring (c1, lower case letters) /= 0 THEN
+         WHILE
+            CHAR c = string[ix];
+            ix <= UPB string ANDTH
+            instring (c, lc or dd or vs) /= 0
+         DO ix +:= 1 OD
+      ELIF instring (c1, upper case letters) /= 0 THEN
+         WHILE
+            CHAR c = string[ix];
+            ix <= UPB string ANDTH
+            instring (c, uc or dd or vs) /= 0
+         DO ix +:= 1 OD
+      ELIF instring (c1, opsymbols) /= 0 THEN
+         WHILE
+            CHAR c = string[ix];
+            ix <= UPB string ANDTH
+            instring (c, opsymbols) /= 0
+         DO ix +:= 1 OD
+      ELSE
+         flt (string [:ix-1] + " ? - ident expected")
+      FI;
+      MAKEID string [start:ix-1]
+   END;
+
+   REF PATH answer =
+      node name common (if rd int, rd name, first char, put back char, flt);
+   IF first char (flt) /= REPR 0 THEN
+      flt (string [:ix -1] + " ? - EOS expected")
+   FI;
+   answer
+END;
+
+{ 'absolute node name' is designed to reverse the action of `NODENAME'.
+   It produces a path from either a probe or the simulated function.
+}
+PROC absolute node name = (REF VECTOR [] CHAR string, FLTPROC flt) REF PATH:
+BEGIN
+   REF VECTOR [] CHAR trimmed =
+      IF
+         UPB string >= 2 ANDTH string[UPB string - 1] = " " ANDTH
+         string [UPB string] = go in char
+      THEN
+         string[1:UPB string -2]
+      ELSE string
+      FI;
+   REF PATH path = string node name (trimmed, flt);
+   REF PATH root path;
+   simtable lookup path (simulated function name, any, root path);
+   IF name OF root path /= name OF path THEN
+     IF NOT simtable lookup path (name OF path, probe name, root path) THEN
+        flt ("Path root " + name OF path + " not found")
+     FI
+   FI;
+   bind OF path := bind OF root path;
+   path
+END;
+
+{ STRUCTURAL TRANSFORMATIONS }
+{ ========================== }
+
+
+{ The operations in this section form the basis of the user visible operations
+  on node names, but at this stage perform a purely structural change, without
+  any interpretation (or test of legality) in the context of the circuit being
+  simulated.
+}
+
+
+{ Local Operations }
+{ ---------------- }
+
+
+{ 'NEW' makes a copy of the specified PATH, copying the top level structure
+  but *not* the MNODE field (which is often not changed - but if it is, it is
+  always by construction of a new MNODE).
+}
+OP NEW = (REF PATH path) REF PATH:
+BEGIN
+   REF PATH result := nilpath,
+            scan   := path;
+   REF REF PATH last := result;
+   WHILE scan ISNT nilpath DO
+      REF PATH new = HEAP PATH := scan;
+      REF REF PATH (last) := new;
+      last := rest OF new;
+      scan := rest OF scan
+   OD;
+   result
+END;
+
+
+{ 'CLEAR' sets to NIL the node fields of all elements of the given PATH.
+  (It is used whenever the structural operation may invalidate the node
+  information - then this information will be filled in by the procedure
+  'node' below.)
+}
+OP CLEAR = (REF PATH path) REF PATH:
+BEGIN
+   REF PATH scan := path;
+   WHILE scan ISNT nilpath DO
+      bind OF scan := nilbind;
+      scan := rest OF scan
+   OD;
+   path
+END;
+
+
+{ 'ENDING' returns a pointer to the final element of the PATH, or NIL if
+  the given PATH is NIL.
+}
+OP ENDING = (REF PATH path) REF PATH:
+   IF path IS nilpath THEN
+      nilpath
+   ELSE
+      REF PATH scan := path;
+      WHILE rest OF scan ISNT nilpath DO
+         scan := rest OF scan
+      OD;
+      scan
+   FI;
+
+
+{ 'APPEND' joins the second argument onto the end of a copy of its first
+  argument.  The first argument should never be NIL (if it is, the result
+  will be NIL) - but the second argument may legally be NIL.
+}
+PRIO APPEND = 9;
+OP APPEND = (REF PATH left, right) REF PATH:
+   IF left IS nilpath THEN
+      nilpath
+   ELSE
+      REF PATH result = NEW left;
+      rest OF (ENDING result) := right;
+      result
+   FI;
+
+
+{ High Level Operations }
+{ --------------------- }
+
+
+{ The operations are careful to clear any node fields which they might
+  invalidate, so it can be assumed that any which remain hold useful
+  information.
+}
+
+
+{ 'GOIN' makes the purely structural change to the PATH necessary to indicate
+  descending one level of the function hierarchy.  If the transformation is
+  not possible, NIL is returned, otherwise a *copy* of the path is suitably
+  modified and returned.
+}
+OP GOIN = (REF PATH path) REF PATH:
+   IF path IS nilpath THEN
+      nilpath
+   ELSE
+      REF PATH result = NEW path;
+      REF PATH ending = ENDING result;
+      IF op OF ending /= no op THEN
+         { Can't go in if an operator is already there }
+         nilpath
+      ELSE
+         op OF ending := go in;
+         result
+      FI
+   FI;
+
+
+{ 'GOPAST' makes the purely structural change to the PATH necessary to indicate
+  that the monitoring pointer is just to the right of that path.  If the
+  transformation is not possible, NIL is returned, otherwise a *copy* of the
+  path is suitably modified and returned.
+}
+OP GOPAST = (REF PATH path) REF PATH:
+   IF path IS nilpath THEN
+      nilpath
+   ELSE
+      REF PATH result = NEW path;
+      REF PATH ending = ENDING result;
+      IF op OF ending = no op THEN
+         { Must insert 'go past' operator }
+         op OF ending := go past;
+         result
+      ELSE
+         { Just leave the operator (it never gets in the way) }
+         result
+      FI
+   FI;
+
+
+{ 'GOOUT' makes the purely structural change to the PATH necessary to indicate
+  going out one level of the function hierarchy.  If the transformation is
+  not possible, NIL is returned, otherwise a *copy* of the path is suitably
+  modified and returned.
+}
+OP GOOUT = (REF PATH path) REF PATH:
+   IF path IS nilpath THEN
+      nilpath
+   ELSE
+      REF PATH result = NEW path;
+      REF PATH scan       := result,
+               last go in := nilpath;
+      WHILE scan ISNT nilpath DO
+         IF op OF scan = go in THEN
+            last go in := scan
+         FI;
+         scan := rest OF scan
+      OD;
+      IF last go in IS nilpath THEN
+         { There was no 'go in', so we can't go out! }
+         nilpath
+      ELSE
+         { Go out by truncating the path at the last go in }
+         op OF last go in := no op;
+         rest OF last go in := nilpath;
+         result
+      FI
+   FI;
+
+
+{ 'GOOUT' in its dyadic form, repeats the basic GOOUT operation until the
+  resulting ending of the path has the name specified.  NIL is returned
+  if this operation fails for any reason.
+}
+PRIO GOOUT = 9;
+OP GOOUT = (ID name, REF PATH path) REF PATH:
+BEGIN
+   REF PATH result := GOOUT path;
+   WHILE
+      REF PATH ending = ENDING result;
+      (ending ISNT nilpath) ANDTH name OF ending /= name
+   DO
+      result := GOOUT result
+   OD;
+   result
+END;
+
+
+{ 'SMALLNAME' returns just the last text component of the given PATH
+}
+OP SMALLNAME = (REF PATH path) ID:
+   IF REF PATH end = ENDING path;
+      aliasname OF end ISNT nilid
+   THEN aliasname OF end
+   ELSE name OF end
+   FI;
+
+OP NEWALIAS = (REF PATH path, ID alias) REF PATH:
+  (aliasname OF (ENDING path) := alias; path);
+
+{'EXPANDROOT' attempts to replace the first PATH element
+  with another complete path. This new 'root' is found by looking
+  up the first path name in simtable. If the lookup fails then the whole
+  path is taken to be relative to the monitoring pointer (which is
+  also expanded by simtable lookup)
+ }
+PRIO EXPANDROOT = 9;
+OP EXPANDROOT = (REF PATH path) REF PATH:
+   IF REF PATH root path;
+      repeat OF path = 1 ANDTH
+      simtable lookup path(name OF path, any, root path)
+   THEN
+      IF op OF path = go in THEN
+         GOIN root path APPEND CLEAR rest OF path
+      ELIF op OF path = go past THEN
+         GOPAST root path APPEND CLEAR rest OF path
+      ELSE {no op}
+         root path
+      FI
+   ELSE
+      simtable lookup path(monitoring pointer name, any, root path);
+      GOPAST root path APPEND CLEAR path
+   FI;
+
+
+{ SEMANTIC INTERPRETATION OF NODENAMES }
+{ ==================================== }
+
+{
+  'node' returns a REF MNODE describing the node referred to by the given PATH
+   name, filling in any unset MNODE fields (and leaving any set ones alone
+   since the structural operations guarantee to clear any invalidated nodes).
+   It is often called just for its side effect of doing a full semantic check.
+   It used the procedure 'search right' which actually understands the circuit
+   hierarchy, in order to do it.
+
+   'node' relies on the fact that the 'bind' field of the first element in
+   'path' is set to describe either the simulated function or a probe function.
+}
+VECTOR[0] BINDING null binding;
+
+PROC search right = (INT repeat, ID name, REF VECTOR[] BINDING context)
+                                                           REF VECTOR[] BINDING:
+BEGIN
+   INT i := 1;
+   INT remainder := repeat;
+   WHILE
+      (i <= UPB context) ANDTH
+      BEGIN
+         BINDING binding = context[i];
+         IF
+            ((lname OF binding ISNT nilid) ANDTH (name = lname OF binding)) OREL
+            ((uname OF binding ISNT nilid) ANDTH (name = uname OF binding))
+         THEN remainder -:= 1 FI;
+         (remainder /= 0)
+      END
+   DO i +:= 1 OD;
+   context[i:]
+END;
+
+PROC node = (REF PATH path, FLTPROC flt) REF MNODE:
+BEGIN
+   REF VECTOR[] BINDING context := null binding;
+   REF MNODE ans;
+   REF PATH scan := path;
+   INT instance, circuit, base;
+
+   WHILE scan ISNT nilpath DO
+      IF bind OF scan IS nilbind THEN
+         IF repeat OF scan < 1 THEN
+            flt("Repeat count in node name should be at least one")
+         FI;
+         REF VECTOR [] BINDING tail =
+            search right (repeat OF scan, name OF scan, context);
+         IF UPB tail = 0 THEN
+            flt("Component """ + name OF scan + """ of node name not found")
+         FI;
+         bind OF scan := HEAP BIND :=
+         (
+            uname OF tail[1], lname OF tail[1],
+            HEAP MNODE :=
+            (
+               HEAP NODE :=
+                  CASE lookup rnode(node OF tail[1]) IN
+                      (BOX b):  BOX (fn OF b, instance OF b + instance),
+                      (WIRE w): LINE (HEAP WIRE := w, instance)
+                  ESAC,
+               circuit, base
+             )
+         );
+         IF op OF scan = go in THEN
+            CASE node OF node OF bind OF scan IN
+               (BOX b):
+                   BEGIN
+                       context := body OF lookup function(fn OF b);
+                       instance := instance OF b
+                   END
+            OUT flt ("""" + name OF scan + """ is not a function")
+            ESAC
+         ELIF op OF scan = go past THEN
+            IF UPB context /= 0 THEN context := tail[2:] FI
+         FI
+      ELSE { bind already set but we may have to check that we can go in }
+         IF op OF scan = go in THEN
+            CASE node OF node OF bind OF scan IN
+               (BOX b):
+                   BEGIN
+                       context := body OF lookup function(fn OF b);
+                       instance := instance OF b;
+                       circuit := circuit OF node OF bind OF scan;
+                       base := base OF node OF bind OF scan
+                   END
+            OUT flt ("""" + name OF scan + """ is not a function")
+            ESAC
+         ELIF op OF scan = go past THEN
+            IF UPB context /= 0 THEN
+               REF VECTOR [] BINDING tail =
+                  search right (repeat OF scan, name OF scan, context);
+               context := tail[2:]
+            ELSE
+              {attempt to go past probe or simulated fn}
+               flt ("Cannot go past " + name OF scan)
+            FI
+         FI
+      FI;
+      ans := node OF bind OF scan ;
+      scan := rest OF scan
+   OD;
+   ans
+END;
+
+
+SKIP
+
+KEEP
+   { CREATION OF PATHS }
+   make path,
+
+   { CONVERSION OF NODENAMES TO TEXT }
+   NODENAME (REF PATH),
+
+   { SYNTACTIC ANALYSIS OF NODE NAMES }
+   get_nodename, string node name, absolute node name,
+
+   { STRUCTURAL TRANSFORMATIONS }
+   NEW (REF PATH), GOIN (REF PATH), GOOUT (REF PATH), GOOUT (ID, REF PATH),
+   SMALLNAME (REF PATH), EXPANDROOT(REF PATH), NEWALIAS(REF PATH, ID),
+
+   { SEMANTIC INTERPRETATION OF NODENAMES }
+   node
+
+FINISH
