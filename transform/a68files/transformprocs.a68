@@ -1,0 +1,1609 @@
+DECS  transformprocs CONTEXT VOID  USE  putstrings,  osinterface,  messageproc,
+      assmodes,  closureprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: transformprocs.a68,v 34.2 1995/03/29 13:03:07 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:03:88   Renamed transformprocs - only holds null procedures.  EVW
+28:04:88   Additional (existing global) procedures moved into TPROCS.  DCT
+17:06:88   Updated for draft 5 modes.  DCT
+22:06:88   make_newtprocs  merged in.  DCT
+16:08:88   STRINGs etc - draft6 modes. EVW
+24:10:88   MACPARAMC added to KEEP list.  EVW
+17:11:88   Handles nilfndec, niltypedec etc:  EVW
+28:02:89   Sun stack problem - remove recursion in PROC ustr. EVW
+              remove other recursion after release4?
+14:08:89   CR 642.  Updated from Kernel Interface.  DCT
+30:10:89   CR 638.  MPARAM added, INSTANCE, MACPARAM and MACSPEC altered. EVW
+17:12:89   CR ???.  ALIENCODE, SAMPLE and TIMESCALE added. EVW
+13:03:90   Default FNDEC proc now handles types correctly. EVW
+29:03:90   Macros can now have function parameters. JIT
+23:04:90   Add FORMULAS, UFN. Replace IOSPEC by TERMINALS. Remove FNSPEC,
+              FNSETSTR, FNSETROW, INPUT. CHange MAKE, JOIN and BODYDATA. EVW
+10:07:90   Added MAKE (as needed frequently).  Added null_* procedures for
+              the mail UNION Modes to avoid scanning parts of the tree.
+              Removed unnecessary use of HEAP (now Apollo compiler works).  DCT
+17:04:91   R6B31.  Wrong tprocs used for terminals in fndec. EVW
+10:05:91   R6B34.  fndec falls over on function parameters of macros.
+                 Function parameters of macros are not dealt with by the null
+                 transforms.  Nil function body not dealt with.  DJS
+27:06:91   Version 7 of the assembler modes. EVW
+16:10:91   Updated for new CLOSURE mode.  DCT
+24:10:91   flt_if_interrupted called in main closure loop.  DCT
+12:11:91   Add text attributes. EVW
+17:12:91   UTERMINDEX added, BODYDATA removed, MACSPEC altered. EVW
+02:03:92   Attribute declarations added. EVW
+06:04:92   discard_tprocs added to reduce heap thrashing.  DCT
+17:07:92   Changes made for CONST / UNIT mode change. JIT
+05:08:92   SEQROW added to PROC seqstep. JIT
+03:11:92   Updated for 'chars' mode changes. JIT
+19:04:93   Handling of replicators altered. EVW
+22:09:93   Correct tprocs now used for formularange. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.029 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+{{ These modes are used to show changes and hence avoid unnecessary copying }}
+
+MODE  TRANSFORMPROCS,
+
+      ATTRSTRC = STRUCT (REF ATTRSTR a, BOOL c),
+      TATTRSTR = PROC (REF ATTRSTR , TRANSFORMPROCS) ATTRSTRC,
+         ATTRC = STRUCT (ATTR a, BOOL c),
+         TATTR = PROC (ATTR, TRANSFORMPROCS) ATTRC,
+      ATTRDECC = STRUCT (REF ATTRDEC a, BOOL c),
+      TATTRDEC = PROC (REF ATTRDEC, TRANSFORMPROCS) ATTRDECC,
+
+      FORMULAC = STRUCT (FORMULA f, BOOL c),
+      TFORMULA = PROC (FORMULA, TRANSFORMPROCS) FORMULAC,
+     FORMULASC = STRUCT (REF FORMULAS f, BOOL c),
+     TFORMULAS = PROC (REF FORMULAS, TRANSFORMPROCS) FORMULASC,
+       INTDECC = STRUCT (REF INTDEC i, BOOL c),
+       TINTDEC = PROC (REF INTDEC, TRANSFORMPROCS) INTDECC,
+        RANGEC = STRUCT (RANGE r, BOOL c),
+        TRANGE = PROC (RANGE, TRANSFORMPROCS) RANGEC,
+ FORMULARANGEC = STRUCT (FORMULARANGE f, BOOL c),
+ TFORMULARANGE = PROC (FORMULARANGE, TRANSFORMPROCS) FORMULARANGEC,
+
+         TSTRC = STRUCT (REF TSTR t, BOOL c),
+         TTSTR = PROC (REF TSTR, TRANSFORMPROCS) TSTRC,
+         TYPEC = STRUCT (TYPE t, BOOL c),
+         TTYPE = PROC (TYPE, TRANSFORMPROCS) TYPEC,
+
+  ALTERNATIVEC = STRUCT (ALTERNATIVE a, BOOL c),
+  TALTERNATIVE = PROC (ALTERNATIVE, TRANSFORMPROCS) ALTERNATIVEC,
+ ALTERNATIVESC = STRUCT (REF VECTOR [] ALTERNATIVE a, BOOL c),
+ TALTERNATIVES = PROC (REF VECTOR [] ALTERNATIVE, TRANSFORMPROCS) ALTERNATIVESC,
+     TYPEBODYC = STRUCT (TYPEBODY t, BOOL c),
+     TTYPEBODY = PROC (TYPEBODY, TRANSFORMPROCS) TYPEBODYC,
+      TYPEDECC = STRUCT (REF TYPEDEC t, BOOL c),
+      TTYPEDEC = PROC (REF TYPEDEC, TRANSFORMPROCS) TYPEDECC,
+
+     CONSTDECC = STRUCT (REF CONSTDEC co, BOOL c),
+     TCONSTDEC = PROC (REF CONSTDEC, TRANSFORMPROCS) CONSTDECC,
+
+        UALTSC = STRUCT (REF UALTS ua, BOOL c),
+        TUALTS = PROC (REF UALTS, TRANSFORMPROCS) UALTSC,
+         USTRC = STRUCT (REF USTR u, BOOL c),
+         TUSTR = PROC (REF USTR, TRANSFORMPROCS) USTRC,
+     UCHOICESC = STRUCT (REF UCHOICES u, BOOL c),
+     TUCHOICES = PROC (REF UCHOICES, TRANSFORMPROCS) UCHOICESC,
+         UNITC = STRUCT (UNIT u, BOOL c),
+         TUNIT = PROC (UNIT, TRANSFORMPROCS) UNITC,
+
+       MPARAMC = STRUCT (MPARAM m, BOOL c),
+       TMPARAM = PROC (MPARAM, TRANSFORMPROCS) MPARAMC,
+    MACPARAMSC = STRUCT (REF VECTOR [] MACPARAM m, BOOL c),
+    TMACPARAMS = PROC (REF VECTOR [] MACPARAM, TRANSFORMPROCS) MACPARAMSC,
+     INSTANCEC = STRUCT (INSTANCE i, BOOL c),
+     TINSTANCE = PROC (INSTANCE, TRANSFORMPROCS) INSTANCEC,
+
+  DECLARATIONC = STRUCT (DECLARATION d, BOOL c),
+  TDECLARATION = PROC (DECLARATION, TRANSFORMPROCS) DECLARATIONC,
+
+   PRINTITEMSC = STRUCT (REF PRINTITEMS p, BOOL c),
+   TPRINTITEMS = PROC (REF PRINTITEMS, TRANSFORMPROCS) PRINTITEMSC,
+        PRINTC = STRUCT (REF PRINT p, BOOL c),
+        TPRINT = PROC (REF PRINT, TRANSFORMPROCS) PRINTC,
+        FAULTC = STRUCT (REF FAULT f, BOOL c),
+        TFAULT = PROC (REF FAULT, TRANSFORMPROCS) FAULTC,
+
+        NAMESC = STRUCT (REF NAMES n, BOOL c),
+        TNAMES = PROC (REF NAMES, TRANSFORMPROCS) NAMESC,
+          LETC = STRUCT (REF LET l, BOOL c),
+          TLET = PROC (REF LET, TRANSFORMPROCS) LETC,
+   SEQCHOICESC = STRUCT (REF SEQCHOICES s, BOOL c),
+   TSEQCHOICES = PROC (REF SEQCHOICES, TRANSFORMPROCS) SEQCHOICESC,
+      SEQSTEPC = STRUCT (SEQSTEP s, BOOL c),
+      TSEQSTEP = PROC (SEQSTEP, TRANSFORMPROCS) SEQSTEPC,
+     SEQUENCEC = STRUCT (REF SEQUENCE s, BOOL c),
+     TSEQUENCE = PROC (REF SEQUENCE, TRANSFORMPROCS) SEQUENCEC,
+
+         MAKEC = STRUCT (REF MAKE  m,  BOOL  c),
+         TMAKE = PROC (REF MAKE,  TRANSFORMPROCS) MAKEC,
+         JOINC = STRUCT (REF JOIN j, BOOL c),
+         TJOIN = PROC (REF JOIN, TRANSFORMPROCS) JOINC,
+        JOINSC = STRUCT (REF JOINS  j, BOOL c),
+        TJOINS = PROC (REF JOINS, TRANSFORMPROCS) JOINSC,
+         STEPC = STRUCT (STEP s, BOOL c),
+         TSTEP = PROC (STEP, TRANSFORMPROCS) STEPC,
+       SERIESC = STRUCT (REF SERIES s, BOOL c),
+       TSERIES = PROC (REF SERIES, TRANSFORMPROCS) SERIESC,
+
+       FNBODYC = STRUCT (FNBODY f, BOOL c),
+       TFNBODY = PROC (FNBODY, TRANSFORMPROCS) FNBODYC,
+      MACSPECC = STRUCT (MACSPEC m, BOOL c),
+      TMACSPEC = PROC (MACSPEC, TRANSFORMPROCS) MACSPECC,
+     MACSPECSC = STRUCT (REF VECTOR [] MACSPEC m, BOOL c),
+     TMACSPECS = PROC (REF VECTOR [] MACSPEC, TRANSFORMPROCS) MACSPECSC,
+        FNDECC = STRUCT (REF FNDEC f, BOOL c),
+        TFNDEC = PROC (REF FNDEC, TRANSFORMPROCS) FNDECC,
+
+        OUTERC = STRUCT (OUTER o, BOOL c),
+        TOUTER = PROC (OUTER, TRANSFORMPROCS) OUTERC,
+
+      CLOSUREC = STRUCT (CLOSURE cl, BOOL c),
+      TCLOSURE = PROC (CLOSURE, TRANSFORMPROCS, MESSAGEPROC) CLOSUREC,
+
+
+     TPROCS = STRUCT
+        ( TATTR attr,  TATTRSTR attrstr, TATTRDEC attrdec,
+
+          TFORMULA  formula,  TFORMULAS  formulas,  TINTDEC  intdec,
+          TRANGE  range,  TFORMULARANGE  formularange,
+
+          TTSTR  tstr,  TTYPE  type, TALTERNATIVE  alternative,
+          TALTERNATIVES  alternatives,  TTYPEBODY  typebody,  TTYPEDEC  typedec,
+
+          TCONSTDEC  constdec,
+
+          TUALTS  ualts,  TUSTR  ustr,  TUCHOICES  uchoices,  TUNIT  unit,
+
+          TMPARAM  mparam,  TMACPARAMS  macparams,  TINSTANCE  instance,
+
+          TDECLARATION  declaration,
+
+          TPRINTITEMS  printitems,  TPRINT  print,  TFAULT  fault,
+
+          TNAMES  names,  TLET  let,  TSEQCHOICES  seqchoices,
+          TSEQSTEP  seqstep,  TSEQUENCE  sequence,
+
+          TMAKE  make,  TJOIN  join,  TJOINS  joins,  TSTEP  step,
+          TSERIES  series,
+
+          TFNBODY  fnbody,  TMACSPEC  macspec,  TMACSPECS  macspecs,
+          TFNDEC  fndec,
+
+          TOUTER  outer,
+
+          TCLOSURE  closure,
+
+          TRANSFORMPROCS  rest
+        ) ,
+
+      TRANSFORMPROCS = REF TPROCS;    {{ REF is used only for efficiency }}
+
+
+
+TRANSFORMPROCS  niltprocs = NIL;
+TRANSFORMPROCS  freelist:= niltprocs;
+INT  n_allocated:= 0,  n_reallocated:= 0;         { stats }
+
+{ Could add a "replace_tprocs" to allow creation on the stack... }
+
+
+PROC  make_newtprocs = ( TRANSFORMPROCS  old,
+                         VECTOR [] UNION
+                            ( TATTR, TATTRSTR, TATTRDEC,
+                              TFORMULA, TFORMULAS, TINTDEC, TRANGE,
+                              TFORMULARANGE, TTSTR, TTYPE,
+                              TALTERNATIVE, TALTERNATIVES, TTYPEBODY, TTYPEDEC,
+                              TCONSTDEC, TUALTS,TUSTR, TUCHOICES, TUNIT,
+                              TMPARAM, TMACPARAMS, TINSTANCE,
+                              TDECLARATION,
+                              TPRINTITEMS, TPRINT, TFAULT,
+                              TNAMES, TLET, TSEQCHOICES, TSEQSTEP, TSEQUENCE,
+                              TMAKE, TJOIN, TJOINS, TSTEP, TSERIES,
+                              TFNBODY, TMACSPEC, TMACSPECS, TFNDEC,
+                              TOUTER,
+                              TCLOSURE )  procs
+                       ) TRANSFORMPROCS:
+BEGIN
+   TRANSFORMPROCS  new = IF freelist IS niltprocs
+                         THEN  n_allocated PLUSAB 1;
+                               HEAP TPROCS
+                         ELSE  TRANSFORMPROCS  free = freelist;
+                               n_reallocated PLUSAB 1;
+                               freelist:= rest OF freelist;
+                               free
+                         FI;
+   new:= old;
+   FORALL proc IN procs
+   DO  CASE  proc IN
+          (TATTR attr)                   attr OF new:= attr ,
+          (TATTRSTR attrstr)             attrstr OF new:= attrstr ,
+          (TATTRDEC attrdec)             attrdec OF new:= attrdec ,
+
+          (TFORMULA  formula)            formula OF new:= formula ,
+          (TFORMULAS formulas)           formulas OF new:= formulas ,
+          (TINTDEC  intdec)              intdec OF new:= intdec ,
+          (TRANGE  range)                range OF new:= range ,
+          (TFORMULARANGE frange)         formularange OF new:= frange ,
+
+          (TTSTR  tstr)                  tstr OF new:= tstr ,
+          (TTYPE  type)                  type OF new:= type ,
+          (TALTERNATIVE  alternative)    alternative OF new:= alternative ,
+          (TALTERNATIVES  alternatives)  alternatives OF new:= alternatives ,
+          (TTYPEBODY  typebody)          typebody OF new:= typebody ,
+          (TTYPEDEC  typedec)            typedec OF new:= typedec ,
+
+          (TCONSTDEC  constdec)          constdec OF new:= constdec ,
+
+          (TUALTS  ualts)                ualts OF new:= ualts ,
+          (TUSTR  ustr)                  ustr OF new:= ustr ,
+          (TUCHOICES  uchoices)          uchoices OF new:= uchoices ,
+          (TUNIT  unit)                  unit OF new:= unit ,
+
+          (TMPARAM  mparam)              mparam OF new:= mparam ,
+          (TMACPARAMS  macparams)        macparams OF new:= macparams ,
+          (TINSTANCE  instance)          instance OF new:= instance ,
+
+          (TDECLARATION  declaration)    declaration OF new:= declaration ,
+
+          (TPRINTITEMS  printitems)      printitems OF new:= printitems ,
+          (TPRINT  print)                print OF new:= print ,
+          (TFAULT  fault)                fault OF new:= fault ,
+
+          (TNAMES  names)                names OF new:= names ,
+          (TLET  let)                    let OF new:= let ,
+          (TSEQCHOICES  seqchoices)      seqchoices OF new:= seqchoices ,
+          (TSEQSTEP  seqstep)            seqstep OF new:= seqstep ,
+          (TSEQUENCE  sequence)          sequence OF new:= sequence ,
+
+          (TMAKE  make)                  make OF new:= make,
+          (TJOIN  join)                  join OF new:= join ,
+          (TJOINS  joins)                joins OF new:= joins ,
+          (TSTEP  step)                  step OF new:= step ,
+          (TSERIES  series)              series OF new:= series ,
+
+          (TFNBODY  fnbody)              fnbody OF new:= fnbody ,
+          (TMACSPEC  macspec)            macspec OF new:= macspec ,
+          (TMACSPECS  macspecs)          macspecs OF new:= macspecs ,
+          (TFNDEC  fndec)                fndec OF new:= fndec ,
+
+          (TOUTER  outer)                outer OF new:= outer ,
+
+          (TCLOSURE  closure)            closure OF new:= closure
+       OUT  global_msg(system, "make_newtprocs")
+       ESAC
+   OD;
+   new
+END;
+
+
+PROC  discard_tprocs = (TRANSFORMPROCS  tprocs) VOID:
+BEGIN
+   rest OF tprocs:= freelist;
+   freelist:= tprocs
+END;
+
+
+
+PROC  clear_tprocs = VOID:
+BEGIN
+   TRANSFORMPROCS  ptr:= freelist;
+   INT  count:= 0;
+   WHILE ptr ISNT niltprocs DO  count PLUSAB 1;  ptr:= rest OF ptr  OD;
+   put(screen, ( n_allocated, " transform procedures allocated, ",
+                 n_reallocated, " re-allocated and ", count, " freed",
+                 newline ));
+   freelist:= niltprocs
+END;
+
+
+
+
+
+{{{ null transform procedures }}}
+{{{ ------------------------- }}}
+
+PROC attrstr = (REF ATTRSTR st, TRANSFORMPROCS tprocs) ATTRSTRC:
+   IF st IS nilattrstr
+   THEN  (st, FALSE)
+   ELSE  ATTRC  a = (attr OF tprocs)(elem OF st, tprocs);
+         ATTRSTRC  asc = (attrstr OF tprocs)(rest OF st, tprocs);
+         IF c OF a  OREL  c OF asc
+         THEN  (HEAP ATTRSTR:= (a OF a, a OF asc), TRUE)
+         ELSE  (st, FALSE)
+         FI
+   FI;
+
+PROC attr = (ATTR attr, TRANSFORMPROCS tprocs) ATTRC:
+   CASE attr IN
+   (REF ATTRSTR as)
+      ( ATTRSTRC ac = (attrstr OF tprocs)(as, tprocs);
+        (a OF ac, c OF ac)
+      ),
+   (REF ATTRBRACKET ab)
+      ( ATTRC abc = (attr OF tprocs)(attr OF ab, tprocs);
+        IF c OF abc
+        THEN (MAKEATTRBRACKET(a OF abc), TRUE)
+        ELSE (attr, FALSE)
+        FI
+      )
+   OUT (attr, FALSE)
+   ESAC;
+
+PROC attrdec = (REF ATTRDEC adec, TRANSFORMPROCS tprocs) ATTRDECC:
+BEGIN
+   IF adec ISNT nilattrdec
+   THEN  ATTRC ac = (attr OF tprocs)(value OF adec, tprocs);
+         IF c OF ac
+         THEN  ( HEAP ATTRDEC:= ( sort OF adec, attrname OF adec, a OF ac,
+                                  usage OF adec), TRUE )
+         ELSE  (adec, FALSE)
+         FI
+   ELSE  (adec, FALSE)
+   FI
+END;
+
+
+PROC formula = (FORMULA form, TRANSFORMPROCS tprocs) FORMULAC:
+   CASE form IN
+      (REF FCHECK fck)
+         (  FORMULAC test = (formula OF tprocs)(test OF fck, tprocs);
+            FORMULAC standard = (formula OF tprocs)(standard OF fck, tprocs);
+            IF c OF test  OREL  c OF standard
+            THEN  (HEAP FCHECK:= (sort OF fck, f OF test, f OF standard), TRUE)
+            ELSE  (form, FALSE)
+            FI
+         ),
+      (REF FDOP fd)
+         (  FORMULAC l1 = (formula OF tprocs)(left OF fd, tprocs),
+                     r1 = (formula OF tprocs)(right OF fd, tprocs);
+            IF c OF l1 OREL c OF r1
+            THEN (HEAP FDOP := (f OF l1, sort OF fd, f OF r1), TRUE)
+            ELSE (form, FALSE)
+            FI
+         ),
+      (REF FMOP fm)
+         (  FORMULAC r = (formula OF tprocs)(right OF fm, tprocs);
+            IF c OF r
+            THEN  (HEAP FMOP := (sort OF fm, f OF r), TRUE)
+            ELSE  (form, FALSE)
+            FI
+         ),
+      (REF FCOND fc)
+         (  FORMULAC cond = (formula OF tprocs)(cond OF fc, tprocs),
+                     true = (formula OF tprocs)(true OF fc, tprocs),
+                     false = (formula OF tprocs)(false OF fc, tprocs);
+            IF c OF cond  OREL  c OF true  OREL  c OF false
+            THEN  (HEAP FCOND := (f OF cond, f OF true, f OF false), TRUE)
+            ELSE  (form, FALSE)
+            FI
+         ),
+      (REF FBRACKET fb)
+         (  FORMULAC fc = (formula OF tprocs)(formula OF fb, tprocs);
+            IF c OF fc
+            THEN  (MAKEFBRACKET (f OF fc), TRUE)
+            ELSE  (form, FALSE)
+            FI
+         )
+   OUT (form, FALSE)
+   ESAC;
+
+PROC formulas = (REF FORMULAS fs, TRANSFORMPROCS tprocs) FORMULASC:
+   IF fs IS nilformulas
+   THEN  (fs, FALSE)
+   ELSE  FORMULAC fc = (formula OF tprocs)(formula OF fs, tprocs);
+         FORMULASC rest = (formulas OF tprocs)(rest OF fs, tprocs);
+         IF c OF fc  OREL  c OF rest
+         THEN  (HEAP FORMULAS:= (f OF fc, f OF rest), TRUE)
+         ELSE  (fs, FALSE)
+         FI
+   FI;
+
+
+PROC range = (RANGE rge, TRANSFORMPROCS tprocs) RANGEC:
+BEGIN
+   FORMULAC lwb = (formula OF tprocs)(lwb OF rge, tprocs),
+            upb = (formula OF tprocs)(upb OF rge, tprocs);
+   IF c OF lwb  OREL  c OF upb
+   THEN  ((f OF lwb, f OF upb), TRUE)
+   ELSE  (rge, FALSE)
+   FI
+END;
+
+
+PROC formularange = (FORMULARANGE fr, TRANSFORMPROCS tprocs) FORMULARANGEC:
+   CASE fr IN
+   (RANGE rg)   ( RANGEC rc = (range OF tprocs)(rg, tprocs);
+                  (r OF rc, c OF rc)
+                ),
+   (FORMULA f)  ( FORMULAC fc = (formula OF tprocs)(f, tprocs);
+                  (f OF fc, c OF fc)
+                )
+   OUT  global_msg(system, "formularange"); SKIP
+   ESAC;
+
+
+PROC intdec = (REF INTDEC idec, TRANSFORMPROCS tprocs) INTDECC:
+BEGIN
+   IF idec ISNT nilintdec
+   THEN  FORMULARANGEC frc = (formularange OF tprocs)(value OF idec, tprocs);
+         ATTRC ac = (attr OF tprocs)(attr OF idec, tprocs);
+         IF c OF frc  OREL c OF ac
+         THEN  ( HEAP INTDEC:= ( sort OF idec, intname OF idec, a OF ac,
+                                 f OF frc, usage OF idec), TRUE )
+         ELSE  (idec, FALSE)
+         FI
+   ELSE  (idec, FALSE)
+   FI
+END;
+
+
+
+PROC tstr = (REF TSTR st, TRANSFORMPROCS tprocs) TSTRC:
+   IF st IS niltstr
+   THEN  (st, FALSE)
+   ELSE  TYPEC  t = (type OF tprocs)(elem OF st, tprocs);
+         TSTRC  tsc = (tstr OF tprocs)(rest OF st, tprocs);
+         IF c OF t  OREL  c OF tsc
+         THEN  (HEAP TSTR:= (t OF t, t OF tsc), TRUE)
+         ELSE  (st, FALSE)
+         FI
+   FI;
+
+
+PROC type = (TYPE ty, TRANSFORMPROCS tprocs) TYPEC:
+   CASE ty IN
+      (REF TROW tr)
+         ( FORMULAC size = (formula OF tprocs)(size OF tr, tprocs);
+           TYPEC elem = (type OF tprocs)(elem OF tr, tprocs);
+           IF c OF size  OREL  c OF elem
+           THEN  (HEAP TROW:= (f OF size, t OF elem), TRUE)
+           ELSE  (tr, FALSE)
+           FI
+         ) ,
+      (REF TSTR ts)
+         ( TSTRC tc = (tstr OF tprocs)(ts, tprocs);
+           (t OF tc, c OF tc)
+         ),
+      (REF TFN tf)
+         ( TYPEC from = (type OF tprocs)(from OF tf, tprocs);
+           TYPEC to = (type OF tprocs)(to OF tf, tprocs);
+           IF c OF from  OREL  c OF to
+           THEN  (HEAP TFN:= (t OF from, t OF to), TRUE)
+           ELSE  (tf, FALSE)
+           FI
+         ) ,
+      (REF TBRACKET tb)
+         ( TYPEC tbc = (type OF tprocs)(type OF tb, tprocs);
+           IF c OF tbc
+           THEN (MAKETBRACKET (t OF tbc), TRUE)
+           ELSE (tb, FALSE)
+           FI
+         ),
+      (REF TSTRING tg)
+         ( FORMULAC size = (formula OF tprocs)(size OF tg, tprocs);
+           TYPEC char = (type OF tprocs)(char OF tg, tprocs);
+           IF c OF size  OREL  c OF char
+           THEN  (HEAP TSTRING:= (f OF size, t OF char), TRUE)
+           ELSE  (tg, FALSE)
+           FI
+         )
+   OUT (ty, FALSE)
+   ESAC;
+
+
+PROC alternative = (ALTERNATIVE  alt, TRANSFORMPROCS  tprocs) ALTERNATIVEC:
+BEGIN
+   TYPEC  assoc = (type OF tprocs)(assoc OF alt, tprocs);
+   IF c OF assoc
+   THEN  ((altname OF alt, t OF assoc), TRUE)
+   ELSE  (alt, FALSE)
+   FI
+END;
+
+
+PROC alternatives = (REF VECTOR [] ALTERNATIVE  alts,  TRANSFORMPROCS  tprocs)
+                    ALTERNATIVESC:
+BEGIN
+   REF VECTOR [] ALTERNATIVE  new:= alts;
+   BOOL  changed:= FALSE;
+   FOR i TO UPB new
+   DO  ALTERNATIVEC  a = (alternative OF tprocs)(new[i], tprocs);
+       IF c OF a
+       THEN  IF NOT changed
+             THEN  changed:= TRUE;
+                   new:= HEAP VECTOR [UPB new] ALTERNATIVE:= new
+             FI;
+             new[i]:= a OF a
+       FI
+   OD;
+   (new, changed)
+END;
+
+
+PROC typebody = (TYPEBODY tbody, TRANSFORMPROCS tprocs) TYPEBODYC:
+   CASE tbody IN
+      (REF VECTOR [] ALTERNATIVE nn)
+         ( ALTERNATIVESC  alts = (alternatives OF tprocs)(nn, tprocs);
+           (a OF alts, c OF alts)
+         ) ,
+      (REF NEWINTS ni)
+         ( RANGEC  r = (range OF tprocs)(range OF ni, tprocs);
+           IF c OF r
+           THEN  (HEAP NEWINTS:= (tagname OF ni, r OF r), TRUE)
+           ELSE  (tbody, FALSE)
+           FI
+         ) ,
+      (REF NEWCHARS nc)
+         ( (tbody, FALSE)
+         ),
+      (REF TYPETAG tg)
+         ( TYPEC  tt = (type OF tprocs)(tag OF tg, tprocs);
+           IF c OF tt
+           THEN  (MAKETYPETAG t OF tt, TRUE)
+           ELSE  (tbody, FALSE)
+           FI
+         )
+   ESAC;
+
+
+PROC typedec = (REF TYPEDEC tdec, TRANSFORMPROCS tprocs) TYPEDECC:
+BEGIN
+   IF tdec ISNT niltypedec
+   THEN  TYPEBODYC tc = (typebody OF tprocs)(body OF tdec, tprocs);
+         ATTRC ac = (attr OF tprocs)(attr OF tdec, tprocs);
+         IF c OF tc  OREL c OF ac
+         THEN ( HEAP TYPEDEC:= ( sort OF tdec, typename OF tdec, a OF ac,
+                                 t OF tc, usage OF tdec ),
+                TRUE )
+         ELSE (tdec, FALSE)
+         FI
+   ELSE (tdec, FALSE)
+   FI
+END;
+
+
+
+PROC constdec = (REF CONSTDEC cdec, TRANSFORMPROCS tprocs) CONSTDECC:
+BEGIN
+   IF cdec ISNT nilconstdec
+   THEN  UNITC  const = (unit OF tprocs)(value OF cdec, tprocs);
+         ATTRC ac = (attr OF tprocs)(attr OF cdec, tprocs);
+         IF c OF const  OREL  c OF ac
+         THEN  ( HEAP CONSTDEC:= ( sort OF cdec, constname OF cdec, a OF ac,
+                                   u OF const, usage OF cdec),
+                 TRUE )
+         ELSE  (cdec, FALSE)
+         FI
+   ELSE  (cdec, FALSE)
+   FI
+END;
+
+
+
+
+PROC ualts = (REF UALTS ua, TRANSFORMPROCS tprocs) UALTSC:
+   IF ua IS nilualts
+   THEN  (ua, FALSE)
+   ELSE  UNITC  ut = (unit OF tprocs)(alt OF ua, tprocs);
+         UALTSC  uac = (ualts OF tprocs)(rest OF ua, tprocs);
+         IF c OF ut  OREL  c OF uac
+         THEN  (HEAP UALTS:= (u OF ut, ua OF uac), TRUE)
+         ELSE  (ua, FALSE)
+         FI
+   FI;
+
+
+PROC ustr = (REF USTR st, TRANSFORMPROCS tprocs) USTRC:
+   IF st IS nilustr
+   THEN  (st, FALSE)
+   ELSE  UNITC  u = (unit OF tprocs)(elem OF st, tprocs);
+         USTRC  usc = (ustr OF tprocs)(rest OF st, tprocs);
+         IF c OF u  OREL  c OF usc
+         THEN  (HEAP USTR:= (u OF u, u OF usc), TRUE)
+         ELSE  (st, FALSE)
+         FI
+   FI;
+
+PROC uchoices = (REF UCHOICES u, TRANSFORMPROCS tprocs) UCHOICESC:
+   IF u IS niluchoices
+   THEN  (u, FALSE)
+   ELSE  UNITC test = (unit OF tprocs)(test OF u, tprocs);
+         UNITC ans = (unit OF tprocs)(output OF u, tprocs);
+         UCHOICESC rest = (uchoices OF tprocs)(rest OF u, tprocs);
+         IF c OF rest  OREL  c OF test  OREL  c OF ans
+         THEN  (HEAP UCHOICES:= (check OF u, sort OF u, u OF test, u OF ans,
+                                 u OF rest), TRUE)
+         ELSE  (u, FALSE)
+         FI
+   FI;
+
+
+PROC unit = (UNIT u, TRANSFORMPROCS tprocs) UNITC:
+   CASE u IN
+      (REF CNAME  cn)
+         ( ( cn, FALSE) ),
+      (REF CPRIM  cp)
+         ( ( cp, FALSE) ),
+      (REF CINT ci)
+         ( FORMULAC index = (formula OF tprocs)(index OF ci, tprocs);
+           IF c OF index
+           THEN  (HEAP CINT:= (typeno OF ci, f OF index), TRUE)
+           ELSE  (ci, FALSE)
+           FI
+         ) ,
+      (REF CQUERY cq)
+         ( TYPEC tcq = (type OF tprocs)(querytype OF cq, tprocs);
+           IF c OF tcq
+           THEN  (MAKECQUERY (t OF tcq), TRUE)
+           ELSE  (cq, FALSE)
+           FI
+         ) ,
+      (REF CRANGE cr)
+         ( RANGEC rc = (range OF tprocs)(range OF cr, tprocs);
+           IF c OF rc
+           THEN  (HEAP CRANGE:= (typeno OF cr, r OF rc), TRUE)
+           ELSE  (cr, FALSE)
+           FI
+         ) ,
+      (REF CTYPE ct)
+         ( TYPEC tc = (type OF tprocs)(type OF ct, tprocs);
+           IF c OF tc
+           THEN  (MAKECTYPE (t OF tc), TRUE)
+           ELSE  (ct, FALSE)
+           FI
+         ) ,
+      (REF CPRIMRANGE crg)
+         ( (crg, FALSE)
+         ) ,
+      (REF UALTS ual)
+         ( UALTSC ualtc = (ualts OF tprocs)(ual, tprocs);
+           (ua OF ualtc, c OF ualtc)
+         ) ,
+      (REF UASSOC ua)
+         (  UNITC uc = (unit OF tprocs)(assoc OF ua, tprocs);
+            IF c OF uc
+            THEN  (HEAP UASSOC:= (typeno OF ua, altno OF ua, u OF uc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UEXTRACT ue)
+         (  UNITC uc = (unit OF tprocs)(extract OF ue, tprocs);
+            IF c OF uc
+            THEN  (HEAP UEXTRACT:= (u OF uc, typeno OF ue, altno OF ue), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UPORTNAME ut)
+         (  UNITC uc = (unit OF tprocs)(unit OF ut, tprocs);
+            IF c OF uc
+            THEN (HEAP UPORTNAME := (u OF uc, fnno OF ut, nameno OF ut), TRUE)
+            ELSE (u, FALSE)
+            FI
+         ),
+      (REF UINDEX ui)
+         (  UNITC uc = (unit OF tprocs)(unit OF ui, tprocs);
+            FORMULAC index = (formula OF tprocs)(index OF ui, tprocs);
+            IF c OF uc  OREL  c OF index
+            THEN  (HEAP UINDEX:= (u OF uc, f OF index), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UTRIM ut)
+         (  UNITC uc = (unit OF tprocs)(unit OF ut, tprocs);
+            RANGEC rc = (range OF tprocs)(range OF ut, tprocs);
+            IF c OF uc  OREL  c OF rc
+            THEN  (HEAP UTRIM:= (u OF uc, r OF rc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UDYINDEX udy)
+         (  UNITC uc = (unit OF tprocs)(unit OF udy, tprocs);
+            UNITC index = (unit OF tprocs)(index OF udy, tprocs);
+            IF c OF uc OREL c OF index
+            THEN  (HEAP UDYINDEX:= (u OF uc, u OF index), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UREPLACE uda)
+         (  UNITC uc = (unit OF tprocs)(unit OF uda, tprocs);
+            UNITC index = (unit OF tprocs)(index OF uda, tprocs);
+            UNITC from = (unit OF tprocs)(from OF uda, tprocs);
+            IF c OF uc OREL c OF index OREL c OF from
+            THEN  (HEAP UREPLACE:= (u OF uc, u OF index, u OF from), TRUE)
+            ELSE  (uda, FALSE)
+            FI
+         ) ,
+      (REF UROW ur)
+         (  FORMULAC size = (formula OF tprocs)(size OF ur, tprocs);
+            UNITC uc = (unit OF tprocs)(elem OF ur, tprocs);
+            IF c OF size  OREL  c OF uc
+            THEN  (HEAP UROW:= (f OF size, u OF uc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF USTR us)
+         (  USTRC uc = (ustr OF tprocs)(us, tprocs);
+            (u OF uc, c OF uc)
+         ) ,
+      (REF UCONC ucon)
+         (  UNITC luc = (unit OF tprocs)(left OF ucon, tprocs);
+            UNITC ruc = (unit OF tprocs)(right OF ucon, tprocs);
+            IF c OF luc  OREL  c OF ruc
+            THEN  (HEAP UCONC:=
+                    (string OF ucon, sort OF ucon, u OF luc, u OF ruc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UMINST um)
+         (  INSTANCEC ic = (instance OF tprocs)(inst OF um, tprocs);
+            UNITC uc = (unit OF tprocs)(right OF um, tprocs);
+            IF c OF uc  OREL  c OF ic
+            THEN  (HEAP UMINST:= (i OF ic, u OF uc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UDINST ud)
+         (  UNITC luc = (unit OF tprocs)(left OF ud, tprocs);
+            INSTANCEC ic = (instance OF tprocs)(inst OF ud, tprocs);
+            UNITC ruc = (unit OF tprocs)(right OF ud, tprocs);
+            IF c OF luc  OREL  c OF ruc  OREL  c OF ic
+            THEN  (HEAP UDINST:= (u OF luc, i OF ic, u OF ruc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UCASE uca)
+         (  UNITC uc = (unit OF tprocs)(input OF uca, tprocs);
+            UCHOICESC ucc = (uchoices OF tprocs)(choices OF uca, tprocs);
+            IF c OF uc  OREL  c OF ucc
+            THEN  (HEAP UCASE:= (u OF uc, u OF ucc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UCOND ucond)
+         (  FORMULAC cond = (formula OF tprocs)(cond OF ucond, tprocs);
+            UNITC true = (unit OF tprocs)(true OF ucond, tprocs),
+                 false = (unit OF tprocs)(false OF ucond, tprocs);
+            IF c OF cond  OREL  c OF true  OREL  c OF false
+            THEN  (HEAP UCOND:= (f OF cond, u OF true, u OF false), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UREPL url)
+         (  FORMULAC replc = (formula OF tprocs)(repl OF url, tprocs);
+            UNITC body = (unit OF tprocs)(body OF url, tprocs);
+            IF c OF replc  OREL  c OF body
+            THEN  (HEAP UREPL:= (f OF replc, u OF body), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF USEQUENCE useq)
+         (  SEQUENCEC seqc = (sequence OF tprocs)(body OF useq, tprocs);
+            UNITC output = (unit OF tprocs)(output OF useq, tprocs);
+            IF c OF seqc  OREL  c OF output
+            THEN  ( HEAP USEQUENCE:= ( s OF seqc, u OF output ), TRUE )
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF USERIES user)
+         (  SERIESC sec = (series OF tprocs)(body OF user, tprocs);
+            UNITC output = (unit OF tprocs)(output OF user, tprocs);
+            IF c OF sec  OREL  c OF output
+            THEN  (HEAP USERIES:= ( s OF sec, u OF output ), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UATTR uat)
+         (  UNITC uc = (unit OF tprocs)(unit OF uat, tprocs);
+            ATTRC ac = (attr OF tprocs)(attr OF uat, tprocs);
+            IF c OF uc  OREL  c OF ac
+            THEN  (HEAP UATTR:= (u OF uc, a OF ac), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UCHECK uck)
+         (  UNITC uc = (unit OF tprocs)(unit OF uck, tprocs);
+            FORMULAC fc =
+                (formula OF tprocs)(HEAP FCHECK:=(check OF uck), tprocs);
+            IF c OF uc  OREL  c OF fc
+            THEN  REF FCHECK chk = CASE f OF fc IN (REF FCHECK fck) fck
+                                      OUT global_msg(system, "fcheck"); SKIP
+                                   ESAC;
+                  (HEAP UCHECK:= (u OF uc, chk), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UBRACKET ub)
+         (  UNITC uc = (unit OF tprocs)(unit OF ub, tprocs);
+            IF c OF uc
+            THEN (MAKEUBRACKET (u OF uc), TRUE)
+            ELSE (u, FALSE)
+            FI
+         ) ,
+      (REF CQUOTE cqt)
+         ( (cqt, FALSE) ),
+      (REF CVOID cv)
+         ( (cv, FALSE) ),
+      (REF USTRING ug)
+         (  FORMULAC size = (formula OF tprocs)(size OF ug, tprocs);
+            UNITC uc = (unit OF tprocs)(char OF ug, tprocs);
+            IF c OF size  OREL  c OF uc
+            THEN  (HEAP USTRING:= (f OF size, u OF uc), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         ) ,
+      (REF UFN uf)
+         (  UNITC skc = (unit OF tprocs)(sink OF uf, tprocs),
+                  src = (unit OF tprocs)(source OF uf, tprocs);
+            IF c OF skc  OREL  c OF src
+            THEN  (HEAP UFN:= (u OF skc, u OF src), TRUE)
+            ELSE  (u, FALSE)
+            FI
+         )
+   OUT (u, FALSE)
+   ESAC;
+
+
+
+
+PROC mparam = (MPARAM mp, TRANSFORMPROCS tprocs) MPARAMC:
+   CASE mp IN
+      (ATTRTAG atag)
+         ( ATTRC ac = (attr OF tprocs)(tag OF atag, tprocs);
+           IF c OF ac
+           THEN  (MAKEATTRTAG (a OF ac), TRUE)
+           ELSE  (mp, FALSE)
+           FI
+         ) ,
+      (FORMULATAG ftag)
+         ( FORMULAC fc = (formula OF tprocs)(tag OF ftag, tprocs);
+           IF c OF fc
+           THEN  (MAKEFORMULATAG (f OF fc), TRUE)
+           ELSE  (mp, FALSE)
+           FI
+         ) ,
+      (TYPETAG ttag)
+         ( TYPEC tc = (type OF tprocs)(tag OF ttag, tprocs);
+           IF c OF tc
+           THEN  (MAKETYPETAG (t OF tc), TRUE)
+           ELSE  (mp, FALSE)
+           FI
+         ),
+      (UNITTAG ctag)
+         ( UNITC cc = (unit OF tprocs)(tag OF ctag, tprocs);
+           IF c OF cc
+           THEN  (MAKEUNITTAG (u OF cc), TRUE)
+           ELSE  (mp, FALSE)
+           FI
+         ),
+      (INSTANCE inst)
+         ( INSTANCEC ic = (instance OF tprocs)(inst, tprocs);
+           IF c OF ic
+           THEN (i OF ic, TRUE)
+           ELSE (mp, FALSE)
+           FI
+         )
+   OUT  (mp, FALSE)
+   ESAC;
+
+
+PROC macparams = (REF VECTOR [] MACPARAM mps, TRANSFORMPROCS tprocs) MACPARAMSC:
+BEGIN
+   IF mps ISNT nilmacparams
+   THEN  REF VECTOR [] MACPARAM  new:= mps;
+         BOOL  changed:= FALSE;
+         FOR i TO UPB new
+         DO  REF MACPARAM  old = new[i];
+             MPARAMC  mp = (mparam OF tprocs)(param OF old, tprocs);
+             IF c OF mp
+             THEN  IF NOT changed
+                   THEN  changed:= TRUE;
+                         new:= HEAP VECTOR [UPB new] MACPARAM:= new
+                   FI;
+                   new[i]:= (sort OF old, m OF mp)
+             FI
+         OD;
+         (new, changed)
+   ELSE  (mps, FALSE)
+   FI
+END;
+
+
+PROC instance = (INSTANCE inst, TRANSFORMPROCS tprocs) INSTANCEC:
+BEGIN
+   MACPARAMSC  mps = (macparams OF tprocs)(macparams OF inst, tprocs);
+   ATTRC ac = (attr OF tprocs)(attr OF inst, tprocs);
+   IF c OF mps  OREL c OF ac
+   THEN ((fnno OF inst, m OF mps, a OF ac), TRUE)
+   ELSE (inst, FALSE)
+   FI
+END;
+
+
+PROC declaration = (DECLARATION  dec, TRANSFORMPROCS  tprocs) DECLARATIONC:
+   (dec, FALSE);   { Note:  This is superceeded by default in outerfn }
+
+
+PROC printitems = (REF PRINTITEMS pi, TRANSFORMPROCS tprocs) PRINTITEMSC:
+BEGIN
+   IF pi IS nilprintitems
+   THEN  (pi, FALSE)
+   ELSE  STRUCT (UNION (ID, REF FORMULATAG)  i,  BOOL  c)  itemc =
+            CASE item OF pi IN
+               (ID id)
+                  (id, FALSE),
+               (REF FORMULATAG ft)
+                  ( FORMULAC ftc = (formula OF tprocs)(tag OF ft, tprocs);
+                    IF c OF ftc
+                    THEN  (MAKEFORMULATAG (f OF ftc), TRUE)
+                    ELSE  (ft, FALSE)
+                    FI
+                  )
+            ESAC;
+         PRINTITEMSC  rest = (printitems OF tprocs)(rest OF pi, tprocs);
+         IF c OF rest  OREL  c OF itemc
+         THEN  (HEAP PRINTITEMS:= (i OF itemc, p OF rest), TRUE)
+         ELSE  (pi, FALSE)
+         FI
+   FI
+END;
+
+
+PROC print = (REF PRINT  p, TRANSFORMPROCS  tprocs) PRINTC:
+BEGIN
+   FORMULAC  cond = (formula OF tprocs)(cond OF p, tprocs);
+   PRINTITEMSC  print = (printitems OF tprocs)(print OF p, tprocs);
+   IF c OF cond  OREL  c OF print
+   THEN  (HEAP PRINT:= (f OF cond, p OF print), TRUE)
+   ELSE  (p, FALSE)
+   FI
+END;
+
+
+PROC fault = (REF FAULT  f, TRANSFORMPROCS  tprocs) FAULTC:
+BEGIN
+   FORMULAC  cond = (formula OF tprocs)(cond OF f, tprocs);
+   PRINTITEMSC  fault = (printitems OF tprocs)(fault OF f, tprocs);
+   IF c OF cond  OREL  c OF fault
+   THEN  (HEAP FAULT:= (f OF cond, p OF fault), TRUE)
+   ELSE  (f, FALSE)
+   FI
+END;
+
+
+
+
+
+PROC  names = (REF NAMES  n, TRANSFORMPROCS  tprocs) NAMESC:
+   IF n IS nilnames
+   THEN  (n, FALSE)
+   ELSE  NAMESC nc = (names OF tprocs)(rest OF n, tprocs);
+         IF c OF nc
+         THEN  (HEAP NAMES:= (nameno OF n, n OF nc), TRUE)
+         ELSE  (n, FALSE)
+         FI
+   FI;  { NOTE:  This is superceeded by default in fndec }
+
+PROC  let = (REF LET l, TRANSFORMPROCS tprocs) LETC:
+BEGIN
+   NAMESC  n = (names OF tprocs)(letnames OF l, tprocs);
+   UNITC uc = (unit OF tprocs)(unit OF l, tprocs);
+   IF c OF n  OREL  c OF uc
+   THEN  (HEAP LET:= (n OF n, u OF uc), TRUE)
+   ELSE  (l, FALSE)
+   FI
+END;
+
+
+PROC  seqchoices = (REF SEQCHOICES  sc, TRANSFORMPROCS  tprocs) SEQCHOICESC:
+   IF sc IS nilseqchoices
+   THEN  (sc, FALSE)
+   ELSE  UNITC  test = (unit OF tprocs)(test OF sc, tprocs);
+         SEQSTEPC  out = (seqstep OF tprocs)(output OF sc, tprocs);
+         SEQCHOICESC  rest = (seqchoices OF tprocs)(rest OF sc, tprocs);
+         IF c OF test  OREL  c OF out  OREL  c OF rest
+         THEN  ( HEAP SEQCHOICES:= ( check OF sc, sort OF sc, u OF test,
+                                     s OF out, s OF rest ), TRUE )
+         ELSE  (sc, FALSE)
+         FI
+   FI;
+
+
+PROC seqstep = (SEQSTEP ss, TRANSFORMPROCS tprocs) SEQSTEPC:
+   CASE ss IN
+      (DECLARATION dec)
+         ( DECLARATIONC  d = (declaration OF tprocs)(dec, tprocs);
+           (d OF d, c OF d)
+         ) ,
+      (REF PRINT pt)
+         ( PRINTC  p = (print OF tprocs)(pt, tprocs);
+           (p OF p, c OF p)
+         ) ,
+      (REF FAULT ft)
+         ( FAULTC  f = (fault OF tprocs)(ft, tprocs);
+           (f OF f, c OF f)
+         ) ,
+      (REF SEQLET sl)
+         ( LETC lc = (let OF tprocs)(seqlet OF sl, tprocs);
+           ((HEAP SEQLET  s;  seqlet OF s:= l OF lc;  s), c OF lc)
+         ) ,
+      (REF SEQVAR sv)
+         ( LETC lc = (let OF tprocs)(seqvar OF sv, tprocs);
+           ((HEAP SEQVAR  s;  seqvar OF s:= l OF lc;  s), c OF lc)
+         ) ,
+      (REF SEQPVAR sp)
+         ( NAMESC  n = (names OF tprocs)(pvarnames OF sp, tprocs);
+           UNITC  c = (unit OF tprocs)(init OF sp, tprocs);
+           IF c OF n  OREL  c OF c
+           THEN  (HEAP SEQPVAR:= (n OF n, u OF c), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQASSIGN sa)
+         ( UNITC to = (unit OF tprocs)(to OF sa, tprocs),
+                 from = (unit OF tprocs)(from OF sa, tprocs);
+           IF c OF to  OREL  c OF from
+           THEN  (HEAP SEQASSIGN:= (u OF to, u OF from), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQCASE sc)
+         ( UNITC  input = (unit OF tprocs)(input OF sc, tprocs);
+           SEQCHOICESC  choices = (seqchoices OF tprocs)(choices OF sc, tprocs);
+           IF c OF input  OREL  c OF choices
+           THEN  (HEAP SEQCASE:= (u OF input, s OF choices), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQCOND scond)
+         ( FORMULAC cond = (formula OF tprocs)(cond OF scond, tprocs);
+           SEQSTEPC true = (seqstep OF tprocs)(true OF scond, tprocs),
+                    false = (seqstep OF tprocs)(false OF scond, tprocs);
+           IF c OF cond  OREL  c OF true  OREL  c OF false
+           THEN  (HEAP SEQCOND:= (f OF cond, s OF true, s OF false), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQREPL sr)
+         (  FORMULAC replc = (formula OF tprocs)(repl OF sr, tprocs);
+           SEQSTEPC body = (seqstep OF tprocs)(body OF sr, tprocs);
+           IF c OF replc  OREL  c OF body
+           THEN  ( HEAP SEQREPL:= (f OF replc, s OF body), TRUE )
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQROW srow)
+         ( FORMULAC size = (formula OF tprocs)(size OF srow, tprocs);
+           SEQSTEPC elem = (seqstep OF tprocs)(elem OF srow, tprocs);
+           IF c OF size OREL c OF elem
+           THEN (HEAP SEQROW := (f OF size, s OF elem), TRUE)
+           ELSE (ss, FALSE)
+           FI
+         ),
+      (REF SEQUENCE seq)
+         ( SEQUENCEC  s = (sequence OF tprocs)(seq, tprocs);
+           (s OF s, c OF s)
+         )
+   OUT  (ss, FALSE)
+   ESAC;
+
+
+PROC sequence = (REF SEQUENCE ss, TRANSFORMPROCS tprocs) SEQUENCEC:
+   IF ss IS nilsequence
+   THEN  (ss, FALSE)
+   ELSE  SEQSTEPC s = (seqstep OF tprocs)(step OF ss, tprocs);
+         SEQUENCEC seq = (sequence OF tprocs)(rest OF ss, tprocs);
+         IF c OF seq  OREL  c OF s
+         THEN  (HEAP SEQUENCE:= (s OF s, s OF seq), TRUE)
+         ELSE  (ss, FALSE)
+         FI
+   FI;
+
+
+
+
+
+PROC  make = (REF MAKE  m,  TRANSFORMPROCS  tprocs) MAKEC:
+BEGIN
+   FORMULASC  fc = (formulas OF tprocs)(sizes OF m, tprocs);
+   INSTANCEC  ic = (instance OF tprocs)(inst OF m, tprocs);
+   NAMESC  nc = (names OF tprocs)(makenames OF m, tprocs);
+   IF c OF fc  OREL  c OF ic  OREL  c OF nc
+   THEN  (HEAP MAKE:= (f OF fc, i OF ic, n OF nc), TRUE)
+   ELSE  (m, FALSE)
+   FI
+END;
+
+
+PROC  join = (REF JOIN j, TRANSFORMPROCS tprocs) JOINC:
+BEGIN
+   UNITC ufc = (unit OF tprocs)(from OF j, tprocs),
+         utc = (unit OF tprocs)(to OF j, tprocs);
+   IF c OF ufc  OREL  c OF utc
+   THEN  (HEAP JOIN:= (u OF ufc, u OF utc), TRUE)
+   ELSE  (j, FALSE)
+   FI
+END;
+
+
+PROC  joins = (REF JOINS js, TRANSFORMPROCS tprocs) JOINSC:
+   IF js IS niljoins
+   THEN  (js, FALSE)
+   ELSE  JOINC  j = (join OF tprocs)(join OF js, tprocs);
+         JOINSC  rest = (joins OF tprocs)(rest OF js, tprocs);
+         IF c OF j  OREL  c OF rest
+         THEN  (HEAP JOINS:= (j OF j, j OF rest), TRUE)
+         ELSE  (js, FALSE)
+         FI
+   FI;
+
+
+PROC step = (STEP step, TRANSFORMPROCS tprocs) STEPC:
+   CASE step IN
+      (DECLARATION dec)
+         ( DECLARATIONC  d = (declaration OF tprocs)(dec, tprocs);
+           (d OF d, c OF d)
+         ) ,
+      (REF PRINT pt)
+         ( PRINTC  p = (print OF tprocs)(pt, tprocs);
+           (p OF p, c OF p)
+         ) ,
+      (REF FAULT ft)
+         ( FAULTC  f = (fault OF tprocs)(ft, tprocs);
+           (f OF f, c OF f)
+         ) ,
+      (REF LET lt)
+         ( LETC  l = (let OF tprocs)(lt, tprocs);
+           (l OF l, c OF l)
+         ) ,
+      (REF MAKE  mk)
+         ( MAKEC  m = (make OF tprocs)(mk, tprocs);
+           (m OF m, c OF m)
+         ) ,
+      (REF JOIN  join)
+         ( JOINC  j = (join OF tprocs)(join, tprocs);
+           (j OF j, c OF j)
+         ) ,
+      (REF REPLJOIN  rj)
+         ( FORMULASC rsc = (formulas OF tprocs)(repls OF rj, tprocs);
+           JOINSC jsc = (joins OF tprocs)(joins OF rj, tprocs);
+           IF c OF rsc  OREL  c OF jsc
+           THEN  (HEAP REPLJOIN:= (f OF rsc, j OF jsc), TRUE)
+           ELSE  (step, FALSE)
+           FI
+         )
+   ESAC;
+
+
+PROC series = (REF SERIES ser, TRANSFORMPROCS tprocs) SERIESC:
+BEGIN
+   IF ser IS nilseries
+   THEN  (ser, FALSE)
+   ELSE  STEPC sc = (step OF tprocs)(step OF ser, tprocs);
+         SERIESC rest = (series OF tprocs)(rest OF ser, tprocs);
+         IF c OF rest  OREL  c OF sc
+         THEN  (HEAP SERIES:= (s OF sc, s OF rest), TRUE)
+         ELSE  (ser, FALSE)
+         FI
+   FI
+END;
+
+
+
+
+PROC fnbody = (FNBODY body, TRANSFORMPROCS tprocs) FNBODYC:
+   CASE body IN
+      (REF UNITTAG ut)
+         ( UNITC uc = (unit OF tprocs)(tag OF ut, tprocs);
+           IF c OF uc
+           THEN  (MAKEUNITTAG (u OF uc), TRUE)
+           ELSE  (body, FALSE)
+           FI
+         ) ,
+      (REF ALIENCODE al)
+         ( MACPARAMSC
+              params = (macparams OF tprocs)(macparams OF al, tprocs);
+           IF c OF params
+           THEN  (HEAP ALIENCODE := (biop OF al, name OF al, m OF params), TRUE)
+           ELSE  (body, FALSE)
+           FI
+         ) ,
+      (REF ARITH ar)
+         (  FORMULAC fc = (formula OF tprocs)(output OF ar, tprocs);
+            IF c OF fc
+            THEN  (MAKEARITH (f OF fc), TRUE)
+            ELSE  (body, FALSE)
+            FI
+         ) ,
+      (REF ADELAY ad)
+         ( UNITC init = (unit OF tprocs)(init OF ad, tprocs);
+           FORMULAC ac = (formula OF tprocs)(ambigtime OF ad, tprocs);
+           UNITC ambig = (unit OF tprocs)(ambig OF ad, tprocs);
+           FORMULAC dc = (formula OF tprocs)(delaytime OF ad, tprocs);
+           IF c OF ac  OREL  c OF init  OREL  c OF dc  OREL  c OF ambig
+           THEN  ( HEAP ADELAY:= ( sort OF ad, u OF init,
+                                   f OF ac, u OF ambig, f OF dc ), TRUE )
+           ELSE  (body, FALSE)
+           FI
+         ) ,
+      (REF IDELAY id)
+         ( UNITC init = (unit OF tprocs)(init OF id, tprocs);
+           FORMULAC fc = (formula OF tprocs)(delaytime OF id, tprocs);
+           IF c OF fc  OREL  c OF init
+           THEN  (HEAP IDELAY:= (u OF init, f OF fc), TRUE)
+           ELSE  (body, FALSE)
+           FI
+         ) ,
+      (REF RAM rm)
+         ( UNITC init = (unit OF tprocs)(init OF rm, tprocs);
+           IF c OF init
+           THEN  (MAKERAM(u OF init), TRUE)
+           ELSE  (body, FALSE)
+           FI
+         ),
+      (REF SAMPLE sp)
+         ( FORMULAC ic = (formula OF tprocs)(interval OF sp, tprocs);
+           UNITC init = (unit OF tprocs)(init OF sp, tprocs);
+           FORMULAC sc = (formula OF tprocs)(skew OF sp, tprocs);
+           IF c OF init OREL c OF ic OREL c OF sc
+           THEN (HEAP SAMPLE := (sort OF sp, f OF ic, u OF init, f OF sc),
+                                 TRUE)
+           ELSE (body, FALSE)
+           FI
+         ),
+      (REF TIMESCALE ts)
+         ( INSTANCEC inst = (instance OF tprocs)(inst OF ts, tprocs);
+           FORMULAC sc = (formula OF tprocs)(scale OF ts, tprocs);
+           UNITC init = (unit OF tprocs)(init OF ts, tprocs);
+           FORMULAC skc = (formula OF tprocs)(skew OF ts, tprocs);
+           IF c OF inst OREL c OF sc OREL c OF skc OREL c OF init
+           THEN (HEAP TIMESCALE := (faster OF ts, sort OF ts, i OF inst,
+                                    f OF sc, u OF init, f OF skc), TRUE)
+           ELSE (body, FALSE)
+           FI
+         ),
+      (REF BODYCHECK bc)
+         ( FNBODYC fc = (fnbody OF tprocs)(fnbody OF bc, tprocs);
+           IF c OF fc
+           THEN (HEAP BODYCHECK :=(joincheck OF bc, check OF bc, f OF fc), TRUE)
+           ELSE (body, FALSE)
+           FI
+         )
+   OUT  (body, FALSE)
+   ESAC;
+
+
+PROC  macspec = (MACSPEC  ms, TRANSFORMPROCS  tprocs) MACSPECC:
+BEGIN
+   DECLARATIONC dc = (declaration OF tprocs)(spec OF ms, tprocs);
+   IF c OF dc
+   THEN  ((sort OF ms, d OF dc), TRUE)
+   ELSE  (ms, FALSE)
+   FI
+END;
+
+
+PROC  macspecs = (REF VECTOR [] MACSPEC  mss, TRANSFORMPROCS  tprocs) MACSPECSC:
+BEGIN
+   IF mss IS nilmacspecs
+   THEN (mss, FALSE)
+   ELSE REF VECTOR [] MACSPEC  new:= mss;
+        BOOL  changed:= FALSE;
+        FOR i TO UPB new
+        DO  MACSPECC  m = (macspec OF tprocs)(new[i], tprocs);
+            IF c OF m
+            THEN  IF NOT changed
+                  THEN  changed:= TRUE;
+                        new:= HEAP VECTOR [UPB new] MACSPEC:= new
+                  FI;
+                  new[i]:= m OF m
+            FI
+       OD;
+       (new, changed)
+   FI
+END;
+
+
+PROC  fndec = (REF FNDEC  fdec, TRANSFORMPROCS  tprocs) FNDECC:
+BEGIN
+   IF fdec ISNT nilfndec
+   THEN  REF VECTOR [] NAMETYPE  nametypes:= nametypes OF fdec;
+         BOOL changed:= FALSE;
+
+         PROC update_nametypes = (INT nameno) VOID:
+         BEGIN
+            ATTRC ac = (attr OF tprocs)(attr OF nametypes[nameno], tprocs);
+            TYPEC  t = (type OF tprocs)(type OF nametypes[nameno], tprocs);
+            IF c OF t  OREL  c OF ac
+            THEN  IF NOT changed
+                  THEN  changed := TRUE;
+                        nametypes := HEAP VECTOR [UPB nametypes] NAMETYPE
+                                  := nametypes
+                  FI;
+                  attr OF nametypes[nameno]:= a OF ac;
+                  type OF nametypes[nameno]:= t OF t
+            FI
+         END;
+
+         PROC  names = (REF NAMES n, TRANSFORMPROCS  tprocs) NAMESC:
+           IF n IS nilnames
+           THEN  (n, FALSE)
+           ELSE  update_nametypes(nameno OF n);
+                 NAMESC nc = (names OF tprocs)(rest OF n, tprocs);
+                 IF c OF nc
+                 THEN  (HEAP NAMES:= (nameno OF n, n OF nc), TRUE)
+                 ELSE  (n, FALSE)
+                 FI
+            FI;
+
+
+         TRANSFORMPROCS  newprocs = make_newtprocs(tprocs, (names));
+
+         MACSPECSC  mc = (macspecs OF tprocs)(macspecs OF fdec, newprocs);
+         ATTRC ac = (attr OF tprocs)(attr OF fdec, newprocs);
+         NAMESC
+            ic = (names OF newprocs)(inputs OF fdec, newprocs),
+            oc = (names OF newprocs)(outputs OF fdec, newprocs);
+
+         FNBODYC  fc =  (fnbody OF tprocs)(fnbody OF fdec, newprocs);
+
+         IF changed OREL c OF mc OREL c OF ic  OREL  c OF oc  OREL c OF ac
+            OREL c OF fc
+         THEN ( HEAP FNDEC:= ( sort OF fdec, macro OF fdec, fnname OF fdec,
+                               m OF mc, a OF ac, n OF ic, n OF oc, nametypes,
+                               f OF fc, usage OF fdec),
+                TRUE )
+         ELSE  (fdec, FALSE)
+         FI
+   ELSE  (fdec, FALSE)
+   FI
+END;
+
+
+
+
+
+PROC  outer = (OUTER  outer, TRANSFORMPROCS  tprocs) OUTERC:
+BEGIN
+
+   HEAP ENVIRON  env:= environ OF outer;
+   BOOL  ac:= FALSE,  ic:= FALSE,  tc:= FALSE,  cc:= FALSE,  fc:= FALSE;
+
+   REF REF VECTOR [] REF ATTRDEC attrs = attrs OF env;
+   REF REF VECTOR [] REF INTDEC ints = ints OF env;
+   REF REF VECTOR [] REF TYPEDEC types = types OF env;
+   REF REF VECTOR [] REF CONSTDEC consts = consts OF env;
+   REF REF VECTOR [] REF FNDEC fns = fns OF env;
+
+
+   PROC  declaration = (DECLARATION  dec, TRANSFORMPROCS  tprocs) DECLARATIONC:
+   BEGIN
+      CASE dec IN
+         (ATTRNAME  ano)
+            ( IF attrno OF ano > 0  { Not expanded MACSPEC declaration }
+              THEN REF ATTRDEC adec = attrs[attrno OF ano];
+                   ATTRDECC  adecc = (attrdec OF tprocs)(adec, tprocs);
+                   IF c OF adecc
+                   THEN  IF ac
+                         THEN  adec := a OF adecc
+                         ELSE  ac:= TRUE;
+                               attrs:= HEAP VECTOR [UPB attrs] REF ATTRDEC
+                                    := attrs;
+                               attrs[attrno OF ano]:= a OF adecc
+                         FI
+                   FI
+              FI
+            ) ,
+
+         (FNAME  ino)
+            ( IF intno OF ino > 0  { Not expanded MACSPEC declaration }
+              THEN REF INTDEC idec = ints[intno OF ino];
+                   INTDECC  idecc = (intdec OF tprocs)(idec, tprocs);
+                   IF c OF idecc
+                   THEN  IF ic
+                         THEN  idec := i OF idecc
+                         ELSE  ic:= TRUE;
+                               ints:= HEAP VECTOR [UPB ints] REF INTDEC:= ints;
+                               ints[intno OF ino]:= i OF idecc
+                         FI
+                   FI
+              FI
+            ) ,
+
+         (TNAME  tno)
+            ( IF typeno OF tno > 0 { Not expanded MACSPEC declaration }
+              THEN REF TYPEDEC tdec = types[typeno OF tno];
+                   TYPEDECC  tdecc = (typedec OF tprocs)(tdec, tprocs);
+                   IF c OF tdecc
+                   THEN  IF tc
+                         THEN  tdec:= t OF tdecc
+                         ELSE  tc:= TRUE;
+                               types:= HEAP VECTOR [UPB types] REF TYPEDEC
+                                    := types;
+                               types[typeno OF tno]:= t OF tdecc
+                         FI
+                  FI
+              FI
+            ) ,
+
+         (CNAME  cno)
+            ( IF constno OF cno > 0 { Not expanded MACSPEC declaration }
+              THEN REF CONSTDEC cdec = consts[constno OF cno];
+                   CONSTDECC  cdecc = (constdec OF tprocs)(cdec, tprocs);
+                   IF c OF cdecc
+                   THEN  IF cc
+                         THEN  cdec:= co OF cdecc
+                         ELSE  cc:= TRUE;
+                               consts:= HEAP VECTOR [UPB consts] REF CONSTDEC
+                                                                 := consts;
+                               consts[constno OF cno]:= co OF cdecc
+                         FI
+                  FI
+              FI
+            ) ,
+
+         (FNNAME  fno)
+            ( IF fnno OF fno > 0 { Not expanded MACSPEC declaration }
+              THEN REF FNDEC fdec = fns[fnno OF fno];
+                   FNDECC  fdecc = (fndec OF tprocs)(fdec, tprocs);
+                   IF c OF fdecc
+                   THEN  IF fc
+                         THEN  fdec:= f OF fdecc
+                         ELSE  fc:= TRUE;
+                               fns:= HEAP VECTOR [UPB fns] REF FNDEC:= fns;
+                               fns[fnno OF fno]:= f OF fdecc
+                         FI
+                   FI
+              FI
+            )
+      ESAC;
+      (dec, FALSE)
+   END;
+
+
+   { Now create a new set of transformprocs to process inner declarations }
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs, declaration);
+
+   DECLARATION od =
+     CASE sort OF outer IN { Outer declaration is always 1st element in environ}
+     { outerattr  } MAKEATTRNAME(1),
+     { outerint   } MAKEFNAME(1),
+     { outertype  } MAKETNAME(1),
+     { outerconst } MAKECNAME(1),
+     { outerfn    } MAKEFNNAME(1)
+     OUT SKIP
+     ESAC;
+   (declaration OF newtprocs)(od, newtprocs);
+
+   IF ac  OREL  ic  OREL  tc  OREL  cc  OREL  fc
+   THEN  ((closureno OF outer, sort OF outer, env), TRUE)
+   ELSE  (outer, FALSE)
+   FI
+END;
+
+
+PROC closure = (CLOSURE cl, TRANSFORMPROCS tprocs, MESSAGEPROC msg) CLOSUREC:
+   IF outers OF cl IS nilouters
+   THEN  (cl, FALSE)
+   ELSE  { (outer OF tprocs) must not change the closure number }
+         CLOSURE  new:= cl;
+         BOOL  changed:= FALSE;
+         REF OUTERS  ptr:= outers OF new;
+         WHILE ptr ISNT nilouters
+         DO  flt_if_interrupted(msg);
+             OUTERC  oc = (outer OF tprocs)(outer OF ptr, tprocs);
+             IF c OF oc
+             THEN  IF NOT changed
+                   THEN  changed:= TRUE;
+                         new:= copy_closure(new, msg);
+                         ptr:= find_outers(closureno OF outer OF ptr, new, msg)
+                   FI;
+                   outer OF ptr:= o OF oc
+             FI;
+             ptr:= rest OF ptr
+         OD;
+         (new, changed)
+   FI;
+
+
+{ This set of procedures will scan a complete tree to the leaf level -
+  substitute action procedures (using make_newtprocs) where changes or
+  information gathering is required.  Take care to avoid looping by calling
+  (proc OF previoustprocs) where default action is required on other parts
+  of a given MODE.  "previoustprocs" should be nulltprocs at the outer level.
+  At each new call of make_newtprocs, "previoustprocs" should normally be the
+  first parameter to make_newtprocs - ie the previous one (to ensure that the
+  correct behaviour occurs when more than one transform is being performed
+  simulataneously).
+}
+
+TRANSFORMPROCS  nulltprocs = HEAP TPROCS :=
+    ( attr,  attrstr,  attrdec,
+      formula,  formulas,  intdec,  range,  formularange,
+      tstr,  type,  alternative,  alternatives,
+      typebody,  typedec,
+      constdec,
+      ualts,  ustr,  uchoices,  unit,  mparam,  macparams,  instance,
+      declaration,
+      printitems,  print,  fault,
+      names,  let,  seqchoices,  seqstep,  sequence,
+      make,  join,  joins,  step,  series,
+      fnbody,  macspec,  macspecs,  fndec,
+      outer,  closure,  niltprocs
+    );
+
+{ Where it is known that certain parts of the tree are of no interest,
+  make_newtprocs may be called with one or more of the following "null"
+  procedures to avoid unnecessary scanning.
+}
+
+PROC null_attr = (ATTR a, TRANSFORMPROCS tprocs) ATTRC: (a, FALSE);
+
+PROC  null_formula = (FORMULA  f,  TRANSFORMPROCS  tprocs) FORMULAC:
+   (f, FALSE);
+
+PROC  null_type = (TYPE  t,  TRANSFORMPROCS  tprocs) TYPEC:  (t, FALSE);
+
+PROC  null_unit = (UNIT  u,  TRANSFORMPROCS  tprocs) UNITC:  (u, FALSE)
+
+
+
+
+KEEP   ATTRC, ATTRSTRC, ATTRDECC,
+       FORMULAC,  FORMULASC, INTDECC,  RANGEC,  FORMULARANGEC,
+       TSTRC,  TYPEC,  ALTERNATIVEC,  ALTERNATIVESC,
+       TYPEBODYC,  TYPEDECC,
+       CONSTDECC,
+       UALTSC,  USTRC,  UCHOICESC,  UNITC,
+       MPARAMC,  MACPARAMSC,  INSTANCEC,
+       DECLARATIONC,
+       PRINTITEMSC,  PRINTC,  FAULTC,
+       NAMESC,  LETC,  SEQCHOICESC,  SEQSTEPC,  SEQUENCEC,
+       MAKEC,  JOINC,  JOINSC,  STEPC,  SERIESC,
+       FNBODYC,  MACSPECC,  MACSPECSC,  FNDECC,
+       OUTERC, CLOSUREC,
+       TPROCS,  TRANSFORMPROCS,
+       niltprocs,  make_newtprocs,  discard_tprocs,  clear_tprocs,  nulltprocs,
+       null_attr,  null_formula,  null_type,  null_unit
+
+FINISH
