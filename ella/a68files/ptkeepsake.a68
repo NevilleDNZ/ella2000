@@ -1,0 +1,183 @@
+DECS  ptkeepsake  CONTEXT VOID  USE  putstrings,  messageproc,  osinterface,
+      su_keepsake,  ioprocs:
+
+{ " Id: ptkeepsake.sta,v 1.1 91/10/14 14:31:03 edcad Exp $" }
+configinfo A68CONFIG "$Id: ptkeepsake.a68,v 34.2 1995/03/29 13:03:31 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1985
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+02:09:85  Prints out an ADAM database.  If a block is pointed to by more
+             than one discptr it is printed out each time.
+28:11:85  Brought to Perq
+16:10:86  Updated for new osinterface  DCT
+31:10:86  Updated for break-in  DCT
+26:11:87  Each ptr is only printed once.  Layout changed.  DCT
+09:02:89  CR 642. Updated to new kernel.  EVW
+04:09:89  CR 636. Changed from ptadam to ptkeepsake - it now prints a
+                     keepsake database. JIT
+
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.007 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC ptkeepsake = (REF DATABASE  df,  MESSAGEPROC  flt) VOID:
+BEGIN
+   INT  indent = 2;
+
+   PROC  print = (INT  margin, VECTOR [] OUTMODE line) VOID:
+   ( put(out, setindent(margin));  put(out, line) );
+
+   MODE  DP  = STRUCT (INT  n,  DISCPTR  dp,  INT  size,  BOOL  printed);
+
+   INT  sz = 1000;
+   REF VECTOR [] DP  mem:= HEAP VECTOR [sz] DP;
+   INT  ndp:= 0;
+
+   PROC  add = (DISCPTR  dp) VOID:
+   BEGIN
+      IF (ndp PLUSAB 1) > UPB mem
+      THEN  HEAP VECTOR [UPB mem + sz] DP  new;
+            new[: UPB mem]:= mem;
+            mem:= new
+      FI;
+      INT array_size = IF discptr_data(df, dp) = 3
+                       THEN num_chars(df, dp)
+                       ELSE size(df, dp)
+                       FI;
+      mem[ndp]:= (ndp, dp, array_size, FALSE)
+   END;
+
+   PROC  find = (DISCPTR  dp) DP:
+   BEGIN
+      INT  ind:= 0;
+      FOR i TO ndp WHILE ind = 0
+      DO  IF same_discptr(df, dp, dp OF mem[i]) THEN  ind:= i  FI  OD;
+      IF ind = 0 THEN  add(dp);  ind:= ndp  FI;
+      mem[ind]
+   END;
+
+
+   PROC  print_dpname = (INT  margin,  DP  dp,  CHAR  type) BOOL:
+                                                        { Requires printing }
+      IF printed OF dp
+      THEN  print(margin, (newline, type, size OF dp, ":  %", n OF dp));
+            FALSE
+      ELSE  print(0, ( newline, "%", n OF dp, pos(margin),
+                       type, size OF dp, ":" ));
+            printed OF mem[n OF dp]:= TRUE
+      FI;
+
+
+   PROC printints = (INT  margin,  DP  dp) VOID:
+      IF print_dpname(margin, dp, "{")
+      THEN  VECTOR [size OF dp] INT intblock;
+            read_ints(df, intblock, dp OF dp);
+            INT  pos = charnumber(out);
+            print(pos + 1, ("  ", intblock))
+      FI;
+
+
+   PROC printchars = (INT  margin,  DP  dp) VOID:
+      IF print_dpname(margin, dp, "?")
+      THEN  VECTOR [size OF dp] CHAR charblock;
+            read_chars(df, charblock, dp OF dp);
+            INT  pos = charnumber(out);
+            print(pos + 1, "  ");
+            FORALL c IN charblock
+            DO  IF c <= " " OREL c > "~"
+                THEN print(pos + 1, oneline(("<", intchars(ABS c), ">")))
+                ELSE print(pos + 1, c)
+                FI
+            OD
+      FI;
+
+
+   PROC (INT, DISCPTR) VOID  printdp;
+
+
+   PROC  printdiscptrs = (INT  margin,  DP  dp) VOID:
+      IF print_dpname(margin, dp, "[")
+      THEN  VECTOR [size OF dp] DISCPTR  ptrblock;
+            read_discptrs(df, ptrblock, dp OF dp);
+            FORALL ptr IN ptrblock DO  printdp(margin + indent, ptr)  OD;
+            print(0, (newline, "-", n OF dp, pos(margin), "]"))
+      FI;
+
+   PROC printcharsdps = (INT margin, DP dp) VOID:
+   BEGIN
+      VECTOR [num_chars(df, dp OF dp)] CHAR charblock;
+      VECTOR [num_discptrs(df, dp OF dp)] DISCPTR ptrblock;
+      read_chars_dps(df, charblock, ptrblock, dp OF dp);
+      IF print_dpname(margin, dp, "(")
+      THEN INT pos = charnumber(out);
+           print(pos + 1, "  ");
+           FORALL c IN charblock
+           DO IF c <= " " OREL c > "~"
+              THEN print(pos + 1, oneline(("<", intchars(ABS c), ">")))
+              ELSE print(pos + 1, c)
+              FI
+           OD
+      FI
+   END;
+
+   printdp:= (INT  margin,  DISCPTR  ptr) VOID:
+   IF discptr_data(df, ptr) = 2
+   THEN  print(margin, (newline, "#"))
+   ELSE  DP  dp = find(ptr);
+         CASE  discptr_data(df, ptr) IN
+            SKIP, SKIP,
+            printcharsdps(margin, dp),
+            printints(margin, dp) ,
+            printchars(margin, dp) ,
+            printdiscptrs(margin, dp),
+            SKIP
+%3        , print(margin, "Moded ")
+         OUT  print(margin, "???")
+         ESAC
+   FI;
+
+
+   print(0, ( newline, pos(30), "Library printer", lines(2),
+              """#"" = nilptr,  ""{"" = integers,  ""("" = chars_dps,  "
+              """?"" = chars only,  ""["" = discptrs", lines(2) ) );
+
+   printdp(indent, get_root(df));
+
+   print(0, lines(2))
+END
+
+KEEP  ptkeepsake
+
+FINISH
