@@ -1,0 +1,1214 @@
+DECS  modeprocs CONTEXT VOID  USE  putstrings,  messageproc, osinterface,
+      basics, ioprocs, assmodes, closureprocs, transformprocs:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: modeprocs.a68,v 34.2 1995/03/29 13:02:59 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+09:02:88  Module containing procs to find TYPE of CONST and UNIT.
+05:05:88  General procedures used by several transformations
+21:06:88  Procedures for transforming numbering sequences in declarations
+28:10:88  Add const_type for CNAME, correct unit_type for FNSETROW.  EVW
+07:02:89  CR 642. Updated for kernel. VEW
+20:09:89  R4B467.  PROC findnew* now take USAGE paramters. EVW
+05:10:89  R4B492.  PROC findnewtype, look for closure, then name. EVW
+06:10:89  R4B492.  Return to position before 5/10/89.  EVW
+30:10:89  CR 638.  CMACPAR added, explicitsize OF fndec removed.  EVW
+                      CTYPE altered.
+27:03:90  PROC findnewfnno now uses macclosureno in search as well. EVW
+18:14:90  CR 643. Fntype Changes UFN, UNAME, TERMINALS, UVOID, TVOID. EVW
+08:10:90  Change in PROC terminals_type to deal with FN or MAC parameters
+             which are 'fnsets'. JIT
+28:02:91  R6B20.  Typing error - should be MAKECTYPE in translate_const. EVW
+11:04:91  R6B25.  COrrection to PROC terminals_type for FNSETs. EVW
+24:06:91  unit_type for UDYASSIGN altered. EVW
+27:06:91  Version 7 of assembler modes. EVW
+17:12:91  UTERMINDEX added. EVW
+03:03:92  Atribute declarations added. EVW
+17:03:92  Multiple strings added to CQUOTE. EVW
+12:05:92  simplify_type and check_types moved to modeprocs. new spec to
+             fndec_tfn.  remove fndec_type, type_source, type_sink. DJS
+02:06:92  Assumption of nameno ordering removed from unit_type. EVW
+             coerce_type corrected for namedoutputs. EVW
+             CVOID added to const_type.
+08:06:92  R6B106: Findnew* procs now take appropiate part of environ. EVW
+25:06:92  Tidy up of meaning of IO. EVW
+             Addition to unit_type for portnames which are not indices. EVW
+17:07:92  Changes made for CONST / UNIT mode change. JIT
+03:11:92  Updated for 'chars' mode changes. JIT
+13:01:93  translate_constunit added to keep list. JIT
+16:02:93  R6B145: add general PROC uportname_index. EVW
+24:02:93  Updated to OSIF - Level 1.  DCT
+19:04:93  Handling of replicators changed. FREPL removed  EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.029 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+OP MAKEFINT = (INT int) REF FINT:  HEAP FINT := (int, nullid);
+
+
+PROC  formula_int = (FORMULA form, MESSAGEPROC  msg) INT:
+BEGIN
+   PROC  err = (STR  error) INT:  ( msg(user, error); 0 );
+
+   CASE form  IN
+      (REF FINT i)  int OF i,
+      (REF FCHECK)  err("FCHECK expansion needed"),
+      (REF FARITH)  err("ARITH expression"),
+      (REF FNAME)   err("INT substitution needed"),
+      (REF FDOP)    err("formula needs simplifying"),
+      (REF FMOP)    err("formula needs simplifying"),
+      (REF FCOND)   err("conditional expansion needed"),
+      (REF FBRACKET)err("redundant brackets need removing"),
+      (REF FMACPAR) err("FMACPAR present"),
+      (REF FNULL)   err("FNULL present")
+   ESAC
+END;
+
+PROC int = (FORMULA form) INT:  formula_int(form, global_msg);
+
+{{***************************************************************************}}
+{{           General Procedures on OUTER                                     }}
+{{***************************************************************************}}
+
+PROC get_outerattr = (OUTER o) REF ATTRDEC:
+BEGIN
+   IF sort OF o /= outerattr THEN sys fault("Not an outerattr") FI;
+   (attrs OF environ OF o)[1]
+END;
+
+PROC get_outerint = (OUTER o) REF INTDEC:
+BEGIN
+   IF sort OF o /= outerint THEN sys fault("Not an outerint") FI;
+   (ints OF environ OF o)[1]
+END;
+
+PROC get_outertype = (OUTER o) REF TYPEDEC:
+BEGIN
+   IF sort OF o /= outertype THEN sys fault("Not an outertype") FI;
+   (types OF environ OF o)[1]
+END;
+
+PROC get_outerconst = (OUTER o) REF CONSTDEC:
+BEGIN
+   IF sort OF o /= outerconst THEN sys fault("Not an outerconst") FI;
+   (consts OF environ OF o)[1]
+END;
+
+PROC get_outerfn = (OUTER o) REF FNDEC:
+BEGIN
+   IF sort OF o /= outerfn THEN sys fault("Not an outerfn") FI;
+   (fns OF environ OF o)[1]
+END;
+
+
+
+
+{{***************************************************************************}}
+{{           Conversion of ATTR numbers                                      }}
+{{***************************************************************************}}
+
+PROC findnewattrno = (REF USAGE ug, REF VECTOR [] REF ATTRDEC new) INT:
+BEGIN
+   {{ Know that you are only looking at outer attr declarations }}
+   IF ug IS nilusage THEN sys fault("You can only look for OUTER attrs") FI;
+   INT attrno := 0;
+   FOR i TO UPB new WHILE attrno = 0
+   DO  REF ATTRDEC adec = new[i];
+       IF (adec ISNT nilattrdec) ANDTH (usage OF adec ISNT nilusage)
+          ANDTH closureno OF usage OF adec = closureno OF ug
+       THEN attrno := i
+       FI
+   OD;
+   attrno
+END;
+
+PROC translate_attr = (ATTR a, TRANSFORMPROCS tp, REF ENVIRON old, new) ATTRC:
+BEGIN
+   CASE a IN
+   (REF ATTRNAME an)
+      ( REF ATTRDEC adec = (attrs OF old)[attrno OF an];
+        IF sort OF adec = outerdec
+        THEN INT i = findnewattrno(usage OF adec, attrs OF new);
+             IF i /= attrno OF an
+             THEN (MAKEATTRNAME i, TRUE)
+             ELSE (a, FALSE)
+             FI
+        ELSE (a, FALSE)
+        FI
+      )
+   OUT (attr OF nulltprocs)(a, tp)
+   ESAC
+END;
+
+{{***************************************************************************}}
+{{           Conversion of FORMULA numbers                                   }}
+{{***************************************************************************}}
+
+PROC findnewintno = (REF USAGE ug, REF VECTOR [] REF INTDEC new) INT:
+BEGIN
+   {{ Know that you are only looking at outer int declarations }}
+   IF ug IS nilusage THEN sys fault("You can only look for OUTER ints") FI;
+   INT intno := 0;
+   FOR i TO UPB new WHILE intno = 0
+   DO  REF INTDEC idec = new[i];
+       IF (idec ISNT nilintdec) ANDTH (usage OF idec ISNT nilusage)
+          ANDTH closureno OF usage OF idec = closureno OF ug
+       THEN intno := i
+       FI
+   OD;
+   intno
+END;
+
+PROC translate_formula =
+             (FORMULA f, TRANSFORMPROCS tprocs, REF ENVIRON old, new) FORMULAC:
+   CASE f IN
+   (REF FNAME fi)( REF INTDEC idec = (ints OF old)[intno OF fi];
+                   IF sort OF idec = outerdec
+                   THEN INT i = findnewintno(usage OF idec, ints OF new);
+                        IF i /= intno OF fi
+                        THEN ( MAKEFNAME(i), TRUE)
+                        ELSE (f, FALSE)
+                        FI
+                   ELIF sort OF idec = macpardec
+                   THEN ( MAKEFMACPAR (-1), TRUE)
+                   ELSE (f, FALSE)
+                   FI
+                  )
+   OUT (formula OF nulltprocs)(f, tprocs)
+   ESAC;
+
+
+
+{{***************************************************************************}}
+{{           Conversion of TYPE numbers                                      }}
+{{***************************************************************************}}
+
+PROC findnewtypeno = (REF USAGE tg, REF VECTOR [] REF TYPEDEC new) INT:
+BEGIN
+   {{ Know that you are only looking at outer type declarations }}
+   IF tg IS nilusage THEN sys fault("You can only look for OUTER types") FI;
+   INT typeno := 0;
+   FOR i TO UPB new WHILE typeno = 0
+   DO  REF TYPEDEC tdec = new[i];
+       IF (tdec ISNT niltypedec) ANDTH (usage OF tdec ISNT nilusage)
+          ANDTH closureno OF usage OF tdec = closureno OF tg
+       THEN typeno := i
+       FI
+   OD;
+   typeno
+END;
+
+PROC translate_type = (TYPE t, TRANSFORMPROCS tprocs, REF ENVIRON old, new)
+                                                                        TYPEC:
+BEGIN
+   CASE t IN
+   (REF TNAME tn)
+      ( REF TYPEDEC tdec = (types OF old)[typeno OF tn];
+        IF sort OF tdec = outerdec
+        THEN INT i = findnewtypeno(usage OF tdec, types OF new);
+             IF i /= typeno OF tn
+             THEN (MAKETNAME i, TRUE)
+             ELSE (t, FALSE)
+             FI
+        ELIF sort OF tdec = macpardec
+        THEN (MAKETMACPAR(-1), TRUE)
+        ELSE (t, FALSE)
+        FI
+      )
+   OUT (type OF nulltprocs)(t, tprocs)
+   ESAC
+END;
+
+
+
+{{***************************************************************************}}
+{{           Conversion of CONST numbers                                     }}
+{{***************************************************************************}}
+
+PROC findnewconstno = (REF USAGE ug, REF VECTOR [] REF CONSTDEC new) INT:
+BEGIN
+   {{ Know that you are only looking at outer const declarations }}
+   IF ug IS nilusage THEN sys fault("You can only look for OUTER consts") FI;
+   INT constno := 0;
+   FOR i TO UPB new WHILE constno = 0
+   DO  REF CONSTDEC cdec = new[i];
+       IF (cdec ISNT nilconstdec) ANDTH (usage OF cdec ISNT nilusage)
+          ANDTH closureno OF usage OF cdec = closureno OF ug
+       THEN constno := i
+       FI
+   OD;
+   constno
+END;
+
+PROC translate_constunit = (UNIT c, TRANSFORMPROCS tprocs, REF ENVIRON old, new)
+                                                                      UNITC:
+BEGIN
+   MODE INTC = STRUCT (INT i, BOOL c);
+   PROC new_typeno = (INT typeno) INTC:
+   ( REF TYPEDEC tdec = (types OF old)[typeno];
+     INT newtypeno = IF sort OF tdec = outerdec
+                     THEN findnewtypeno(usage OF tdec, types OF new)
+                     ELSE typeno
+                     FI;
+     (newtypeno, newtypeno /= typeno)
+   );
+
+   INTC ic;
+   CASE c IN
+   (REF CNAME cn)
+      ( REF CONSTDEC cdec = (consts OF old)[constno OF cn];
+        IF sort OF cdec = outerdec
+        THEN INT i = findnewconstno(usage OF cdec, consts OF new);
+             IF i /= constno OF cn
+             THEN (MAKECNAME i, TRUE)
+             ELSE (c, FALSE)
+             FI
+        ELSE (c, FALSE)
+        FI
+      ),
+   (REF CPRIM cp)
+      ( ic := new_typeno(typeno OF cp);
+        IF c OF ic
+        THEN (HEAP CPRIM := (i OF ic, primno OF cp), TRUE)
+        ELSE (cp, FALSE)
+        FI
+      ),
+   (REF CINT ci)
+      ( ic := new_typeno(typeno OF ci);
+        FORMULAC fc = (formula OF tprocs)(index OF ci, tprocs);
+        IF c OF ic OREL c OF fc
+        THEN ( HEAP CINT := (i OF ic, f OF fc), TRUE)
+        ELSE (ci, FALSE)
+        FI
+      ),
+   (REF CRANGE crg)
+      ( ic := new_typeno(typeno OF crg);
+        FORMULAC lc = (formula OF tprocs)(lwb OF range OF crg, tprocs),
+                 uc = (formula OF tprocs)(upb OF range OF crg, tprocs);
+        IF c OF ic OREL c OF lc OREL c OF uc
+        THEN (HEAP CRANGE := (i OF ic, (f OF lc, f OF uc)), TRUE)
+        ELSE (crg, FALSE)
+        FI
+      ),
+   (REF CPRIMRANGE cpr)
+      ( ic := new_typeno(typeno OF cpr);
+        IF c OF ic
+        THEN (HEAP CPRIMRANGE := (i OF ic, firstno OF cpr, lastno OF cpr), TRUE)
+        ELSE (cpr, FALSE)
+        FI
+      ),
+   (REF CQUOTE ct)
+      ( ic := new_typeno(typeno OF ct);
+        IF c OF ic
+        THEN (HEAP CQUOTE := (i OF ic, string OF ct), TRUE)
+        ELSE (ct, FALSE)
+        FI
+      ),
+   (REF UASSOC ua)
+      ( ic := new_typeno(typeno OF ua);
+        UNITC uc = (unit OF tprocs)(assoc OF ua, tprocs);
+        IF c OF ic OREL c OF uc
+        THEN ( HEAP UASSOC := (i OF ic, altno OF ua, u OF uc), TRUE)
+        ELSE (ua, FALSE)
+        FI
+      )
+   OUT (unit OF nulltprocs)(c, tprocs)
+   ESAC
+END;
+
+
+{{***************************************************************************}}
+{{           Find procedueres                                                }}
+{{***************************************************************************}}
+
+
+PROC translateprocs = ( REF ENVIRON oldenv, newenv,
+                        PROC (TRANSFORMPROCS) VOID  action ) VOID:
+BEGIN
+   TRANSFORMPROCS  newtprocs = make_newtprocs(nulltprocs,
+   (  (ATTR a, TRANSFORMPROCS tp) ATTRC:
+            translate_attr(a, tp, oldenv, newenv),
+       (FORMULA f, TRANSFORMPROCS tp) FORMULAC:
+            translate_formula(f, tp, oldenv, newenv),
+      (TYPE t, TRANSFORMPROCS tp) TYPEC:
+            translate_type(t, tp, oldenv, newenv),
+      (UNIT u, TRANSFORMPROCS tp) UNITC:
+            translate_constunit(u, tp, oldenv, newenv)
+   ));
+   action(newtprocs);
+   discard_tprocs(newtprocs)
+END;
+
+
+PROC find_attrdec = (ATTRNAME dec, CLOSURE closure, REF ENVIRON env)REF ATTRDEC:
+BEGIN
+   REF ATTRDEC adec := (attrs OF env)[attrno OF dec];
+     IF sort OF adec = outerdec
+   THEN OUTER oattr =
+          outer OF find_outers(closureno OF usage OF adec, closure, global_msg);
+
+        PROC  do_attr = (TRANSFORMPROCS  newtprocs) VOID:
+           adec := a OF (attrdec OF newtprocs)
+                          ((attrs OF environ OF oattr)[1], newtprocs);
+
+        translateprocs(environ OF oattr, env, do_attr)
+   FI;
+   adec
+END;
+
+
+PROC find_intdec = (FNAME dec, CLOSURE closure, REF ENVIRON env) REF INTDEC:
+BEGIN
+   REF INTDEC idec := (ints OF env)[intno OF dec];
+   IF sort OF idec = outerdec
+   THEN
+      OUTER oint =
+         outer OF find_outers(closureno OF usage OF idec, closure, global_msg);
+
+      PROC  do_int = (TRANSFORMPROCS  newtprocs) VOID:
+          idec := i OF (intdec OF newtprocs)
+                          ((ints OF environ OF oint)[1], newtprocs);
+
+      translateprocs(environ OF oint, env, do_int)
+   FI;
+   idec
+END;
+
+
+PROC find_typedec = (TNAME dec, CLOSURE closure, REF ENVIRON env) REF TYPEDEC:
+BEGIN
+   REF TYPEDEC tdec := (types OF env)[typeno OF dec];
+   IF sort OF tdec = outerdec
+   THEN OUTER otype =
+          outer OF find_outers(closureno OF usage OF tdec, closure, global_msg);
+
+      PROC  do_type = (TRANSFORMPROCS  newtprocs) VOID:
+          tdec := t OF (typedec OF newtprocs)
+                          ((types OF environ OF otype)[1], newtprocs);
+
+      translateprocs(environ OF otype, env, do_type)
+   FI;
+   tdec
+END;
+
+
+PROC find_constdec = (CNAME dec, CLOSURE closure, REF ENVIRON env)
+                                                               REF CONSTDEC:
+BEGIN
+   REF CONSTDEC cdec := (consts OF env)[constno OF dec];
+   IF sort OF cdec = outerdec
+   THEN OUTER oconst =
+          outer OF find_outers(closureno OF usage OF cdec, closure, global_msg);
+
+        PROC  do_const = (TRANSFORMPROCS  newtprocs) VOID:
+            cdec := co OF (constdec OF newtprocs)
+                 ((consts OF environ OF oconst)[1], newtprocs);
+
+        translateprocs(environ OF oconst, env, do_const)
+   FI;
+   cdec
+END;
+
+{{***************************************************************************}}
+{{           Conversion of FN numbers                                        }}
+{{***************************************************************************}}
+
+PROC findnewfnno = (REF USAGE fg, REF VECTOR [] REF FNDEC new) INT:
+BEGIN
+   {{ Know that you are only looking at outer fn declarations }}
+   IF fg IS nilusage THEN sys fault("You can only look for OUTER fns") FI;
+   INT fnno := 0;
+   FOR i TO UPB new WHILE fnno = 0
+   DO  REF FNDEC fdec = new[i];
+       IF (fdec ISNT nilfndec) ANDTH (usage OF fdec ISNT nilusage)
+           ANDTH closureno OF usage OF fdec = closureno OF fg
+       THEN fnno := i
+       FI
+   OD;
+   fnno
+END;
+
+PROC translate_fndec = (REF FNDEC fdec, REF ENVIRON old, new) REF FNDEC:
+BEGIN
+   REF FNDEC ans;
+   PROC  do_fdec = (TRANSFORMPROCS  newtprocs) VOID:
+            ans := f OF (fndec OF newtprocs)(fdec, newtprocs);
+   translateprocs(old, new, do_fdec);
+   ans
+END;
+
+
+PROC find_fndec = (FNNAME dec, CLOSURE closure, REF ENVIRON env) REF FNDEC:
+BEGIN
+   REF FNDEC fdec := (fns OF env)[fnno OF dec];
+   IF sort OF fdec = outerdec
+   THEN OUTER ofn =
+          outer OF find_outers(closureno OF usage OF fdec, closure, global_msg);
+
+        PROC  do_fdec = (TRANSFORMPROCS  newtprocs) VOID:
+            fdec := f OF (fndec OF newtprocs)
+                            ((fns OF environ OF ofn)[1], newtprocs);
+
+        translateprocs(environ OF ofn, env, do_fdec)
+   FI;
+   fdec
+END;
+
+
+
+{{****************** Procedures used by PROC unit_type ***********************}}
+
+
+PROC simplify_formula = (FORMULA form) FORMULA:
+{{  This procedure is used to simplify formulae generated in PROC unit_type }}
+   CASE form IN
+   (REF FDOP fd)
+      ( FORMULA lf = simplify_formula(left OF fd),
+                rf = simplify_formula(right OF fd);
+        CASE lf IN
+        (REF FINT li)
+           CASE rf IN
+           (REF FINT ri)
+              ( INT l = int OF li, r = int OF ri;
+                HEAP FINT :=
+                  ( CASE sort OF fd IN
+                      l + r,  l - r,  l * r,  l OVER r,
+                      ABS (l = r),      ABS (l /= r),     ABS (l <= r),
+                      ABS (l >= r),     ABS (l < r),      ABS (l > r),
+                      ABS (BIN l AND BIN r), ABS (BIN l OR BIN r),  0,
+                      ABS (BIN l SHL r),         ABS (BIN l SHR r),
+                      ABS (BIN l AND BIN r),     ABS (BIN l OR BIN r),
+                      l MOD r
+                    OUT 0
+                    ESAC, nullid
+                  )
+              )
+           OUT form
+           ESAC
+        OUT form
+        ESAC
+      ),
+   (REF FMOP fm)
+      ( FORMULA rf = simplify_formula(right OF fm);
+        CASE rf IN
+        (REF FINT ri)
+           ( INT r = int OF ri;
+             HEAP FINT :=
+                ( CASE sort OF fm IN
+                    r, -r, ABS (r=0), 0, ABS NOT BIN r, ENTIER sqrt(r), ABS r
+                  OUT 0
+                  ESAC, nullid
+                 )
+            )
+         OUT form
+         ESAC
+      ),
+   (REF FBRACKET fb)  simplify_formula(formula OF fb)
+   OUT form
+   ESAC;
+
+
+PROC tstr_size = (REF TSTR tstr) FORMULA:
+(  INT size := 0;
+   REF TSTR st := tstr;
+   WHILE st ISNT niltstr DO size PLUSAB 1;  st := rest OF st OD;
+   HEAP FINT := (size, nullid)
+);
+
+
+PROC  trim = (TYPE t, FORMULA f, s, REF ENVIRON env) TYPE:
+BEGIN
+   PROC trimst = (REF TSTR st, INT f, size) REF TSTR:
+      IF (st IS niltstr) OREL size<= 0 OREL f<= 0 THEN niltstr
+      ELIF f>1 THEN trimst(rest OF st, f-1, size)
+      ELSE HEAP TSTR:= (elem OF st, trimst(rest OF st, f, size-1))
+      FI;
+
+   CASE t IN
+   (REF TNAME tn)
+      ( CASE body OF (types OF env)[typeno OF tn] IN
+        (REF TYPETAG tv)  trim(tag OF tv, f, s, env)
+        OUT sysfault("trim"); tnull
+        ESAC
+      ),
+   (REF TROW tr)
+      CASE s IN
+      (REF FINT fi)  IF (int OF fi) = 0
+                     THEN  elem OF tr
+                     ELSE  HEAP TROW := (s, elem OF tr)
+                     FI
+      OUT  HEAP TROW := (s, elem OF tr)
+      ESAC,
+   (REF TSTR tstr)
+      CASE s IN
+      (REF FINT s1)
+         CASE f IN
+         (REF FINT f1) ( INT si = int OF s1;
+                         REF TSTR st = trimst(tstr, int OF f1, (si=0|1|si));
+                         IF si = 0 THEN elem OF st ELSE st FI
+                       )
+         OUT IF int OF s1 = 0
+             THEN  elem OF tstr
+             ELSE  HEAP TROW := (s1, elem OF tstr)
+             FI
+         ESAC
+      OUT  HEAP TROW := (s, elem OF tstr)
+      ESAC,
+   (REF TBRACKET tb)  trim(type OF tb, f, s, env),
+   (REF TSTRING tg)
+      CASE s IN
+      (REF FINT fi)  IF (int OF fi) = 0
+                     THEN  char OF tg
+                     ELSE  HEAP TSTRING := (s, char OF tg)
+                     FI
+      OUT  HEAP TSTRING := (s, char OF tg)
+      ESAC
+   OUT sysfault("trim");  tnull
+   ESAC
+END;
+
+
+
+
+PROC equal_formula = (FORMULA f1, f2) BOOL:
+   CASE f1 IN
+   (REF FINT i1)
+       CASE f2 IN (REF FINT i2)  int OF i1 = int OF i2
+       OUT equal_formula(f2, f1)
+       ESAC,
+   (REF FCHECK fc)  equal_formula(test OF fc, f2),
+   (REF FARITH fa) (sys fault("equal_formula"); FALSE),
+   (REF FNAME fn1)
+       CASE f2 IN (REF FNAME fn2) intno OF fn1 = intno OF fn2
+       OUT  FALSE
+       ESAC,
+   (REF FMOP fm1)
+       CASE f2 IN
+       (REF FMOP fm2) (sort OF fm1 = sort OF fm2)
+                      ANDTH equal_formula(right OF fm1, right OF fm2)
+       OUT  FALSE
+       ESAC,
+   (REF FDOP fd1)
+       CASE f2 IN
+       (REF FDOP fd2) (sort OF fd1 = sort OF fd2)
+                      ANDTH equal_formula(left OF fd1, left OF fd2)
+                      ANDTH equal_formula(right OF fd1, right OF fd2)
+       OUT  FALSE
+       ESAC,
+   (REF FCOND fc1)
+       CASE f2 IN
+       (REF FCOND fc2) equal_formula(cond OF fc1, fc2)
+                       ANDTH equal_formula(true OF fc1, true OF fc2)
+                       ANDTH equal_formula(false OF fc1, false OF fc2)
+       OUT  FALSE
+       ESAC,
+   (REF FBRACKET fb1)  equal_formula(formula OF fb1, f2)
+   OUT sys fault("equal_formula"); FALSE
+   ESAC;
+
+
+PROC uif_type = (FORMULA cond, TYPE true, false, REF ENVIRON env) TYPE:
+BEGIN
+   PROC flt_type = TYPE: ( sys fault("uif_type"); tnull );
+
+   PROC uif_tstr = (FORMULA cond, REF TSTR ta, tb, REF ENVIRON env) REF TSTR:
+      IF ta IS niltstr
+      THEN  niltstr
+      ELSE  TYPE t = uif_type(cond, elem OF ta, elem OF tb, env);
+            HEAP TSTR:= (t, uif_tstr(cond,rest OF ta, rest OF tb, env))
+      FI;
+
+   TYPE then = CASE true IN (REF TBRACKET ta) type OF ta OUT true ESAC;
+   TYPE else = CASE false IN (REF TBRACKET tb) type OF tb OUT false ESAC;
+
+   CASE then IN
+   (REF TNAME tna)
+       CASE else IN
+       (REF TNAME tnb)
+           IF typeno OF tna = typeno OF tnb
+           THEN  then
+           ELSE  REF TYPEDEC tdec = (types OF env)[typeno OF tnb];
+                 CASE body OF tdec IN
+                 (REF TYPETAG tg)  uif_type(cond, then, tag OF tg, env)
+                 OUSE body OF tdec IN
+                 (REF TYPETAG tg)  uif_type(cond, tag OF tg, else, env)
+                 OUT  flt_type
+                 ESAC
+           FI
+       OUT flt_type
+       ESAC,
+   (REF TROW tra)
+       CASE else IN
+       (REF TROW trb)
+           IF equal_formula(size OF tra, size OF trb)
+           THEN then
+           ELSE  FORMULA size = HEAP FCOND:= (cond, size OF tra, size OF trb);
+                 HEAP TROW := (size, elem OF tra)
+           FI,
+       (REF TSTR tsb) ( TYPE t = HEAP TROW := (tstr_size(tsb), elem OF tsb);
+                        uif_type(cond, then, t, env)
+                      )
+       OUT flt_type
+       ESAC,
+   (REF TSTR tsa)
+       CASE else IN
+       (REF TROW tr)  ( TYPE t = HEAP TROW := (tstr_size(tsa), elem OF tsa);
+                        uif_type(cond, t, else, env)
+                      ),
+       (REF TSTR tsb) uif_tstr(cond, tsa, tsb, env)
+       OUT flt_type
+       ESAC,
+   (REF TSTRING tga)
+       CASE else IN
+       (REF TSTRING tgb)
+           IF equal_formula(size OF tga, size OF tgb)
+           THEN then
+           ELSE  FORMULA size = HEAP FCOND:= (cond, size OF tga, size OF tgb);
+                 HEAP TSTRING := (size, char OF tga)
+           FI
+       OUT flt_type
+       ESAC
+   OUT flt_type
+   ESAC
+END;
+
+
+PROC uconc_type = (BOOL string, INT sort, TYPE left, right,
+                                                   REF ENVIRON env) TYPE:
+BEGIN
+   PROC make_trow = (TYPE t) REF TROW:
+      CASE t IN
+      (REF TNAME tn)
+         ( CASE body OF (types OF env)[typeno OF tn] IN
+           (REF TYPETAG tv) make_trow(tag OF tv)
+           OUT HEAP TROW := (MAKEFINT(1), tn)
+           ESAC
+         ),
+      (REF TROW tr)      tr,
+      (REF TSTR tst)     HEAP TROW := (tstr_size(tst), elem OF tst),
+      (REF TBRACKET tb)  make_trow(type OF tb),
+      (REF TSTRING tg)   HEAP TROW := (size OF tg, char OF tg)
+      OUT sys fault("make_trow"); NIL
+      ESAC;
+
+   FORMULA size; TYPE answer;
+   CASE sort + 1 IN
+   { 0 } ( size := MAKEFINT(2);  answer := left ),
+   { 1 } ( REF TROW l = make_trow(left);
+           size := HEAP FDOP:= (size OF l, fplus, MAKEFINT(1));
+           answer := elem OF l
+         ),
+   { 2 } ( REF TROW r = make_trow(right);
+           size := HEAP FDOP:= (MAKEFINT(1), fplus, size OF r);
+           answer := elem OF r
+         ),
+   { 3 } ( REF TROW l = make_trow(left),
+                    r = make_trow(right);
+           size := HEAP FDOP := (size OF l, fplus, size OF r);
+           answer := elem OF l
+         )
+   ESAC;
+   IF string
+   THEN  HEAP TSTRING := (simplify_formula(size), answer)
+   ELSE  HEAP TROW := (simplify_formula(size), answer)
+   FI
+END;
+
+{{ ********************* Useful Procedures *****************************}}
+
+PROC coerce_type = (TYPE type, INT sort,BOOL namedoutput,REF ENVIRON env) TYPEC:
+BEGIN
+   PROC basic_type = (TYPE ty) TYPEC:
+      IF NOT namedoutput
+      THEN IF (sort = usink) OREL (sort = uiosink)
+           THEN (tnull, TRUE)
+           ELSE (ty, FALSE)
+           FI
+      ELSE IF  (sort = usource) OREL (sort = uiosource)
+           THEN (tnull, TRUE)
+           ELSE (ty, FALSE)
+           FI
+      FI;
+
+   PROC coerce_tstr = (REF TSTR st) TSTRC:
+      IF st IS niltstr
+      THEN  (st, FALSE)
+      ELSE  TYPEC  t = coerce_type(elem OF st, sort, namedoutput, env);
+            TSTRC  tsc = coerce_tstr(rest OF st);
+            IF c OF t  OREL  c OF tsc
+            THEN  (HEAP TSTR:= (t OF t, t OF tsc), TRUE)
+            ELSE  (st, FALSE)
+            FI
+      FI;
+
+   CASE type IN
+   (REF TNAME tn)
+      ( REF TYPEDEC tdec = (types OF env)[typeno OF tn];
+        CASE body OF tdec IN
+        (REF TYPETAG tg) coerce_type(tag OF tg, sort, namedoutput, env)
+        OUT basic_type(tn)
+        ESAC
+      ),
+   (REF TROW tr)
+      ( TYPEC rc = coerce_type(elem OF tr, sort, namedoutput, env);
+        IF c OF rc
+        THEN (HEAP TROW := (size OF tr, t OF rc), TRUE)
+        ELSE (tr, FALSE)
+        FI
+      ),
+   (REF TSTR ts)
+      ( TSTRC sc = coerce_tstr(ts);
+        (t OF sc, c OF sc)
+      ),
+   (REF TFN tf)
+      IF namedoutput
+      THEN IF   sort = usource   THEN  (from OF tf, TRUE)
+           ELIF sort = usink     THEN  (to OF tf, TRUE)
+           ELIF sort = uiosource THEN  (HEAP TFN := (to OF tf, from OF tf),TRUE)
+           ELSE (tf, FALSE)
+           FI
+      ELSE IF   sort = usource   THEN  (to OF tf, TRUE)
+           ELIF sort = usink     THEN  (from OF tf, TRUE)
+           ELIF sort = uiosink   THEN  (HEAP TFN := (to OF tf, from OF tf),TRUE)
+           ELSE (tf, FALSE)
+           FI
+      FI,
+   (REF TBRACKET tb) coerce_type(type OF tb, sort, namedoutput, env)
+   OUT basic_type(type)
+   ESAC
+END;
+
+PROC type_size = (TYPE t, REF ENVIRON env) FORMULA:
+   CASE t IN
+   (REF TNAME tn)  CASE body OF (types OF env)[typeno OF tn] IN
+                   (REF TYPETAG tv)  type_size(tag OF tv, env)
+                   OUT MAKEFINT(1)
+                   ESAC,
+  (REF TROW tr)    size OF tr,
+  (REF TSTR tst)   tstr_size(tst),
+  (REF TBRACKET tb) type_size(type OF tb, env),
+  (REF TSTRING tg) size OF tg
+  OUT sys fault("type_size"); SKIP
+  ESAC;
+
+
+PROC names_size = (REF NAMES ns) INT:
+(  REF NAMES nlist := ns;
+   INT size := 0;
+   WHILE nlist ISNT nilnames
+     DO  size PLUSAB 1;  nlist := rest OF nlist OD;
+   size
+);
+
+PROC names_type = (REF NAMES ns, REF FNDEC fdec) TYPE:
+(  REF VECTOR [] NAMETYPE nametypes = nametypes OF fdec;
+   REF TSTR answer := niltstr;
+   REF REF TSTR nexttstr := answer;
+   REF NAMES nlist := ns;
+   WHILE nlist ISNT nilnames
+   DO REF REF TSTR (nexttstr)
+        := HEAP TSTR := (type OF nametypes[nameno OF nlist], niltstr);
+      nexttstr := rest OF nexttstr;
+      nlist := rest OF nlist
+   OD;
+
+   IF answer IS niltstr           THEN tnull
+   ELIF rest OF answer IS niltstr THEN elem OF answer
+   ELSE answer
+   FI
+);
+
+PROC names_index = (REF NAMES ns, INT nameno) INT:
+(  REF NAMES names := ns;
+   INT index := -1;
+   FOR i WHILE (index = -1) ANDTH (names ISNT nilnames)
+   DO IF nameno OF names = nameno
+      THEN index := i
+      ELSE names := rest OF names
+      FI
+   OD;
+   index
+);
+
+PROC uportname_index = (REF UPORTNAME up, REF ENVIRON env) INT:
+BEGIN
+   { -1 = fault, 0 = single portname, >0 index }
+   REF FNDEC ft = (fns OF env)[fnno OF up];
+   INT index := names_index(inputs OF ft, nameno OF up);
+   IF index > -1
+   THEN IF (rest OF inputs OF ft) IS nilnames
+        THEN index := 0
+        FI
+   ELSE index := names_index(outputs OF ft, nameno OF up);
+        IF (index = 1) ANDTH (rest OF outputs OF ft IS nilnames)
+        THEN index := 0
+        FI
+   FI;
+   index
+END;
+
+
+PROC fndec_tfn = (REF FNDEC fdec ) REF TFN:
+BEGIN
+   HEAP TFN := ( names_type(inputs OF fdec, fdec),
+                 names_type(outputs OF fdec, fdec) )
+END;
+
+PROC unit_type= (UNIT u, REF FNDEC fdec, REF ENVIRON env) TYPE:
+BEGIN
+   PROC ustr_tstr = (REF USTR uc) REF TSTR:
+      IF uc IS nilustr
+      THEN  niltstr
+      ELSE  TYPE t = unit_type(elem OF uc, fdec, env);
+            HEAP TSTR := (t, ustr_tstr(rest OF uc))
+      FI;
+
+   CASE u IN
+   (REF CNAME cn)    ( REF CONSTDEC cdec = (consts OF env)[constno OF cn];
+                       unit_type(value OF cdec, fdec, env)
+                     ),
+   (REF CPRIM cp)    MAKETNAME(typeno OF cp),
+   (REF CINT ci)     MAKETNAME(typeno OF ci),
+   (REF CQUERY cqy)  querytype OF cqy,
+   (REF CQUOTE cq )
+        HEAP TSTRING := (MAKEFINT(UPB string OF cq), MAKETNAME(typeno OF cq)),
+   (REF CRANGE cr)   MAKETNAME(typeno OF cr),
+   (REF CTYPE cn)    type OF cn,
+   (REF CPRIMRANGE cg) MAKETNAME(typeno OF cg),
+   (REF CVOID cv)        tvoid,
+   (REF UALTS ua)    unit_type(alt OF ua, fdec, env),
+   (REF UNAME un)
+      ( TYPE ut = type OF (nametypes OF fdec)[nameno OF un];
+        BOOL namedoutput := FALSE;
+        REF NAMES outputs := outputs OF fdec;
+        WHILE (outputs ISNT nilnames) ANDTH NOT namedoutput
+        DO IF nameno OF outputs = nameno OF un
+           THEN namedoutput := TRUE
+           FI;
+           outputs := rest OF outputs
+        OD;
+        t OF coerce_type(ut, sort OF un, namedoutput, env)
+      ),
+   (REF UASSOC ua)   MAKETNAME(typeno OF ua),
+   (REF UEXTRACT ue)
+      ( REF TYPEDEC tdec = (types OF env)[typeno OF ue];
+        CASE body OF tdec IN
+        (REF VECTOR [] ALTERNATIVE pi)  assoc OF pi[altno OF ue]
+        OUT ( sysfault("uextract"); tnull )
+        ESAC
+      ),
+   (REF UPORTNAME uti)
+      ( TYPE tti = unit_type(unit OF uti, fdec, env);
+        INT index = uportname_index(uti, env);
+        IF   index = -1 THEN sysfault("uportname"); tnull
+        ELIF index = 0  THEN tti
+        ELSE trim(tti, MAKEFINT(index), MAKEFINT(0), env)
+        FI
+      ),
+   (REF UINDEX ui)   ( TYPE ti = unit_type(unit OF ui, fdec, env);
+                       trim(ti, index OF ui, MAKEFINT(0), env)
+                     ),
+   (REF UTRIM ut)    ( TYPE tt = unit_type(unit OF ut, fdec, env);
+                       FORMULA lwb = lwb OF range OF ut,
+                               upb = upb OF range OF ut;
+                       FORMULA size := simplify_formula(HEAP FDOP :=
+                         (HEAP FDOP := (upb, fminus, lwb), fplus, MAKEFINT(1)));
+                       trim(tt, lwb, size, env)
+                     ),
+   (REF UDYINDEX ud) ( TYPE td = unit_type(unit OF ud, fdec, env);
+                       trim(td, MAKEFINT(1), MAKEFINT(0), env)
+                     ),
+   (REF UREPLACE ua) unit_type(unit OF ua, fdec, env),
+   (REF UROW ur)
+      ( TYPE tr = unit_type(elem OF ur, fdec, env);
+        FORMULA size =
+          CASE size OF ur IN
+          (REF FNAME fn)
+             CASE value OF (ints OF env)[intno OF fn] IN
+             (RANGE rg) simplify_formula(HEAP FDOP :=
+                                 (HEAP FDOP:= (upb OF rg, fminus, lwb OF rg),
+                                  fplus, MAKEFINT(1)))
+             OUT size OF ur
+             ESAC
+          OUT size OF ur
+          ESAC;
+        HEAP TROW := (size, tr)
+      ),
+   (REF USTR ust)    ( ustr_tstr(ust) ),
+   (REF UCONC ucc)
+      ( TYPE l = unit_type(left OF ucc, fdec, env),
+             r = unit_type(right OF ucc, fdec, env);
+        uconc_type(string OF ucc, sort OF ucc, l, r, env)
+      ),
+   (REF UMINST um)
+      ( REF FNDEC fdec = (fns OF env)[fnno OF inst OF um];
+        to OF fndec_tfn(fdec)
+      ),
+   (REF UDINST ud)
+      ( REF FNDEC fdec = (fns OF env)[fnno OF inst OF ud];
+        to OF fndec_tfn(fdec)
+      ),
+   (REF UCASE uc)
+      unit_type(output OF choices OF uc, fdec, env),
+   (REF UCOND ucond)
+      ( TYPE true = unit_type(true OF ucond, fdec, env),
+        false = unit_type(false OF ucond, fdec, env);
+        uif_type(cond OF ucond, true, false, env)
+      ),
+   (REF UREPL urepl)
+      ( INT intno = CASE repl OF urepl IN
+{{?? what about fcheck }}
+                    (REF FNAME fn) intno OF fn
+                    OUT sys fault("fname needed in UREPL"); SKIP
+                    ESAC;
+        RANGE range =
+           CASE value OF (ints OF env)[intno] IN
+           (RANGE rg) rg
+           OUT sys fault("range needed in UREPL"); SKIP
+           ESAC;
+        FORMULA size := simplify_formula(
+             HEAP FDOP := (HEAP FDOP:= (upb OF range, fminus, lwb OF range),
+                           fplus, MAKEFINT(1)));
+        TYPE t = unit_type(body OF urepl, fdec, env);
+        HEAP TROW := (size, t)
+      ),
+   (REF USEQUENCE useq)  unit_type(output OF useq, fdec, env),
+   (REF USERIES user)    unit_type(output OF user, fdec, env),
+   (REF UATTR ua)        unit_type(unit OF ua, fdec, env),
+   (REF UCHECK uck)      unit_type(unit OF uck, fdec, env),
+   (REF UBRACKET ub)     unit_type(unit OF ub, fdec, env),
+   (REF USTRING ug)    ( TYPE tg = unit_type(char OF ug, fdec, env);
+                         HEAP TSTRING := (size OF ug, tg)
+                       ),
+   (REF UFN uf)        ( TYPE tsink = unit_type(sink OF uf, fdec, env),
+                             tsrc = unit_type(source OF uf, fdec, env);
+                         HEAP TFN := (tsink, tsrc)
+                       ),
+   (REF UNULL un)        tnull
+   ESAC
+END;
+
+{{ Type equality procedures - based on MACRO.STA }}
+
+PROC simplify_type = (TYPE type, REF ENVIRON env) TYPE:
+BEGIN
+  { Procedure to simplify a TYPE to a composition of primitive (NEW) TYPEs }
+  PROC simplify = (TYPE type, TRANSFORMPROCS tprocs) TYPEC:
+   CASE  type IN
+   (REF TNAME  tn)
+     ( REF TYPEDEC  typedec = (types OF env)[typeno OF tn];
+       CASE body OF typedec IN
+       (REF TYPETAG  tag) ( t OF simplify(tag OF tag, tprocs), TRUE )
+       OUT  (type, FALSE)
+       ESAC
+     ) ,
+   (REF TBRACKET  tb)
+     ( TYPEC tc = simplify(type OF tb, tprocs);
+       (t OF tc, TRUE)
+     )
+   OUT  { Note use of nulltprocs to avoid problems with recursion }
+        (type OF nulltprocs)(type, tprocs)
+   ESAC;
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(nulltprocs, (simplify));
+
+TYPE result = t OF simplify(type, newtprocs);
+
+    discard_tprocs( newtprocs );
+    result
+END;
+
+
+PROC check_types = (TYPE a, b, REF ENVIRON enva, envb, BOOL check_body) BOOL:
+BEGIN
+
+   PROC equal_typebody = (TYPEBODY ab, bb, REF ENVIRON enva, envb) BOOL:
+   BEGIN
+      CASE bb IN
+        (REF TYPETAG) sys fault("call simplify_type first") OUT SKIP ESAC;
+      CASE ab IN
+      (REF VECTOR [] ALTERNATIVE av)
+         CASE bb IN
+         (REF VECTOR [] ALTERNATIVE bv)
+            ( IF UPB av = UPB bv
+              THEN
+                 BOOL eq := TRUE;
+                 FORALL aalt IN av, balt IN bv WHILE eq
+                 DO eq := (altname OF aalt = altname OF balt) ANDTH
+                           check_types(assoc OF aalt, assoc OF balt,
+                                       enva, envb, check_body)
+                 OD;
+                 eq
+              ELSE
+                 FALSE
+              FI
+            )
+         OUT FALSE
+         ESAC,
+      (REF NEWINTS an)
+         CASE bb IN
+         (REF NEWINTS bn)
+             (tagname OF an = tagname OF bn) ANDTH
+             (int(lwb OF range OF an) = int(lwb OF range OF bn)) ANDTH
+             (int(upb OF range OF an) = int(upb OF range OF bn))
+         OUT FALSE
+         ESAC,
+      (REF NEWCHARS ac)
+         CASE bb IN
+         (REF NEWCHARS bc)
+            IF (tagname OF ac = tagname OF bc)
+            THEN REF VECTOR [] CHAR achars := chars OF ac,
+                                    bchars := chars OF bc;
+                 BOOL equal := UPB achars = UPB bchars;
+                 IF equal
+                 THEN FOR i TO UPB achars WHILE equal
+                      DO equal := achars[i] = bchars[i] OD
+                 FI;
+                 equal
+            ELSE FALSE
+            FI
+         OUT FALSE
+         ESAC,
+      (REF TYPETAG at) (sys fault("call simplify_type first"); FALSE)
+      OUT sys fault("equal_typebody"); FALSE
+      ESAC
+   END;
+
+   PROC equal_tnames = (INT atypeno, btypeno, REF ENVIRON enva, envb) BOOL:
+   BEGIN
+      REF TYPEDEC at = (types OF enva)[atypeno],
+                  bt = (types OF envb)[btypeno];
+
+      IF check_body
+      THEN
+         IF sort OF at = outerdec
+         THEN  IF (sort OF bt = outerdec) ANDTH
+                  (closureno OF usage OF at = closureno OF usage OF bt)
+               THEN  TRUE
+               ELSE ( typename OF at = typename OF bt ) ANDTH
+                      equal_typebody(body OF at, body OF bt, enva, envb)
+               FI
+         ELSE  (sort OF at = sort OF bt) ANDTH (atypeno = btypeno)
+         FI
+      ELSE
+         {{ TRUE - definitely equal,  FALSE - dont know }}
+         IF sort OF at = sort OF bt
+         THEN  IF sort OF at = outerdec
+               THEN closureno OF usage OF at = closureno OF usage OF bt
+               ELSE typename OF at = typename OF bt
+               FI
+         ELSE FALSE
+         FI
+      FI
+   END;
+
+   CASE a IN
+   (REF TNAME an)  {{ assumes simplfy_type has been called first }}
+      CASE b IN
+      (REF TNAME bn) equal_tnames(typeno OF an, typeno OF bn, enva, envb)
+      OUT FALSE
+      ESAC,
+   (REF TROW ar)
+      CASE b IN
+      (REF TROW br)
+         ( (int(size OF ar) = int(size OF br)) ANDTH
+            check_types(elem OF ar, elem OF br, enva, envb, check_body)
+         ),
+      (REF TSTR bs)
+         (REF TSTR tstr := bs;
+          BOOL equal := TRUE;
+          INT k := 0;
+          FOR i WHILE equal ANDTH (tstr ISNT niltstr)
+          DO  IF check_types(elem OF ar, elem OF tstr, enva, envb, check_body)
+              THEN tstr := rest OF tstr; k := i
+              ELSE equal := FALSE
+              FI
+          OD;
+          equal ANDTH (k = int(size OF ar))
+         )
+      OUT check_types(b, a, envb, enva, check_body)
+      ESAC,
+   (REF TSTR as)
+      CASE b IN
+      (REF TSTR bs)
+         check_types (elem OF as, elem OF bs, enva, envb, check_body)
+                ANDTH
+         IF rest OF as IS niltstr
+         THEN (rest OF bs IS niltstr)
+         ELIF rest OF bs ISNT niltstr
+         THEN check_types (rest OF as, rest OF bs, enva, envb, check_body)
+         ELSE FALSE
+         FI
+      OUT check_types (b, a, envb, enva, check_body)
+      ESAC,
+   (REF TFN afn)
+      CASE b IN
+      (REF TFN bfn)
+         check_types(from OF afn, from OF bfn, enva, envb, check_body)
+              ANDTH
+         check_types(to OF afn, to OF bfn, enva, envb, check_body)
+      OUT  FALSE
+      ESAC,
+   (REF TSTRING ag)
+      CASE b IN
+      (REF TSTRING bg)
+         ( (int(size OF ag) = int(size OF bg)) ANDTH
+            check_types(char OF ag, char OF bg, enva, envb, check_body)
+         )
+      OUT FALSE
+      ESAC,
+   (REF TNULL an)  (CASE b IN (REF TNULL bn) (TRUE) OUT FALSE ESAC),
+   (REF TVOID av)  (CASE b IN (REF TVOID bv) (TRUE) OUT FALSE ESAC),
+   (REF TMACPAR am) CASE b IN
+                    (REF TMACPAR bm) macparno OF am = macparno OF bm
+                    OUT FALSE
+                    ESAC
+   OUT FALSE
+   ESAC
+END;
+
+
+SKIP
+KEEP  MAKEFINT(INT),  formula_int,  int,  simplify_formula,
+      get_outerattr, get_outerint, get_outertype, get_outerconst, get_outerfn,
+      findnewattrno, findnewintno,  findnewtypeno,  findnewconstno, findnewfnno,
+      find_attrdec, find_intdec, find_typedec, find_constdec, find_fndec,
+      fndec_tfn, tstr_size,  type_size, translate_fndec,
+      names_type, names_size, names_index, unit_type,
+      simplify_type, check_types, uportname_index
+FINISH
+
