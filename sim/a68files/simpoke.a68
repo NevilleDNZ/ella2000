@@ -1,0 +1,324 @@
+DECS simpoke CONTEXT VOID USE putstrings, kernel, basics, commandsyntax,
+     kernelreader, simreader:
+
+{ " Id: simpoke.sta,v 1.1 91/10/14 14:31:33 edcad Exp$" }
+configinfo A68CONFIG "$Id: simpoke.a68,v 34.2 1995/03/29 13:04:29 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+09:06:88  Module created for release 4 using code taken from the release 3
+             module SIM.  BJE
+11:11:88  Change to 'rd string value' for Sys Spec CR 26.  BJE
+
+   ********  ******************************************************************
+
+22:02:90  Rewritten for the Kernel Interface (uses Module simreader).  DCT
+23:07:90  An extra "/" added to "wrong basic value" error message.  DCT
+16:04:91  R6B27: index reset to "0" rather than last_index when cyclic.  DCT
+11:06:91  R6B46: unmatched string quote in error message.  DCT
+26:09:91  R6B75: (related to iram bug) error message "Extra " improved.  DCT
+03:10:91  R6B77: rework of R6B75 to improve efficiency.  DCT
+16:11:92  R6B131: Extra check on characters in a string. JIT
+25:11:92  R6B133: SVOID added in read_value.JIT
+03:12:92  () can now be read in a 'cp' command. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.011 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module is responsible for accepting signal values supplied by the user.
+}
+
+INT  cycle_and_check = 1,  nocycle_and_check = 2,  nocycle_nocheck = 3;
+
+
+PROC  get_values = ( VALUES  names,  REF INT  last_index,
+                     STYPE  type,  INT  cycle,  FLTPROC  flt ) SVALUE:
+BEGIN
+   { last_index should point to the last item read.  Items will then be read
+     (cycling from last_index) as necessary.  Therefore a "values" list should
+     be the final parameter to a command unless nocycle_nocheck is used, in
+     which case, last index will point to the last item read.
+
+        Already parsed by read_values.
+
+      [ -> ]  { ? | () | { <ident> [ /<ident> | '<character> | "<string>" ] } }
+   }
+
+   BOOL  cycling:= FALSE;
+   INT  index:= last_index;
+
+   PROC  read_name = VALUE:
+      IF (index PLUSAB 1) > UPB names
+      THEN  IF cycle = cycle_and_check
+            THEN  cycling:= TRUE;
+                  index:= last_index;
+                  read_name
+            ELSE  last_index:= UPB names;
+                  (0, nullstr)
+            FI
+      ELSE  names[index]
+      FI;
+
+   PROC  put_back = VOID:  index MINUSAB 1;   { used for the optional "->" }
+
+   PROC  new_flt = (STR  msg) VOID:
+      flt( IF cycling THEN  oneline((msg, " in repetition of arguments"))
+                      ELSE  msg
+           FI
+         );
+
+   SVALUE  err = null svalue;
+
+   PROC  wrong = (VALUE  v,  STR  expected) SVALUE:
+   BEGIN
+      IF sort OF v > 0
+      THEN  new_flt(oneline((expected, " expected, not """, value OF v, """")))
+      ELSE  new_flt(oneline((expected, " expected")))
+      FI;
+      err
+   END;
+
+   PROC  make_query = (STYPE  type) SVALUE:
+   BEGIN
+      HEAP SQUERY  ans;
+      type OF ans:= type;
+      ans
+   END;
+
+   PROC  instring = (CHAR  c,  STR  str) BOOL:
+   BEGIN
+      BOOL  not_found:= TRUE;
+      FORALL s IN str WHILE not_found
+      DO  IF c = s THEN  not_found:= FALSE  FI  OD;
+      NOT not_found
+   END;
+
+   PROC  check_ident = (VALUE  name, STYPE  type) VALUE:  { delivers next item }
+   BEGIN
+      IF is_val_id(name)
+      THEN  PROC  fail = (STR  expected,  CHAR  sort) VOID:
+               new_flt(oneline(( """", value OF name,
+                                 " is the wrong basic value - """,
+                                 expected, sort, """ expected" )));
+            CASE type IN
+               (REF SINT  i)
+                  IF id OF i /= value OF name THEN  fail(id OF i, "/")  FI ,
+               (REF SCHAR  c)
+                  IF id OF c /= value OF name THEN  fail(id OF c, "'")  FI ,
+               (REF SSTRING  s)
+                  IF id OF t OF s /= value OF name
+                  THEN  fail(id OF t OF s, """")
+                  FI
+            ESAC;
+            read_name
+
+      ELSE  wrong( name, CASE type IN
+                            (REF SINT) "ELLA-integer",
+                            (REF SCHAR) "ELLA-character",
+                            (REF SSTRING) "ELLA-string"
+                         ESAC
+                 );
+            read_name
+      FI
+   END;
+
+   PROC  read_value = (STYPE  type) SVALUE:
+      CASE  type IN
+         (SNULL)  null svalue ,
+
+         (SVOID)
+            ( VALUE name = read_name;
+              IF NOT is_void(name)
+              THEN flt(oneline(("() expected, not ", """", value OF name,
+                                """")))
+              FI;
+              void svalue
+            ) ,
+
+         (REF SFN  sf)
+            ( { The "->" preceeding the input part of a FNTYPE is optional }
+              IF NOT is_fn_arrow(read_name) THEN  put_back  FI;
+              HEAP SVFN:= (make_query(from OF sf), read_value(to OF sf))
+            ) ,
+
+         (REF SST  sstruct)
+            ( REF SVST  ans:= nil svst;
+              REF REF SVST  end:= ans;
+              REF SST  ptr:= sstruct;
+              WHILE ptr ISNT nil sst
+              DO  end:= tail OF ( REF REF SVST (end):= HEAP SVST:=
+                                  (read_value(t OF ptr), nil svst) );
+                  ptr:= rest OF ptr
+              OD;
+              ans
+            ) ,
+
+         (REF SROW  sr)
+            ( REF SVST  ans:= nil svst;
+              REF REF SVST  end:= ans;
+              TO no OF sr
+              DO  end:= tail OF ( REF REF SVST (end):= HEAP SVST:=
+                                  (read_value(type OF sr), nil svst) )
+              OD;
+              ans
+            )
+
+      OUT ( VALUE  name = read_name;
+            IF is_query(name)
+            THEN  make_query(type)
+            ELSE  CASE type IN
+                     (REF SINT  si)
+                        ( VALUE  int_val = check_ident(name, type);
+                          IF is_slash_int(int_val)
+                          THEN
+                             INT  int = chars to int( value OF int_val,
+                                                      HEAP BOOL { error flag });
+                             IF int < lwb OF si  OREL  int > upb OF si
+                             THEN  flt(oneline(( value OF name, "/", int,
+                                                 " is out of bounds - [",
+                                                 lwb OF si, "..",
+                                                 upb OF si, "]" )));
+                                   err
+                             ELSE  HEAP SVINT:= (si, int)
+                             FI
+                          ELSE  wrong(int_val, "ELLA-integer")
+                          FI
+                        ) ,
+
+                     (REF SCHAR  sc)
+                        ( VALUE  char_val = check_ident(name, type);
+                          IF is_prime_char(char_val)
+                          THEN
+                             CHAR  char = (value OF char_val)[1];
+                             IF NOT instring(char, char OF sc)
+                             THEN  flt(oneline(( value OF name, "'", char, " is"
+                                                 " not a value in this type")));
+                                   err
+                             ELSE  HEAP SVCHAR:= (sc, char)
+                             FI
+                          ELSE  wrong(char_val, "ELLA-character")
+                          FI
+                        ) ,
+
+                     (REF SSTRING  ss)
+                        ( VALUE  string = check_ident(name, type);
+                          SCHAR  ctype = t OF ss;
+                          IF is_quoted_string(string)
+                          THEN
+                             INT  upb = UPB value OF string;
+                             { ELLA string denotations:
+                               If the character type of the string includes " "
+                               then a shorter string is acceptable.  It will
+                               be padded out on the right.
+                             }
+                             IF upb > no OF ss  OREL
+                                   ( NOT instring(" ", char OF ctype)  ANDTH
+                                     upb < no OF ss )
+                             THEN  new_flt(oneline(( value OF name, """",
+                                                     value OF string,
+                                                     """ should be of length ",
+                                                     no OF ss )));
+                                   err
+                             ELSE BOOL correct := TRUE;
+                                  FOR i TO upb WHILE correct
+                                  DO CHAR char = (value OF string)[i];
+                                     IF NOT instring(char, char OF ctype)
+                                     THEN flt(oneline((value OF name, "'",
+                                                       char, " is not a value",
+                                                       " in this type")));
+                                          correct := FALSE
+                                     FI
+                                  OD;
+                                  IF correct
+                                  THEN HEAP SVSTR  ans:=
+                                        (ss, HEAP VECTOR [no OF ss] CHAR);
+                                        (value OF ans)[: upb]:= value OF string;
+                                       FORALL c IN (value OF ans)[upb+1 :]
+                                       DO  c:= " "  OD;
+                                       ans
+                                  ELSE err
+                                  FI
+                             FI
+                          ELSE  wrong(string, "ELLA-string")
+                          FI
+                        ) ,
+
+                     (REF SENUM  se)
+                        ( IF is_val_id(name)
+                          THEN
+                             INT  tag:= 1;
+                             REF SENUM  ptr:= se;
+                             WHILE (ptr ISNT nil senum)  ANDTH
+                                   (id OF ptr /= value OF name)
+                             DO  ptr:= rest OF ptr;  tag PLUSAB 1  OD;
+                             IF ptr IS nil senum
+                             THEN  new_flt(oneline(( """", value OF name,
+                                                     """ is the wrong basic "
+                                                     "value" )));
+                                   err
+                             ELSE  HEAP SVENUM:= (se, tag, read_value(t OF ptr))
+                             FI
+                          ELSE  wrong(name, "basic value")
+                          FI
+                        )
+                  ESAC
+            FI
+          )
+      ESAC;
+
+   SVALUE  ans = read_value(type);
+   IF cycle = nocycle_nocheck
+   THEN  last_index:= index
+   ELIF NOT cycling  ANDTH  index < UPB names
+   THEN  VALUE  first = read_name;
+         RVC  val =
+            IF is_val_id(first)  ANDTH  index < UPB names
+            THEN  VALUE  second = read_name;
+                  IF is_slash_int(second)
+                  THEN  oneline((value OF first, "/", value OF second))
+                  ELIF is_prime_char(second)
+                  THEN  oneline((value OF first, "'", value OF second))
+                  ELIF is_quoted_string(second)
+                  THEN  oneline((value OF first, """", value OF second, """"))
+                  ELSE  value OF first
+                  FI
+            ELSE  value OF first
+            FI;
+         flt(oneline(("Extra parameter """, val, """ found")))
+   FI;
+   ans
+END
+
+KEEP  cycle_and_check,  nocycle_and_check,  nocycle_nocheck,  get_values
+FINISH

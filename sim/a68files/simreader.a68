@@ -1,0 +1,347 @@
+DECS  simreader  CONTEXT VOID  USE  putstrings,  basics,  messageproc,
+      commandsyntax,  commandreader,  kernelreader:
+
+{ " Id: simreader.sta,v 1.1 91/10/14 14:31:36 edcad Exp $" }
+configinfo A68CONFIG "$Id: simreader.a68,v 34.2 1995/03/29 13:05:02 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+05:12:89  Simulator reader for the new Kernel Interface.  DCT/EVW
+14:12:89  <value> reader added.  DCT
+09:01:90  The "get" procedures for node and value are in simnode and simpoke.
+22:01:90  Help strings added.  Reader error recovery corrected.  DCT
+22:06:90  Had is_name rather than is_simname in is_nodename.  DCT
+21:12:90  Query_syntax kept. JIT
+27:06:91  R6B51:  various reader errors - no check for <int> after /.  DCT
+03:12:92  Reading of () introduced. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.008 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Reader for simulator nodenames.  As the EPI representation for a nodename
+  is not broken down into components the EPI reader from Module simnode can be
+  used.  The ETI reader therefore, only has to parse and extract the node name
+  from the command line and pass it to simnode for analysis.  This though
+  presents two problems:  first, if is difficult to make use of existing
+  command line readers and secondly, multiple input lines may be difficult to
+  process.  It has been decided therefore, to make use of the commandreader
+  syntax to generate tokens that can be assembled by "node name common".
+  Procedure "get_nodename" is defined in Module simnode.
+
+  The syntax is (taken from simnode):
+
+  <period>  ::=  .            <semicolon> ::=  ;
+  <openrnd> ::=  (            <closernd>  ::=  )
+  <vspace>  ::=  _
+
+  <near>    ::=  [ <number> ] <name>
+  <full>    ::=  <near> [ { <period> | <semicolon> } <full> ]
+  <node>    ::=  <openrnd> <node> <closernd> |
+                     <vspace> [ <period> <full> ] | <full>
+
+
+  <period>, <name> and <number> ("int") are defined in kernelreader.
+
+  "fullnode" (<full> above) is introduced to cope with the recursion.
+  ( Alternatively <full> could be defined as <near> [ {.|;} <near> ]* ).
+}
+
+INT  semicolon_no,  openrnd_no,  closernd_no,  simname_no,  vspace_no,
+     fullnode_no,  nodename_no;
+
+COMMANDSYNTAX  semicolon_syntax = semicolon_no,
+               openrnd_syntax   = openrnd_no,
+               closernd_syntax  = closernd_no,
+               vspace_syntax    = vspace_no,
+               simname_syntax   = simname_no,
+               nodename_syntax  = nodename_no;
+
+STR  semicolon_str = ";",
+     openrnd_str   = "(",
+     closernd_str  = ")",
+     vspace_str    = "_",
+     simname_str   = "<name>",
+     fullnode_str  = "<fullnode>",
+     nodename_str  = "<nodename>",
+     semicolon_help = "Semicolon signifies ""go past"".",
+     period_help    = "Period signifies ""go in"".",
+     rndbrk_help    = "Use round brackets to separate to different node names.",
+     vspace_help    = "Visible space signifies the current position.",
+     simname_help   = "An ELLA function or identifier name.",
+     fullnode_help  = "A fullnode gives the path to an instance where <name> "
+                      "is an instance name and <number> may be used to "
+                      "select the nth version.",
+     nodename_help  = "The complete specification of a particular node.";
+
+
+PROC  check = (CHAR  c) BOOL:
+   { Additional separators for <name>s (cf attreader <nodeset>s) }
+   c = ")"  OREL  c = "."  OREL  c = ";";
+
+PROC  read_simname = (MESSAGEPROC  msg) RVC:
+   IF RVC  ident = read_ident_basic(get_first, simname_str, msg);
+      legal_read(ident)
+   THEN  check_separator(ident, simname_str, check, msg)
+   ELIF RVC  fnname = read_fnname_basic(get_first, msg);
+        legal_read(fnname)
+   THEN  check_separator(fnname, simname_str, check, msg)
+   ELSE  fnname
+   FI;
+
+
+PROC  read_semicolon = (MESSAGEPROC  msg) RVC:  read_char(semicolon_str[1],msg);
+PROC  read_openrnd   = (MESSAGEPROC  msg) RVC:  read_char(openrnd_str[1], msg);
+PROC  read_closernd  = (MESSAGEPROC  msg) RVC:  read_char(closernd_str[1], msg);
+PROC  read_vspace    = (MESSAGEPROC  msg) RVC:  read_char(vspace_str[1], msg);
+
+
+PROC  is_semicolon = (VALUE  v) BOOL:  sort OF v = semicolon_no;
+PROC  is_openrnd   = (VALUE  v) BOOL:  sort OF v = openrnd_no;
+PROC  is_closernd  = (VALUE  v) BOOL:  sort OF v = closernd_no;
+PROC  is_vspace    = (VALUE  v) BOOL:  sort OF v = vspace_no;
+PROC  is_simname   = (VALUE  v) BOOL:  sort OF v = simname_no;
+PROC  is_nodename  = (VALUE  v) BOOL:
+      sort OF v = openrnd_no  OREL  sort OF v = vspace_no  OREL
+      is_int(v)  OREL  is_simname(v);
+
+
+{ get_char procedures are not needed.  get_nodename is defined in simnode }
+
+
+
+
+
+
+
+
+{ Readers for the simulator data type <value>.  Module simpoke defined a
+  complicated mechanism for re-reading the command line to permit tokens
+  to be reused.  This is replaced by a system to extract tokens from a
+  VALUES parameter (VECTOR [] VALUE).  Procedure get_values does this in
+  Module simpoke.
+}
+
+
+{ <value> = [ -> ]  { ? | () | <id> { <> | /<int> | '<char> | "<string>" } } }
+
+INT  value_no,  val_id_no,  fn_arrow_no,  query_no,  void_no, slash_int_no,
+     prime_char_no;  { quoted_string is defined in kernelreader }
+
+COMMANDSYNTAX
+   value_syntax      = value_no,
+   fn_arrow_syntax   = fn_arrow_no,
+   query_syntax      = query_no,
+   void_syntax       = void_no,
+   val_id_syntax     = val_id_no,
+   slash_int_syntax  = slash_int_no,
+   prime_char_syntax = prime_char_no,
+   values_syntax     = { star(value_syntax); }
+        RULE (star_syn, HEAP VECTOR [1] COMMANDSYNTAX:= value_no);
+
+STR  value_str      = "<value>",
+     val_id_str     = ident_str,
+     fn_arrow_str   = "->",
+     query_str      = "?",
+     void_str       = "()",
+     slash_int_str  = ( VECTOR [UPB int_str + 1] CHAR  str;
+                        str[1]:= "/";   str[2:]:= int_str;
+                        str
+                      ),          { mutter ! }
+     prime_char_str = "'<character>",
+     value_help = "An ELLA signal value.";
+
+
+{ Note that some of these procedures do NOT permit leading spaces }
+
+PROC  read_fn_arrow = (MESSAGEPROC  msg) RVC:
+   IF first_char(msg) = "-"
+   THEN  IF next_char(msg) = ">" THEN  next_char(msg)  { consume next } FI;
+         check_read(MAKERVC "->", fn_arrow_str, msg)  { ??? spaces allowed ? }
+   ELSE  nothing_read
+   FI;
+
+PROC  read_void = (MESSAGEPROC  msg) RVC:
+   IF first_char(msg) = "("
+   THEN  IF next_char(msg) = ")" THEN  next_char(msg)  { consume next } FI;
+         check_read(MAKERVC "()", void_str, msg)
+   ELSE  nothing_read
+   FI;
+
+PROC  read_query = (MESSAGEPROC  msg) RVC:  read_char(query_str[1], msg);
+
+PROC  read_val_id = (MESSAGEPROC  msg) RVC:
+   check_separator( read_ident_basic(get_first, val_id_str, msg),
+                    val_id_str, (CHAR  c) BOOL:
+                          c = "/"  OREL  c = "'"  OREL  c = """",
+                    msg );
+
+PROC  read_slash_int = (MESSAGEPROC  msg) RVC:
+   IF next_first_char(msg) = "/"
+   THEN  RVC  int = read_int_basic(check_end, msg);
+         IF NOT legal_read(int)
+         THEN  msg( user,
+                    int_str + " expected after ""/"" in " + slash_int_str )
+         FI;
+         int
+   ELSE  nothing_read
+   FI;
+
+PROC  read_prime_char = (MESSAGEPROC  msg) RVC:
+   IF next_first_char(msg) = "'"
+   THEN  CHAR  c = next_char(msg);
+         next_char(msg);      { consume the next character for check_read }
+         check_read(MAKERVC c, prime_char_str, msg)
+   ELSE  nothing_read
+   FI;
+
+
+PROC  is_query = (VALUE  v) BOOL:       sort OF v = query_no;
+PROC  is_void = (VALUE  v) BOOL:        sort OF v = void_no;
+PROC  is_fn_arrow = (VALUE  v) BOOL:    sort OF v = fn_arrow_no;
+PROC  is_val_id = (VALUE  v) BOOL:      sort OF v = val_id_no;
+PROC  is_slash_int = (VALUE  v) BOOL:   sort OF v = slash_int_no;
+PROC  is_prime_char = (VALUE  v) BOOL:  sort OF v = prime_char_no;
+PROC  is_value = (VALUE  v) BOOL:
+         is_fn_arrow(v) OREL is_query(v) OREL is_val_id(v) OREL is_void(v);
+
+
+{ "get" procedures are not provided.  Care should be taken to check for
+  correct values using the "is" procedures. }
+
+PROC  get_slash_int = (VALUE  v,  MESSAGEPROC  msg) INT:
+BEGIN
+   check_value(v, slash_int_no, msg);
+   chars to int(value OF v, HEAP BOOL)
+END;
+
+
+
+
+
+
+{ "<time>" is used to describe an integer parameter in one simulator command }
+
+INT  time_no;
+COMMANDSYNTAX  time_syntax = time_no;
+STR  time_str = "<time>",
+     time_help = "An integer number - this may be signed.";
+
+PROC  read_time = (MESSAGEPROC  msg) RVC:  read_int_basic(first_and_check, msg);
+
+PROC  is_time = (VALUE  v) BOOL:  sort OF v = time_no;
+
+PROC  get_time = (VALUE  v,  MESSAGEPROC  msg) INT:
+BEGIN
+   check_value(v, time_no, msg);
+   chars to int(value OF v, HEAP BOOL)
+END;
+
+
+
+
+
+
+PROC  add_simulator_readers = (REF READERS  readers) REF READERS:
+BEGIN
+   { Note the use of "_no" in the syntax definitions below.  This permits
+     recursion and also the output of the associated "_str"s to describe
+     parsing errors where appropriate.
+   }
+   COMMANDSYNTAX
+      fullnode_syntax =
+         prod(( opt(int_syntax),
+                simname_syntax,
+                opt( prod(( alt(( period_syntax, semicolon_syntax )),
+                             fullnode_no
+                          ))
+                   )
+             )),
+      nodename_syntax =
+         alt(( prod(( openrnd_syntax, nodename_no, closernd_syntax )),
+               prod(( vspace_syntax, opt( prod(( period_syntax, fullnode_no )) )
+                   )),
+               fullnode_no
+            )),
+      value_syntax =
+         prod(( opt(fn_arrow_syntax),
+                alt(( query_syntax, void_syntax,
+                      prod(( val_id_syntax,
+                             opt(alt(( slash_int_syntax, prime_char_syntax,
+                                       quoted_string_syntax )))
+                          ))
+                   ))
+             ));
+   add_readers( readers,
+                ( ( semicolon_no, read_semicolon, semicolon_str,
+                    semicolon_help ),
+                  ( HEAP INT, period_syntax, period_str,
+                    period_help ),    { Repeated to include the help }
+                  (openrnd_no, read_openrnd, openrnd_str, rndbrk_help),
+                  (closernd_no, read_closernd, closernd_str, rndbrk_help),
+                  (vspace_no, read_vspace, vspace_str, vspace_help),
+                  (simname_no, read_simname, simname_str, simname_help),
+                  (fullnode_no, fullnode_syntax, fullnode_str, fullnode_help),
+                  (nodename_no, nodename_syntax, nodename_str, nodename_help),
+                  (fn_arrow_no, read_fn_arrow, fn_arrow_str, nullstr),
+                  (query_no, read_query, query_str, nullstr),
+                  (void_no, read_void, void_str, nullstr),
+                  (val_id_no, read_val_id, val_id_str, nullstr),
+                  (slash_int_no, read_slash_int, slash_int_str, nullstr),
+                  (prime_char_no, read_prime_char, prime_char_str, nullstr),
+                  (value_no, value_syntax, value_str, value_help),
+                  (time_no, read_time, time_str, time_help)
+                )
+              )
+END
+
+
+
+KEEP  semicolon_str,    semicolon_syntax,    is_semicolon,
+      openrnd_str,      openrnd_syntax,      is_openrnd,
+      closernd_str,     closernd_syntax,     is_closernd,
+      vspace_str,       vspace_syntax,       is_vspace,
+      simname_str,      simname_syntax,      is_simname,
+      nodename_str,     nodename_syntax,     is_nodename,
+      fn_arrow_str,     read_fn_arrow,       is_fn_arrow,
+      query_str,        query_syntax,        is_query,        read_query,
+      void_str,         void_syntax,         is_void,         read_void,
+      val_id_str,       val_id_syntax,       is_val_id,
+      slash_int_str,    slash_int_syntax,    is_slash_int,
+      prime_char_str,   read_prime_char,     is_prime_char,
+      value_str,        values_syntax,       is_value,
+      time_str,         time_syntax,         is_time,         get_time,
+
+      add_simulator_readers
+FINISH
