@@ -1,0 +1,106 @@
+DECS simbasics CONTEXT VOID USE  putstrings:
+
+{ " Id: simbasics.sta,v 2.1 91/02/22 18:36:51 14:31:16 edcad Exp$" }
+configinfo A68CONFIG "$Id: simbasics.a68,v 34.2 1995/03/29 13:04:58 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+24:06:88  Module created for release 4.  BJE,
+13:02:89  Correction to `whole'.  R4B125.  BJE.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains procedures without side effects of general use to
+   the simulator shell.
+}
+
+{ 'max' simply returns the larger of its two arguments. }
+PROC max = (INT a, b) INT:  IF a > b THEN  a  ELSE  b  FI;
+
+{ 'min' is its little brother }
+PROC min = (INT a, b) INT:  IF a < b THEN  a  ELSE  b  FI;
+
+{ Calculated the number of decimal digits to display an integer }
+PROC digits = (INT n) INT:
+BEGIN
+   INT width := 1;
+   INT nn := n;
+   WHILE nn >= 10 OR nn <= -10 DO
+      { That rather odd test avoids the need to ABS n, which can overflow }
+      nn := nn % 10;
+      width +:= 1
+   OD;
+   IF n < 0 THEN  width + 1  ELSE  width  FI
+END;
+
+{
+   Reimplementation of the standard prelude function described on p88 of
+   "Guide to ALGOL 68" by Woodward and Bond.  This function is not provided
+   by the CTRANS environment.
+
+
+}
+PROC whole = (INT n, width) REF VECTOR [] CHAR:
+BEGIN
+   INT w = ABS width;
+   REF VECTOR [] CHAR ans = HEAP VECTOR [w] CHAR;
+   INT sig := digits (n);
+   IF width > 0 ANDTH n >=0 THEN sig +:= 1 FI;
+   IF sig > w THEN FOR i TO w DO ans[i] := "*" OD
+   ELSE
+      INT i := w;
+      INT r := n MOD 10;
+      INT q := ABS (n OVER 10);
+      IF n < 0 THEN r := (10 - r) MOD 10 FI;
+      ans [i] := REPR (ABS "0" + r);
+      WHILE q /= 0 DO
+         r := q MOD 10;
+         q := q OVER 10;
+         ans [i -:= 1] := REPR (ABS "0" + r)
+      OD;
+      IF n < 0 THEN ans [i -:= 1] := "-"
+      ELIF width > 0 THEN ans [i -:= 1] := "+"
+      FI;
+      WHILE i > 1 DO ans [i -:= 1] := " " OD
+   FI;
+   ans
+END;
+
+SKIP
+
+KEEP
+   max, min, digits, whole
+
+FINISH
