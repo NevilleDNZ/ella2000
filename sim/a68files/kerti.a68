@@ -1,0 +1,1820 @@
+DECS kerti CONTEXT VOID USE putstrings, basics, options, kesymbols, kesignals,
+     ketranslate, keinstance, keamgen, keamstandard, keambasics, kebasics,
+     kesave, kememory, testmode, osinterface:
+
+{ " Id: kerti.sta,v 2.3 91/07/30 15:19:30 miker Exp$" }
+configinfo A68CONFIG "$Id: kerti.a68,v 34.2 1995/03/29 13:04:54 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement the run-time interface
+              in the kernel of the new simulator
+24:11:88  Bugs in `drop' and `{peek,poke} a bit' corrected.  MDR
+24:11:88  `set function' attaches inputs to inner instances. BJE
+28:11:88  `drop' amended to correct bug visible on VMS only.  Bug 41.  BJE.
+01:12:88  Silly bug in `set function' corrected.  BJE
+02:12:88  `set function' sets input parameters to ?.  Bug 37.  BJE
+02:12:88  `set function' handles input connections to deeply
+              nested instances.  Bug 44. BJE
+09:12:88  `set function' collects inputs from instance #2.  `raw
+              poke signal value' sets correct instance flags.  Bug 13.  BJE
+10:12:88  Minor change for new MODE of 'lookup name'.  PAR.
+15:12:88  `set function' now uses `cp instanceno'.  BJE.
+21:12:88  started exception handling. MDR.
+21:12:88  `raw {peek, poke} signal value' now handle SVNULL.  Bug 77.  BJE
+29:12:88  `set function' updates fanout list of cp instance and initialises
+              time and initialised gloabls end evaluation flags.  Bug 64.  BJE
+ 4:01:89  Interrupt handling modified.  Bug 80 and review actions.  PAR.
+12:01:89  `sim time' reinitialised by `set function'.  Bug 106.  BJE.
+14:01:89  `poke a bit' clear padding bytes in associations.  Bug 117. BJE.
+17:01:89  Exception messages reworded.  PAR.
+20:01:89  Save/Restore 'sf no'.  Bug 86.  R4B034.  MDR.
+23:01:89  Generic identity evaluation flags set in 'set function'.
+              Bug 95.  R4B035.  PAR.
+24:01:89  Restore no longer calls 'raw select function', but does
+              call 'am initialise'.  Bug 86.  R4B034.  PAR.
+02:02:89  `raw select function' calls for the correct sort of name
+              search.  R4B066.  BJE.
+02:02:89  Changed mode of ferry precedures.  Arch design CR 33.  PAR.
+02:02:89  Restore calls 'am locations initialise'.  R4B034.  PAR.
+15:03:89  'set function' corrected.  R4B217.  PAR
+10:04:89  Speedup changes.  R4B134 and R4B152.  PAR.
+04:12:89  Memory allocation, and fanout extension added.  PAR.
+26:10:89  Added Probe connectivity code. MDR.
+25:01:90  R4B??? Fix to PROC instance. MDR.
+17:09:90  Integrated alien code. MDR.
+28:11:90  Fixed probe relocation to ignore fanouts to global vars. MDR.
+11:12:90  Assclosure added to use list for firstseed etc. Also osinterface
+              added for screen. JIT
+12:02:91  Eliminate sizes message when in testmode.  DJS
+21:02:91  Fixed destroy all probe instances. MDR.
+23:04:91  Re-merge into ELLA 6. DJS
+22:05:91 Clear init flag in alien code instances. AAP.
+26:07:91 Fozen nodes list initialised, contained functions now found
+             correctly during freeze. MDR.
+10:02:93 Firstseed renamed simdecl etc. EVW
+10:06:93  Interface changed for separate simulator image.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.038 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Fanout lists can be extended with extra elements, or elements can be
+  deleted from them, with the following procedures.  Note that it can be
+  assumed that the extension will always occur after the existing data
+  (which may need to be moved into new space), and that a deletion will
+  remove the last-added occurrence of the given element.
+  The list to be changed is specified by the abstract machine address of
+  a pointer to the list -- if the data is moved, the pointer must be
+  changed to point to it!  The new fanouts are given as a list of
+  addresses to which the extra fanout entries should point.
+  As implemented at the moment, deletion does not ever free any memory:
+  this could be added if it could be justified.
+}
+MODE SINKINSTANCELIST = STRUCT (INT fanout to, REF SINKINSTANCELIST tail);
+REF SINKINSTANCELIST nil sinkinstancelist = NIL;
+
+
+PROC add to fanout = (INT source fanout,
+                      SINKINSTANCELIST instancelist) VOID:
+BEGIN
+    INT list := cg peek int (source fanout);    { Actual address of list }
+    INT size := cg peek int (list);             { Number of *entries* }
+    INT extras := 0;
+    REF SINKINSTANCELIST scan := LOC SINKINSTANCELIST := instancelist;
+    WHILE scan ISNT nil sinkinstancelist DO
+        extras +:= 1;
+        scan := tail OF scan
+    OD;
+    list := extend am memory (list, (size + 1 + extras) * ws);
+                                { Extra 1 for the size field itself! }
+    cg poke int (list, source fanout);          { Store new pointer }
+    cg poke int (size + extras, list);          { Store new size }
+    scan := LOC SINKINSTANCELIST := instancelist;
+    TO extras DO
+        INT to = fanout to OF scan;
+        size +:= 1;
+        cg poke int (to, list + size * ws);
+        scan := tail OF scan
+    OD
+END;
+
+
+{ Note that this procedure *will* modify fanout lists in un-managed memory,
+  but this is safe because it will always reduce the size.  In practice,
+  I would not expect it to be called on such lists.
+}
+PROC remove from fanout = (INT source fanout,
+                           SINKINSTANCELIST instancelist) VOID:
+BEGIN
+    INT list = cg peek int (source fanout);     { Actual address of list }
+    INT size := cg peek int (list);             { Number of entries }
+    INT deletions := 0;
+    REF SINKINSTANCELIST scan := LOC SINKINSTANCELIST := instancelist;
+    WHILE scan ISNT nil sinkinstancelist DO
+        INT to = fanout to OF scan;
+        BOOL not found := TRUE;
+        FOR i FROM size BY -1 TO 1 WHILE not found DO
+            INT address = list + i * ws;
+            INT entry = cg peek int (address);
+            IF entry = to THEN
+                IF i < size THEN
+                    cg poke (cg peek ((size -i) * ws, address + ws), address)
+                FI;
+                not found := FALSE;
+                size -:= 1
+            FI
+        OD;
+        scan := tail OF scan
+    OD;
+    cg poke int (size, list)
+END;
+
+
+{ Local Copies of Variables }
+{ ========================= }
+
+{ The current simulation time
+}
+INT sim time := 0;
+
+{ The name of the simulated function
+}
+ID sf id;
+
+{ The function number of the simulated function
+}
+INT sf no;
+
+{ The input pointers taken from the original instance data for the
+  simulated function instance, when its inputs were redirected to
+  be the circuit parameters.  Needed so that they can be restored
+  again later.
+}
+WORD old input ptrs := NIL;
+
+{ Setting and Simulating a Function }
+{ ================================= }
+
+
+PROC VOID unfreeze all instances;
+
+{ To set simulated function, we find anyinstance of the appropriate function,
+  make its inputs (and where necessary the inputs of its component instances)
+  point to the circuit parameters' instance and adjust the circuit parameters'
+  fanout appropriately.  There is no attempt to optimise this fanout, there
+  is exactly on forward fanout pointer for each backward input pointer even
+  if several of the latter come from the same place.  Instantiation
+  guarantees that there will be sufficient space for the largest possible
+  fanout list.  Next we clear the`time' and `initialised' globals.  Finally
+  we initialise the evaluation flags.  We set all the flags within the
+  simulated function and clear all those outside it.  Note that this does
+  not guarantee that fanout from the simulated function cannot wake up external
+  instances but it does minimise external activity.  Such activity has no
+  visible effect other than acting as a drain on processing power.
+}
+PROC set function = (INT symbol no) NODE:
+BEGIN
+    unfreeze all instances;
+    { `fanout count' counts the number of used fanout items, `fanout ptr'
+      points to the location where `fanout count' must eventually be stored.
+      `fanout' is a scratchpad for holding encoded fanout counts and pointers
+    }
+    INT fanout count := 0;
+    STRUCT (INT size, offset, BITS sort) shape =
+        lookup shape (fnno OF instance ptrs [cp instance no]);
+    INT fanout ptr = offset OF instance ptrs [cp instance no]
+                     + size OF shape;
+    INT fanout list = fanout ptr + ws;
+
+    free am memory(cg peekint(fanout ptr));
+    cg poke int(fanout list, fanout ptr);
+    BOOL done a unit del fanout := FALSE;
+
+    { Recurse over input aliases to connect signal sources
+      wherever they are needed throughout the circuit so for:
+
+      FN A = (bool: ip) -> bool: <atomic function>.
+
+      FN B = (bool: ip) -> bool: A ip.
+
+      FN C = (bool: ip) -> bool: B ip.
+
+      join the signal sources to B.ip and B.A.ip (as well as ip
+      which has already been done.  If the signal sources are the
+      circuit parameters, then also set the corresponding fanouts. }
+    PROC joinup input aliases =  (
+        WORD input,
+        REF VECTOR [] STRUCT (INT inst offset, ip no)aliases,
+        INT instance no,
+        BOOL circuit parameters)
+    VOID:
+        FOR j TO UPB aliases DO
+            INT inner instance = instance no + inst offset OF aliases [j];
+            INT inner offset = offset OF instance ptrs [inner instance];
+            cg poke (input,
+                     inner offset + size unit + ip no OF aliases [j] * ws);
+            IF circuit parameters THEN
+                cg poke int (inner offset, fanout list + (fanout count +:=1) * ws);
+                IF (NOT done a unit del fanout) ANDTH
+                   (sort OF lookup shape(fnno OF instance ptrs[inner instance])
+                    = unit delay)
+                THEN
+                   done a unit del fanout := TRUE;
+                   cg poke int (global unit del event,
+                                fanout list + (fanout count +:=1) * ws)
+                FI
+            FI;
+            joinup input aliases (
+                input,
+                lookup input aliases (
+                    fnno OF instance ptrs [inner instance],
+                    ipno OF aliases [j]),
+                inner instance,
+                circuit parameters)
+        OD;
+
+    IF old input ptrs ISNT RVC (NIL) THEN
+        { Restore original inputs to previous simulated function }
+        INT instance no = lookup an instance (sf no);
+        INT old offset = offset OF instance ptrs [instance no] + size unit + ws;
+        cg poke (old input ptrs, old offset);
+        REF VECTOR [] INT data sizes = lookup input sizes (sf no);
+        FOR i TO UPB data sizes DO
+            REF VECTOR [] CHAR input =
+                old input ptrs [ (i - 1) * ws + 1 : i * ws];
+            REF VECTOR [] STRUCT (INT inst offset, ip no) aliases =
+                lookup input aliases (sf no, i);
+            joinup input aliases ( input, aliases, instance no, FALSE)
+        OD;
+        old input ptrs := NIL
+    FI;
+
+    sf no := symbol no;
+    sf id := lookup user id (symbol no);
+
+    { Find a suitable instance of the new function }
+    INT instance no = lookup an instance (symbol no);
+
+    { Save its current input pointers }
+    INT outer offset = offset OF instance ptrs [instance no];
+    INT n inputs = cg peek int (outer offset + size unit);
+    old input ptrs :=
+        HEAP VECTOR [ws * n inputs] CHAR :=
+            cg peek (ws * n inputs, outer offset + size unit + ws);
+
+    { Set up new input pointers }
+    INT pstart = offset OF instance ptrs [cp instanceno] + ws + size unit;
+    INT pend := pstart;
+    REF VECTOR [] INT data sizes = lookup input sizes (symbol no);
+    IF (NOT done a unit del fanout) ANDTH
+       (sort OF lookup shape(symbol no) = unit delay)
+    THEN
+       done a unit del fanout := TRUE;
+       cg poke int (global unit del event, fanout list+(fanout count +:=1)*ws)
+    FI;
+    FOR i TO n inputs DO
+        VECTOR [ws] CHAR input;
+        unsigned to word (pend, input);
+        up (input);
+        cg poke (input, outer offset + size unit + i * ws);
+        cg poke int (outer offset, fanout list + (fanout count +:=1) * ws);
+        joinup input aliases (
+            input,
+            lookup input aliases (symbol no, i),
+            instance no,
+            TRUE);
+        pend +:= data sizes [i]
+    OD;
+
+    { Adjust the fanout count }
+    cg poke int (fanout count, fanout list);
+    IF fanout list + (fanout count + 1) * ws >
+       offset OF instance ptrs [cp instanceno + 1]
+    THEN sys fault ("set function: fanout too great")
+    FI;
+
+    { Clear circuit parameters to ? }
+    VECTOR [pend - pstart] CHAR params;
+    FORALL c IN params DO c := REPR 0 OD;
+    cg poke (params, pstart);
+
+    { Initialise global variables and evaluation flags.  Note that we have
+      to take special action to set the evaluation flags of delay loop
+      breakin generic identities (whose instance numbers will not be in
+      the normal range).  For simplicity we set those of all generic
+      identities -- this will not be significant, since in their only
+      other use for combinatorial loop breaks, they are always called
+      unconditionally just before combinatorial logic. }
+    sim time := 0;
+    INT clear = 0;
+    INT set = 1;
+    INT generic id fnno = lookup name (MAKEID "$Genericid", 0, -1);
+    INT last instance no = instance no + lookup last instance (symbol no);
+    cg poke int (clear, global initialised);
+    cg poke int (clear, global time);
+    FOR i TO UPB instance ptrs DO
+        INT flag =
+            IF
+                instance no <= i ANDTH i <= last instance no
+                OREL fnno OF instance ptrs [i] = generic id fnno
+            THEN set
+            ELSE clear
+            FI;
+        cg poke int (flag, offset OF instance ptrs [i])
+    OD;
+
+    { Clear the "initialised" flags of alien code instances }
+    FORALL instptr IN instance ptrs
+    DO
+        IF sort OF lookup shape(fnno OF instptr) >= alien sort
+        THEN
+            cg poke int( 0,
+               offset OF instptr + ws*(8+UPB lookup input sizes(fnno OF instptr)))
+        FI
+    OD;
+
+    HEAP NODE := BOX (symbol no, instance no)
+END;
+
+
+PROC (BOOL)VOID clear am probe lists; {declared later in the 'Reading and
+                                       Changing Global Memory' section}
+PROC VOID destroy all probe instances;
+
+PROC raw select function = (ID function, FLTPROC flt) NODE:
+BEGIN
+    { call alien code terminators }
+    cg poke int(terminate action,global action);
+    VOID (cg simulate(sim time));
+    destroy all probe instances;
+
+    { The last 0 here calls for the correct sort of search - see
+      `lookup name' itself }
+    INT found := lookup name (function, simdecl, 0);
+    IF found = 0 THEN
+       found := lookup name (function, simandprobedecl, 0)
+    FI;
+    IF found = 0 THEN flt ("function not found")
+    ELIF lookup an instance (found) = 0 THEN
+       flt ("function not instantiated in this circuit")
+    FI;
+    set function (found)
+END;
+
+
+{ 'raw simulate' advances time by at most the given increment, returning the
+  actual increment used in 'increment' (currently, the increment used
+  is at most one, but may be larger when event optimisation is implemented).
+  The BOOL 'stable' is set TRUE if the simulation step terminated after
+  completing combinatorial logic normally, and FALSE otherwise (which can only
+  happen through a hard interrupt or exception of some sort).
+}
+PROC raw simulate = (REF INT increment, REF BOOL stable, FLTPROC flt) VOID:
+ BEGIN
+    INT start time = sim time;
+    INT stop time := sim time + increment;
+    IF NOT stable THEN cg poke int(0, global comb outputs stable) FI;
+    STRUCT (INT lasttime, interrupted) sim :=
+        BEGIN
+            cg poke int(evaluate action, global action);
+            cg simulate (stop time)
+        END;
+    sim time := lasttime OF sim;
+    increment := lasttime OF sim - start time;
+    stable := TRUE;
+
+    IF interrupted OF sim /= 0 THEN
+        OP BYA = (INT w, INT level) BOOL:
+            (BIN w AND BIN level) /= 16r0;
+
+        ID msg;
+
+        IF interrupted OF sim BYA hard interrupt THEN
+            put (screen, ("Cancel", newline, "Cancel", newline));
+            msg := MAKEID "Interrupted, values not final";
+            stable := FALSE
+        ELIF interrupted OF sim BYA soft interrupt THEN
+            msg := MAKEID "Cancel"
+        FI;
+
+        IF interrupted OF sim BYA sqrt error THEN
+            IF NOT stable THEN put (out, (msg, newline)) FI;
+            msg := MAKEID "SQRT of a negative number, values not reliable";
+            stable := FALSE
+        ELIF interrupted OF sim BYA arithmetic error THEN
+            IF NOT stable THEN put (out, (msg, newline)) FI;
+            msg := MAKEID "Arithmetic error, values not reliable";
+            stable := FALSE
+        FI;
+
+        flt (msg)
+    FI
+
+END;
+
+   { === Connectivity Code for Probes === }
+   {
+    'connect probe' connects an already instanciated probe function
+     to a specified line. It is assumed that type checking has already been
+     performed on the probe input & the line.
+     A list of probe connections (ie fanouts) is collected for each probe
+     to allow the probe to be disconnected by MNODE reference.
+
+    'disconnect probe' removes the fanouts established by
+    'connect probe' for a particular probe MNODE
+
+    'save probes' causes the probe list to be saved to the simulation file.
+    'restore probes' reconstructs a probe list from a previously saved one.
+    Neither of these routines need to operate upon the abstract machine's
+    global memory (ie probe fanout/connections) as a complete snapshot of
+    it is taken during 'savesimuation'.
+
+    This code makes NO attempt to remove duplication in the fanout lists
+    produced. This will produce a slightly inefficient simulation in that
+    certain functions which feed a probe will set its evaluation flag more
+    than once. I hope this will be insignificant. A more sophisticated
+    implementation could check for duplicates in 'add sinkinstance'
+    and 'add sourceinstance'.
+ }
+
+   PROC add sink instance = (INT fanout to, REF REF SINKINSTANCELIST list)VOID:
+      list := HEAP SINKINSTANCELIST := (fanout to, list);
+
+   PROC save sinkinstancelist =
+           (REF SINKINSTANCELIST sinkinstancelist,
+            PROC (RVC, FLTPROC) VOID ferry,
+            FLTPROC flt) VOID:
+   BEGIN
+       REF SINKINSTANCELIST head := sinkinstancelist;
+       INT count :=0;
+       WHILE head ISNT nil sinkinstancelist DO
+          count +:=1;
+          head := tail OF head
+       OD;
+       write int (count, ferry, flt);
+       head := sinkinstancelist;
+       WHILE head ISNT nil sinkinstancelist DO
+          write int(fanout to OF head, ferry, flt);
+          head := tail OF head
+       OD
+   END;
+
+   PROC restore sinkinstancelist =
+           (PROC (RVC, FLTPROC) VOID ferry,
+            FLTPROC flt) REF SINKINSTANCELIST:
+   BEGIN
+      REF SINKINSTANCELIST result := nil sinkinstancelist;
+      TO read int(ferry, flt) DO
+         add sink instance(readint (ferry, flt), result)
+      OD;
+      result
+    END;
+
+
+   MODE SOURCEINSTANCELIST = STRUCT (INT fanout from,
+                               REF SINKINSTANCELIST sinks,
+                               REF SOURCEINSTANCELIST tail);
+   REF SOURCEINSTANCELIST nil sourceinstancelist = NIL;
+
+   PROC add source instance = (INT fanout from,
+                               REF SINKINSTANCELIST sinks,
+                               REF REF SOURCEINSTANCELIST list)VOID:
+      list := HEAP SOURCEINSTANCELIST := (fanout from, sinks, list);
+
+   PROC save sourceinstancelist =
+           (REF SOURCEINSTANCELIST sourceinstancelist,
+            PROC (RVC, FLTPROC) VOID ferry,
+            FLTPROC flt) VOID:
+   BEGIN
+       REF SOURCEINSTANCELIST head := sourceinstancelist;
+       INT count :=0;
+       WHILE head ISNT nil sourceinstancelist DO
+          count +:=1;
+          head := tail OF head
+       OD;
+       write int (count, ferry, flt);
+       head := sourceinstancelist;
+       WHILE head ISNT nil sourceinstancelist DO
+          write int (fanout from OF head, ferry, flt);
+          save sinkinstancelist(sinks OF head, ferry, flt);
+          head := tail OF head
+       OD
+   END;
+
+   PROC restore sourceinstancelist =
+           (PROC (RVC, FLTPROC) VOID ferry,
+            FLTPROC flt) REF SOURCEINSTANCELIST:
+   BEGIN
+      REF SOURCEINSTANCELIST result := nil sourceinstancelist;
+      TO read int(ferry, flt) DO
+         add source instance (readint (ferry, flt),
+                              restore sinkinstancelist(ferry, flt),
+                              result)
+      OD;
+      result
+    END;
+
+    MODE PROBELIST =
+       STRUCT (INT probe base offset,
+               INT connected to {base offset},
+               REF SOURCEINSTANCELIST input instances,
+               REF PROBELIST tail);
+    REF PROBELIST nil probelist = NIL;
+
+   {probelist is an object which records the connectivity of the inputs
+    to a probe function}
+   REF PROBELIST probelist;
+
+   PROC clear probelist = VOID:
+       probelist := nil probelist;
+
+   { The following four procedures only operate upon the probelist object }
+   PROC add probe = (INT base,line, REF SOURCEINSTANCELIST inputinstances)VOID:
+      probelist := HEAP PROBELIST := (base, line, inputinstances, probelist);
+
+   PROC del probe = (INT base) REF PROBELIST:
+   BEGIN
+      REF REF PROBELIST head := probelist;
+      WHILE (head ISNT nil probelist) ANDTH (probe base offset OF head /= base)
+      DO
+         head := tail OF head
+      OD;
+      IF head IS nil probelist THEN
+         nil probelist
+      ELSE
+         REF PROBELIST result = head;
+         REF REF PROBELIST(head) := tail OF head;
+         result
+      FI
+   END;
+
+   PROC save probes = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+      BEGIN
+         INT count :=0;
+         REF PROBELIST head := probelist;
+         WHILE head ISNT nil probelist DO
+            count +:=1;
+            head := tail OF head
+         OD;
+         write int (count, ferry, flt);
+         head := probelist;
+         WHILE head ISNT nil probelist DO
+            write int(probe base offset OF head, ferry, flt);
+            write int(connected to OF head, ferry, flt);
+            save source instancelist(input instances OF head, ferry, flt);
+            head := tail OF head
+         OD
+      END;
+
+   PROC restore probes = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+      BEGIN
+         clear probelist;
+         TO read int (ferry, flt) DO
+            add probe(read int(ferry, flt), read int(ferry, flt),
+                      restore source instancelist(ferry, flt))
+         OD
+      END;
+
+{Find the circuit & base of the probe instance *containing* the offset given,
+ or 0 for the simulated function}
+PROC find probe base circuit = (INT target offset, global start list, global end list)
+   STRUCT (INT base, circuit):
+BEGIN
+   INT start list = cg peek int(global start list);
+   INT end list = cg peek int(global end list);
+   INT circuit result := 0;
+   INT base result := 0;
+   INT instance := start list;
+   INT prev base := -1;
+   WHILE instance <= end list DO
+      INT this base = cg peek int (instance+ws);
+      IF this base > prev base ANDTH this base <= target offset THEN
+         prev base := this base;
+         base result := this base;
+         circuit result := cg peek int (instance)
+      FI;
+      instance +:= 2*ws
+   OD;
+   (base result, circuit result)
+END;
+
+{ Calculate the instance containing the given location, ie `i' st
+
+  offset OF instance ptrs [i] <= loc  ANDTH
+  (i = UPB instance ptrs OREL loc < offset OF instance ptrs [i+1]
+}
+PROC instance = (INT loc) STRUCT (INT fnno, offset):
+BEGIN
+    STRUCT (INT base, circuit) probe =
+       find probe base circuit(loc, global start inst list,
+                                    global end inst list);
+    REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF probe = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF probe]
+       FI;
+    INT real loc = loc - base OF probe;
+
+    INT lwb := 0;
+    INT upb := UPB inst ptrs +1;
+    WHILE lwb + 1 /= upb DO
+        INT mid = (lwb + upb) OVER 2;
+        IF offset OF inst ptrs [mid] <= real loc THEN lwb := mid
+        ELSE upb := mid
+        FI
+    OD;
+    (fnno OF inst ptrs[lwb], base OF probe + offset OF inst ptrs[lwb])
+END;
+
+ {
+   Recurse over input aliases to connect signal sources
+   as in 'set function'.  However, we accumulate a list of fanouts
+   also.  This list is actually nearly optimal, in that we only
+   force those instances which recieve inputs directly from the main
+   circuit -- the only inefficiency is that we include compound function
+   instances.
+  }
+ PROC joinup probe input aliases =
+    (REF REF SINKINSTANCELIST sinks,
+     INT input,
+     REF VECTOR [] INSTANCEPTR probe inst ptrs,
+     REF VECTOR [] STRUCT (INT inst offset, ip no)aliases,
+     INT base,
+     INT instance no) VOID:
+
+     FOR j TO UPB aliases DO
+        INT inner instance = instance no + inst offset OF aliases [j];
+        INT inner offset = base + offset OF probe inst ptrs [inner instance];
+        INT input offset = inner offset + size unit + ip no OF aliases[j] * ws;
+        cg poke int (input, input offset);
+        cg poke int (1, inner offset);
+        add sink instance (inner offset, sinks);
+        joinup probe input aliases (
+           sinks,
+           input,
+           probe inst ptrs,
+           lookup input aliases (
+                 fnno OF probe inst ptrs [inner instance],
+                 ipno OF aliases [j]),
+           base,
+           inner instance)
+     OD;
+
+{
+ Pre-conditions of 'connect probe' :-
+   Probe instantiation has occured already.
+   The Probe & Line's types have been matched already.
+
+ This procedure has to connect the probe's inputs to the outputs of the
+ instances that comprise the line being probed, and add the probe's
+ instance offset(s) to the line's fanout list(s).
+
+ The types of probe and line are ignored here, the block description only is
+ used to drive the connection.
+
+ }
+PROC connect probe = (MNODE mprobe, mline) VOID:
+BEGIN
+   INT c = circuit OF mprobe;
+   REF VECTOR [] INSTANCEPTR pis = inst ptrs OF (probe instance ptrs[c]);
+   {The probe ID instance is always immediately before the probe
+    function instance. It is the ID's inputs which we re-direct}
+   INT probe id inst = (probe instance OF (probe instance ptrs[c])-1);
+   INT probe instance offset = offset OF pis[probe id inst] +
+                               base OF mprobe;
+   INT probe input offset = probe instance offset + ws + size unit;
+
+   REF VECTOR [] INT input data sizes =
+      lookup input sizes (fnno OF probe instance ptrs[circuit OF mprobe]);
+   INT n inputs = UPB input data sizes;
+
+   REF VECTOR [] INSTANCEPTR line inst ptrs =
+      IF circuit OF mline = 0 THEN
+         instance ptrs
+      ELSE
+         inst ptrs OF (probe instance ptrs[circuit OF mline])
+      FI;
+
+   LINE line =
+      CASE node OF mline IN
+      (LINE l): l,
+      (BOX b) : (HEAP WIRE := outputs OF raw lookup function(fn OF b),
+                 instance OF b)
+     ESAC;
+
+   REF VECTOR [] BLOCK blocks =  blocks OF wire OF line;
+
+   INT block index := 0;
+   INT block size := 0;
+   INT line instance no;
+   INT line fanout offset; {the offset of the fanout ptr for part of the line}
+   INT part line offset;   {the offset of part of the line!}
+
+   REF SOURCEINSTANCELIST inputs of probe := nil sourceinstancelist;
+
+   FOR i TO n inputs DO
+      IF block size <= 0 THEN
+         block index +:=1;
+         line instance no := instance OF line +
+            inst offset OF blocks[block index];
+
+         IF {the block is not indirect}
+            INT line eval flag offset = base OF mline +
+                offset OF line inst ptrs [line instance no];
+            INT relative = offset OF blocks [block index];
+            INT line value offset = line eval flag offset + ABS relative;
+            relative >= 0
+         THEN
+            {we've got all we need already}
+            part line offset := line value offset;
+            INT line fnno = fnno OF line inst ptrs [line instance no];
+            line fanout offset := line eval flag offset +
+               size OF lookup shape(line fnno)
+         ELSE
+            {we need to find the output of another function via
+             an input pointer at 'line value offset'}
+            part line offset := cg peek int (line value offset);
+            STRUCT (INT fnno, offset)real inst = instance (part line offset);
+            line fanout offset := offset OF real inst +
+               size OF lookup shape(fnno OF real inst)
+         FI;
+
+         block size := size OF blocks[block index]
+      FI;
+
+      { record that we need to fanout to this probe instance }
+      REF SINKINSTANCELIST sinks := nil sinkinstancelist;
+      add sink instance (probe instance offset, sinks);
+
+      { connect the probe's input to the line }
+      cg poke int(part line offset, probe input offset + (i-1)*ws);
+      joinup probe input aliases(
+         sinks,
+         part line offset,
+         inst ptrs OF probe instance ptrs[circuit OF mprobe],
+         lookup input aliases(fnno OF pis[probe id inst], i),
+         base OF mprobe,
+         probe id inst);
+
+      {record the fact that the instance holding this part of the line has
+       been connected to}
+      add source instance(line fanout offset,
+                          sinks,
+                          inputs of probe);
+      add to fanout(line fanout offset, sinks);
+
+      block size  -:= input data sizes [i];
+      part line offset +:= input data sizes [i]
+   OD;
+
+   {set probe's evaluation flag}
+   cg poke int (1, probe instance offset);
+   add probe(base OF mprobe, base OF mline, inputs of probe)
+
+END;
+
+{
+ This procedure has to remove the probe's instance offset(s) from the line's
+ fanout lists.
+ }
+PROC disconnect probe = (MNODE mprobe) VOID:
+BEGIN
+   REF PROBELIST probe = del probe (base OF mprobe);
+   IF probe IS nil probelist THEN
+      sysfault ("bad probe box")
+   ELSE
+      REF SOURCEINSTANCELIST current source := input instances OF probe;
+      WHILE current source ISNT nil sourceinstancelist DO
+         remove from fanout(fanout from OF current source,
+                            sinks OF current source);
+         current source := tail OF current source
+      OD
+   FI
+END;
+
+{This procedure returns an MNODE which describes a piece of instance data
+ to be used as the input for a probe.}
+PROC raw probe input node = (MNODE mprobe)MNODE:
+BEGIN
+    INT input size := 0;
+    REF VECTOR [] INT input sizes =
+       lookup input sizes(fnno OF (probe instance ptrs[circuit OF mprobe]));
+    FOR i TO UPB input sizes DO input size +:= input sizes[i] OD;
+    MNODE(
+       LINE(
+          HEAP WIRE :=
+             (null stype,
+              HEAP VECTOR[1]BLOCK := BLOCK(0, ws + size unit, input size)
+              ),
+          input instance OF (probe instance ptrs[circuit OF mprobe])),
+       circuit OF mprobe, base OF mprobe)
+END;
+
+PROC connects to = (INT base)INT{base}:
+BEGIN
+   REF PROBELIST head := probelist;
+   INT result := 0;
+   WHILE (head ISNT nil probelist) ANDTH (result = 0) DO
+      IF probe base offset OF head = base THEN
+         result := connected to OF head
+      FI;
+      head := tail OF head
+   OD;
+   result
+END;
+
+{ This procedure finds 'source base' in a probe list and moves it
+  to in front of 'sink base', if it isn't already.
+  It is used to ensure that probes are evaluated in the correct
+  (dataflow) order.
+  Both source base and sink base MUST exist within the list.
+ }
+PROC move element up probe list = (INT source base, sink base,
+                                   INT global start list, global end list)VOID:
+BEGIN
+   INT start list = cg peek int (global start list);
+   INT end list = cg peek int (global end list);
+   INT elem := start list;
+   INT found source := 0;
+   INT found sink := 0;
+   WHILE elem <= endlist AND found source = 0 DO
+      INT this base = cgpeek int (elem+ws);
+      IF this base = source base THEN found source := elem FI;
+      IF this base = sink base THEN found sink := elem FI;
+      elem +:=2*ws
+   OD;
+   IF found sink /= 0 THEN
+      {we need to move the element at 'found source' to be in front of
+       the one at 'found sink'}
+       INT source circuit = cg peekint (found source);
+       INT source base = cg peekint (found source+ws);
+       FOR i FROM found source-ws BY -ws TO found sink DO
+          cg pokeint(cg peekint(i), i+2*ws)
+       OD;
+       cg pokeint(source circuit, found sink);
+       cg pokeint(source base, found sink+ws)
+   {ELSE we found the source first, so the list order is ok}
+   FI
+END;
+
+{This procedure ensures that chains of probes are evaluated in dataflow
+ order.}
+PROC reorder instance evaluations = (INT source base, sink base) VOID:
+IF source base /= 0 AND source base /= sink base THEN
+   move element up probe list(source base, sink base,
+                              global start inst list,
+                              global end inst list);
+   reorder instance evaluations(connects to(source base), source base)
+FI;
+
+{This procedure is exported, rather than disconnect and connect probe
+ to ensure that probe inputs are always tied up when simulation continiues}
+PROC raw reconnect probe instance = (MNODE mprobe, mline)VOID:
+BEGIN
+   disconnect probe(mprobe);
+   connect probe(mprobe, mline);
+   reorder instance evaluations(base OF mline, base OF mprobe)
+END;
+
+{List all probes connected to the base offset supplied, *except* for
+ the probe with the same base - ie the current probe may have its
+ inputs connected to query.
+ A `base' of 0 is treated as a wildcard, and results in a list of all probes
+ being returned.
+}
+PROC raw list probes connected to = (INT base) REF VECTOR[] INT:{bases}
+BEGIN
+   INT count :=0;
+   REF PROBELIST head := probelist;
+   WHILE head ISNT nil probelist DO
+      IF base = 0 OREL
+         (connected to OF head = base ANDTH
+         base /= probe base offset OF head)
+      THEN
+         count +:=1
+      FI;
+      head := tail OF head
+   OD;
+   HEAP VECTOR [count] INT result;
+   head := probelist;
+   count := 0;
+   WHILE head ISNT nil probelist DO
+      IF base = 0 OREL
+         (connected to OF head = base ANDTH
+         base /= probe base offset OF head)
+      THEN
+         result[count +:=1] := probe base offset OF head
+      FI;
+      head := tail OF head
+   OD;
+   result
+END;
+
+   { === End of Connectivity Code for Probes === }
+
+
+   { === Type Checking Code for Probes === }
+{
+  Code to ensure the Probe's input type matches the line it is
+  to be connected to.
+}
+
+PROC raw probe type matches line = (MNODE mprobe, mline)BOOL:
+   BEGIN
+      INT probe fnno = fnno OF (probe instance ptrs[circuit OF mprobe]);
+      STYPE probe type = type OF raw inputs(raw lookup function(probe fnno));
+      STYPE line type  =
+         CASE node OF mline IN
+           (LINE l): type OF wire OF l,
+           (BOX b) : type OF outputs OF raw lookup function(fn OF b)
+         ESAC;
+      (flatten type(probe type) = flatten type(line type))
+   END;
+
+   { === End of Type Checking Code for Probes === }
+
+{ Reading and Changing Global Memory }
+{ ================================== }
+
+{search the global memory instance list and return the instance offset
+ associated with circuit, or 0 if circuit is not found}
+PROC find probe instance = (INT circuit, global start list, global end list)
+   INT:
+BEGIN
+   INT start list = cg peek int(global start list);
+   INT end list = cg peek int(global end list);
+   INT result := 0;
+   INT instance list := start list;
+   WHILE instance list <= end list ANDTH result = 0 DO
+      IF cg peek int (instance list) = circuit THEN
+         result := cg peek int (instance list + ws)
+      ELSE
+         instance list +:= (2*ws)
+      FI
+   OD;
+   result
+END;
+
+PROC raw create probe instance = (INT circuit) INT: {instance offset}
+BEGIN
+
+   {NB. these lists must be initialised by set function}
+   INT old base offset =
+      find probe instance(circuit, global start inst list, global end inst list);
+
+   IF old base offset = 0 THEN
+     {No instantiations of this function yet, so use the one set up by
+      'construct probe memory'}
+      base offset OF probe instance ptrs[circuit]
+   ELSE
+     {we need to produce a new set of instance data from the
+      one set up already}
+      INT size = size OF probe instance ptrs[circuit];
+      INT new base offset = allocate am memory(size);
+      INT relocation factor = new base offset - old base offset;
+
+      {Copy all the instance data for the probe}
+      cg poke (cg peek (size, old base offset), new base offset);
+
+      {Now set the evaluation flags. Re-locate the input pointers,
+       alien-code workspaces and fanout lists.}
+      REF VECTOR [] INSTANCEPTR inst ptrs =
+         inst ptrs OF probe instance ptrs[circuit];
+
+      INT set flag = 1;
+      FOR i TO UPB inst ptrs DO
+         INT address := new base offset + offset OF inst ptrs [i];
+         cg poke int (set flag, address);
+         address +:= size unit;
+         FOR j TO cg peek int (address) DO
+            address +:= ws;
+            cg poke int (cg peek int(address) + relocation factor, address)
+         OD;
+
+         STRUCT (INT size, offset, BITS sort) shape =
+            lookup shape (fnno OF inst ptrs [i]);
+
+         { Create a new alien code workspace }
+         IF sort OF shape >= alien sort THEN
+            cg poke int(allocate am memory(cg peekint (address+ 4*ws)),
+                        address+ 5*ws)
+         FI;
+
+         INT old fanout ptr = new base offset + offset OF inst ptrs [i] +
+                              size OF shape;
+         INT old fanout list = cg peek int(old fanout ptr);
+         INT fanout size = cg peek int(old fanout ptr + ws);
+         INT new fanout list = allocate am memory((fanout size+1)*ws);
+         cg poke int (new fanout list, old fanout ptr);
+         cg poke int (fanout size, new fanout list);
+         { Relocate fanout pointers, being careful not to relocate pointers
+           into global data. eg unit delay event fanouts.
+           This is a bit of a bodge.}
+         FOR j TO fanout size DO
+            INT new fanout ptr =
+               IF INT old fanout ptr = cg peek int(old fanout list+ j*ws);
+                  old fanout ptr >= old base offset
+               THEN old fanout ptr + relocation factor
+               ELSE old fanout ptr
+               FI;
+            cg poke int(new fanout ptr, new fanout list + j*ws)
+         OD
+      OD;
+      new base offset
+   FI
+END;
+
+{This procedure assumes that del from am probe list has already been called to
+remove the current function instance. It only checks to see if other instances
+of the same type exist, and so will fail if the instance list contains the one
+which is being deleted.}
+PROC raw destroy probe instance = (INT circuit, base)VOID:
+BEGIN
+   INT next base offset =
+      find probe instance(circuit, global start inst list, global end inst list);
+
+   IF next base offset = 0 THEN
+     {there are no instances other than this one, so leave it as an example.
+      base offset OF (probe instance ptrs[circuit]) will already be
+      pointing at it so we dont need to do anything}
+      SKIP
+   ELSE
+      {we may remove this instance as there is another which may be
+       used as an example}
+      base offset OF (probe instance ptrs[circuit]) := next base offset;
+
+      disconnect probe(MNODE(BOX(0, 0), circuit, base));
+
+      {Remove any fanout lists and alien code workspace}
+      REF VECTOR [] INSTANCEPTR inst ptrs =
+         inst ptrs OF probe instance ptrs[circuit];
+      FOR i TO UPB inst ptrs DO
+         STRUCT (INT size, offset, BITS sort) shape =
+            lookup shape (fnno OF inst ptrs [i]);
+         { free any alien code workspace }
+         IF sort OF shape >= alien sort THEN
+            INT workspace pointer = base + offset OF inst ptrs [i] +
+               (cg peek int(base + offset OF inst ptrs [i] + size unit)+1)*ws +
+                5*ws;
+            free am memory(cg peek int(workspace pointer))
+         FI;
+         INT old fanout ptr = base + offset OF inst ptrs [i] + size OF shape;
+         free am memory(cg peek int (old fanout ptr))
+      OD;
+
+      {Remove the whole instance data}
+      free am memory(base)
+   FI
+END;
+
+{Note: 'global end {inst,init} list' must point AT the last element in the
+ list.}
+clear am probe lists :=
+   (BOOL init)VOID:
+BEGIN
+    IF NOT init THEN
+       IF (global start init list <= global end init list) THEN
+          free am memory(global start init list)
+       FI;
+       IF (global start inst list <= global end inst list) THEN
+          free am memory(global start inst list)
+       FI
+    FI;
+    cg poke int (2*ws, global start init list);
+    cg poke int (0, global end init list);
+    cg poke int (2*ws, global start inst list);
+    cg poke int (0, global end inst list)
+END;
+
+{The following 2 procedures are used to add and delete probe instances
+from the initialisation and instance lists held in global memory.}
+
+PROC add to am probe list = (MNODE mfn,
+                             INT global start list, global end list)VOID:
+BEGIN
+   INT start list = cg peek int (global start list);
+   INT end list = cg peek int (global end list);
+   INT current size = end list - start list + 2*ws;
+   INT newsize = current size + 2*ws;
+   INT new list;
+   INT address;
+   IF current size > 0 THEN
+     new list := extend am memory(start list, new size);
+     address  := new list + current size
+   ELSE
+     new list := allocate am memory(new size);
+     address  := new list
+   FI;
+   cg poke int (circuit OF mfn, address);
+   cg poke int (base OF mfn, address + ws);
+   cg poke int (new list, global start list);
+   cg poke int (new list + current size, global end list)
+END;
+
+{This routine is a bit heavy handed in that it scans the whole
+ row passed in for every element in the (global memory) probe list
+ to see if it has been deleted. It will probably be ok as we are only dealing
+ with small lists. Also, it assumes that the circuit base offsets are unique
+ and so doesn't bother to match the function number}
+PROC del from am probe list = (VECTOR [] INT probe bases,
+                               INT global start list, global end list)VOID:
+BEGIN
+   INT start list = cg peek int (global start list);
+   INT end list = cg peek int (global end list);
+   INT current size = end list - start list + 2*ws;
+   IF current size > 0 THEN
+      INT new size = current size - UPB probe bases * (2*ws);
+      INT new list = allocate am memory(new size);
+      INT old list address := start list;
+      INT new list address := new list;
+      FOR i TO current size % (ws*2) DO
+         INT circuit = cg peek int(old list address);
+         old list address +:=ws;
+         INT offset = cg peek int(old list address);
+         old list address +:=ws;
+         BOOL found := FALSE;
+         FOR j TO UPB probe bases WHILE NOT found DO
+            found := (probe bases[j] = offset)
+         OD;
+         IF NOT found THEN
+            cg poke int(circuit, new list address);
+            new list address +:= ws;
+            cg poke int(offset, new list address);
+            new list address +:= ws
+         FI
+      OD;
+      free am memory(start list);
+      cg poke int (new list, global start list);
+      cg poke int (new list + new size - 2*ws, global end list)
+   FI
+END;
+
+
+{This procedure sets up a new probe instance given the function name,
+ ties its inputs to query, ensures that it will be initialised next
+ time the calls array is executed, and returns the MNODE its description.}
+PROC raw initialise probe instance = (ID function, FLTPROC flt) MNODE:
+BEGIN
+    INT fnno := lookup name (function, probedecl, 0);
+    IF fnno = 0 THEN
+       fnno:= lookup name (function, simandprobedecl, 0)
+    FI;
+    IF fnno = 0 THEN flt ("Function not found") FI;
+    INT circuit := 0;
+    FOR i TO UPB probe instance ptrs WHILE circuit = 0 DO
+       IF fnno OF probe instance ptrs[i] = fnno THEN circuit := i FI
+    OD;
+    INT base = raw create probe instance (circuit);
+    INT pi = probe instance OF (probe instance ptrs[circuit]);
+    MNODE mprobe = (BOX(fnno, pi), circuit, base);
+    connect probe (mprobe, raw probe input node(mprobe));
+    add to am probe list(mprobe, global start init list, global end init list);
+    add to am probe list(mprobe, global start inst list, global end inst list);
+    mprobe
+END;
+
+{Set the evaluation flags within the probe to ensure initialisation
+ can occur and add this function to the instantiation list.}
+PROC raw reinitialise probe instance = (MNODE fn) VOID:
+BEGIN
+   INT c = circuit OF fn;
+   REF VECTOR [] INSTANCEPTR pis = inst ptrs OF (probe instance ptrs[c]);
+   INT probe id inst = (probe instance OF (probe instance ptrs[c])-1);
+   FOR i FROM probe id inst TO UPB pis DO
+      INT set flag = 1;
+      cg poke int (set flag, offset OF pis[i] + base OF fn)
+   OD;
+   add to am probe list(fn, global start init list, global end init list)
+END;
+
+PROC raw stop probe instances = (REF VECTOR [] INT bases) VOID:
+BEGIN
+  del from am probe list (bases, global start inst list, global end inst list);
+  del from am probe list (bases, global start init list, global end init list)
+END;
+
+destroy all probe instances :=
+VOID:
+   WHILE
+      INT start = cgpeek int(global start inst list);
+      INT end = cgpeek int(global end inst list);
+      start <= end
+   DO
+      VECTOR [1] INT this base := cgpeek int(start+ws);
+      INT circuit = cgpeek int(start);
+      raw stop probe instances (this base);
+      raw destroy probe instance(circuit, this base[1])
+   OD;
+
+
+PROC raw peek signal value = (MNODE mloc, WORD answer) VOID:
+BEGIN
+    REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF mloc = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF mloc]
+       FI;
+
+    LINE loc = CASE node OF mloc IN (LINE l):l ESAC;
+    WIRE wire = wire OF loc;
+    INT next := 1;
+    FORALL block IN blocks OF wire DO
+        INT inst offset = inst offset OF block + instance OF loc;
+        INT raw = base OF mloc + offset OF inst ptrs [inst offset] +
+                  ABS offset OF block;
+        INT address = IF offset OF block < 0 THEN
+                          cg peek int (raw)
+                      ELSE
+                          raw
+                      FI;
+        INT size = size OF block;
+        answer [next : next + size - 1] := cg peek (size, address);
+        next +:= size
+    OD
+END;
+
+{ Note that 'raw poke signal value' must set the evaluation flags of all
+  instances in which values are set.  This will ensure that they, will
+  be evaluated, and therefore any dependants will too if the change
+  propagates.
+
+  Note that we want the instances containing the signal *values*, not
+  pointers to them.
+}
+PROC raw poke signal value = (MNODE mloc, WORD val) VOID:
+BEGIN
+    REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF mloc = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF mloc]
+       FI;
+    LINE loc = CASE node OF mloc IN (LINE l):l ESAC;
+    INT set flag = 1;
+    WIRE wire = wire OF loc;
+    INT next := 1;
+    FORALL block IN blocks OF wire DO
+        INT inst offset = inst offset OF block + instance OF loc;
+        INT raw = base OF mloc + offset OF inst ptrs [inst offset] +
+                  ABS offset OF block;
+        INT address = IF offset OF block < 0 THEN
+                          cg peek int (raw)
+                      ELSE
+                          raw
+                      FI;
+        INT this size = size OF block;
+        cg poke (val [next : next + this size - 1], address);
+        next +:= this size;
+        STRUCT (INT fnno, offset)real instance = instance (address);
+        cg poke int (set flag, offset OF real instance)
+    OD
+END;
+
+
+{ "sources" identifies all of the instances which produce the value
+  represented by the given LINE.  At the moment, a given instance might
+  appear more than once -- this should really be optimised out.
+}
+MODE SOURCELIST = STRUCT (INT fnno, offset, REF SOURCELIST tail);
+REF SOURCELIST nil sourcelist = NIL;
+
+PROC sources = (MNODE mline) REF SOURCELIST:
+BEGIN
+    REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF mline = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF mline]
+       FI;
+    LINE line = CASE node OF mline IN (LINE l): l ESAC;
+    REF SOURCELIST ans := nil sourcelist;
+    WIRE wire = wire OF line;
+    FORALL block IN blocks OF wire DO
+        INT inst offset = inst offset OF block + instance OF line;
+        INT raw = base OF mline + offset OF inst ptrs [inst offset]
+                  + ABS offset OF block;
+        INT address = IF offset OF block < 0 THEN
+                          cg peek int (raw)
+                      ELSE
+                          raw
+                      FI;
+        STRUCT (INT fnno, offset)real instance = instance (address);
+        ans := HEAP SOURCELIST := (fnno OF real instance,
+                                   offset OF real instance, ans)
+    OD;
+    ans
+END;
+
+
+
+MODE FROZENLIST = STRUCT (MNODE function, REF FROZENLIST tail);
+REF FROZENLIST nil frozenlist = NIL;
+REF FROZENLIST frozenlist;
+
+PROC save frozenlist = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+   BEGIN
+      INT count :=0;
+      REF FROZENLIST head := frozenlist;
+      WHILE head ISNT nil frozenlist DO
+         count +:=1;
+         head := tail OF head
+      OD;
+      write int (count, ferry, flt);
+      head := frozenlist;
+      WHILE head ISNT nil frozenlist DO
+         write mnode(function OF head, ferry, flt);
+         head := tail OF head
+      OD
+   END;
+
+PROC restore frozenlist = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+   frozenlist := nil frozenlist;
+   TO readint(ferry, flt) DO
+      frozenlist := HEAP FROZENLIST := (read mnode(ferry, flt), frozenlist)
+   OD
+END;
+
+PROC find input aliases =
+   (REF SINKINSTANCELIST inputs,
+    REF VECTOR [] STRUCT (INT inst offset, ip no)aliases,
+    REF VECTOR [] INSTANCEPTR instanceptrs,
+    INT instance no,
+    INT flag val)REF SINKINSTANCELIST:
+BEGIN
+   REF SINKINSTANCELIST result := inputs;
+   FOR j TO UPB aliases DO
+      INT inner instance = instance no + inst offset OF aliases [j];
+      INT inner offset = offset OF instance ptrs [inner instance];
+      cg poke int (flag val, inneroffset);
+      result := HEAP SINKINSTANCELIST :=
+         (inner offset,
+          find input aliases
+            (result,
+             lookup input aliases (fnno OF instance ptrs [inner instance],
+                                   ipno OF aliases [j]),
+             instanceptrs,
+             inner instance,
+             flag val)
+         )
+   OD;
+   result
+END;
+
+{'mline' is a line which drives a functions inputs.
+ This procedure aplies the 'action' procedure to all the components of
+ 'mline' in order to remove or add all fanouts associated with it.}
+PROC act on all fanouts = (MNODE mline,
+                           INT fnno, {same function as mline}
+                           INT instanceno, {ditto}
+                           INT eval flag,
+                           INT flag val,
+                           REF VECTOR [] INSTANCEPTR inst ptrs,
+                           PROC (INT, SINKINSTANCELIST) VOID action)
+                           VOID:
+
+BEGIN
+    REF SOURCELIST scan := sources (mline);
+
+    {ASSERT: length(scan) == UPB lookup inputs(fnno)}
+
+    INT sink input := UPB lookup input sizes(fnno) +1;
+    WHILE scan ISNT nil sourcelist DO
+        STRUCT (INT size, offset, BITS sort) source shape =
+            lookup shape (fnno OF scan);
+        INT source fanout = offset OF scan + size OF source shape;
+        cg poke int (flag val, eval flag);
+        REF SINKINSTANCELIST all sinks =
+           find input aliases
+             (HEAP SINKINSTANCELIST := (eval flag, nil sinkinstancelist),
+              lookup input aliases (fnno, sink input -:=1),
+              inst ptrs,
+              instance no,
+              flag val);
+        action (source fanout, all sinks);
+        scan := tail OF scan
+    OD
+END;
+
+PROC raw unfreeze instance = (MNODE function) BOOL:
+BEGIN
+   {remove function from frozen list if it exists}
+   REF REF FROZENLIST head := frozenlist;
+   BOOL found := FALSE;
+   WHILE (head ISNT nil frozenlist) ANDTH NOT found DO
+      IF (function OF head = function) THEN
+         REF REF FROZENLIST(head) := tail OF head;
+         found := TRUE
+      ELSE
+         head := tail OF head
+      FI
+   OD;
+
+   IF found THEN
+      {set its eval flag}
+      BOX box = CASE node OF function IN (BOX b): b ESAC;
+      REF VECTOR [] INSTANCEPTR inst ptrs =
+          IF circuit OF function = 0 THEN
+             instance ptrs
+          ELSE
+             inst ptrs OF probe instance ptrs[circuit OF function]
+          FI;
+      INT eval flag = base OF function + offset OF inst ptrs[instance OF box];
+
+      {recurse over input aliases to add any fanouts to it}
+      MNODE inputs =(
+         LINE(
+              HEAP WIRE := raw inputs(raw lookup function (fn OF box)),
+              instance OF box),
+         circuit OF function,
+         base OF function);
+
+   act on all fanouts(inputs, fn OF box, instance OF box, eval flag,
+                         1{set flag}, inst ptrs, add to fanout);
+
+   {'defrost' the outputs of any alien code functions contained within
+    this function instance. Set all eval flags}
+    FOR this inst TO lookup last instance(fn OF box) DO
+       STRUCT (INT size, offset, BITS sort) shape =
+           lookup shape (fnno OF inst ptrs[instance OF box + this inst]);
+       INT inst offset = base OF function +
+          offset OF inst ptrs[instance OF box + this inst];
+       INT set flag = 1;
+       cg poke int (set flag, inst offset);
+
+       IF sort OF shape >= alien sort THEN
+          INT freeze output flag = inst offset +
+             (cg peek int (inst offset + ws)+1)*ws + 7 *ws;
+          cg poke int(0, freeze output flag)
+       FI
+     OD
+   FI;
+   found
+END;
+
+{0=ok, 1= contained transparents, 2= already frozen}
+PROC raw freeze instance = (MNODE function) INT:
+BEGIN
+   BOX box = CASE node OF function IN (BOX b): b ESAC;
+   REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF function = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF function]
+       FI;
+
+   INT eval flag = base OF function + offset OF inst ptrs[instance OF box];
+
+   INT result := 0;
+   REF FROZENLIST head := frozenlist;
+   WHILE (head ISNT nil frozenlist) AND result = 0 DO
+      BOX box = CASE node OF function OF head IN (BOX b): b ESAC;
+      INT headlwb = base OF function +
+                    offset OF inst ptrs[instance OF box];
+      INT headupb = base OF function +
+       offset OF inst ptrs[ instance OF box + lookup last instance(fn OF box)];
+      result := 2 * ABS (evalflag >= headlwb AND evalflag <= headupb);
+      head := tail OF head
+   OD;
+
+   IF result = 0 THEN
+      INT fnupb = offset OF
+         inst ptrs[instance OF box + lookup last instance(fn OF box)];
+
+      { remove any frozen functions contained by the new one }
+      REF REF FROZENLIST head := frozenlist;
+      WHILE (head ISNT nil frozenlist) DO
+         BOX box = CASE node OF function OF head IN (BOX b): b ESAC;
+         INT headlwb = base OF function +
+                       offset OF inst ptrs[instance OF box];
+         INT headupb = base OF function +
+          offset OF inst ptrs[instance OF box+lookup last instance(fn OF box)];
+         IF (evalflag <= headlwb AND fnupb >= headupb) THEN
+            {Join-up the contained function's inputs fanouts & remove
+             it from the frozen list. (This does another linear scan
+             of the list...  should be ok for small number of frozen
+             nodes)}
+            raw unfreeze instance (function OF head)
+         ELSE
+            head := tail OF head
+         FI
+      OD;
+
+      {add function to frozen list}
+      frozenlist := HEAP FROZENLIST := (function, frozenlist);
+
+      {recurse over input aliases to remove any fanouts to it}
+      MNODE inputs =(
+         LINE(
+            HEAP WIRE := raw inputs(raw lookup function (fn OF box)),
+            instance OF box),
+         circuit OF function,
+         base OF function);
+
+      act on all fanouts(inputs, fn OF box, instance OF box, eval flag,
+                         0{reset flag}, inst ptrs, remove from fanout);
+
+      {Freeze the outputs of any alien code functions contained within
+       this function instance. Reset all eval flags.}
+       FOR this inst TO lookup last instance(fn OF box) DO
+          STRUCT (INT size, offset, BITS sort) shape =
+              lookup shape (fnno OF inst ptrs[instance OF box + this inst]);
+          INT inst offset = base OF function +
+             offset OF inst ptrs[instance OF box + this inst];
+          INT reset flag = 0;
+          cg poke int (reset flag, inst offset);
+          IF sort OF shape >= alien sort THEN
+             INT freeze output flag = inst offset +
+                (cg peek int (inst offset + ws)+1)*ws + 7 *ws;
+             cg poke int(1, freeze output flag)
+          FI
+      OD;
+      WIRE outputs = lookup outputs(fn OF box);
+      FORALL block IN blocks OF outputs WHILE result = 0 DO
+         result := ABS (offset OF block < 0)
+      OD
+   FI;
+   result
+END;
+
+
+unfreeze all instances :=
+   VOID:
+      WHILE frozenlist ISNT nil frozenlist DO
+         raw unfreeze instance(function OF frozenlist)
+      OD;
+
+{This is very similar to raw poke signal value, except we will only
+ use it to poke values into a single (possible compound) function's output.
+ We want to leave the state of this function and it's successors as if
+ this function had just been evaluated. ie its eval flag reset & those
+ of its successors set}
+PROC raw poke signal value and fanout = (MNODE mloc, WORD val) VOID:
+BEGIN
+    REF VECTOR [] INSTANCEPTR inst ptrs =
+       IF circuit OF mloc = 0 THEN
+          instance ptrs
+       ELSE
+          inst ptrs OF probe instance ptrs[circuit OF mloc]
+       FI;
+    LINE loc = CASE node OF mloc IN (LINE l):l ESAC;
+    INT set flag = 1;
+    INT reset flag = 0;
+    WIRE wire = wire OF loc;
+    INT next := 1;
+    FORALL block IN blocks OF wire DO
+        INT inst offset = inst offset OF block + instance OF loc;
+        INT raw = base OF mloc + offset OF inst ptrs [inst offset] +
+                  ABS offset OF block;
+        INT address = IF offset OF block < 0 THEN
+                          cg peek int (raw)
+                      ELSE
+                          raw
+                      FI;
+        INT this size = size OF block;
+        cg poke (val [next : next + this size - 1], address);
+        next +:= this size;
+        STRUCT (INT fnno, offset)real instance = instance (address);
+        cg poke int (reset flag, offset OF real instance);
+
+        STRUCT (INT size, offset, BITS sort) shape =
+           lookup shape (fnno OF real instance);
+        INT fanout list = cg peekint (offset OF real instance + size OF shape);
+
+        FOR i TO cg peekint(fanout list) DO
+           cg pokeint (set flag, cg peekint(fanoutlist + i*ws))
+        OD
+    OD
+END;
+
+
+{ "raw make flag fanouts" constructs a flag in abstract machine memory
+  to which all instances of a LINE will fan out -- this is the functionality
+  used to optimise monitoring.
+}
+PROC raw make flag fanouts = (MNODE mline) INT: {Address of the flag}
+BEGIN
+    INT flag address = allocate am memory (ws);
+    REF SOURCELIST scan := sources (mline);
+    WHILE scan ISNT nil sourcelist DO
+        STRUCT (INT size, offset, BITS sort) shape =
+            lookup shape (fnno OF scan);
+        INT fanout = offset OF scan + size OF shape;
+        SINKINSTANCELIST mon := (global monitor changed, nil sinkinstancelist);
+        add to fanout (fanout, (flag address, mon));
+        scan := tail OF scan
+    OD;
+    flag address
+END;
+
+
+{ "raw remove flag fanouts" deletes a flag created by the previous
+  routine, together with the fanouts to it.
+}
+PROC raw remove flag fanouts = (MNODE mline, INT flag address) VOID:
+BEGIN
+    REF SOURCELIST scan := sources (mline);
+    WHILE scan ISNT nil sourcelist DO
+        STRUCT (INT size, offset, BITS sort) shape =
+            lookup shape (fnno OF scan);
+        INT fanout = offset OF scan + size OF shape;
+        SINKINSTANCELIST mon := (global monitor changed, nil sinkinstancelist);
+        remove from fanout (fanout, (flag address, mon));
+        scan := tail OF scan
+    OD;
+    free am memory (flag address)
+END;
+
+
+
+PROC raw clear interrupts = VOID:  cg clear interrupts;
+
+
+{ Size messages }
+{ ============= }
+
+
+PROC size messages = VOID:
+BEGIN
+    STRUCT (INT code size, data size,
+            dynamic stack size, static stack size) cg size data = cg sizes;
+   IF testmode = null_options THEN
+       put (out, ("Code size: ", code size OF cg size data, " bytes", newline,
+                  "Data size: ", data size OF cg size data, " bytes", newline,
+                  newline))
+    FI
+END;
+
+
+{ Initialisation and Termination }
+{ ============================== }
+
+
+PROC raw terminate kernel = (FLTPROC flt) VOID:
+BEGIN
+    { call alien code terminators }
+    cg poke int(terminate action,global action);
+    VOID (cg simulate(sim time));
+    unfreeze all instances;
+    remove tables;
+    remove instances;
+    clear probelist;
+    am closedown (flt)
+END;
+
+
+PROC raw initialise kernel = (FILE  simfile,
+                              INT diagnostic level,
+                              PROC (RVC) VOID instr,
+                              FLTPROC flt) NODE:
+BEGIN
+    PROC fault closedown = (VECTOR [] CHAR msg) VOID:
+    BEGIN
+        raw terminate kernel (flt);
+        flt (msg)
+    END;
+
+    frozenlist := nil frozenlist;
+    initialise tables;
+    translate initialise (instr, diagnostic level, fault closedown);
+
+    { The implementations of 'peek' and 'poke' above assume that 'size unit'
+      is sufficiently big to encode any enumerated type:
+    }
+    IF size unit < 4 THEN
+        sys fault ("kerti: size unit too small for peek and poke")
+    FI;
+
+                 { ********************** }
+    INT fnno = translate (simfile, diagnostic level, instr, flt);
+                 { ********************** }
+
+    size messages;
+    sf id := nullid;
+    old input ptrs := NIL;
+    clear probelist;
+    clear am probe lists (TRUE);
+    set function (fnno)
+END;
+
+
+{ Saving and Restoring the Kernel State }
+{ ===================================== }
+
+
+VECTOR [9] CHAR signature := "192837465";
+
+PROC raw save state = (REF INT time, REF ID function,
+                       PROC (RVC, FLTPROC) VOID ferry1, ferry2,
+                       FLTPROC flt) VOID:
+BEGIN
+    time := sim time;
+    function := sf id;
+
+    ferry1 (signature, flt);
+    write int (sf no, ferry1, flt);
+    write id (old input ptrs, ferry1, flt);
+*H  put(out, (time_str, "starting save state...", newline));
+    cg save state (ferry1, ferry2, flt);
+*H  put(out, (time_str, "cg save state", newline));
+    save tables (ferry1, flt);
+*H  put(out, (time_str, "save tables", newline));
+    save instance ptrs (ferry1, flt);
+*H  put(out, (time_str, "save instance ptrs", newline));
+    save memory management (ferry1, flt);
+    save probes(ferry1, flt);
+    save frozenlist(ferry1, flt);
+    { call alien code savers }
+    cg poke int(save action,global action);
+    VOID (cg simulate(time))
+
+END;
+
+
+PROC raw restore state = (INT diagnostic level, time, ID function,
+                          PROC (RVC, FLTPROC) VOID ferry1, ferry2,
+                          PROC (RVC) VOID instr,
+                          FLTPROC flt) NODE:
+BEGIN
+    PROC fault closedown = (VECTOR [] CHAR msg) VOID:
+    BEGIN
+        raw terminate kernel (flt);
+        flt (msg)
+    END;
+    sim time := time;
+    sf id := function;
+    VECTOR [9] CHAR saved signature;
+    ferry1 (saved signature, flt);
+    IF saved signature /= signature THEN flt ("Bad status file") FI;
+    sf no := read int (ferry1, flt);
+    old input ptrs := read id (ferry1, flt);
+    am initialise (instr, diagnostic level, flt);
+    am locations initialise;
+*H  put(out, (time_str, "starting restore state...", newline));
+    cg restore state (ferry1, ferry2, fault closedown);
+    size messages;
+*H  put(out, (time_str, "cg restore state", newline));
+    restore tables (ferry1, fault closedown);
+*H  put(out, (time_str, "restore tables", newline));
+    restore instance ptrs (ferry1, fault closedown);
+*H  put(out, (time_str, "restore instance ptrs", newline));
+    restore memory management (ferry1, fault closedown);
+    restore probes(ferry1, fault closedown);
+    restore frozenlist(ferry1, flt);
+
+    { call alien code restorers }
+    cg poke int(restore action,global action);
+    VOID (cg simulate(sim time));
+
+    BOX (sf no, lookup an instance (sf no))
+END
+
+
+KEEP
+    cg peek int, cg poke int,
+    raw make flag fanouts, raw remove flag fanouts,
+    raw initialise kernel, raw select function, raw simulate,
+    raw peek signal value, raw poke signal value, raw save state,
+    raw restore state, raw clear interrupts, raw terminate kernel,
+    raw initialise probe instance, raw reinitialise probe instance,
+    raw destroy probe instance,
+    raw probe input node, raw reconnect probe instance,
+    raw probe type matches line, raw stop probe instances,
+    raw list probes connected to, raw freeze instance, raw unfreeze instance,
+    raw poke signal value and fanout
+
+FINISH

@@ -1,0 +1,854 @@
+DECS  kemassemvax  CONTEXT VOID  USE  putstrings, vmsinterface, kesave:
+
+{  " Id: kemassemvax.sta,v 2.1 91/02/22 18:35:19 edcad Exp$" }
+configinfo A68CONFIG "$Id: kemassemvax.a68,v 34.2 1995/03/29 13:04:53 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+31:10:88 Created new module out of simgen68k to encapsulate the
+             machine assembler.  SPT
+16:06:89 R4B374. Corrected save and restore state which had become
+             inconsistent.  MHC
+10:06:93 OSIF Level 2 - vmsinterface added to support VMS bits.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.003 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{                            VAX Machine Assembler                             }
+{------------------------------------------------------------------------------}
+
+{ local declarations }
+
+   FLTPROC  faultproc := abort;
+
+*4 MODE  FUNCPTR = BITS;                                 {function address}
+
+*4 { simple coercions }
+
+*4 OP (REF CHAR) BITS ADDR                 = BIOP 99;
+*4 OP (REF INT) BITS ADDR                  = BIOP 99;
+*4 OP (CHAR) SHORT SHORT BITS CBIN         = BIOP 99;
+*4 OP (REF INT) REF STRUCT 512 CHAR RITORS = BIOP 99;
+*4 OP (PROC BOOL) FUNCPTR PROCTOFUNCPTR    = BIOP 99;
+
+
+   PROC display = (VECTOR [] CHAR message) VOID:
+        put(screen, (message, newline));
+
+   PROC  sim fault = (VECTOR [] CHAR message) VOID:
+   BEGIN
+      sys fault("******   SIMULATOR ERROR " + message + "   ******")
+   END;
+
+   PRIO ASSERT = 1;
+
+   OP ASSERT = (VECTOR [] CHAR description, BOOL assertion) VOID:
+   BEGIN
+      IF NOT assertion
+      THEN
+         sim fault ("ASSERT: " + description)
+      FI
+   END;
+
+{--------------------------------------------------------------------------}
+{ Code area }
+
+   REF VECTOR [] CHAR  code:= HEAP VECTOR [0] CHAR;
+                 {{{  UPB = 0 is flag that virtual memory is not held  }}}
+
+   INT initsize = 65536;
+
+   PROC checkresult = (INT r, VECTOR [] CHAR submessage) VOID:
+   BEGIN
+      IF r > 0
+      THEN
+         sim fault("Failure in code area management (" + submessage +
+                   "), result = " + oneline(r))
+      FI
+   END;
+
+   PROC  get_vec_chars = (INT  size) REF VECTOR [] CHAR:
+   BEGIN
+      IF (size MOD 4) /= 0
+      THEN  sys fault("get_vec_chars:  NOT multiple of 4")
+      FI;
+      REF VECTOR [] INT array = get_vm(size OVER 4, faultproc);
+      RVITORVC array
+   END;
+
+   PROC  free_vec_chars = (REF REF VECTOR [] CHAR  array) VOID:
+   BEGIN
+      free_vm( RRVCTORRVI array, faultproc)
+   END;
+
+   PROC create code area = VOID:
+   BEGIN
+      IF UPB code > 0 THEN  free_vec_chars(code)  FI;
+      code := get_vec_chars(initsize)
+   END;
+
+   PROC extend code area = VOID:
+   BEGIN
+      INT  upb = UPB code,  new upb = upb * 2;
+      put(screen, ("Extending code area from ", upb, " to ", new upb, newline));
+      REF VECTOR [] CHAR new code = get_vec_chars(new upb);
+      new code [ : upb] := code;
+      free_vec_chars(code);
+      code := new code
+   END;
+
+   PROC set code access = VOID:
+   BEGIN
+      SKIP
+   END;
+
+
+{-------------------------------------------------------------------------}
+{ Code generation }
+
+   INT bytesinabits = 4;
+
+   MODE OPERAND = STRUCT (INT length, BITS operand1, operand2);
+   { operand2 is used only when length > bytesinabits }
+
+   OP = = (OPERAND o1, o2) BOOL:
+      (length OF o1 = length OF o2)
+         AND (operand1 OF o1 = operand1 OF o2)
+         AND (((length OF o1 > bytesinabits)
+            AND (operand2 OF o1 = operand2 OF o2))
+         OR (length OF o1 <= bytesinabits));
+
+   MODE MACHINEOFFSET = INT;
+
+   MACHINEOFFSET nullmachineoffset = -1;
+
+{ Machine assembler }
+
+   INT location := 1;
+
+   PROC ma initialise = (FLTPROC flt) VOID:
+   {Overall initialisation for machine assembler. }
+      BEGIN
+         faultproc := flt;
+         create code area;
+         location := 1
+      END;
+
+   PROC ma change flt = (FLTPROC flt) VOID:
+   { Change fault procedure. }
+   BEGIN
+      faultproc := flt
+   END;
+
+   PROC ma save state = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryout) VOID:
+   { Save state of the code array }
+      BEGIN
+         write int (location, ferryout, faultproc);
+         code := code [:((location+3)%4)*4];
+         write int (UPB code, ferryout, faultproc);
+         ferryout (code, faultproc)
+      END;
+
+   PROC ma restore state = (PROC (REF VECTOR [] CHAR, FLTPROC) VOID ferryin)
+                                                                           VOID:
+   { Restore state of the code array. }
+
+      BEGIN
+         IF UPB code > 0 THEN free_vec_chars(code) FI;
+         location := read int (ferryin, faultproc);
+         INT size = read int (ferryin, faultproc);
+         code := get_vec_chars (size);
+         ferryin (code, faultproc)
+      END;
+
+   PROC ma executable = VOID: set code access;
+
+{ Instructions and other assembler constants }
+
+   BITS    movzwl= 16r3c,   movl  = 16rd0,   movzbl= 16r9a,
+           moval = 16rde,   mnegl = 16rce,   mcoml = 16rd2,
+           pushal= 16rdf,
+           pushl = 16rdd,   bitl =  16rd3,
+           sobgeq= 16rf4,
+           pushr = 16rbb,   popr  = 16rba,
+           movc3 = 16r28,   cmpc3 = 16r29,
+           tstl  = 16rd5,   cmpl  = 16rd1,
+           addl2 = 16rc0,   addl3 = 16rc1,
+           subl2 = 16rc2,   subl3 = 16rc3,
+           sbwc  = 16rd9,
+           mull2 = 16rc4,   mull3 = 16rc5,
+           divl2 = 16rc6,   divl3 = 16rc7,
+           bisl2 = 16rc8,   bisl3 = 16rc9,
+           bicl2 = 16rca,   bicl3 = 16rcb,
+           xorl2 = 16rcc,   xorl3 = 16rcd,
+           ashl  = 16r78,   rotl  = 16r9c,
+           clrl  = 16rd4,
+           extv  = 16ree,   extzv = 16ref,
+           insv  = 16rf0,
+           cvtbl = 16r98,
+           jmp   = 16r17,   jsb   = 16r16,
+           brw   = 16r31,   brb   = 16r11,   bsbb  = 16r10,
+           bsbw  = 16r30,   rsb   = 16r5,
+           calls = 16rfb,
+           ret   = 16r04,
+           bispsw= 16rb8,   bicpsw= 16rb9,
+           nop   = 16r01,   decl  = 16rd7,
+           b     = 16r10; {OR condition with this}
+
+{ Registers }
+
+   INT     ap    =   12,    fp    =    13,   sp    =    14,
+           pc    =   15;
+
+{ Condition codes to be ORed with 'b' }
+{ All these are signed. }
+
+   BITS    neq   = 16r2,    eql   = 16r3,
+           gtr   = 16r4,    leq   = 16r5,
+           geq   = 16r8,    lss   = 16r9;
+
+{ All these are unsigned. }
+
+   BITS    gtru  = 16ra,    lequ  = 16rb,
+           gequ  = 16re,    lssu  = 16rf;
+
+{ All these are unsigned. }
+   PROC invcondition = (BITS c) BITS:
+   { Gives the inverse condition to that supplied. }
+   BEGIN
+      OP XOR = (BITS a, b) BITS:
+         (a AND (NOT b)) OR ((NOT a) AND b);
+
+      c XOR 16r1
+   END;
+
+   PROC swapcondition = (BITS c) BITS:
+   { Gives the condition which would mean the same thing if the
+     operands to the compare were swapped. }
+      IF c = neq THEN neq
+      ELIF c = eql THEN eql
+      ELIF c = gtr THEN lss
+      ELIF c = leq THEN geq
+      ELIF c = geq THEN leq
+      ELIF c = lss THEN gtr
+      ELSE simfault ("Inappropriate attempt to swap condition."); BIN 0
+      FI;
+
+{ Code area accessing }
+
+   PROC ma code ref = (INT location) REF CHAR:
+   BEGIN
+      code [location]
+   END;
+
+   PROC ma code size = INT:
+   BEGIN
+      location
+   END;
+
+   PROC is long word aligned = BOOL:
+   BEGIN
+      location MOD 4 = 0
+   END;
+
+   PROC assemble = (BITS instruction, [] OPERAND operands) VOID:
+   BEGIN
+      IF location + 6 * UPB operands > UPB code THEN extend code area FI;
+      code [location] := REPR ABS instruction;
+      location +:= 1;
+      FOR op no FROM LWB operands TO UPB operands
+      DO
+         BITS part1 := operand1 OF operands [op no];
+         BITS part2 := operand2 OF operands [op no];
+         FOR i TO length OF operands [op no]
+         DO
+            REF BITS part = ( i > bytesinabits | part2 | part1 );
+            code [location] := REPR ABS (part AND 16rff);
+            location +:= 1;
+            part := part SHR 8
+         OD
+      OD
+   END;
+
+   PROC assemble branch = (BITS instruction, INT offset) VOID:
+   BEGIN
+      IF location + 4 > UPB code THEN extend code area FI;
+      code [location] := REPR ABS instruction;
+      location +:= 1;
+      IF instruction = brw OR instruction = bsbw
+      THEN
+         "Word offset for branch" ASSERT
+                                      (offset >= -32768 ANDTH offset <= 32767);
+         code [location] := REPR ABS (BIN offset AND 16rff);
+         code [location + 1] := REPR ABS ((BIN offset SHR 8) AND 16rff);
+         location +:= 2
+      ELSE
+         "Short offset for branch" ASSERT (offset >= -128 ANDTH offset <= 127);
+         code [location] := REPR ABS (BIN offset AND 16rff);
+         location +:= 1
+      FI
+   END;
+
+   PROC assemble byte = (BITS byte) VOID:
+   BEGIN
+      IF location + 1 > UPB code THEN extend code area FI;
+      code [location] := REPR ABS (byte AND 16rff);
+      location +:= 1
+   END;
+
+   PROC assemble longword = (BITS longword) VOID:
+   BEGIN
+      IF location + 3 > UPB code THEN extend code area FI;
+      FOR i FROM 0 TO 3
+      DO
+         code [location + i] := REPR ABS ((longword SHR (i*8)) AND 16rff)
+      OD;
+      location +:= 4
+   END;
+
+   PRIO >> = 1;    { Used for putting condition into branch }
+
+   OP >> = (BITS a, b) BITS:
+   BEGIN
+      a OR b
+   END;
+
+   PROC set code index = (REF INT index) VOID:
+   BEGIN
+      { Sets 'index' so that it can be used (eg in 'code ref') to refer
+        to the next code address to be used. }
+      index := location
+   END;
+
+   PROC list code = (RCH  out) VOID :
+      CO write code[1:location-1] in DEBUG format CO
+   BEGIN
+      INT bytes per line = 32,
+          nbytes = location - 1;
+      INT nlines = nbytes % bytes per line,
+          bytes in last = nbytes MOD bytes per line;
+      INT ptr := 1;
+
+      OP A = (REF CHAR c) VECTOR [] CHAR : hexchars(ADDR c);
+
+      OP B = (CHAR c) VECTOR [] CHAR : hexchars(c);
+
+      TO nlines
+      DO
+         put (out, ("!", A code[ptr], ":  "));
+         FOR k FROM ptr + bytes per line - 1 BY -1 TO ptr
+         DO
+            put (out, B code[k])
+         OD;
+         newline (out);
+         ptr +:= bytes per line
+      OD;
+      IF bytes in last > 0
+      THEN
+         put (out, ("!", A code[ptr], ":  "));
+         FOR k FROM ptr + bytes in last - 1 BY -1 TO ptr
+         DO
+            put (out, B code[k])
+         OD;
+         newline (out)
+      FI
+   END;
+
+{ Addressing modes }
+
+   OP R   = (INT reg) OPERAND: {register}
+   BEGIN
+      (1, (BIN reg OR 16r50), 16r0)
+   END;
+
+   OP RI  = (INT reg) OPERAND: {register increment}
+   BEGIN
+      (1, (BIN reg OR 16r80), 16r0)
+   END;
+
+   OP RD  = (INT reg) OPERAND: {register deferred}
+   BEGIN
+      (1, (BIN reg OR 16r60), 16r0)
+   END;
+
+   OP RID = (INT reg) OPERAND: {register inc def}
+   BEGIN
+      (1, (BIN reg OR 16r90), 16r0)
+   END;
+
+   OP DR  = (INT reg) OPERAND: {decrement reg}
+   BEGIN
+      (1, (BIN reg OR 16r70), 16r0)
+   END;
+
+   OP LIT = (INT lit) OPERAND: {literal mode}
+   BEGIN
+      IF (BIN lit AND 16rffffffc0) /= 16r0
+      THEN
+         sim fault ("Literal too large for literal address mode");
+         SKIP
+      ELSE
+         (1, BIN lit, 16r0)
+      FI
+   END;
+
+   PRIO DISP = 5, DISPD = 5;
+
+   OP DISP = (INT displacement, INT reg) OPERAND: {displacement mode}
+   BEGIN
+      IF displacement >= -128 ANDTH displacement <= 127
+      THEN
+         (2, ((BIN displacement AND 16rff) SHL 8 OR 16ra0 OR BIN reg), 16r0)
+      ELIF displacement >= -32768 ANDTH displacement <= 32767
+      THEN                                              CO Was -16384 to 16383, not -32768 to 32767 CO
+         (3, ((BIN displacement AND 16rffff) SHL 8 OR 16rc0 OR BIN reg), 16r0)
+      ELSE
+         (5, (BIN displacement SHL 8 OR 16re0 OR BIN reg), (BIN displacement SHR 24))
+      FI
+   END;
+
+   OP DISPD = (INT displacement, INT reg) OPERAND: {disp deferred mode}
+   BEGIN
+      IF displacement >= -128 ANDTH displacement <= 127
+      THEN
+         (2, ((BIN displacement AND 16rff) SHL 8 OR 16rb0 OR BIN reg), 16r0)
+      ELIF displacement >= -32768 ANDTH displacement <= 32767
+      THEN                                              CO Was -16384 to 16383, not -32768 to 32767 CO
+         (3, ((BIN displacement AND 16rffff) SHL 8 OR 16rd0 OR BIN reg), 16r0)
+      ELSE
+         (5, (BIN displacement SHL 8 OR 16rf0 OR BIN reg), (BIN displacement SHR 24))
+      FI
+   END;
+
+   OP IMMB  = (INT value) OPERAND:
+   BEGIN
+      "Immediate Byte" ASSERT (value >= -128 ANDTH value <= 127);
+      (2, ((BIN value AND 16rff) SHL 8 OR 16r8f), 16r0)
+   END;
+
+   OP IMMW  = (INT value) OPERAND:
+   BEGIN
+      "Immediate Word" ASSERT (value >= -32768 ANDTH value <= 32767);
+      (3, ((BIN value AND 16rffff) SHL 8 OR 16r8f), 16r0)
+   END;
+
+   OP IMML  = (INT value) OPERAND:
+   BEGIN
+      (5, (BIN value SHL 8 OR 16r8f), (BIN value SHR 24))
+   END;
+
+   OP ABSA  = (INT location) OPERAND:
+   BEGIN
+      (5, (BIN location SHL 8 OR 16r9f), (BIN location SHR 24))
+   END;
+
+   OP RELB  = (INT displ) OPERAND:
+   BEGIN
+      "Relative Byte" ASSERT (displ >= -128 ANDTH displ <= 127);
+      (2, ((BIN displ AND 16rff) SHL 8 OR 16raf), 16r0)
+   END;
+
+   OP RELW  = (INT displ) OPERAND:
+   BEGIN
+      "Relative Word" ASSERT (displ >= -32768 ANDTH displ <= 32767);
+      (3, ((BIN displ AND 16rffff) SHL 8 OR 16rcf), 16r0)
+   END;
+
+   OP RELL  = (INT displ) OPERAND:
+   BEGIN
+      (5, (BIN displ SHL 8 OR 16ref), (BIN displ SHR 24))
+   END;
+
+   OP RELBD = (INT displ) OPERAND:
+   BEGIN
+      "Relative Byte Defered" ASSERT (displ >= -128 ANDTH displ <= 127);
+      (2, ((BIN displ AND 16rff) SHL 8 OR 16rbf), 16r0)
+   END;
+
+   OP RELWD = (INT displ) OPERAND:
+   BEGIN
+      "Relative Word Defered" ASSERT (displ >= -32768 ANDTH displ <= 32767);
+      (3, ((BIN displ AND 16rffff) SHL 8 OR 16rdf), 16r0)
+   END;
+
+   OP RELLD = (INT displ) OPERAND:
+   BEGIN
+      (5, (BIN displ SHL 8 OR 16rff), (BIN displ SHR 24))
+   END;
+
+   PRIO // = 1;
+
+   OP // = (OPERAND base, INT index reg) OPERAND: {index mode}
+   BEGIN
+      (length OF base + 1,
+       operand1 OF base SHL 8 OR (16r40 OR BIN index reg),
+       (operand2 OF base SHL 8) OR (operand1 OF base SHR 24))
+   END;
+
+   { The two operators following encode 'non-operands' for the use of branch
+     type instructions. For example:
+
+        assemble (brw, (BRANCHDISPW 15342));
+
+     would be the same as:
+
+        assemble branch (brw, 15342);
+
+   }
+
+   OP BRANCHDISPB = (INT displ) OPERAND:
+   { No operand reference; branch byte displacement. }
+   BEGIN
+      "Branch Byte Displacement" ASSERT (displ >= -128 ANDTH displ <= 127);
+      (1, (BIN displ AND 16rff), 16r0)
+   END;
+
+   OP BRANCHDISPW = (INT displ) OPERAND:
+   { No operand reference; branch word displacement. }
+   BEGIN
+      "Branch Word Displacement" ASSERT (displ >= -32768 ANDTH displ <= 32767);
+      (2, (BIN displ AND 16rffff), 16r0)
+   END;
+
+{ Useful macros }
+
+   OP LITB = (INT lit) OPERAND:
+   { Choose the smallest operand to encode the literal. }
+   BEGIN
+      IF (BIN lit AND 16rffffffc0) = 16r0 THEN
+         LIT lit
+      ELSE
+         IMMB lit
+      FI
+   END;
+
+   OP LITW = (INT lit) OPERAND:
+   { Choose the smallest operand to encode the literal. }
+   BEGIN
+      IF (BIN lit AND 16rffffffc0) = 16r0 THEN
+         LIT lit
+      ELSE
+         IMMW lit
+      FI
+   END;
+
+   OP LITL = (INT lit) OPERAND:
+   { Choose the smallest operand to encode the literal. }
+   BEGIN
+      IF (BIN lit AND 16rffffffc0) = 16r0 THEN
+         LIT lit
+      ELSE
+         IMML lit
+      FI
+   END;
+
+   { Sizes for labels }
+   INT
+      byte = 1,
+      word = 2,
+      long = 4;
+
+   { Limits for labels }
+   INT
+      minbyte = -128,
+      maxbyte = +127,
+      minword = -32768,
+      maxword = +32767;
+
+   MODE MACHINELABEL = STRUCT (INT location, size);
+   MACHINELABEL nullmachinelabel = (-1, -1);
+
+   OP = = (MACHINELABEL l1, l2) BOOL:
+      (location OF l1 = location OF l2)
+      AND (size OF l1 = size OF l2);
+
+   PROC fix machine label = (MACHINELABEL label) VOID:
+   BEGIN
+      INT offset = location - location OF label - size OF label;
+      IF size OF label = byte THEN
+         "Wrong size label (byte)" ASSERT
+            minbyte <= offset AND offset <= maxbyte
+      ELIF  size OF label = word THEN
+         "Wrong size label (word)" ASSERT
+            minword <= offset AND offset <= maxword
+      FI;
+      FOR i FROM 0 TO size OF label - 1
+      DO
+         code [location OF label + i] :=
+            REPR ABS (BIN offset SHR (i*8) AND 16rff)
+      OD
+   END;
+
+   PROC ma bra byte = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble branch (brb, 0);
+      size OF label := byte;
+      location OF label := location - 1
+   END;
+
+   PROC ma bra word = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble branch (brw, 0);
+      size OF label := word;
+      location OF  label := location - 2
+   END;
+
+   PROC ma bra long = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble (jmp, RELL 0);
+      size OF label := long;
+      location OF label := location - 4
+   END;
+
+   PROC ma bra = (MACHINEOFFSET addr) VOID:
+   BEGIN
+      INT
+         byteoffset = addr - location - 2,
+         wordoffset = addr - location - 3,
+         longoffset = addr - location - 6;
+      IF minbyte <= byteoffset AND byteoffset <= maxbyte THEN
+         assemble branch (brb, byteoffset)
+      ELIF minword <= wordoffset AND wordoffset <= maxword THEN
+         assemble branch (brw, wordoffset)
+      ELSE
+         assemble (jmp, RELL longoffset)
+      FI
+   END;
+
+   PROC ma bcc byte = (BITS condition, REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble branch (b>>condition, 0);
+      size OF label := byte;
+      location OF label := location -1
+   END;
+
+   PROC ma bcc = (BITS condition, MACHINEOFFSET addr) VOID:
+   BEGIN
+      INT
+         byteoffset = addr - location - 2;
+      IF minbyte <= byteoffset AND byteoffset <= maxbyte THEN
+         assemble branch (b>>condition, byteoffset)
+      ELSE
+         MACHINELABEL over;
+         ma bcc byte (invcondition(condition), over);
+         ma bra (addr);
+         fix machine label (over)
+      FI
+   END;
+
+   PROC ma bsr byte = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble branch (bsbb, 0);
+      size OF label := byte;
+      location OF label := location - 1
+   END;
+
+   PROC ma bsr word = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble branch (bsbw, 0);
+      size OF label := word;
+      location OF label := location - 2
+   END;
+
+   PROC ma bsr long = (REF MACHINELABEL label) VOID:
+   BEGIN
+      assemble (jsb, RELL 0);
+      size OF label := long;
+      location OF label := location - 4
+   END;
+
+   PROC ma bsr = (MACHINEOFFSET addr) VOID:
+   BEGIN
+      INT
+         byteoffset = addr - location - 2,
+         wordoffset = addr - location - 3,
+         longoffset = addr - location - 6;
+      IF minbyte <= byteoffset AND byteoffset <= maxbyte THEN
+         assemble branch (bsbb, byteoffset)
+      ELIF minword <= wordoffset AND wordoffset <= maxword THEN
+         assemble branch (bsbw, wordoffset)
+      ELSE
+         assemble (jsb, RELL longoffset)
+      FI
+   END;
+
+   PROC ma put char = (CHAR c) VOID:
+   BEGIN
+      assemble byte (BIN ABS c)
+   END;
+
+   PROC ma put word = (BITS word) VOID:
+   BEGIN
+      IF location + 1 > UPB code THEN extend code area FI;
+      FOR i FROM 0 TO 1
+      DO
+         code [location + i] := REPR ABS ((word SHR (i*8)) AND 16rff)
+      OD;
+      location +:= 2
+   END;
+
+   SKIP
+
+KEEP
+   FLTPROC,
+   simfault,
+   get_vec_chars,
+   free_vec_chars,
+   ASSERT (VECTOR [] CHAR, BOOL),
+   location,
+   ma code ref,
+   ma code size,
+   MACHINEOFFSET,
+   nullmachineoffset,
+   ma initialise,
+   ma changeflt,
+   ma savestate,
+   ma restorestate,
+   ma executable,
+   byte,
+   word,
+   long,
+   MACHINELABEL,
+   nullmachinelabel,
+   = (MACHINELABEL, MACHINELABEL),
+   OPERAND,
+   = (OPERAND, OPERAND),
+   eql,
+   gtr,
+   leq,
+   geq,
+   lss,
+   neq,
+   gtru,
+   lequ,
+   gequ,
+   lssu,
+   inv condition,
+   swap condition,
+   assemble,
+   movzwl,
+   movl,
+   movzbl,
+   moval,
+   mnegl,
+   mcoml,
+   pushal,
+   pushl,
+   bitl,
+   movc3,
+   cmpc3,
+   sobgeq,
+   pushr,
+   popr,
+   tstl,
+   cmpl,
+   addl2,
+   addl3,
+   subl2,
+   subl3,
+   sbwc,
+   mull2,
+   mull3,
+   divl2,
+   divl3,
+   bisl2,
+   bisl3,
+   bicl2,
+   bicl3,
+   xorl2,
+   xorl3,
+   ashl,
+   rotl,
+   clrl,
+   extv,
+   extzv,
+   insv,
+   cvtbl,
+   jmp,
+   jsb,
+   brw,
+   brb,
+   bsbb,
+   bsbw,
+   rsb,
+   calls,
+   ret,
+   bispsw,
+   bicpsw,
+   nop,
+   decl,
+   b,
+   ap,
+   fp,
+   sp,
+   pc,
+   >> (BITS, BITS),
+   R (INT),
+   RI (INT),
+   RD (INT),
+   RID (INT),
+   DR (INT),
+   LIT (INT),
+   DISP (INT, INT),
+   DISPD (INT, INT),
+   IMMB (INT),
+   IMMW (INT),
+   IMML (INT),
+   ABSA (INT),
+   RELB (INT),
+   RELW (INT),
+   RELL (INT),
+   RELBD (INT),
+   RELWD (INT),
+   RELLD (INT),
+   // (OPERAND, INT),
+   BRANCHDISPB (INT),
+   BRANCHDISPW (INT),
+   LITB (INT),
+   LITW (INT),
+   LITL (INT),
+   fix machine label,
+   ma bra byte,
+   ma bra word,
+   ma bra long,
+   ma bsr byte,
+   ma bsr word,
+   ma bsr long,
+   ma bra,
+   ma bsr,
+   ma bcc,
+   ma bcc byte,
+   ma put char,
+   ma put word
+FINISH

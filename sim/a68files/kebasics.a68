@@ -1,0 +1,521 @@
+DECS kebasics CONTEXT VOID USE  putstrings, basics:
+
+{  " Id: kebasics.sta,v 2.1 91/02/22 18:34:24 edcad Exp$" }
+configinfo A68CONFIG "$Id: kebasics.a68,v 34.2 1995/03/29 13:04:41 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+06:05:88 Created to define basic modes and operators for symbolic
+            information in the kernel of the new simulator
+25:11:88 `sim null id' moved here from KEXPAND
+07:12:88 + on BLOCKs corrected.  BJE.
+07:12:88 `sim null id' removed.  BJE.
+12:01:89 `= (SVALUE, SVALUE)' corrected.  EPI Bug 82.  Sim bug 79.  BJE.
+02:02:89 'dump code generator' added.  R4B034 and Arch design CR 35.
+06:02:89 'omit inline biops' added for work on optimised biops.  PAR.
+16:02:89 'diagnose outer fns' added to isolate R4B129.  PAR.
+10:04:89 Removal of WORDS.  R4B134.  PAR.
+04:12:89 Added MNODE for Probe function support. MDR.
+23:07:90 Addition of SVOID and SVVOID. EVW
+10:06:93 FLTPROC added for OSIF Level 2.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.012 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Diagnostic levels - the corresponding diagnostics are produced if these
+  bits are set in the 'diagnostic level' passed to the kernel.
+}
+BITS diagnose interface  = 16r1,  { Run-time interface less encode/decode }
+     diagnose encoding   = 16r2,  { Show signal encoding and decoding calls }
+     diagnose am code    = 16r4,  { Show abstract machine code generation }
+     omit expansion      = 16r8,  { Switch off the simulator's expansion }
+     dump code generator = 16r10, { Show complete code generator state }
+     omit inline biops   = 16r20, { Switch off optimised biops }
+     diagnose outer fns  = 16r40; { List outer FN names prior to translation }
+
+
+{ The simulator uses its own set of modes to represent ELLA types, see
+  P029.50.11.  The assembler modes are not used, since they are in some
+  ways too general (referring to FORMULA, not INT, for example), and in
+  some ways not explicit enough (the user's declaration hierarchy is
+  used).  Our modes describe only the structure of the type in question.
+  If, at a later date, we need to record the user's type names, this
+  could be done with an extra alternative in the STYPE union of the form
+    SNAME   = STRUCT (ID name, TYPE type)
+  which can be used to supply any number of levels of indirection, or
+  naming.
+}
+MODE
+    STYPE,
+    SVOID   = STRUCT (INT svoid),
+    SNULL   = STRUCT (INT snull),
+    SINT    = STRUCT (ID id, INT lwb, upb),
+    SCHAR   = STRUCT (ID id, REF VECTOR [] CHAR char),
+    SSTRING = STRUCT (INT no, SCHAR t),
+    SENUM   = STRUCT (ID id, STYPE t, REF SENUM rest),
+    SFN     = STRUCT (STYPE from, to),
+    SST     = STRUCT (STYPE t, REF SST rest),
+    SROW    = STRUCT (INT no, STYPE type),
+    SPRIM   = UNION  (REF SENUM, REF SINT, REF SCHAR),
+    STYPE   = UNION  (SPRIM, REF SROW, REF SSTRING,
+                      REF SFN, REF SST, SVOID, SNULL);
+
+REF SENUM nil senum = NIL;
+REF SST nil sst     = NIL;
+STYPE null stype    = HEAP SNULL;
+STYPE void stype    = HEAP SVOID;
+
+
+{ ELLA values are often passed around in the simulator in a high level,
+  structured form.  The mode SVALUE is used for this (see P029.50.12).
+}
+MODE
+    SVALUE,
+    SVVOID  = STRUCT (INT svvoid),
+    SVNULL  = STRUCT (INT svnull),
+    SQUERY  = STRUCT (STYPE type),
+    SVINT   = STRUCT (REF SINT type, INT value),
+    SVCHAR  = STRUCT (REF SCHAR type, CHAR value),
+    SVSTR   = STRUCT (REF SSTRING type, REF VECTOR [] CHAR value),
+    SVENUM  = STRUCT (REF SENUM type, INT tag, SVALUE assoc),
+    SVST    = STRUCT (SVALUE head, REF SVST tail),
+    SVFN    = STRUCT (SVALUE from, to),
+    SVALUE  = UNION  (REF SQUERY, REF SVINT, REF SVCHAR, REF SVSTR,
+                      REF SVENUM, REF SVST, REF SVFN, SVVOID, SVNULL);
+
+REF SVST nil svst = NIL;
+SVALUE null svalue = HEAP SVNULL;
+SVALUE void svalue = HEAP SVVOID;
+
+
+{ The low level representation of ELLA values, at the level of the
+  run-time interface, uses the mode WORD.  See P029.50.12.
+}
+MODE WORD    = REF VECTOR [] CHAR;
+
+VECTOR [0] CHAR null word;
+WORD nil word = NIL;
+
+
+{ Values are not necessarily stored contiguously, so we have to describe
+  the memory as a set of BLOCKs.  Each block defines an area by its size,
+  offset within an instance, and instance number relative to the current
+  instance.  If the offset is positive, it is the offset of the data in
+  the instance data, otherwise the absolute value of the offset gives the
+  offset within the instance at which a pointer to the actual data is to
+  be found.  The pointer itself is a global memory address (relative to
+  the base of the abstract machine's global memory).
+}
+MODE BLOCK = STRUCT (INT inst offset, offset, size);
+
+
+{ The structure of the ELLA circuit is represented symbolically
+  by FNs and WIREs, or their instances, BOXes and LINEs.
+  See P029.50.11.
+  The vector of blocks in a WIRE should be canonical in the sense
+  that a contiguous set of locations within one instance should be
+  described by a single block, and within one instance the blocks
+  should be in order of increasing offset.
+  MNODE is used to represent a node within any of the circuits being
+  simulated. ie. simulated fn or probe functions. See E.N0045.50.27.
+}
+MODE
+    WIRE    = STRUCT (STYPE type, REF VECTOR [] BLOCK blocks),
+    SRAM    = STRUCT (WIRE first cell, INT lwb, ram size, step),
+    BINDING = STRUCT (ID uname, lname, INT node),
+    FN      = STRUCT (REF SRAM ram, WIRE outputs, INT no inputs,
+                      REF VECTOR [] BINDING body),
+    BOX     = STRUCT (INT fn, instance),
+    LINE    = STRUCT (REF WIRE wire, INT instance),
+    NODE    = UNION  (BOX, LINE),
+    RNODE   = UNION  (BOX, WIRE),
+    MNODE = STRUCT (NODE node, INT circuit, base);
+
+REF SRAM  nil sram  = NIL;
+REF FN   nil fn   = NIL;
+REF NODE nil node = NIL;
+
+
+{ Extraction of the STYPE from an SVALUE.  Note that to avoid special
+  cases elsewhere, SVNULL is assumed to have type SNULL.
+}
+OP TYPEOF = (SVALUE sv) STYPE:
+    CASE sv IN
+        (SVVOID):           void stype,
+        (SVNULL):           null stype,
+        (REF SQUERY sq):    type OF sq,
+        (REF SVINT si):     type OF si,
+        (REF SVCHAR sc):    type OF sc,
+        (REF SVSTR ss):     type OF ss,
+        (REF SVENUM se):    type OF se,
+        (REF SVST st):
+            BEGIN
+                REF SST answer := nil sst;
+                REF REF SST end := answer;
+                REF SVST scan := st;
+                WHILE scan ISNT nil svst DO
+                    REF REF SST (end) :=
+                       HEAP SST := (TYPEOF head OF scan, nil sst);
+                    scan := tail OF scan;
+                    end := rest OF end
+                OD;
+                answer
+            END,
+        (REF SVFN sf):      HEAP SFN := (TYPEOF from OF sf, TYPEOF to OF sf)
+    ESAC;
+
+
+
+{ Equality for STYPE's
+  SNULL is always equal to another SNULL.  ditto for SVOID
+}
+OP = = (STYPE left, right) BOOL:
+    CASE left IN
+        (REF SINT l):
+            CASE right IN
+                (REF SINT r):
+                    id OF l = id OF r
+                    ANDTH  lwb OF l = lwb OF r
+                    ANDTH  upb OF l = upb OF r
+            OUT  FALSE
+            ESAC,
+        (REF SCHAR l):
+            CASE right IN
+                (REF SCHAR r):
+                    id OF l = id OF r  ANDTH  char OF l = char OF r
+            OUT  FALSE
+            ESAC,
+        (REF SSTRING l):
+            CASE right IN
+                (REF SSTRING r):
+                    no OF l = no OF r  ANDTH  t OF l = t OF r
+            OUT  FALSE
+            ESAC,
+        (REF SENUM l):
+            CASE right IN
+                (REF SENUM r):
+                    id OF l = id OF r  ANDTH  t OF l = t OF r  ANDTH
+                        IF rest OF l IS nil senum THEN
+                            IF rest OF r IS nil senum THEN  TRUE
+                            ELSE  FALSE
+                            FI
+                        ELSE
+                            IF rest OF r IS nil senum THEN  FALSE
+                            ELSE  rest OF l = rest OF r
+                            FI
+                        FI
+            OUT  FALSE
+            ESAC,
+       (REF SST l):
+            CASE right IN
+                (REF SST r):
+                    t OF l = t OF r  ANDTH
+                        IF rest OF l IS nil sst THEN
+                            IF rest OF r IS nil sst THEN  TRUE
+                            ELSE  FALSE
+                            FI
+                        ELSE
+                            IF rest OF r IS nil sst THEN  FALSE
+                            ELSE  rest OF l = rest OF r
+                            FI
+                        FI
+            OUT  FALSE
+            ESAC,
+        (REF SFN l):
+            CASE right IN
+                (REF SFN r):  from OF l = from OF r  ANDTH  to OF l = to OF r
+            OUT FALSE
+            ESAC,
+        (REF SROW l):
+            CASE right IN
+                (REF SROW r):  no OF l = no OF r  ANDTH  type OF l = type OF r
+            OUT  FALSE
+            ESAC,
+        (SVOID):
+            CASE right IN
+                (SVOID):  TRUE
+            OUT  FALSE
+            ESAC,
+        (SNULL):
+            CASE right IN
+                (SNULL):  TRUE
+            OUT  FALSE
+            ESAC
+    ESAC;
+
+
+{ Is this value completely unknown?  Note that there is more than one way
+  of representing a completely unknown structure or function type
+}
+PROC is query = (SVALUE v) BOOL:
+    CASE v IN
+        (REF SQUERY): TRUE,
+        (REF SVST s):
+            IF s IS nil svst THEN TRUE
+            ELSE is query (head OF s) ANDTH is query (tail OF s)
+            FI,
+        (REF SVFN f): is query (from OF f) ANDTH is query (to OF f)
+    OUT FALSE
+    ESAC;
+
+
+{ Equality for SVALUE's assumes that they share an STYPE, otherwise the results
+  are undefined.  The OUT clauses below handle comparison of ? against a known
+  signal.
+
+  For convenience SVNULL is taken equal to SVNULL.  This avoids special cases
+  in the recursion
+}
+OP = = (SVALUE left, right) BOOL:
+    CASE right IN (REF SQUERY): is query (left)
+    OUSE left IN
+        (REF SQUERY): is query (right),
+        (REF SVINT l):
+            CASE right IN
+                (REF SVINT r):  value OF l = value OF r
+            OUT  FALSE
+            ESAC,
+        (REF SVCHAR l):
+            CASE right IN
+                (REF SVCHAR r):  value OF l = value OF r
+            OUT  FALSE
+            ESAC,
+        (REF SVSTR l):
+            CASE right IN
+                (REF SVSTR r):  value OF l = value OF r
+            OUT  FALSE
+            ESAC,
+        (REF SVENUM l):
+            CASE right IN
+                (REF SVENUM r):
+                    tag OF l = tag OF r  ANDTH  assoc OF l = assoc OF r
+            OUT  FALSE
+            ESAC,
+       (REF SVST l):
+            CASE right IN
+                (REF SVST r):
+                    head OF l = head OF r  ANDTH
+                        IF tail OF l IS nil svst THEN
+                            IF tail OF r IS nil svst THEN  TRUE
+                            ELSE  FALSE
+                            FI
+                        ELSE
+                            IF tail OF r IS nil svst THEN  FALSE
+                            ELSE  tail OF l = tail OF r
+                            FI
+                        FI
+            OUT  FALSE
+            ESAC,
+        (REF SVFN l):
+            CASE right IN
+                (REF SVFN r):  from OF l = from OF r  ANDTH  to OF l = to OF r
+            OUT FALSE
+            ESAC,
+        (SVVOID):
+            CASE right IN
+                (SVVOID):  TRUE
+            OUT  FALSE
+            ESAC,
+        (SVNULL):
+            CASE right IN
+                (SVNULL):  TRUE
+            OUT  FALSE
+            ESAC
+    ESAC;
+
+
+{ This is written assuming that the same block structure is always used
+  to define a given memory structure -- see the note on the canonical
+  form above (with MODE WIRE).
+}
+OP = = (WIRE left, right) BOOL:
+    type OF left = type OF right  ANDTH
+    UPB blocks OF left = UPB blocks OF right  ANDTH
+    BEGIN
+        BOOL same blocks := TRUE;
+        FOR i TO UPB blocks OF left WHILE same blocks DO
+            BLOCK left block = (blocks OF left) [i],
+                  right block = (blocks OF right) [i];
+            IF
+                inst offset OF left block /= inst offset OF right block  OREL
+                offset OF left block /= offset OF right block  OREL
+                size OF left block /= size OF right block
+            THEN
+                same blocks := FALSE
+            FI
+        OD;
+        same blocks
+    END;
+
+
+OP = = (BOX left, right) BOOL:
+    fn OF left = fn OF right  ANDTH  instance OF left = instance OF right;
+
+
+OP = = (LINE left, right) BOOL:
+    wire OF left = wire OF right  ANDTH  instance OF left = instance OF right;
+
+
+OP = = (NODE left, right) BOOL:
+    CASE left IN
+        (BOX lb):  CASE right IN (BOX rb):  lb = rb OUT FALSE ESAC,
+        (LINE ll):  CASE right IN (LINE rl):  ll = rl OUT FALSE ESAC
+    ESAC;
+
+OP = = (MNODE left, right) BOOL:
+   base OF left = base OF right ANDTH node OF left = node OF right ANDTH
+   circuit OF left = circuit OF right;
+
+{ Append on SST (destructive)
+}
+OP + = (REF SST a, b) REF SST:
+BEGIN
+    REF SST result := a;
+    REF REF SST scan := result;
+    WHILE scan ISNT nil sst DO scan := rest OF scan OD;
+    REF REF SST (scan) := b;
+    result
+END;
+
+
+{ Join two blocks descriptions, ensuring that the newly adjacent
+  elements are merged if they describe contiguous pieces of memory.
+  This will produce a canonical representation (see comment
+  above MODE WIRE) only if the two inputs are canonical.
+}
+OP + = (REF VECTOR [] BLOCK a, b) REF VECTOR [] BLOCK:
+BEGIN
+    INT n = UPB a,
+        m = UPB b;
+    IF n = 0 THEN  b
+    ELIF m = 0 THEN  a
+    ELSE
+        BLOCK an = a [n],
+              b1 = b [1];
+        BOOL merge = inst offset OF an = inst offset OF b1 ANDTH
+                         offset OF an >= 0 ANDTH
+                         offset OF an + size OF an = offset OF b1;
+        INT size = IF merge THEN  n + m - 1  ELSE  n + m  FI;
+        HEAP VECTOR [size] BLOCK result;
+        result [1 : n] := a;
+        IF merge THEN
+            size OF result [n] +:= size OF b1;
+            result [n+1 : ] := b [2 : ]
+        ELSE
+            result [n+1 : ] := b
+        FI;
+        result
+    FI
+END;
+
+
+{ Convertion of integers to WORDs, where the WORD to be filled in
+  is supplied, and must be wide enough for the proposed representation.
+}
+PROC unsigned to word = (INT n, WORD rep) VOID:
+BEGIN
+    INT acc := n;
+    FOR i FROM UPB rep BY -1 TO 1 DO
+        rep [i] := REPR (acc MOD 256);
+        acc := IF acc >= 0 THEN  acc % 256  ELSE  ((acc + 1) % 256) - 1  FI
+    OD
+END;
+
+PROC signed to word = (INT n, WORD rep) VOID:
+    unsigned to word (n, rep);
+
+
+{ Basic integer decoding, assuming the WORD represents an
+  *unsigned* integer
+}
+PROC word to unsigned = (WORD rep) INT:
+BEGIN
+    INT ans := 0;
+    FOR i TO UPB rep DO
+        ans := 256 * ans + ABS rep [i]
+    OD;
+    ans
+END;
+
+
+{ Basic integer decoding, assuming the WORD represents a
+  *signed* integer
+}
+PROC word to signed = (WORD rep) INT:
+BEGIN
+    INT ans;
+    IF ABS rep [1] >= 128 THEN
+        ans := ABS rep [1] - 256
+    ELSE
+        ans := ABS rep [1]
+    FI;
+    FOR i FROM 2 TO UPB rep DO
+        ans := 256 * ans + ABS rep [i]
+    OD;
+    ans
+END;
+
+
+
+MODE  FLTPROC = PROC (STR) VOID
+
+KEEP
+    diagnose interface, diagnose encoding, diagnose am code, omit expansion,
+    dump code generator, omit inline biops, diagnose outer fns,
+
+    SVOID, SNULL, SINT, SCHAR, SSTRING, SENUM, SFN, SST, SROW, SPRIM, STYPE,
+    nil senum, nil sst, null stype, void stype,
+
+    SVVOID, SVNULL, SQUERY, SVINT, SVCHAR, SVSTR, SVENUM, SVST, SVFN, SVALUE,
+    nil svst, null svalue, void svalue,
+
+    WORD,
+    null word, nil word,
+
+    BLOCK, WIRE, SRAM, BINDING, FN, BOX, LINE, NODE, RNODE, MNODE,
+    nil sram, nil fn, nil node,
+
+    TYPEOF (SVALUE),
+
+    = (STYPE, STYPE),  = (SVALUE, SVALUE),
+    = (WIRE, WIRE),  = (BOX, BOX),  = (LINE, LINE),  = (NODE, NODE),
+    = (MNODE, MNODE),
+    + (REF SST, REF SST),
+    + (REF VECTOR [] BLOCK, REF VECTOR [] BLOCK),
+
+    unsigned to word, signed to word, word to unsigned, word to signed,
+
+    FLTPROC,  sysfault
+FINISH

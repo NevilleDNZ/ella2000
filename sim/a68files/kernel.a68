@@ -1,0 +1,587 @@
+DECS  kernel  CONTEXT VOID USE  putstrings,  basics,  osinterface,
+      kebasics,  kesignals,  kesymbols,  kerti:
+
+{ " Id: kernel.sta,v 2.1 91/02/22 18:35:23 edcad Exp$" }
+configinfo A68CONFIG "$Id: kernel.a68,v 34.2 1995/03/29 13:04:52 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement the external interface to
+              the kernel of the new simulator.  It simply collects
+              and filters the relevant keep-lists.
+02:02:89  Changed mode of ferry procedures.  Arch design CR 33.  PAR.
+10:04:89  Change to peek/poke/encode/decode for speedup.  R4B134.  PAR.
+13:09:89  CR 642. Updated to RSRE kernel. EVW
+04:12:89  Fanout extension passed through.  PAR.
+18:12:89  Change to peek/poke for Probe functions. MDR.
+13:03:90  Hierarchic Timescaling:                                MHC
+                - Export PROC lookup scaletime from kesymbols so that it
+                  is accessible to simstart.
+13:12:90  Assclosure added to use list for CLOSURESEEDS. JIT
+27:08:91  SVVOID added to KEEP list. EVW
+16:10:92  void stype and void svalue added to KEEP list. JIT
+10:06:93  Interface changed for separate simulator image.  DCT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.011 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ Instrumentation Procedure and Control }
+{ ===================================== }
+
+
+{ 'instrument' is the procedure which may be used to record calls to
+  the kernel.
+}
+PROC (REF VECTOR [] CHAR) VOID instrument := (RVC msg) VOID: SKIP;
+
+
+{ 'show interface' is a boolean set according to the supplied diagnostic
+  level to determine whether the shell interface to the kernel is
+  instrumented.  Bacause of the large quantity of traffic, this by itself
+  does not switch on diagnostics for encoding and decoding functions.
+  These are handled independently by 'show encoding'.
+}
+BOOL show interface := FALSE,
+     show encoding  := FALSE;
+
+
+{ Text Generation for Instrumentation }
+{ =================================== }
+
+
+PROC instr type = (STYPE type) REF VECTOR [] CHAR:
+    CASE type IN
+        (SPRIM):        MAKEID "SPRIM",
+        (REF SROW):     MAKEID "SROW",
+        (REF SSTRING):  MAKEID "SSTRING",
+        (REF SFN):      MAKEID "SFN",
+        (REF SST):      MAKEID "SST",
+        (SNULL):        MAKEID "SNULL"
+    ESAC;
+
+
+PROC instr value = (SVALUE value) REF VECTOR [] CHAR:
+    CASE value IN
+        (SVNULL):       MAKEID "SVNULL",
+        (REF SQUERY q): oneline (("?(", instr type (type OF q), ")")),
+        (REF SVINT i):  oneline ((id OF type OF i, "/", value OF i)),
+        (REF SVCHAR c): oneline ((id OF type OF c, "'", value OF c)),
+        (REF SVSTR s):  oneline ((id OF t OF type OF s, """", value OF s, """")),
+        (REF SVENUM e): oneline ((BEGIN
+                                      REF SENUM el := type OF e;
+                                      TO tag OF e - 1 DO  el := rest OF el  OD;
+                                      id OF el
+                                  END,
+                                  instr value (assoc OF e))),
+        (REF SVST s):   oneline ((instr value (head OF s), instr value (tail OF s))),
+        (REF SVFN f):   oneline ((instr value (from OF f), instr value (to OF f)))
+    ESAC;
+
+
+PROC instr ram = (SRAM ram) REF VECTOR [] CHAR:
+    oneline((lwb OF ram, " + ", ramsize OF ram, " * ",
+            instr type (type OF first cell OF ram)));
+
+
+PROC instr fn = (FN fn) REF VECTOR [] CHAR:
+    IF ram OF fn IS nil sram THEN  MAKEID "_"
+    ELSE
+        REF SRAM ram = ram OF fn;
+        oneline(("SRAM: ", instr ram(ram)))
+    FI;
+
+
+PROC instr box = (BOX box) REF VECTOR [] CHAR:
+    oneline (("FN (", fn OF box, ")"));
+
+
+PROC instr wire = (WIRE wire) REF VECTOR [] CHAR:
+    oneline ((instr type (type OF wire), ", size: (not calculated)"));
+
+
+PROC instr line = (LINE line) REF VECTOR [] CHAR:
+    oneline (("WIRE (", instr wire (wire OF line), ")"));
+
+
+PROC instr node = (NODE node) REF VECTOR [] CHAR:
+    CASE node IN
+        (BOX b):   oneline (("BOX (", instr box (b), ")")),
+        (LINE l):  oneline (("LINE (", instr line (l), ")"))
+    ESAC;
+
+PROC instr mnode = (MNODE mnode) REF VECTOR [] CHAR:
+    oneline (("MNODE (CIRCUIT (",circuit OF mnode, "), BASE (", base OF mnode,
+              "),", instr node (node OF mnode), ")"));
+
+PROC instr rnode = (RNODE rnode) REF VECTOR [] CHAR:
+    CASE rnode IN
+        (BOX b):   oneline (("BOX (", instr box (b), ")")),
+        (WIRE w):  oneline (("WIRE (", instr wire (w), ")"))
+    ESAC;
+
+
+PROC instr word = (WORD word) REF VECTOR [] CHAR:
+    IF UPB word = 0 THEN  MAKEID "?"  ELSE  MAKEID "_"  FI;
+
+
+
+{ Instrumented Kernel Operations }
+{ ============================== }
+
+
+PROC initialise kernel = (FILE  simfile,
+                          INT diagnostic level,
+                          PROC (RVC) VOID instr,
+                          FLTPROC flt) NODE:
+BEGIN
+    instrument := instr;
+    show interface := diagnose interface <= BIN diagnostic level;
+    show encoding := diagnose encoding <= BIN diagnostic level;
+
+    NODE ans = raw initialise kernel (simfile, diagnostic level, instr, flt);
+    IF show interface THEN
+        instrument (oneline (("initialise kernel (REF seeds) = ",
+                              instr node (ans))))
+    FI;
+    ans
+END;
+
+
+PROC select function = (ID function, FLTPROC flt) NODE:
+BEGIN
+    NODE ans = raw select function (function, flt);
+    IF show interface THEN
+        instrument (oneline (("select function (",
+                              function,
+                              ") = ",
+                              instr node (ans))))
+    FI;
+    ans
+END;
+
+
+PROC simulate = (REF INT increment, REF BOOL stable, FLTPROC flt) VOID:
+BEGIN
+    INT old inc = increment;
+    raw simulate (increment, stable, flt);
+    IF show interface THEN
+        instrument (oneline (("simulate (",
+                              old inc,
+                              "->",
+                              increment,
+                              ", ->",
+                              stable,
+                              ") ")))
+    FI
+END;
+
+
+PROC peek signal value = (MNODE mloc, WORD answer) VOID:
+BEGIN
+    raw peek signal value(mloc, answer);
+    IF show interface THEN
+        instrument (oneline (("peek signal value (",
+                              instr mnode (mloc), ") = ",
+                              instr word (answer))))
+    FI
+END;
+
+
+PROC poke signal value = (MNODE mloc, WORD val) VOID:
+BEGIN
+    raw poke signal value (mloc, val);
+    IF show interface THEN
+        instrument (oneline (("poke signal value (",
+                              instr mnode(mloc),
+                              ", ",
+                              instr word(val),
+                              ")")))
+    FI
+END;
+
+PROC make flag fanouts = (MNODE loc) INT:
+BEGIN
+    INT flag address = raw make flag fanouts (loc);
+    IF show interface THEN
+        instrument (oneline (("make flag fanouts (",
+                              instr mnode (loc), ") = ",
+                              intchars (flag address))))
+    FI;
+    flag address
+END;
+
+
+PROC remove flag fanouts = (MNODE loc, INT flag address) VOID:
+BEGIN
+    raw remove flag fanouts (loc, flag address);
+    IF show interface THEN
+        instrument (oneline (("remove flag fanouts (",
+                              instr mnode(loc),
+                              ", ",
+                              intchars (flag address),
+                              ")")))
+    FI
+END;
+
+
+
+PROC save state = (REF INT time, REF ID function,
+                   PROC (RVC, FLTPROC) VOID ferry1, ferry2,
+                   FLTPROC flt) VOID:
+BEGIN
+    raw save state (time, function, ferry1, ferry2, flt);
+    IF show interface THEN
+        instrument (oneline (("save state (->", time, ", ->", function, ")")))
+    FI
+END;
+
+
+PROC restore state = (INT diagnostic level, time, ID function,
+                      PROC (RVC, FLTPROC) VOID ferry1, ferry2,
+                      PROC (RVC) VOID instr,
+                      FLTPROC flt) NODE:
+BEGIN
+    instrument := instr;
+    show interface := diagnose interface <= BIN diagnostic level;
+    show encoding := diagnose encoding <= BIN diagnostic level;
+    NODE ans = raw restore state (diagnostic level, time, function,
+                                  ferry1, ferry2, instr, flt);
+    IF show interface THEN
+        instrument (oneline (("restore state(",
+                              time,
+                              ", ",
+                              function,
+                              ") =",
+                              instr node (ans))))
+    FI;
+    ans
+END;
+
+
+PROC clear interrupts = VOID:
+BEGIN
+    raw clear interrupts;
+    IF show interface THEN
+        instrument (MAKEID "clear interrupts")
+    FI
+END;
+
+
+PROC terminate kernel = (FLTPROC flt) VOID:
+BEGIN
+    raw terminate kernel (flt);
+    IF show interface THEN
+        instrument (MAKEID "terminate kernel")
+    FI
+END;
+
+PROC initialise probe instance = (ID function, FLTPROC flt) MNODE:
+BEGIN
+    MNODE ans = raw initialise probe instance(function, flt);
+    IF show interface THEN
+        instrument (oneline(("initialise probe instance(",function,") =",
+                             instr mnode(ans))))
+    FI;
+    ans
+END;
+
+PROC reinitialise probe instance = (MNODE function)VOID:
+BEGIN
+    raw reinitialise probe instance(function);
+    IF show interface THEN
+        instrument (oneline(("reinitialise probe instance(",instr mnode(function),")")))
+    FI
+END;
+
+PROC destroy probe instance = (INT circuit, base)VOID:
+BEGIN
+    raw destroy probe instance(circuit, base);
+    IF show interface THEN
+        instrument (oneline(("destroy probe instance(",circuit,",",base,")")))
+    FI
+END;
+
+
+PROC reconnect probe instance = (MNODE function, line)VOID:
+BEGIN
+    raw reconnect probe instance(function, line);
+    IF show interface THEN
+        instrument (oneline(("reconnect probe instance(",
+                    instr mnode(function),",", instr mnode(line), ")")))
+    FI
+END;
+
+PROC probe input node = (MNODE mprobe)MNODE:
+BEGIN
+    MNODE ans = raw probe input node(mprobe);
+    IF show interface THEN
+        instrument (oneline(("probe input node(",
+                    instr mnode(mprobe),") =", instr mnode(ans))))
+    FI;
+    ans
+END;
+
+PROC list probes connected to = (INT base) REF VECTOR [] INT:{base offsets}
+BEGIN
+   REF VECTOR [] INT ans = raw list probes connected to(base);
+   IF show interface THEN
+       instrument (oneline(("list probes connected to(", base,
+                            ") = (not calculated)")))
+   FI;
+   ans
+END;
+
+PROC stop probe instances = (REF VECTOR [] INT bases) VOID:
+BEGIN
+    raw stop probe instances (bases);
+    IF show interface THEN
+        instrument (oneline(("stop probe instances( not calculated)")))
+    FI
+END;
+
+PROC probe type matches line = (MNODE function, line)BOOL:
+BEGIN
+    BOOL ans = raw probe type matches line(function, line);
+    IF show interface THEN
+        instrument (oneline(("probe typematches line(",
+                    instr mnode(function),",",instr mnode(line),") = ", ans)))
+    FI;
+    ans
+END;
+
+PROC freeze instance = (MNODE function)INT:
+BEGIN
+    INT ans = raw freeze instance(function);
+    IF show interface THEN
+        instrument (oneline(("freeze instance(", instr mnode(function), ")")))
+    FI;
+    ans
+END;
+
+PROC unfreeze instance = (MNODE function)BOOL:
+BEGIN
+    BOOL ans = raw unfreeze instance(function);
+    IF show interface THEN
+        instrument (oneline(("unfreeze instance(", instr mnode(function),
+                            ")")))
+    FI;
+    ans
+END;
+
+
+PROC poke signal value and fanout = (MNODE function, WORD val)VOID:
+BEGIN
+    raw poke signal value and fanout (function, val);
+    IF show interface THEN
+        instrument (oneline (("poke signal value and fanout (",
+                              instr mnode(function),
+                              ", ",
+                              instr word(val),
+                              ")")))
+    FI
+END;
+
+PROC lookup function = (INT fn) FN:
+BEGIN
+    FN ans = raw lookup function (fn);
+    IF show interface THEN
+        instrument (oneline (("lookup function (", fn, ") = ", instr fn (ans))))
+    FI;
+    ans
+END;
+
+
+PROC lookup rnode = (INT rnode) RNODE:
+BEGIN
+    RNODE ans = raw lookup rnode (rnode);
+    IF show interface THEN
+        instrument (oneline (("lookup rnode (", rnode, ") = ", instr rnode (ans))))
+    FI;
+    ans
+END;
+
+
+PROC list simulatable functions = (PROC (REF VECTOR [] CHAR) BOOL p) VOID:
+BEGIN
+    PROC pp =(REF VECTOR [] CHAR fn) BOOL:
+    BEGIN
+        BOOL ans = p (fn);
+        instrument (oneline ((fn, IF ans THEN "," ELSE "." FI)));
+        ans
+    END;
+
+    instrument (oneline (("list simulatable functions (p)")));
+    raw list simulatable functions (pp)
+END;
+
+
+PROC signal width = (STYPE t) INT:
+BEGIN
+    INT ans = raw signal width (t);
+    IF show interface THEN
+        instrument (oneline (("signal width (", instr type (t), ") = ", ans)))
+    FI;
+    ans
+END;
+
+
+PROC trim signal = (STYPE t, INT lwb, upb) REF SST:
+BEGIN
+    REF SST ans = raw trim signal (t, lwb, upb);
+    IF show interface THEN
+        instrument (oneline (("trim signal (",
+                              instr type (t),
+                              ", ",
+                              lwb,
+                              ", ",
+                              upb,
+                              ") = ",
+                              instr type (ans))))
+    FI;
+    ans
+END;
+
+
+PROC trim wire = (WIRE t, INT lwb, upb) WIRE:
+BEGIN
+    WIRE ans = raw trim wire (t, lwb, upb);
+    IF show interface THEN
+        instrument (oneline (("trim wire (",
+                              instr wire (t),
+                              ", ",
+                              lwb,
+                              ", ",
+                              upb,
+                              ") = ",
+                              instr wire (ans))))
+    FI;
+    ans
+END;
+
+
+PROC trim ram = (REF SRAM ram, INT lwb, upb) WIRE:
+BEGIN
+    WIRE ans = raw trim ram (ram, lwb, upb);
+    IF show interface THEN
+        instrument (oneline (("trim ram (",
+                              instr ram (ram),
+                              ", ",
+                              lwb,
+                              ", ",
+                              upb,
+                              ") = ",
+                              instr wire (ans))))
+    FI;
+    ans
+END;
+
+
+PROC inputs = (FN f) WIRE:
+BEGIN
+    WIRE ans = raw inputs (f);
+    IF show interface THEN
+        instrument (oneline (("inputs (",
+                              instr fn (f),
+                              ") = ",
+                              instr wire (ans))))
+    FI;
+    ans
+END;
+
+
+PROC encode = (SVALUE val, STYPE type) {=-}REF{=+}WORD:
+BEGIN
+    {=-}REF{=+}WORD ans = raw encode (val, type);
+    IF show encoding THEN
+        instrument (oneline (("encode (",
+                              instr value (val),
+                              ", ",
+                              instr type (type),
+                              ") = ",
+                              instr word (ans))))
+    FI;
+    ans
+END;
+
+
+PROC decode = (WORD rep, STYPE type) SVALUE:
+BEGIN
+    SVALUE ans = raw decode (rep, type);
+    IF show encoding THEN
+        instrument (oneline (("decode (",
+                              instr word (rep),
+                              ", ",
+                              instr type (type),
+                              ") = ",
+                              instr value (ans))))
+    FI;
+    ans
+END
+
+KEEP
+    { Basics }
+    SVOID, SNULL, SINT, SCHAR, SSTRING, SENUM, SFN, SST, SROW, SPRIM, STYPE,
+    nil senum, nil sst, null stype, void stype,
+    SVVOID, SVNULL, SQUERY, SVINT, SVCHAR, SVSTR, SVENUM, SVST, SVFN, SVALUE,
+    nil svst, null svalue, void svalue,
+    WORD,
+    null word, nil word,
+    BLOCK, WIRE, SRAM, BINDING, FN, BOX, LINE, NODE, RNODE, MNODE,
+    nil sram, nil fn, nil node,
+    = (WIRE, WIRE), = (BOX, BOX), = (LINE, LINE), = (NODE, NODE),
+    = (MNODE, MNODE),
+    = (STYPE, STYPE), = (SVALUE, SVALUE),
+    + (REF VECTOR [] BLOCK, REF VECTOR [] BLOCK),
+
+    { Signals }
+    signal width, trim signal, trim wire, trim ram,
+    encode, decode, machine width,
+
+    { Run-time interface }
+    make flag fanouts, remove flag fanouts, cg peek int, cg poke int,
+    initialise kernel, select function, simulate,
+    peek signal value, poke signal value, save state,
+    restore state, clear interrupts, terminate kernel,
+    initialise probe instance, reinitialise probe instance,
+    destroy probe instance, probe input node, reconnect probe instance,
+    list probes connected to, stop probe instances, probe type matches line,
+    freeze instance, unfreeze instance,
+    poke signal value and fanout,
+
+    { Symbol table}
+    lookup function, lookup rnode, lookup userid, list simulatable functions,
+    inputs, lookup scaletime, lookup outputs,
+    FLTPROC
+FINISH
