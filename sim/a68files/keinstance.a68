@@ -1,0 +1,2841 @@
+DECS keinstance CONTEXT VOID
+USE putstrings, osinterface, basics, kesymbols, kesort, kesignals,
+*H  heapdebug,
+    keamgen, kesave, kebasics, keambasics, keconv, kememory, timescale:
+
+{ " Id: keinstance.sta,v 2.2 91/05/10 15:07:01 aap Exp$" }
+configinfo A68CONFIG "$Id: keinstance.a68,v 34.2 1995/03/29 13:04:51 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:05:88  Module created, to implement instantiation of atomic functions
+              in the kernel of the new simulator
+21:11:88  `locals' argument to `declare' changed to [] *REF* RNODE
+              and initialised to NILs to aid early detection of access
+              to unitialised elements.
+22:11:88  `translate function' recurses to handle inner function
+              declarations.  `parent fnno' becomes an argument for
+              this purpose (partial fix for bug 4).
+23:11:88  Various changes to introduce instance data for compound
+              functions and thereby correct the processing of
+              connectivity (bugs 8/9).
+25:11:88  Bug 35. Re-ordered CL evaluation with respect to event setting &
+              handling. MDR.
+29:11:88  `translate function' no longer uses `is atomic'.
+              `declare' loses code for UMINST/UDINST but gains code
+              for CCHAR, CQUOTE, UCONC, UASSOC, UTRIM and UINDEX.
+              BJE. Bugs 4 and 36.
+01:12:88  `translate function' acquires return value.  `make
+              instance' performs depth first search.  `translate top
+              level' uses return code of `add expansion'.  Correct
+              input count passed to `add function'. Bug 22. BJE
+02:12:88  `declare unit' no longer processes UASSOC.  Bug 50.  BJE.
+07:12:88  Error in `fill instance' corrected. BJE.
+07:12:88  `declare' handles multiple MAKEs.  `translate function'
+              and `declare join' handle function sets.  Bug 45.  BJE.
+09:12:88  Circuit parameters and constant signals wrapped up in
+              kosher instances.  Bugs 13 and 57.  BJE.
+09:12:88  Changes for disambiguating names.  PAR.
+12:12:88  `translate atomic' updates RAM data
+14:12:88  'translate function' and 'declare' now mutually recursive.  PAR.
+15:12:88  `make instance', `declare join' and the tail of
+              `translate function optimised.  `constants' removed from
+              `INSTANCE' Bug 51.  Miscellaneous tidies. BJE.
+16:12:88  Monitoring of the inputs and outputs of functions with
+              function type inputs made consistent with release 3.
+              Bug 6.  BJE.
+16:12:88  PBOX added to LOCAL to handle persistent variables.
+              Bug 66.  BJE.
+16:12:88  'make fanouts' changes the predecessors of non-combinatorial
+              function itself, rather than of its successors.  PAR.
+20:12:88  Indexing and trimming errors corrected.  Bug 73.  BJE
+20:12:88  Handling of non-multiple and multiple MAKEs differentiated.  BJE
+20:12:88  No fanout count output for compount functions.  BJE
+21:12:88  Error in `process inputs' corrected.  Bug 76.  BJE.
+21:12:88  Error in processing outputs of function sets with function type
+              inputs corrected.  Bug 77.  BJE.
+21:12:88  `connections' array replaced by `makes' array in preparation
+              for fixing bugs 64 and 76.  BJE.
+21:12:88  Re-arranged calls array code. MDR.
+28:12:88  `transfer joins' handles simple closed loops.  Bug 74.  BJE.
+29:12:88  `transfer location' added.  Bug 75.  BJE.
+29:12:88  Locals saved over recursive calls to declare.  Bug 70.  BJE
+29:12:88  Correct space for `cp instance' fanouts reserved in
+              `construct memory'.  Initialisation of this fanout list
+              and instance flags postponed to `set function'.  Bug 64.
+              BJE.
+02:12:88  `combinatorial calls' forces call to cp instance to be first.
+              Bug 87.  BJE.
+30:12:88  Loop breaks now initialised.  (bug 82)  PAR.
+30:12:88  WIREs representing user inputs passed to 'translate atomic'
+              (bug 55)  PAR.
+12:01:89  Bug in `break loop' corrected.  BJE.  Bug 90.
+12:01:89  Processing of monitoring data for function type inputs
+              corrected in translate function.  BJE.  Bug 98.
+17:01:89  Numeric keys for inner functions made unambiguous.  BJE.  Bug 120.
+19:01:89  Loop break sorting and diagnostics corrected (bug 82 contd.)  PAR.
+19:01:89  MODE changes required for reverse-sorting delays.  Bug 95.  PAR.
+20:01:89  Further correction to delayless feedback in 'construct breaks'.
+              R4B073.  PAR.
+20:01:89  Reverse sorting of delays added.  (Bug 95).  R4B035.  PAR.
+20:01:89  Save/Restore 'cp instance no'.  (Partial fix for) Bug 86.
+              R4B034. MDR.
+27:01:89  FLTPROC supplied to `cg setup space'.  R4B065.  BJE.
+27:01:89  Fanouts to top level (invented) instance used to control
+              iterations.  R4B072.  PAR.
+02:02:89  Mode change to ferry procedures.  Arch design CR 33.  PAR.
+10:02:89  Correction to `strip output {type, wire}'.  R4B038.  BJE.
+16:02:89  Improved undelayed feedback diagnostics.  R4B061.  PAR.
+03:03:89  Circumnavigate problems of excessive heap usage by locals
+              array in declare.  R4B151.  SPT.
+08:03:89  Fix to 'trim wire' for R4B196.  PAR.
+10:04:89  Removal of WORDS, and speedup to 'construct memory'.
+              R4B134.  PAR.
+27:11:89  Added code to set up structure for Probe Functions. MDR.
+29:11:89  Indirection added to instances array to reduce heap
+              fragmentation.  AAP.
+08:01:90  Integrated "Separation of fanouts in 'construct memory'.  PAR."
+              MDR.
+22:02:90  Rely on the fnnos from the instance pointers to provide
+              numberic labeling for callinsts.  Also removed the
+              labels from the heap. MDR.
+13:03:90  Hierarchic Timescaling:                              MHC
+                - Added timescale to USE list
+                - Added code to enter scaletime value into symbol table
+                  in PROC translate function.
+17:09:90  Integrated Alien code with probes etc. MDR.
+10:01:91  Fixed construct memory to track moving global_memory
+              when allocating alien workspaces and fanout lists. MDR.
+23:01:91  Fixed construct memory allocation of workspaces in non-probe
+              alien functions. MDR.
+31:01:91  Releases 5 and 6 merged.  DCT
+10:05:91  Alien code size re-initialised to zero.  AAP
+08:10:91  Updated to version of assembler modes. EVW
+10:04:92  ATTRNAME added in CASE clause in main body of PROC declare. JIT
+ 5:05:92   New spec fo fndec_tfn. DJS
+13:11:92  Updated for 'chars' mode changes. JIT
+08:06:93  RANGEs added to intdec. EVW
+30:06:93  osinterface added to USE list.  DCT
+18:10:93  R6b191:  Ignore LET declarations with TNULL type. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.065 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ The procedures in this module rely heavily on the fact that the
+  assembler interface preserves the declaration-before-use structure
+  of the original ELLA-text.
+}
+
+{ Useful Constants }
+{ ================ }
+VECTOR [0] BLOCK null rvb;
+
+{ Data Structures }
+{ =============== }
+
+
+{ During instantiation, instances are represented by data in several
+  parallel arrays.  Initially, the basic structure of the instance
+  data is recorded in the following array.
+  The 'sort' of an instance determines how it is called, and comes
+  from the symbol table, and the 'fnno' is symbol table handle on
+  the function concerned.
+  The 'nextc' and 'nexte' fields are used only for sorting.
+  'alien workspace offset' is the byte offset within the alien workspace
+  area at the end of global memory.  It is only defined if 'sort' denotes
+  an alien function instance.
+}
+MODE INPUT    = STRUCT (INT inst, offset),
+     INSTANCE = STRUCT (REF VECTOR [] INPUT inputs,
+                        INT fnno, size, output offset, alien workspace offset,
+                        BITS sort, INT nextc, nexte);
+
+REF REF VECTOR [] REF INSTANCE instances;
+REF INT last instance;
+
+{
+    The workspace for alien code functions is allocated at the end of global
+    memory.  'alien workspace size' is used to provide the total size, and
+    current offset.
+}
+INT alien workspace size := 0;
+{ The only lasting data required for instances, other than the
+  initialised global memory, is the machine offset of the start
+  of each one (with a handle by which the corresponding declaration
+  may be identified).
+}
+MODE INSTANCEPTR = STRUCT (INT fnno, offset);
+
+REF REF VECTOR [] INSTANCEPTR instance ptrs;
+
+
+{PROBEINSTPTRS records enough information to allow a copy to be
+ made of the first instantiation of any probe function.
+ base offset is the global memory offset of an instantiation which may be
+ copied }
+MODE PROBEINSTPTRS = STRUCT (INT fnno,
+                                 size,
+                                 input instance,
+                                 probe instance,
+                                 base offset,
+                                 REF VECTOR [] INSTANCEPTR inst ptrs);
+REF VECTOR [] PROBEINSTPTRS probe instance ptrs;
+
+REF VECTOR [] INSTANCEPTR circuit instance ptrs;
+
+{ Each instance is given a fanout list in a separate pass of processing,
+  giving the instances which it feeds.  The final version is recorded in
+  the instance data itself, but during translation, it is needed in a
+  more accessible high level form.
+}
+MODE FANOUTLIST = STRUCT (INT sink, REF FANOUTLIST tail);
+
+REF FANOUTLIST nil fanoutlist = NIL;
+REF REF VECTOR [] FANOUT fanouts;
+
+
+{ A 'BREAK' is a special type of instance of a generic identity function,
+  which is inserted whenever a loop is found.  It is put on the output of
+  one of the combinatorial functions forming the loop, and needs to inherit
+  its fanouts, (and ultimately will be the only function driven by that
+  function).  Loops are broken in both combinatorial logic, and delay
+  event handling -- and the slightly different behaviours required are
+  distinguished by the 'sort' field (which will be either 'event loop break'
+}
+MODE BREAK = STRUCT (BITS sort, INT source inst, FANOUT fanout);
+REF REF VECTOR [] BREAK breaks;
+REF INT last break;
+
+{A complete instantiation environment for the whole circuit, and
+ each of the probe functions.}
+MODE FNINSTENV = STRUCT(REF VECTOR [] REF INSTANCE instances,
+                        REF VECTOR [] FANOUT fanouts,
+                        REF VECTOR [] BREAK breaks,
+                        INT last instance,
+                            last break,
+                            first combinatorial,
+                            last combinatorial,
+                            first event handler);
+
+FNINSTENV empty fnenv = (HEAP VECTOR [0] REF INSTANCE,
+                         NIL,
+                         HEAP VECTOR [0] BREAK,
+                         0,0,0,0,0);
+
+REF VECTOR [] FNINSTENV probe fnenv;
+
+{circuit fnenv simply repackages the data originally kept here
+ to be consistant with probes}
+FNINSTENV circuit fnenv;
+
+
+{ SMAKEs are used to record MAKES statements appearing in the ELLA-text
+  along with the joins to them.  `joins[i]' records where primitive input
+  #i is driven from.  All instance numbers are relative to the enclosing
+  instance.
+}
+MODE SMAKE = STRUCT (INT fn, instance, REF VECTOR [] INPUT inputs);
+
+REF VECTOR [] SMAKE makes := HEAP VECTOR [0] SMAKE;
+INT last make := 0;
+
+
+{ This array is used to record constants that appear within compound
+  instances
+}
+REF VECTOR [] WORD constants := HEAP VECTOR [0] WORD;
+INT last constant := 0;
+
+{ During translation, we accumulate the maximum number of inputs to a
+  function and their maximum fanout so that the correct space can be reserved
+  for the circuit parameters instance.
+}
+INT max input size := 0;
+INT max input fanout := 0;
+
+{ This variable remembers the number of the special instance that
+  holds the circuit parameters.
+}
+INT cp instance no := 0;
+
+{ Basic Insertion Procedures }
+{ ========================== }
+
+*0 INT extend instances count := 0;
+*0
+PROC extend instances = VOID:
+BEGIN
+    INT old size = UPB instances;
+    INT new size = 2 * old size + 1;
+*0  extend instances count PLUSAB 1;
+    HEAP VECTOR [new size] REF INSTANCE new instances;
+    new instances [ : old size] := instances;
+    REF REF VECTOR [] REF INSTANCE (instances) := new instances
+END;
+
+
+{ 'add instance' creates a new instance in the 'instances' table,
+  but only allocates the space for the inputs;
+}
+*0 INT add instance count := 0;
+*0
+PROC add instance = (INT no inputs, fnno, size, output offset, alien workspace,
+                        BITS sort, BOOL probe) VOID:
+BEGIN
+    IF last instance >= UPB instances THEN
+        extend instances
+    FI;
+*0  add instance count PLUSAB 2;
+    instances [last instance +:= 1] := HEAP INSTANCE :=
+        (HEAP VECTOR [no inputs] INPUT, fnno, size, output offset,
+            alien workspace size, sort, 0, 0);
+    IF (sort >= alien sort AND NOT probe) THEN
+      alien workspace size +:= alien workspace
+    FI
+END;
+
+*0 INT extend makes count :=0;
+*0
+PROC extend makes = VOID:
+BEGIN
+    INT old size = UPB makes;
+    INT new size = 2 * old size + 1;
+*0  extend makes count PLUSAB 1;
+    HEAP VECTOR [new size] SMAKE new makes;
+    new makes [ : old size] := makes;
+    makes := new makes
+END;
+
+
+{ 'add make' adds a new primitive make to the table of
+  makes.
+}
+*0 INT add make count := 0;
+*0
+PROC add make = (INT fn, instance) INT:
+BEGIN
+    IF last make >= UPB makes THEN
+        extend makes
+    FI;
+    REF VECTOR [] INT sizes = lookup input sizes (fn);
+*0  add make count PLUSAB 1;
+    HEAP VECTOR [UPB sizes] INPUT inputs;
+    FORALL input IN inputs DO input := (-1, -1) OD;
+    makes [last make +:= 1] := (fn, instance, inputs);
+    last make
+END;
+
+{ `find make' searches tha expansion of the given function for a make with
+  the given relative instance.  A log(UPB expansion) algorithm is possible
+  because the makes are ordered in the expansion by instance offset.
+}
+PROC find make = (INT parent fn, instance) INT:
+BEGIN
+    REF VECTOR [] INT expansion = lookup expansion (parent fn);
+    INT lwb := 1;
+    INT upb := UPB expansion;
+    WHILE lwb < upb DO
+        INT mid = (lwb + upb) OVER 2;
+        INT mid instance = instance OF makes [expansion[mid]];
+        IF instance < mid instance THEN
+            upb := mid - 1
+        ELIF instance > mid instance THEN
+            lwb := mid + 1
+        ELSE
+            lwb := upb := mid
+        FI
+    OD;
+    INT ans = expansion[lwb];
+    IF instance OF makes [ans] /= instance THEN
+        sys fault ("find make: not found")
+    FI;
+    ans
+END;
+
+
+{
+  `add connection' registers the connection in the appropriate entry in the
+  make table
+}
+PROC add connection = (INT src inst, src offset, dest make, dest ip no) VOID:
+    (inputs OF makes [dest make]) [dest ip no] := (src inst, src offset);
+
+*0 INT extend constants count := 0;
+*0
+PROC extend constants = VOID:
+BEGIN
+    INT old size = UPB constants;
+    INT new size = 2 * old size + 1;
+*0  extend constants count PLUSAB 1;
+    HEAP VECTOR [new size] WORD new constants;
+    new constants [ : old size] := constants;
+    constants := new constants
+END;
+
+
+{ 'add constant' adds a new primitive constant to the table of
+  constants.
+}
+PROC add constant = (WORD constant) INT:
+BEGIN
+    IF last constant >= UPB constants THEN
+        extend constants
+    FI;
+    constants [last constant +:= 1] := constant;
+    last constant
+END;
+
+*0 INT extend breaks count := 0;
+*0
+PROC extend breaks = VOID:
+BEGIN
+    INT old size = UPB breaks;
+    INT new size = 2 * old size + 1;
+*0  extend breaks count PLUSAB 1;
+    HEAP VECTOR [new size] BREAK new breaks;
+    new breaks [ : old size] := breaks;
+    REF REF VECTOR [] BREAK (breaks) := new breaks
+END;
+
+
+{ 'add break' creates a new instance of the generic identity function,
+  but in the 'breaks' table, for later processing.
+  The output value is the instance number of the new instance.
+}
+PROC add break = (BITS sort, INT source inst, FANOUT old fanout) INT:
+BEGIN
+    IF last break >= UPB breaks THEN
+        extend breaks
+    FI;
+    breaks [last break +:= 1] := (sort, source inst, old fanout);
+    last instance + last break
+END;
+
+
+{ Transformations on the Data Structures }
+{ ====================================== }
+
+
+{ This procedure operates on the non-local array of input descriptors,
+  constructing a fanout list for each instance in the fanout list array.
+  The recognition, and avoidance, of duplicates relies on the fact that
+  the destinations (indexed by 'i') are processed in order, and therefore
+  any duplicate must be at the head of the existing list.  If any change
+  is made to this optimisation, the calculation of predecessors in the
+  next procedure may need to be changed to match.
+  This procedure is quite expensive, doing one heap allocation for
+  every connection in the circuit.
+  Compound function instances do not have any code and are
+  ignored when creating the lists.
+}
+*0 INT make fanout lists count := 0;
+PROC make fanout lists = (REF VECTOR [] REF FANOUTLIST fanout lists) VOID:
+BEGIN
+    FOR i TO last instance DO
+        fanout lists [i] := nil fanoutlist
+    OD;
+    FOR i TO UPB instances DO
+        IF sort OF instances [i] /= compound THEN
+            FOR j TO UPB inputs OF instances [i] DO
+                INT feed = inst OF (inputs OF instances [i]) [j];
+                IF feed /= 0 THEN
+                    REF REF FANOUTLIST this = fanout lists [feed];
+                    IF (this IS nil fanoutlist) OREL sink OF this /= i THEN
+                        { Not already there, so add this destination }
+*0                      make fanout lists count PLUSAB 1;
+                        this := HEAP FANOUTLIST := (i, this)
+                    FI
+                FI
+            OD
+         FI
+    OD
+END;
+
+
+{ The next procedure calls for the generation of fanout lists, and
+  then converts the list representation to an array, which is more
+  useable later.  It operates on global data, except for the locally
+  constructed fanout lists (which become available for garbage collection
+  at the end of this procedure).
+  This procedure is quite expensive, and visits each FANOUTLIST entry
+  twice -- there is one entry per connection in the circuit.
+}
+*0 INT make fanout arrays count := 0;
+PROC make fanout arrays = VOID:
+BEGIN
+    FOR i TO UPB fanouts DO
+        true predecessors OF fanouts [i] := 0
+    OD;
+    VECTOR [last instance] REF FANOUTLIST fanout lists;
+    make fanout lists (fanout lists);
+    FOR i TO UPB fanout lists DO
+        INT size := 0;
+        REF FANOUTLIST scan := fanout lists [i];
+        WHILE scan ISNT nil fanoutlist DO
+            size +:= 1;
+            scan := tail OF scan
+        OD;
+*0      make fanout arrays count PLUSAB 1;
+        successors OF fanouts [i] := HEAP VECTOR [size] INT;
+        scan := fanout lists [i];
+        WHILE scan ISNT nil fanoutlist DO
+            (successors OF fanouts [i]) [size] := sink OF scan;
+            true predecessors OF fanouts [sink OF scan] +:= 1;
+            size -:= 1;
+            scan := tail OF scan
+        OD
+    OD
+END;
+
+
+{ This procedure constructs all the parallel arrays required as global
+  data, once the raw instances array has been constructed, setting up
+  the 'predecessor' counts ready for the first topological sort (on
+  event handling functions).
+
+  The predecessor count for each non-event handling function is set zero,
+  to reflect the fact that such functions act as signal sources during the
+  event handling phase of simulation, and therefore have no predecessors
+  in the topological sort of event handlers.  (Note that there may still
+  be instances which refer to them as successors, and the sort has to be
+  prepared to handle this).
+}
+*0 INT make fanouts count := 0;
+PROC make fanouts = VOID:
+BEGIN
+    REF REF VECTOR [] REF INSTANCE (instances) := instances [ : last instance];
+*0  make fanouts count PLUSAB 1;
+    REF REF VECTOR [] FANOUT (fanouts) := HEAP VECTOR [last instance] FANOUT;
+    make fanout arrays;
+    FOR i TO last instance DO
+        IF NOT (sort OF instances [i] >= event handling) THEN
+            predecessors OF fanouts [i] := 0
+        ELSE
+            predecessors OF fanouts [i] := true predecessors OF fanouts [i]
+        FI
+    OD
+END;
+
+
+{ 'remake predecessors' is used to modify the true predecessor counts
+  in a way suitable for the sort of combinatorial functions.
+
+  The predecessor count for each non-combinatorial function is set zero,
+  to reflect the fact that delays act as signal sources, and therefore
+  have no predecessors in the topological sort of combinatorial functions.
+  (Note that there may still be instances which refer to them as successors,
+  and the sort has to be prepared to handle this).
+}
+PROC remake predecessors = VOID:
+    FOR i TO last instance DO
+        IF NOT (sort OF instances [i] >= combinatorial) THEN
+            predecessors OF fanouts [i] := 0
+        ELSE
+            predecessors OF fanouts [i] := true predecessors OF fanouts [i]
+        FI
+    OD;
+
+
+{ 'make instance' makes a new instance of the MAKE given by 'makeno'
+  (which indexes the make table)
+  If the function is primitive, just one instance needs to be created,
+  but if compound, a complete set of component instances (including
+  all compound components and an instance of the root function itself)
+  needs to be constructed, complete with all the internal joins.  It
+  is important while doing this to process all joins *to* a function
+  before processing the joins *within* that function.  It is also
+  important that the instance tree gets constructed depth first.  For
+  this reason a two pass algorithm is employed processing all the makes
+  first and then all the joins.
+  Example instances are not added to the symbol table for probes as this
+  data is used in setting the simulated function.
+}
+PROC make instance = (INT makeno, parent instance, BOOL probe) VOID:
+BEGIN
+    SMAKE make = makes [makeno];
+
+    INT instance no = instance OF make + parent instance;
+    INT fnno = fn OF make;
+    REF VECTOR [] INPUT inputs = inputs OF make;
+    STRUCT (INT size, offset, BITS sort) shape = lookup shape (fnno);
+    STRUCT (INT workspace, history, declid) alien shape =
+        lookup alien shape (fnno);
+    add instance (UPB inputs, fnno, size OF shape, offset OF shape,
+        workspace OF alien shape, sort OF shape, probe);
+    IF NOT probe THEN
+       add example instance (fnno, instance no)
+    FI;
+
+    FOR i TO UPB inputs DO
+        INT si = inst OF inputs [i] + parent instance;
+        INT so = offset OF inputs [i];
+        IF so >= 0 THEN {direct}
+            (inputs OF instances [instance no]) [i] := (si, so)
+        ELSE {indirect}
+            (inputs OF instances [instance no]) [i] :=
+               (inputs OF instances [si]) [(-so - size unit) OVER ws]
+        FI
+    OD;
+
+    REF VECTOR [] INT expansion = lookup expansion (fnno);
+    FOR i TO UPB expansion DO
+        make instance (expansion[i], instance no, probe)
+    OD
+END;
+
+
+
+{ Final Output of Machine Data }
+{ ============================ }
+
+{ 'construct instance ptrs' is used to set up the instance ptr data
+  once all the sizes are known.  It returns the total sizes of the
+  instance data and fanout lists.
+
+  Note that `poke signal value' (at least) assumes that the instance
+  offsets are ordered so that it can find the enclosing instance for a
+  piece of data efficiently.
+
+  See the note about the fanouts of compound and probe functions below.
+}
+*0 INT construct instance ptrs count := 0;
+PROC construct instance ptrs = (INT start, BOOL is probe) INT:
+BEGIN
+    { First calculate the offsets, and the total size }
+    INT size := start;
+*0  construct instance ptrs count PLUSAB 1;
+    REF REF VECTOR [] INSTANCEPTR (instance ptrs) :=
+       HEAP VECTOR [last instance] INSTANCEPTR;
+    FOR i TO last instance DO
+        REF INSTANCE instance = instances [i];
+        instance ptrs [i] := (fnno OF instance, size);
+        size +:= size OF instance + ws {Fanout ptr} +
+           IF is probe THEN
+              ws {initial fanout size}
+           ELSE
+              IF i = cp instanceno THEN
+                ws * (2 + max input fanout)
+              ELSE
+                ws * (2 + UPB successors OF fanouts[i])
+              FI
+           FI
+    OD;
+    size
+END;
+
+
+{ This procedure converts the high level data structures for the circuit
+  into the machine level memory structure.  The first address of the constant
+  area is supplied as a parameter, as is the total size of the memory to be
+  allocated and initialised, and the next unused is returned.
+  The global memory belongs to the code generator, but, within this
+  procedure, we use a reference to it for efficiency reasons.
+  Notice that the memory is a VECTOR here, but the abstract machine addresses
+  start at zero -- hence the offset of one applied in any indexing.
+
+  Compound functions have no code and the fanout parts of their instances
+  are never used.  To save instance space we do not include them therefore.
+  Note that this decision would need to be reappraised if compound functions
+  ever acquired code, say to allow constants to be chanegd at simulate time
+  and have the changes propagated.
+
+  The fanout lists for instances within the simulated function appear
+  immediately after the instance data. Fanout lists for probe
+  functions are allocated seperately, in 'managed' memory. A count of
+  the original number of fanouts is stored at the end of the instance
+  data for each instance within a probe. This is used to re-form the
+  original lists when a duplicate of the instance data is made in
+  instantiation.
+}
+PROC construct memory = (
+      BOOL is probe,
+      INT total size, size, last instance,
+      REF VECTOR [] REF INSTANCE instances,
+      REF VECTOR [] FANOUT fanouts,
+      REF VECTOR [] INSTANCEPTR instance ptrs,
+      FLTPROC flt) INT:
+BEGIN
+
+   INT circuit base;
+   REF VECTOR [] CHAR memory;
+   IF NOT is probe THEN
+     { 'dynamic' is to be the size of the managed region of memory -- its size
+      is about 10% of that of the fixed part initially (between 1/7 and 1/14
+      actually) and its size is a power of two. All probe instances are
+      allocated in managed memory, so 'dynamic' has to be large enough to cope.
+      ie greater than 'total size' - 'size'.
+      Actually, the size of 'dynamic' is forced to be at least
+      ('total size' - 'size')*2 to ensure that dynamic memory is available
+      for allocation after probe instantiation.
+      }
+      INT dynamic := min useful;
+      WHILE dynamic < (total size - size)*2
+         DO dynamic *:= 2 OD;
+      WHILE dynamic < total size % 14 DO dynamic *:= 2 OD;
+
+      circuit base := 0;
+      memory := cg set up space (size + dynamic, flt);
+      initialise am memory (size, dynamic)
+   ELSE
+      circuit base := allocate am memory(size);
+      memory := cg peek (size, circuit base)
+   FI;
+
+
+   { This is the *efficient* way of translating between integers and
+     vectors of bytes.  The conversion is done on the REF CHAR, so
+     we can assign as well.  The order of the bytes ALREADY INCLUDES
+     THE 'up' PARAMETER.
+   }
+   OP (REF CHAR) REF INT INTAT = BIOP 99;
+
+   { Now initialise each instance }
+   FOR j TO last instance DO
+       REF INSTANCE this instance = instances [j];
+       INT address :=  1 + offset OF (instance ptrs[j]);
+
+       IF is probe THEN
+          { Set evaluation flag}
+          INTAT memory [address] := 1
+       FI;
+
+       address +:= size unit;
+       { setup input pointers }
+       INTAT memory [address] := UPB inputs OF this instance;
+       address +:= ws;
+
+       FOR k TO UPB inputs OF this instance DO
+           INPUT input = (inputs OF this instance) [k];
+           INT ip ptr =
+               offset OF instance ptrs [inst OF input]
+               + offset OF input
+               + circuit base;
+           INTAT memory [address] := ip ptr;
+           address +:= ws
+       OD;
+
+
+        { Set up alien specific instance data - see N045.50.11 }
+        IF sort OF this instance >= alien sort
+        THEN
+            STRUCT(INT workspace, history, declid) alien shape =
+                lookup alien shape(fnno OF this instance);
+            INTAT memory [address] := declid OF alien shape;
+            address +:= ws;
+            INTAT memory [address] := fnno OF this instance;
+            address +:= ws;
+            INTAT memory [address] := history OF alien shape;
+            address +:= ws;
+            address +:= 0; { XXX input history not yet supported }
+
+            {NB Alien workspace is allocated seperately for probes,
+            as it may be freed later. See KERTI.}
+            INTAT memory [address] := workspace OF alien shape;
+            address +:= ws;
+            INT workspace offset =
+                IF workspace OF alien shape > 0
+                THEN
+                   IF is probe THEN
+                      INT wo = allocate am memory(workspace OF alien shape);
+                      { The allocate may have moved global memory }
+                      memory := cg peek (size, circuit base);
+                      wo
+                   ELSE
+                      { global memory offset }
+                      size - alien workspace size +
+                      alien workspace offset OF this instance
+                   FI
+                ELSE
+                    0
+                FI;
+            INTAT memory [address] := workspace offset;
+            address +:= ws;
+            {clear output frozen flag}
+            INTAT memory [address] := 0;
+            address +:= ws
+        FI;
+
+          { Poke in constants,
+            This is used to set up input sizes for probe ids also. }
+          REF VECTOR [] INT constant nos =
+              lookup constant nos (fnno OF this instance);
+          FOR i TO UPB constant nos DO
+              WORD constant = constants [constant nos [i]];
+              INT this size = UPB constant;
+              memory [address : address + this size -1] := constant;
+              address +:= this size
+          OD;
+
+          IF sort OF this instance >= generic id THEN
+              { The generic ids produced at the moment have only one input,
+                so we must supply one input descriptor, and one output size }
+              INT data size = size OF this instance -
+                              output offset OF this instance;
+              INTAT memory [address] :=
+                  INTAT memory [address + ws] := data size
+          FI;
+
+        { setup fanout list for all instances except the cp instance
+          which is done by `set function'
+        }
+        IF sort OF this instance /= compound ANDTH
+           (isprobe OREL j /= cp instanceno)
+        THEN
+          REF VECTOR [] INT successors = successors OF fanouts [j];
+          address := 1 + offset OF instance ptrs [j] + size OF this instance;
+
+          {We add 1 to the UPB successors as we may add an extra
+           fanout element for unit delays later.}
+          INT fanout list size = UPB successors +1;
+          INT probe reloc size address;
+          REF VECTOR [] CHAR fanout memory =
+             IF is probe THEN
+                {we need to save the current number of fanouts
+                 so we can re-construct the orignal list when we
+                 create a new instance. }
+                probe reloc size address := address-1 + ws + circuit base;
+
+                INT fanout list address = allocate am memory((fanout listsize+1)*ws);
+                memory := cg peek (size, circuit base);
+                INTAT memory[address] := fanout list address;
+
+                address := 1;
+                cg peek ((fanout list size+1)*ws, fanout list address)
+             ELSE
+               {Space for fanout list exists immediately after
+                the instance data}
+                INTAT memory [address] := address -1 + ws;
+                address +:= ws;
+                memory
+              FI;
+
+           BOOL done a unit del fanout := FALSE;
+           INT fanout size address = address;
+           FOR k TO UPB successors DO
+              address +:= ws;
+              INTAT fanout memory[address] :=
+                 circuit base + offset OF instance ptrs[successors[k]];
+
+              IF (NOT done a unit del fanout) ANDTH
+                 (sort OF instances[successors[k]] = unit delay)
+              THEN
+                 done a unit del fanout := TRUE;
+                 address +:= ws;
+                 INTAT fanout memory[address] := global unit del event
+              FI
+           OD;
+           INT real list size =
+              IF done a unit del fanout THEN
+                fanout list size
+              ELSE
+                fanout list size-1
+              FI;
+
+           INTAT fanout memory[fanout size address] := real list size;
+           IF is probe THEN
+              cg poke int (real list size, probe reloc size address)
+           FI
+       FI
+   OD;
+   circuit base
+END;
+
+
+{ 'construct breaks' creates the instances for loop break functions,
+  adding them to the 'instances' array and the 'fanouts' array, with
+  suitable characteristics for a generic identity function.  This
+  procedure is designed to be called more than once, with new sets
+  of breaks each time.  It ensures that the 'instances' and 'fanouts'
+  fully reflect the added instances, so that further sorting can be
+  done.
+
+  In the case of combinatorial loop breaks, they are added to the *end*
+  of the sorted sequence of combinatorial functions.  This is appropriate
+  because in the first entry to the combinatorial loop, they have been
+  initialised to query, so the combinatorial part is not required until
+  *after* everything fed by the instance has been evaluated.  These
+  breaks may set the evaluation flag for the all enclosing pseudo-function,
+  as it is used to control iterations in combinatorial logic.
+
+  In the case of event handling loop breaks, they are not added to a
+  list at all, because the sorting of combinatorial functions follows,
+  and will sort them into the correct place.
+
+  Therefore this procedure takes the index of the current end of the list,
+  and returns that of the new last element.
+}
+*0 INT construct breaks count := 0;
+PROC construct breaks = (INT last) INT:
+BEGIN
+    INT new last := last;
+    ID generic id code = MAKEID "$Genericid";
+    INT generic id fnno = lookup name (generic id code, 0, -1);
+    INT generic output offset = size unit + 4 * ws;
+*0  construct breaks count PLUSAB 2;
+    HEAP VECTOR [last instance + last break] REF INSTANCE new instances;
+    new instances [ : last instance] := instances;
+    REF REF VECTOR [] REF INSTANCE (instances) := new instances;
+    HEAP VECTOR [last instance + last break] FANOUT new fanouts;
+    new fanouts [ : last instance] := fanouts;
+    REF REF VECTOR [] FANOUT (fanouts) := new fanouts;
+    FOR i TO last break DO
+        INT source = source inst OF breaks [i],
+            dest   = last instance + i;     { True inst number for break }
+        INT source offset = output offset OF instances [source];
+        INT source size   = size OF instances [source] - source offset;
+*0      construct breaks count PLUSAB 1;
+        instances [dest] := HEAP INSTANCE :=
+            (HEAP VECTOR [1] INPUT := INPUT (source, source offset),
+             generic id fnno, generic output offset + source size,
+             generic output offset, 0, sort OF breaks [i],
+             0, 0);
+        fanouts [dest] := fanout OF breaks [i];
+        IF sort OF breaks [i] = combinatorial loop break THEN
+            { Add the function to the sorted list }
+*0          construct breaks count PLUSAB 1;
+            nextc OF instances [new last] := dest;
+            new last := dest
+        FI;
+        true predecessors OF fanouts [dest] := 1;
+*0      construct breaks count PLUSAB 1;
+        successors OF fanouts [source] := HEAP VECTOR [1] INT := dest;
+        FORALL succ IN successors OF fanouts [dest] DO
+            FORALL ip IN inputs OF instances [succ] DO
+                IF inst OF ip = source THEN
+                    inst OF ip := dest;
+                    INT trim offset = offset OF ip - source offset;
+                    offset OF ip := generic output offset + trim offset
+                FI
+            OD
+        OD
+    OD;
+    last instance +:= last break;
+    new last
+END;
+
+
+{ 'combinatorial calls' generates the calls to instances as
+  combinatorial functions.  The code for a combinatorial call is
+  distinguished by its name starting with an underscore.
+  It is given the first instance in the sorted sequence, and follows
+  the 'nextc' fields to find the remaining ones in the correct order.
+  It is tolerant of instances appearing in the chain which in fact
+  require no combinatorial call.
+
+  In order for the sequence to be ordered for all possible simulated
+  functions we force the cp instance out first.  The sorting does not
+  guarantee this in the case where constant inputs are supplied to functions.
+  This must be regarded as a bodge; can yo think of a better method?
+}
+LABEL instlab := (0, LOC VECTOR[13]CHAR := "Numeric Label");
+INT comb phase        = 0;
+INT setting phase     = comb phase +1;
+INT handling phase    = setting phase +1;
+INT initialiser phase = handling phase +1;
+INT terminator phase  = initialiser phase +1;
+INT saver phase       = terminator phase +1;
+INT restorer phase    = saver phase +1;
+INT no of phases      = restorer phase +1;
+
+PROC combinatorial calls = VOID:
+BEGIN
+    lab OF instlab :=
+       ((fnno OF (instances OF circuit fnenv)[cp instance no])-1) *no of phases
+       +comb phase;
+    IF sort OF (instances OF circuit fnenv) [cp instance no] >= combinatorial THEN
+        am callinst (offset OF circuit instance ptrs [cp instance no],
+                     instlab)
+    FI;
+    INT instance no := first combinatorial OF circuit fnenv;
+    WHILE instance no /= 0 DO
+        IF sort OF (instances OF circuit fnenv) [instance no] >= combinatorial ANDTH
+           instance no /= cp instance no
+        THEN
+        lab OF instlab :=
+           ((fnno OF (instances OF circuit fnenv)[instance no])-1)*no of phases
+           +comb phase;
+        am callinst (offset OF circuit instance ptrs [instance no],
+                     instlab)
+        FI;
+        instance no := nextc OF (instances OF circuit fnenv) [instance no]
+    OD
+END;
+
+PROC probe combinatorial calls =  VOID:
+BEGIN
+
+    translate start probe loop up;
+    FOR i TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[i];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[i];
+
+       translate start case arm (i);
+       INT instance no := first combinatorial OF probe fnenv[i];
+       WHILE instance no /= 0 DO
+           IF sort OF instances [instance no] >= combinatorial
+           THEN
+               am local (0); {(outer cp)}
+               am pushint (offset OF instance ptrs [instance no]);
+               am add;       {(inner cp: outer cp)}
+               lab OF instlab :=
+                  ((fnno OF instances [instance no])-1)*no of phases
+                  + comb phase;
+               am callinst (indirect, instlab)
+           FI;
+           instance no := nextc OF instances [instance no]
+       OD;
+       translate end case arm
+   OD;
+   translate end probe loop up
+END;
+
+
+{ Combinatorial loop break functions (but *not* event loop breaks)
+  are initialised at the start of combinatorial logic by a call to
+  "^$Genericid".  Note that these are ordinary calls, with the instance
+  pointer as a parameter, because we do not wish the call to be
+  conditional on the evaluation flag.  Note that the loop breaks
+  are identified primarily by their position at the end of the
+  instances array.
+}
+PROC break initialiser calls = VOID:
+    FOR i FROM UPB instances OF circuit fnenv - last break OF circuit fnenv +1
+      TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] = combinatorial loop break
+        THEN
+            ID name = MAKEID "^$Genericid";
+            am pushint (offset OF circuit instance ptrs [i]);
+            am call (1, LABEL (0, name))
+        ELSE
+            sys fault ("keinstance: loop break of wrong sort")
+        FI
+    OD;
+
+PROC probe break initialiser calls = VOID:
+BEGIN
+   translate start probe loop up;
+   FOR j TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[j];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[j];
+
+       translate start case arm (j);
+       FOR i FROM UPB instances - last break OF (probe fnenv[j]) + 1
+             TO UPB instances
+       DO
+           IF sort OF instances [i] = combinatorial loop break THEN
+               ID name = MAKEID "^$Genericid";
+               am local (0); {(outer cp)}
+               am pushint (offset OF instance ptrs [i]);
+               am add;       {(inner cp: outer cp)}
+               am call (1, LABEL (0, name))
+           ELSE
+               sys fault ("keinstance: loop break of wrong sort")
+           FI
+       OD;
+       translate end case arm
+   OD;
+   translate end probe loop up
+END;
+
+{ The event setting calls to delay-like functions are calls to code
+  sequences whose names start with an equals sign.
+}
+PROC event setting calls = VOID:
+    FOR i TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] >= event setting THEN
+           lab OF instlab :=
+              ((fnno OF (instances OF circuit fnenv)[i])-1)*no of phases
+               +setting phase;
+           am callinst (offset OF circuit instance ptrs [i],
+                        instlab)
+        FI
+    OD;
+
+PROC probe event setting calls = VOID:
+BEGIN
+   translate start probe loop up;
+   FOR j TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[j];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[j];
+
+       translate start case arm (j);
+
+       FOR i TO UPB instances DO
+          IF sort OF instances [i] >= event setting THEN
+             am local (0); {(outer cp)}
+             am pushint (offset OF instance ptrs [i]);
+             am add;       {(inner cp: outer cp)}
+             lab OF instlab :=
+               ((fnno OF instances[i])-1)*no of phases + setting phase;
+             am callinst (indirect, instlab)
+           FI
+       OD;
+       translate end case arm
+   OD;
+   translate end probe loop up
+
+END;
+
+{ The event handling calls to delay-like functions are calls to code
+  sequences whose names start with an exclamation mark.
+  It is given the first instance in the reverse-sorted sequence, and
+  follows the 'nexte' fields to find the remaining ones in the correct
+  order.  It is tolerant of instances appearing in the chain which in
+  fact require no event handling call.
+}
+PROC event handling calls =  VOID:
+BEGIN
+    INT instance no := first event handler OF circuit fnenv;
+    WHILE instance no /= 0 DO
+        IF sort OF (instances OF circuit fnenv)[instance no] >= event handling THEN
+            lab OF instlab :=
+               ((fnno OF (instances OF circuit fnenv)[instance no])-1)
+                *no of phases +handling phase;
+            am callinst (offset OF circuit instance ptrs [instance no],
+                         instlab)
+        FI;
+        instance no := nexte OF (instances OF circuit fnenv)[instance no]
+    OD
+END;
+
+PROC probe event handling calls = VOID:
+BEGIN
+   translate start probe loop down;
+   FOR j TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[j];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[j];
+
+       translate start case arm (j);
+
+    INT instance no := first event handler OF probe fnenv[j];
+    WHILE instance no /= 0 DO
+        IF sort OF instances [instance no] >= event handling THEN
+            am local (0); {(outer cp)}
+            am pushint (offset OF instance ptrs [instance no]);
+            am add;       {(inner cp: outer cp)}
+            lab OF instlab :=
+               ((fnno OF instances [ instance no])-1)*no of phases
+               +handling phase;
+            am callinst (indirect, instlab)
+        FI;
+        instance no := nexte OF instances [instance no]
+    OD;
+       translate end case arm
+   OD;
+   translate end probe loop down
+
+END;
+
+
+{ Initialisation calls are calls to code sequences whose names start
+  with a star.
+}
+PROC initialiser calls = VOID:
+    FOR i TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] >= initialised THEN
+        lab OF instlab :=
+           ((fnno OF (instances OF circuit fnenv) [i])-1)*no of phases
+           +initialiser phase;
+        am callinst (offset OF circuit instance ptrs [i],
+                     instlab)
+        FI
+    OD;
+
+PROC probe initialiser calls = VOID:
+BEGIN
+   translate start init loop up;
+   FOR j TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[j];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[j];
+       translate start case arm (j);
+       FOR i TO UPB instances DO
+           IF sort OF instances [i] >= initialised THEN
+               am local (0); {(outer cp)}
+               am pushint (offset OF instance ptrs [i]);
+               am add;       {(inner cp: outer cp)}
+               lab OF instlab := (fnno OF (instances [i])-1)*no of phases
+               +initialiser phase;
+               am callinst (indirect, instlab)
+           FI
+       OD;
+       translate end case arm
+   OD;
+   translate end init loop up
+
+END;
+
+PROC terminator calls = VOID:
+    FOR i TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] >= terminated THEN
+            am pushint (offset OF circuit instance ptrs [i]);
+            lab OF instlab := ((fnno OF (instances OF circuit fnenv)[i])-1)
+               *no of phases+terminator phase;
+            am call (1, instlab)
+        FI
+    OD;
+
+PROC probe phase calls = (BITS phase sort, INT phase number) VOID:
+BEGIN
+   translate start probe loop up;
+   FOR j TO UPB probe fnenv DO
+       REF VECTOR [] INSTANCEPTR instance ptrs =
+           inst ptrs OF probe instance ptrs[j];
+       REF VECTOR [] REF INSTANCE instances = instances OF probe fnenv[j];
+       translate start case arm (j);
+       FOR i TO UPB instances DO
+           IF sort OF instances [i] >= phase sort THEN
+               am local (0); {(outer cp)}
+               am pushint (offset OF instance ptrs [i]);
+               am add;       {(inner cp: outer cp)}
+               lab OF instlab := (fnno OF (instances [i])-1)*no of phases
+               +phase number;
+               am call (1, instlab)
+           FI
+       OD;
+       translate end case arm
+   OD;
+   translate end probe loop up
+
+END;
+
+PROC saver calls = VOID:
+    FOR i TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] >= saved THEN
+            lab OF instlab := ((fnno OF (instances OF circuit fnenv) [i])-1)
+               *no of phases +saver phase;
+            am pushint (offset OF circuit instance ptrs [i]);
+            am call (1, instlab)
+        FI
+    OD;
+
+PROC restorer calls = VOID:
+    FOR i TO UPB instances OF circuit fnenv DO
+        IF sort OF (instances OF circuit fnenv)[i] >= restored THEN
+            lab OF instlab := ((fnno OF (instances OF circuit fnenv) [i])-1)
+               *no of phases +restorer phase;
+            am pushint (offset OF circuit instance ptrs [i]);
+            am call (1, instlab)
+        FI
+    OD;
+
+
+
+{ The functionality provided here is very similar to that of 'translate top
+  level'.
+
+  This procedure ensures that the inputs to the probe function are connected
+  to some data source during instantiation. A requirement of the input
+  pointers is that they point at a piece of data within the same set of
+  instance pointers as the probe itself.
+
+  The outputs of the $PROBE_INPUT function will currently remain set to query
+  to provide the probe functions with something to point at when they are
+  'disconnected'. Values could be poked into the output space to provide
+  an equivalent of 'changeparameters' for probes.
+
+  An identity function is inserted in front of the probe inputs. This is
+  required to avoid aliasing problems when re-connecting a probe which
+  has another probe or monitor attached to it's inputs.
+}
+PROC translate probe top level = (INT fnno)
+    STRUCT(INT makeno, input instance, probe instance):
+BEGIN
+    {Make input buffer instance}
+    WIRE null wire = (null stype, null rvb);
+    INT fn = add function (MAKEID "", 0, -1, 0,
+                           null wire, null wire, nil sram,
+                           (ws + size unit, ws + size unit, compound),
+                           SKIP);
+    ID piname = MAKEID ("$PROBE_INPUT" + intchars(fnno));
+    ID piuname = unique id (piname, 0, -1);
+    INT input size := 0;
+    REF VECTOR [] INT input sizes := lookup input sizes (fnno);
+    FOR i TO UPB input sizes DO input size +:= input sizes[i] OD;
+    INT pi = add function (piname, 0, -1, 0,
+                           null wire, null wire, nil sram,
+                           translate data source (input size, piuname),
+                           SKIP);
+    INT probe input source = next instance (fn, pi); { relative no. }
+    INT pi make = add make (pi, probe input source);
+    add expansion (fn, pi make);
+    INT input instance = probe input source + 1;        { absolute no. }
+
+    {Make probe input identity instance}
+    ID pidname = MAKEID ("$PROBE_ID" + intchars(fnno));
+    ID piduname = unique id (pidname, 0, -1);
+    WIRE output = raw inputs(raw lookup function(fnno));
+    INT pid = add function (pidname, 0, -1, UPB input sizes,
+                            output, output, nil sram,
+                            translate probe id (input sizes, piduname),
+                            SKIP);
+    add input sizes(pid, input sizes);
+    INT probe id source = next instance (fn, pid); { relative no. }
+    INT pid make = add make (pid, probe id source);
+    add expansion (fn, pid make);
+    INT id instance = probe id source + 1;        { absolute no. }
+
+    {connect the identity's inputs to the input buffer,
+     and the top level probe's inputs to the identity}
+    INT input inst offset = next instance (fn, fnno);
+    INT probe make = add make (fnno, input inst offset);
+    add expansion (fn, probe make);
+    INT input whence := ws + size unit;
+    INT id whence := ws + size unit + (UPB inputsizes * 2 * ws)+ws;
+    FOR j TO UPB input sizes DO
+       {Cheat by setting up the generic id's input sizes with constants.
+        This only works because of the ordering inside 'construct memory'.}
+       HEAP VECTOR [ws] CHAR size;
+       signed to word(input sizes[j], size);
+       up (size);
+       add constant no (pid, add constant(size));
+       add connection (probe input source, input whence, pid make, j);
+       add connection (probe id source, id whence, probe make, j);
+       input whence +:= input sizes [j];
+       id whence +:= input sizes [j]
+    OD;
+    { Add the output size (==input size) to the id's instance data }
+    HEAP VECTOR [ws] CHAR size;
+    signed to word (input size, size);
+    up (size);
+    add constant no (pid, add constant(size));
+    {output the top level compound FN, the input area instance ptr index and
+     the probe function's instance ptr index}
+    (add make (fn, 1), input instance, probe input source + input inst offset )
+END;
+
+
+{ The next procedure assumes that the instance and fanout arrays have
+  been set up.  It constructs the actual instances and the calls to
+  to them.  The procedures it passes to the sorting algorithm arrange
+  for the information on the sorted instances to be saved, and this
+  is then used to actually generate the code.
+
+  Sorting of event handling functions is performed first, and follows
+  a call to 'make fanouts' which (as well as making the fanouts)
+  adjusts the predecessor counts to make non-event-handling functions
+  look like signal sources for the purposes of this sort.  The sorted
+  functions are added to a list in reverse order, to ensure that their
+  inputs are not changed during event handling until after they have
+  done their own work.  The list uses the 'nexte' fields of the
+  instances, and terminates when this field is zero (to which it is
+  initialised).  Loops consisting entirely of event handling functions
+  are quite normal, so no warning is given, and they are broken by
+  inserting combinatorial identity functions.  These identities must
+  be sorted together with the other combinatorial functions, because
+  any event handler may also have a combinatorial component.
+
+  Sorting of the combinatorial functions follows, after the predecessor
+  counts have been adjusted to make non-combinatorial functions look
+  like signal sources, and adds instances in the forward order to a
+  list linked using the 'nextc' fields of instances.  The resulting
+  list starts at 'first combinatorial' and ends when the 'nextc' field
+  is zero (to which they are all initialised).
+}
+*0 INT construct calls count := 0;
+PROC construct calls = (INT sim makeno,
+                        VECTOR [] INT probe fnnos,
+                        FLTPROC flt) VOID:
+BEGIN
+
+    REF INT first event handler;  { To be first of sorted event calls }
+
+    PROC insert event = (INT instance no) VOID:
+        IF instance no > last instance THEN
+            SKIP   { Ignore new breaks for now }
+        ELSE
+            nexte OF instances [instance no] := first event handler;
+            REF INT (first event handler) := instance no
+        FI;
+
+    PROC break event loop = (REF VECTOR [] INT loop) INT:
+        add break (event loop break, loop [1], fanouts [loop [1]]);
+
+
+    REF INT first combinatorial,  { To be first of sorted combinatorial calls }
+            last combinatorial;   { Last seen combinatorial call in sorting }
+
+    INT max loop reports = 6;      { Limit on the number of messages }
+    INT loop reports := 0;         { The actual number so far }
+
+    PROC insert combinatorial = (INT instance no) VOID:
+        IF instance no > last instance THEN
+            SKIP   { Ignore new breaks for now }
+        ELIF first combinatorial = 0 THEN
+            REF INT (first combinatorial) := instance no;
+            REF INT (last combinatorial) := instance no
+        ELSE
+            nextc OF instances [last combinatorial] := instance no;
+            REF INT (last combinatorial) := instance no
+        FI;
+
+    PROC break combinatorial loop = (REF VECTOR [] INT loop) INT:
+    BEGIN
+        BOOL do print = loop reports < max loop reports,
+             continued = loop reports = max loop reports;
+        IF do print THEN
+            put (out,
+                 ("There is an undelayed feedback loop involving instances of the functions:",
+                 newline));
+            loop reports +:= 1
+        ELIF continued THEN
+            put (out, (".. and further undelayed feedback loops", newline));
+            loop reports +:= 1
+        FI;
+        ID last name := null id;
+        FOR i TO UPB loop DO
+            IF loop [i] <= last instance THEN
+                { It is *not* a previously inserted break (if it were,
+                  it would not yet be in 'instances', so we would crash) }
+                ID fn name = lookup user parent (fnno OF instances [loop [i]]);
+                IF
+                    do print ANDTH fn name /= last name
+                    ANDTH fn name /= null id ANDTH fn name [1] /= "$"
+                THEN
+                    put (out, ("    ", fn name, newline));
+                    last name := fn name
+                FI
+            FI
+        OD;
+        add break (combinatorial loop break, loop [1], fanouts [loop [1]])
+    END;
+
+    PROC instantiate and sort = (INT topfn makeno, BOOL probe) VOID:
+    BEGIN
+       { First instantiate the hierarchy, starting from the top level function}
+       make instance (topfn makeno, 0, probe);
+       make fanouts;
+
+       { Now sort it to put event handlers in reverse order }
+       topsort (fanouts, insert event, break event loop);
+
+       { Add all the event handling BREAKs to the instance data }
+       construct breaks (0);
+       REF REF VECTOR [] BREAK (breaks) := HEAP VECTOR [0] BREAK;
+       REF INT (last break) := 0;
+
+       { Now sort again, including above breaks, for combinatorial phase }
+       remake predecessors;
+       topsort (fanouts, insert combinatorial, break combinatorial loop);
+
+       { Finally add the combinatorial BREAKs to the instance data }
+       construct breaks (last combinatorial)
+    END;
+
+    probe fnenv := HEAP VECTOR [UPB probe fnnos] FNINSTENV;
+    FOR i TO UPB probe fnnos DO probe fnenv[i] := empty fnenv OD;
+    circuit fnenv := empty fnenv;
+    probe instance ptrs := HEAP VECTOR [UPB probe fnnos] PROBEINSTPTRS;
+
+    { Instantiate the main circuit }
+    instances := instances OF circuit fnenv;
+    breaks := breaks OF circuit fnenv;
+    fanouts := fanouts OF circuit fnenv;
+    last instance := last instance OF circuit fnenv;
+    last break := last break OF circuit fnenv;
+    first combinatorial := first combinatorial OF circuit fnenv;
+    last combinatorial := last combinatorial OF circuit fnenv;
+    first event handler := first event handler OF circuit fnenv;
+    instance ptrs := circuit instance ptrs;
+*0  construct calls count PLUSAB 1;
+
+    instantiate and sort (sim makeno, FALSE);
+    INT size = construct instance ptrs (global end, FALSE)
+               + alien workspace size;
+    INT total size := size;
+
+    { Instantiate the probe circuits }
+    FOR i TO UPB probe fnnos DO
+       instances := instances OF (probe fnenv[i]);
+       breaks := breaks OF (probe fnenv[i]);
+       fanouts := fanouts OF (probe fnenv[i]);
+       last instance := last instance OF (probe fnenv[i]);
+       last break := last break OF (probe fnenv[i]);
+       first combinatorial := first combinatorial OF (probe fnenv[i]);
+       last combinatorial := last combinatorial OF (probe fnenv[i]);
+       first event handler := first event handler OF (probe fnenv[i]);
+
+       fnno OF (probe instance ptrs[i]) := probe fnnos[i];
+       instance ptrs := inst ptrs OF (probe instance ptrs[i]);
+
+       STRUCT (INT makeno, input instance, probe instance)top =
+          translate probe top level(probe fnnos[i]);
+
+       instantiate and sort (makeno OF top, TRUE);
+       INT size = construct instance ptrs (0, TRUE);
+
+       input instance OF (probe instance ptrs[i]) := input instance OF top;
+       probe instance OF (probe instance ptrs[i]) := probe instance OF top;
+       size OF (probe instance ptrs[i]) := size;
+       total size +:= size
+    OD;
+
+
+    translate start calls array (flt);
+    probe initialiser calls;
+    translate start terminators;
+    terminator calls;
+    probe phase calls (terminated, terminator phase);
+    translate start savers;
+    saver calls;
+    probe phase calls (saved, saver phase);
+    translate start restorers;
+    restorer calls;
+    probe phase calls (restored, restorer phase);
+    translate start initialisers;
+    initialiser calls;
+    translate start calls loop;
+    break initialiser calls;
+    probe break initialiser calls;
+    translate start combinatorial loop;
+    combinatorial calls;
+    translate end combinatorial loop;
+    translate start combinatorial loop;
+    probe combinatorial calls;
+    translate end combinatorial loop;
+    translate time test;
+    event setting calls;
+    probe event setting calls;
+    translate time advance;
+    probe event handling calls;
+    event handling calls;
+    translate end calls array;
+
+    { Construct the machine instance data }
+    construct memory (FALSE, total size, size,
+                      last instance OF circuit fnenv,
+                      instances OF circuit fnenv,
+                      fanouts OF circuit fnenv,
+                      circuit instance ptrs,
+                      flt);
+
+    {Construct the probe instance templates}
+    FOR i TO UPB probe fnenv DO
+       base offset OF probe instanceptrs[i] :=
+          construct memory (TRUE, total size,
+                            size OF probe instanceptrs[i],
+                            last instance OF probe fnenv[i],
+                            instances OF probe fnenv[i],
+                            fanouts OF probe fnenv[i],
+                            inst ptrs OF probe instance ptrs[i],
+                            flt)
+    OD;
+
+    { Tidy up things no longer required }
+    instance ptrs := circuit instance ptrs;
+    circuit fnenv := empty fnenv;
+    FOR i TO UPB probe fnenv DO probe fnenv[i] := empty fnenv OD;
+    makes := HEAP VECTOR [0] SMAKE;
+    last make := 0;
+    constants := HEAP VECTOR [0] WORD;
+    alien workspace size := 0;
+    last constant := 0
+END;
+
+
+
+
+{ Setup of Data Structures from Assembler Modes }
+{ ============================================= }
+
+{ The translation of a function is recursive, because an inner function
+  declaration may be encountered.
+}
+PROC (FNBODY, REF FNDEC, REF ENVIRON, CLOSURE, INT, INT, INT, FLTPROC) INT
+    translate function;
+
+{ A slightly richer mode is required to describe a local symbol in `declare'
+  than the RNODE used in the global symbol table.  In particular we need
+  a proper representation of a multiple MAKE (as produced by MAKE [n]
+  AND, say).  In the symbol table we can regard this as n independent
+  instances feeding a common output wire, but locally we need a
+  compound representation in order to connect up the inputs.  MBOX
+  performs this function.  It is like BOX except that the instance
+  number becomes a row.  Note that 'MAKE [1] AND' will be represented by a
+  box while 'MAKE AND' will be represented by an MBOX.
+
+  The sequence transformation converts assignments to a series of LETs
+  with the same nameno which will cause the relevant LOCAL to be
+  overwritten.   In general we do not need to retain the intermediate
+  values but, for persistent variables we need to keep the initial
+  MBOX values.  For this we use PBOX.
+
+  VOID is used as an explicit uninitialised value as a piece of defensive
+  programming.
+}
+MODE MBOX = STRUCT (INT fn, REF VECTOR [] INT instances);
+MODE PBOX = STRUCT (UNION(MBOX, BOX) box, WIRE wire);
+MODE LOCAL = UNION (BOX, MBOX, WIRE, PBOX, VOID);
+
+{ Data Structure Utililies }
+{ ------------------------ }
+
+{ NEW makes a copy of a REF VECTOR [] BLOCK variable which can be updated
+ without affecting the original
+}
+*0 INT new on rv block count := 0;
+OP NEW = (REF VECTOR [] BLOCK blocks) REF VECTOR [] BLOCK:
+   BEGIN
+*0    new on rv block count PLUSAB 1;
+      HEAP VECTOR [UPB blocks] BLOCK new := blocks; new
+   END;
+
+
+{ Two procedure to convert a LOCAL to a WIRE.  We need two because,
+  like Italian accountants, we keep two versions of the books
+  regarding the output of a function, one for our own use (`wire' uses
+  this and one for monitoring `mwire' uses this
+}
+*0 INT wire count := 0;
+PROC wire = (LOCAL local) WIRE:
+CASE local IN
+(WIRE wire): wire,
+(BOX box):
+    BEGIN
+        WIRE outputs = lookup outputs (fn OF box);
+        STYPE type = type OF outputs;
+        REF VECTOR [] BLOCK blocks = NEW blocks OF outputs;
+        INT instance = instance OF box;
+        FORALL block IN blocks DO
+            inst offset OF block +:= instance
+        OD;
+        (type, blocks)
+    END,
+(MBOX mbox):
+    BEGIN
+        REF SST sst := nil sst;
+        REF REF SST end := sst;
+        REF VECTOR [] BLOCK blocks := null rvb;
+        WIRE outputs = lookup outputs (fn OF mbox);
+        STYPE type1 = type OF outputs;
+        REF VECTOR [] BLOCK blocks1 = blocks OF outputs;
+        REF VECTOR [] INT instances = instances OF mbox;
+        FOR i TO UPB instances DO
+            REF REF SST (end) := HEAP SST := (type1, nil sst);
+*0          wire count PLUSAB 2;
+            end := rest OF end;
+            HEAP VECTOR [UPB blocks1] BLOCK blocksn := blocks1;
+            FORALL block IN blocksn DO
+                inst offset OF block +:= instances [i]
+            OD;
+            blocks := blocks + blocksn
+        OD;
+        (sst, blocks)
+    END,
+(PBOX pbox): wire OF pbox
+ESAC;
+
+*0 INT mwire count := 0;
+PROC mwire = (LOCAL local) WIRE:
+CASE local IN
+(WIRE wire): wire,
+(BOX box):
+    BEGIN
+        WIRE outputs = outputs OF raw lookup function (fn OF box);
+        STYPE type = type OF outputs;
+        REF VECTOR [] BLOCK blocks = NEW blocks OF outputs;
+        INT instance = instance OF box;
+        FORALL block IN blocks DO
+            inst offset OF block +:= instance
+        OD;
+        (type, blocks)
+    END,
+(MBOX mbox):
+    BEGIN
+        REF SST sst := nil sst;
+        REF REF SST end := sst;
+        REF VECTOR [] BLOCK blocks := null rvb;
+        WIRE outputs = outputs OF raw lookup function (fn OF mbox);
+        STYPE type1 = type OF outputs;
+        REF VECTOR [] BLOCK blocks1 = blocks OF outputs;
+        REF VECTOR [] INT instances = instances OF mbox;
+        FOR i TO UPB instances DO
+            REF REF SST (end) := HEAP SST := (type1, nil sst);
+*0          mwire count PLUSAB 2;
+            end := rest OF end;
+            HEAP VECTOR [UPB blocks1] BLOCK blocksn := blocks1;
+            FORALL block IN blocksn DO
+                inst offset OF block +:= instances [i]
+            OD;
+            blocks := blocks + blocksn
+        OD;
+        (sst, blocks)
+    END,
+(PBOX pbox): wire OF pbox
+ESAC;
+
+
+{ Now some useful functions for trimming multiples }
+
+{ `trim blocks' is used for indexing and trimming to extract a
+   logical slice from an array
+}
+PROC trim blocks = (REF VECTOR [] BLOCK original, INT drop, keep)
+REF VECTOR [] BLOCK:
+BEGIN
+    REF VECTOR [] BLOCK blocks = NEW original;
+    INT ans lwb := 1;
+    INT to drop := drop;
+    WHILE size OF blocks [ans lwb] <= to drop DO
+        to drop -:= size OF blocks [ans lwb];
+        ans lwb +:= 1
+    OD;
+    size OF blocks [ans lwb] -:= to drop;
+    IF to drop > 0 ANDTH offset OF blocks [ans lwb] < 0 THEN
+        sys fault ("trim blocks: attempt to slice indirect block")
+    ELSE
+        offset OF blocks [ans lwb] +:= to drop
+    FI;
+
+    INT ans upb := ans lwb;
+    INT to keep := keep;
+    WHILE size OF blocks [ans upb] < to keep DO
+        to keep -:= size OF blocks [ans upb];
+        ans upb +:= 1
+    OD;
+    size OF blocks [ans upb] := to keep;
+
+    blocks [ans lwb: ans upb]
+END;
+
+{ `trim wire' handles a complete wire }
+*0 INT trim wire count := 0;
+PROC trim wire = (WIRE wire, INT lwb, upb) WIRE:
+CASE type OF wire IN
+(REF SROW r):
+    BEGIN
+        STYPE stype = type OF r;
+        INT size = machine width (stype);
+        INT keep = size * (upb - lwb + 1);
+        INT drop = size * (lwb - 1);
+        REF VECTOR [] BLOCK blocks = trim blocks (blocks OF wire, drop, keep);
+*0      trim wire count PLUSAB 1;
+        STYPE otype = HEAP SROW := (upb - lwb + 1, stype);
+        (otype, blocks)
+    END,
+(REF SST s) :
+    BEGIN
+        REF SST p := s;
+        INT drop := 0;
+        FOR i TO lwb - 1 DO
+            drop +:= machine width (t OF p);
+            p := rest OF p
+        OD;
+        INT keep := 0;
+        REF SST otype := nil sst;
+        REF REF SST end := otype;
+        FOR i FROM lwb TO upb DO
+*0          trim wire count PLUSAB 1;
+            REF REF SST (end) := HEAP SST := (t OF p, nilsst);
+            keep +:= machine width (t OF p);
+            end := rest OF end;
+            p := rest OF p
+        OD;
+        REF VECTOR [] BLOCK blocks = trim blocks (blocks OF wire, drop, keep);
+        (otype, blocks)
+    END
+ESAC;
+
+
+{ `trim local' handles a local being careful to take the efficient route
+  for dealing with multiple makes
+}
+PROC trim local = (LOCAL local, INT lwb, upb) LOCAL:
+CASE local IN
+(BOX box): trim wire (wire (box), lwb, upb),
+(MBOX mbox):
+    IF UPB instances OF mbox > 1 THEN
+        MBOX (fn OF mbox, (instances OF mbox) [lwb : upb])
+    ELSE
+        trim wire ( wire (local), lwb, upb)
+    FI,
+(WIRE wire): trim wire (wire, lwb, upb),
+(PBOX pbox): trim wire (wire OF pbox, lwb, upb)
+ESAC;
+
+
+{ These procedures are concerned with indexing structures that may not be rows }
+PROC index type = (STYPE type, INT ix) STYPE:
+CASE type IN
+(REF SROW r): type OF r,
+(REF SST s):
+    BEGIN
+        REF SST p := s;
+        FOR i TO ix - 1 DO p := rest OF p OD;
+        t OF p
+    END
+ESAC;
+
+PROC index wire = (WIRE wire, INT ix) WIRE:
+CASE type OF wire IN
+(REF SROW r):
+    BEGIN
+        STYPE stype = type OF r;
+        INT size = machine width (stype);
+        INT drop = size * (ix - 1);
+        REF VECTOR [] BLOCK blocks = trim blocks (blocks OF wire, drop, size);
+        (stype, blocks)
+    END,
+(REF SST s):
+    BEGIN
+        REF SST p := s;
+        INT drop := 0;
+        FOR i TO ix - 1 DO
+            drop +:= machine width (t OF p);
+            p := rest OF p
+        OD;
+        STYPE stype = t OF p;
+        INT size = machine width (stype);
+        REF VECTOR [] BLOCK blocks = trim blocks (blocks OF wire, drop, size);
+        (stype, blocks)
+    END
+ESAC;
+
+PROC index local = (LOCAL local, INT ix) LOCAL:
+CASE local IN
+(BOX box): index wire (wire (box), ix),
+(MBOX mbox):
+    IF UPB instances OF mbox > 1 THEN
+        BOX (fn OF mbox, (instances OF mbox) [ix])
+    ELSE
+        index wire ( wire (local), ix)
+    FI,
+(WIRE wire): index wire (wire, ix),
+(PBOX pbox): index wire (wire OF pbox, ix)
+ESAC;
+
+
+{ 'declare' is used to process series steps, which can, after expansion,
+  be only LETs, MAKEs, or JOINs, with units formed from only UROW,
+  USTR, UNAME and UVOID.
+  Its effect is to record the component instances in the symbol table,
+  and connectivity in this module's data structures and to advance
+  `constants end' by the number of bytes of constant signal data generated.
+  'parent fnno' is the *symbol table* handle on the *immediately*
+   enclosing function in the *instantiation* hierarchy.
+
+  The procedure can be more simply written with a WIRE return but this leads
+  to poor performance in dealing with things like "MAKE [n] AND: and.
+  FOR i = 1..n JOIN and [i] -> ..." [ o(n*n), in fact] so we use LOCAL returns
+  which can be converted to WIREs by `wire'
+}
+*0 INT declare count := 0;
+*0 INT declare make count := 0;
+*0 INT declare unit count := 0;
+PROC declare = (USERIES series, INT parent fnno, REF FNDEC declaration,
+                REF ENVIRON environ, CLOSURE closure,
+                REF VECTOR [] LOCAL locals, REF VECTOR [] ID ids,
+                REF INT constants end,
+                INT diag level, FLTPROC flt) LOCAL:
+BEGIN
+
+   { In the case that there is a change to the locals array, it will
+     be necessary to restore the input array to the values which
+     exist on entry.
+     The original version of declare unit caused a LOC copy of the
+     locals array to be created before calling declare for the USERIES
+     case for this reason.
+     Bug R4B151 showed up massive HEAP usage problems which were
+     identified with the LOC generator.
+     The circumnavigation, given the bug could not be traced by the
+     simulator team, was to store, in a list, an original values for
+     each location in the array which changed (but not if it were
+     NIL originally) and to restore the original values at the end of
+     this procedure. }
+
+   REF VECTOR [] REF LOCAL local changes := NIL;
+
+   PROC record local = (REF REF VECTOR [] REF LOCAL c, REF VECTOR [] LOCAL l,
+                                                                   INT i) VOID:
+   { If no change has yet been registered in "c" then register one. }
+   BEGIN
+      IF c IS REF VECTOR [] REF LOCAL (NIL) THEN
+*0       declare count PLUSAB 2;
+         c := HEAP VECTOR [UPB l] REF LOCAL;
+         FOR n TO UPB l DO c [n] := NIL OD;
+         c [i] := HEAP LOCAL := l [i]
+      ELSE
+         IF c [i] IS REF LOCAL (NIL) THEN
+*0          declare count PLUSAB 1;
+            c [i] := HEAP LOCAL := l [i]
+         FI
+      FI
+   END;
+
+   PROC refurnish locals = (REF VECTOR [] REF LOCAL c, REF VECTOR [] LOCAL l)
+                                                                          VOID:
+   { Restore those values in "l" for which original values have been stored in
+     "c". }
+   BEGIN
+      IF c ISNT REF VECTOR [] REF LOCAL (NIL) THEN
+         FOR i TO UPB l DO
+            IF c[i] ISNT REF LOCAL (NIL) THEN l[i] := c[i] FI OD
+      FI
+   END;
+
+    { 'convert fnno' takes an assembler function number, and translates
+      it to a symbol table handle.
+    }
+    PROC convert fnno = (INT ass fnno) INT:
+    BEGIN
+        REF FNDEC fn = (fns OF environ) [ass fnno];
+        IF sort OF fn = outerdec
+        THEN  lookup name (fnname OF fn, closureno OF usage OF fn, -1)
+        ELSE  lookup name (fnname OF fn, parent fnno, ass fnno)
+        FI
+    END;
+
+    { 'declare make' records the fact that a component function has been made
+      in a compound function.  This is only a declaration, and does not result
+      in any instances being created.  Note that the component outputs are
+      adjusted to be relative to the parent.
+    }
+    PROC declare make = (INT component fnno, MAKE make) VOID:
+    BEGIN
+        ID component ucname = lookup user id (component fnno);
+        REF NAMES lc names = makenames OF make;
+        REF NAMES names := lc names;
+        REF VECTOR [] NAMETYPE nametypes = nametypes OF declaration;
+        IF sizes OF make IS nilformulas
+        THEN
+            WHILE names ISNT nil names DO
+                INT this offset = next instance (parent fnno, component fnno);
+                INT make = add make (component fnno, this offset);
+                add expansion (parent fnno, make);
+                BOX box = (component fnno, this offset);
+                locals [nameno OF names] := box;
+                ID name = name OF nametypes[nameno OF names];
+                ids [nameno OF names] := name;
+                add binding (parent fnno, component ucname, name, box);
+                names := rest OF names
+            OD
+        ELSE
+            IF rest OF sizes OF make ISNT nilformulas
+            THEN  sys fault("Multi- dimensional MAKEs not catered for")
+            FI;
+            INT msize = int (formula OF sizes OF make);
+            WHILE names ISNT nil names DO
+*0              declare make count PLUSAB 1;
+                MBOX mbox = (component fnno, HEAP VECTOR [msize] INT);
+                FOR i TO msize DO
+                    INT this offset =
+                        next instance (parent fnno, component fnno);
+                    INT make = add make (component fnno, this offset);
+                    add expansion (parent fnno, make);
+                    (instances OF mbox) [i] := this offset;
+                    BOX box = (component fnno, this offset);
+                    add binding (parent fnno, component ucname, nil id, box)
+                OD;
+                locals [nameno OF names] := mbox;
+                ID name = name OF nametypes[nameno OF names];
+                ids [nameno OF names] := name;
+                add binding (parent fnno, nil id, name, mwire (mbox));
+                names := rest OF names
+            OD
+        FI
+    END;
+
+
+    { 'declare unit' handles a unit.  Normally, the action is simply
+      to return a description of the signal represented by the unit,
+      but in the case of an implicit function call, a make and a join
+      have to be performed.
+    }
+    PROC declare unit = (UNIT unit) LOCAL:
+        CASE unit IN
+            (UNION (REF CNAME, REF CPRIM, REF CINT, REF CQUERY,
+                    REF CQUOTE, REF CVOID) const):
+                BEGIN
+                    SVALUE svalue = convert const (const, environ, closure);
+                    STYPE stype = TYPEOF svalue;
+                    WORD encoding = machine (svalue, stype);
+                    INT size = UPB encoding;
+                    INT constant ix = add constant (encoding);
+                    add constant no (parent fnno, constant ix);
+*0                  declare unit count PLUSAB 1;
+                    WIRE result =
+                        (stype,
+                         HEAP VECTOR [1] BLOCK :=
+                             BLOCK (0, constants end, size));
+                    constants end +:= size;
+                    result
+                END,
+            (REF UNAME un):  locals [nameno OF un],
+            (REF UINDEX ui):
+                BEGIN
+                    LOCAL input = declare unit (unit OF ui);
+                    INT ix = int (index OF ui);
+                    index local (input, ix)
+                END,
+            (REF UTRIM ut):
+                BEGIN
+                    LOCAL input = declare unit (unit OF ut);
+                    INT lwb = int (lwb OF range OF ut);
+                    INT upb = int (upb OF range OF ut);
+                    trim local (input, lwb, upb)
+                END,
+            (REF USTR us):
+                BEGIN
+                    REF VECTOR [] BLOCK blocks := null rvb;
+                    REF USTR scan := us;
+                    WHILE scan ISNT nilustr DO
+                        WIRE this = wire (declare unit (elem OF scan));
+                        blocks := blocks + NEW blocks OF this;
+                        scan := rest OF scan
+                    OD;
+                    STYPE stype = convert type (unit_type (us, declaration, environ),
+                                                environ, closure);
+                    WIRE (stype, blocks)
+                END,
+            (REF UROW ur):
+                BEGIN
+                    REF VECTOR [] BLOCK blocks := null rvb;
+                    TO int (size OF ur) DO
+                        WIRE this = wire (declare unit (elem OF ur));
+                        blocks := blocks + NEW blocks OF this
+                    OD;
+                    STYPE stype = convert type (unit_type (ur, declaration, environ),
+                                                environ, closure);
+                    WIRE (stype, blocks)
+                END,
+            (REF UCONC uc):
+                BEGIN
+                    WIRE left = wire (declare unit (left OF uc));
+                    WIRE right = wire (declare unit (right OF uc));
+                    STYPE stype =
+                        convert type (
+                            unit_type (uc, declaration, environ),
+                            environ, closure);
+                    WIRE (stype, NEW blocks OF left + NEW blocks OF right)
+                END,
+            (REF USERIES us):
+                { It is possible for an inner series to update an element of
+                  the locals array (eg for a variable assignment within an
+                  arm of a CASE clause).  This side-effect must not be visible;
+                  the only communication between a series and its environment
+                  is via the output of the series.  Therefore we must save
+                  `locals' across the call.  `ids' are written once only and
+                  need not be saved.
+                }
+                declare (us, parent fnno, declaration, environ, closure,
+                         locals,
+                         ids, constants end, diag level, flt)
+        ESAC;
+
+
+    { 'declare join' is used to handle a complete join statement in the
+      ELLA source.
+      It ensures that there is one connection for every primitive component
+      of the signal.  At this stage, the description is hierarchic, so the
+      connections cannot be recorded in 'instances', but rather are described
+      using relative instance numbers in 'makes'.
+    }
+    PROC join_nameno = (UNIT rhs) INT:
+       CASE rhs IN
+       (REF UNAME un)  nameno OF un,
+       (REF UINDEX ui) join_nameno(unit OF ui),
+       (REF UTRIM ut)  join_nameno(unit OF ut)
+       OUT sys fault("kexpand - joins transform not called"); 0
+       ESAC;
+
+    PROC declare join = (JOIN join, UNION(BOX,MBOX) to) VOID:
+    BEGIN
+        UNIT from = from OF join;
+        WIRE whence = wire (declare unit (from));
+        INT fn, instance;
+        CASE to IN
+        (BOX bto):
+            BEGIN
+                fn := fn OF bto;
+                instance := instance OF bto
+            END,
+        (MBOX mto):
+            BEGIN
+                fn := fn OF mto;  {{?? temporary batch for 1-d}}
+                INT mindex = CASE to OF join IN
+                             (REF UINDEX ui) int(index OF ui)
+                             OUT sys fault("kexpand - no index present"); 0
+                             ESAC;
+                instance := (instances OF mto) [mindex]
+            END
+        ESAC;
+        INT fsindex = 1;
+{{?? ignore fnsets
+           CASE fsindex OF join IN (REF FNULL): 1 OUT int(fsindex OF join) ESAC;
+}}
+        REF VECTOR [] INT input sizes = lookup input sizes (fn);
+        STRUCT (INT lwb, upb) slice = lookup input slice (fn, fsindex);
+        REF VECTOR [] BLOCK blocks = NEW blocks OF whence;
+        INT ix := 1;
+        INT make = find make (parent fnno, instance);
+        FOR i FROM lwb OF slice TO upb OF slice DO
+            REF BLOCK next = blocks [ix];
+            add connection (inst offset OF next, offset OF next, make, i);
+            INT size = input sizes [i];
+            IF size < size OF next THEN
+                size OF next -:= size;
+                IF offset OF next >= 0 THEN
+                     offset OF next +:= size
+                ELSE
+                    sys fault ("declare join: attempt to slice indirect block")
+                FI
+            ELSE
+                ix +:= 1
+            FI
+        OD
+    END;
+
+
+    { 'declare let' handles the symbol table operations required for a LET
+      statement.  It is careful to remove synonym declarations, so that the
+      binding really does refer to a real location, but only one level is
+      explicit, since any name appearing on the RHS must already have been
+      processed.
+    }
+    PROC declare let = (LET let) VOID:
+    BEGIN
+        LOCAL node = declare unit (unit OF let);
+        REF NAMES scan := letnames OF let;
+        BOOL multiple = rest OF scan ISNT nilnames;
+        REF VECTOR [] NAMETYPE nametypes = nametypes OF declaration;
+        INT ix := 0;
+        WHILE scan ISNT nilnames DO
+          LOCAL noden =
+              IF multiple THEN index local (node, ix +:= 1)
+              ELSE node
+              FI;
+          CASE type OF nametypes[nameno OF scan] IN
+          (REF TNULL) SKIP
+          OUT
+            WIRE wire = wire (noden);
+            CASE (locals [nameno OF scan]) IN
+            (VOID):
+                (ID name = name OF nametypes[nameno OF scan];
+                 add binding (parent fnno, nullid, name, wire);
+                 ids [nameno OF scan] := name;
+                 locals [nameno OF scan] := noden),
+            (WIRE):
+                (update binding (parent fnno, nilid, ids [nameno OF scan], wire);
+                 record local (local changes, locals, nameno OF scan);
+                 locals [nameno OF scan] := noden),
+            (BOX box):
+                (update binding (parent fnno, nilid, ids [nameno OF scan], wire);
+                 record local (local changes, locals, nameno OF scan);
+                 locals [nameno OF scan] := PBOX (box, wire)),
+            (MBOX mbox):
+                (update binding (parent fnno, nilid, ids [nameno OF scan], wire);
+                 record local (local changes, locals, nameno OF scan);
+                 locals [nameno OF scan] := PBOX (mbox, wire)),
+            (PBOX pbox):
+                (update binding (parent fnno, nilid, ids [nameno OF scan], wire);
+                 record local (local changes, locals, nameno OF scan);
+                 locals [nameno OF scan] := PBOX (box OF pbox, wire))
+            ESAC
+           ESAC;
+           scan := rest OF scan
+        OD
+    END;
+
+    { 'declare function' causes the translation of a local function
+      declaration by a recursive call to 'translate function'.
+    }
+    PROC declare function = (FNNAME fn) VOID:
+     ( REF FNDEC local declaration = (fns OF environ) [fnno OF fn];
+        { It cannot be otherwise! }
+       translate function (fnbody OF local declaration,
+                           local declaration,
+                           environ,
+                           closure,
+                           diag level,
+                           parent fnno,
+                           fnno OF fn,
+                           flt)
+     );
+
+    { The main body of 'declare' }
+    REF SERIES steps := body OF series;
+    WHILE steps ISNT nilseries DO
+        STEP step = step OF steps;
+        CASE step IN
+            (UNION (ATTRNAME, FNAME, CNAME, TNAME)): SKIP, { Already processed }
+            (FNNAME fn):  declare function (fn),
+            (REF LET let):  declare let (let),
+            (REF MAKE make):  declare make (convert fnno (fnno OF inst OF make),
+                                            make),
+            (REF JOIN join):
+                CASE locals [join_nameno(to OF join)] IN
+                    (BOX b):   declare join (join, b),
+                    (MBOX b):  declare join (join, b),
+                    (PBOX b):  declare join (join, box OF b)
+                ESAC
+        ESAC;
+        steps := rest OF steps
+    OD;
+
+    LOCAL ans = declare unit (output OF series);
+
+    { Now restore those locations which have changed. }
+
+    refurnish locals (local changes, locals);
+
+    ans
+
+END;
+
+{ `flatten and add type'.  Convert a STYPE to a row of type indexes
+   with one entry per primitive element.
+}
+PROC flatten and add type = (STYPE type) VECTOR [] INT:
+BEGIN
+    REF SST flattened = flatten type (type);
+    INT number inputs := 0;
+    REF SST scan := flattened;
+    WHILE scan ISNT nil sst DO
+        number inputs +:= 1;
+        scan := rest OF scan
+    OD;
+    VECTOR [number inputs] INT ans;
+    scan := flattened;
+    FOR i TO number inputs DO
+        ans [i] := add type (t OF scan, machine width);
+        scan := rest OF scan
+    OD;
+    ans
+END;
+
+{ A simple convenience function }
+PROC lookup type sizes = (VECTOR [] INT indices) VECTOR [] INT:
+BEGIN
+   VECTOR [UPB indices] INT ans;
+   FOR i TO UPB ans DO ans [i] := lookup type size (indices [i]) OD;
+   ans
+END;
+
+{ `process inputs' creates from the supplied TERMINALS an array of IPs
+  describing each of the user inputs to the function, whether named or
+  not,  The input type could be recalculated here but is passed in for
+  efficiency and to avoid the need for environment and closure.  The
+  primitive type sizes argument also avoids the need for repeating work
+  that has been done elsewhere.  `sort' is no longer used and is set to 1.
+
+}
+MODE IP = STRUCT (WIRE wire, ID name, INT sort);
+
+*0 INT fn inputs count := 0;
+*0 INT process inputs count := 0;
+PROC process inputs = (REF NAMES inputs, STYPE type, REF FNDEC fdec,
+                       VECTOR [] INT prim sizes) VECTOR [] IP:
+BEGIN
+
+    { This is designed to handle the inputs of a function that is
+      known not to be a function-set or function-row.  The `base'
+      argument is designed however to service the needs of these.  It
+      will an integer for a genuine function or for an element of a
+      function set.  Otherwise, for a function row,  each wire is
+      replicated by `UPB base', offsetting  each copy by `UPB base'
+      along the primitive inputs array
+    }
+
+    INT user inputs = names_size (inputs);
+    VECTOR [user inputs] STYPE user types;
+    IF user inputs = 1 THEN
+        user types := type
+    ELSE
+        CASE type IN
+        (REF SST sst):  { It must be an SST when more than one input }
+                 BEGIN
+                     REF SST scan := sst;
+                     INT index := 0;
+                     WHILE scan ISNT nil sst DO
+                         user types [index +:= 1] := t OF scan;
+                         scan := rest OF scan
+                     OD
+                 END
+        ESAC
+    FI;
+
+    REF NAMES terms := inputs;
+    INT ip no := 1;
+    VECTOR [user inputs] IP ans;
+    FOR i TO user inputs DO
+         INT width = raw signal width (user types [i]);
+*0       fn inputs count PLUSAB 1;
+         HEAP VECTOR [width] BLOCK blocks;
+         FOR j TO width DO
+             INT size = prim sizes [ip no];
+             INT offset = - (size unit + ip no * ws);
+             blocks [j] := (0, offset, size);
+             ip no +:= 1
+         OD;
+         STYPE type1 = user types[i];
+         ID name = name OF (nametypes OF fdec)[nameno OF terms];
+         ans [i] := ((type1, blocks), name, 1);
+         terms := rest OF terms
+   OD;
+   ans
+END;
+
+{ If a subordinate function (A say) copies one of its inputs directly to
+  its outputs then we may end up with an indirect join at this level, such
+  as:
+
+      S -> A.ip, A.ip -> D
+
+  These cause problems with the construction of input aliases so this procedure
+  gets rid of them, replacing the above example with:
+
+      S -> A.ip, S -> D
+
+  We look at each input of each subordinate function to see if its source is
+  indirect, if so we follow it back until we find an input of the enclosing
+  function or a direct source.  On the way we link the inputs together and then
+  follow the chain to update them all to refer to the primary source.
+
+  During the process we may discover a simple closed loop with no
+  processing elements on it at all.  Such a loop must always carry an
+  unknown signal and this is accomplished by adding a constant signal
+  to the enclosing function and referring all points on the loop to
+  it.  Contrast the discovery of, treatment of and diagnostic messages
+  for this sort of loop with delayless feedback loops formed of
+  primitive functions as dealt with in `construct calls' above.
+}
+*0 INT query words count := 0;
+PROC transfer joins = (INT fnno, REF INT constants end) VOID:
+BEGIN
+    { Construct a query signal value to a given size}
+    PROC query words = (INT size) {=-}REF{=+}WORD:
+    BEGIN
+*0      query words count PLUSAB 2;
+        HEAP VECTOR [size] CHAR q;
+        FORALL c IN q DO c := REPR 0 OD;
+        {=-}HEAP WORD := {=+}q
+    END;
+
+    REF VECTOR [] INT expansion = lookup expansion (fnno);
+    FOR i TO UPB expansion DO
+        SMAKE smake = makes [expansion[i]];
+        REF VECTOR [] INPUT inputs = inputs OF smake;
+        FOR j TO UPB inputs DO
+
+            { Check for loops and indirections }
+            REF INPUT input = inputs [j];
+            REF INT inst := inst OF input;
+            REF INT offset := offset OF input;
+            INT direct = 0, indirect = 1, loop = 2;
+            INT flag := direct;
+            WHILE inst /= 0 ANDTH offset < 0 ANDTH flag /= loop DO
+                INT make = find make (fnno, inst);
+                INT ip = (-offset - size unit) OVER (ws);
+                IF make = expansion [i] ANDTH ip = j THEN
+                    flag := loop
+                ELSE
+                    flag := indirect
+                FI;
+                REF INPUT onward = (inputs OF makes [make])[ip];
+                REF INT (inst) := make;
+                inst := inst OF onward;
+                offset := offset OF onward
+            OD;
+
+            { Deal with them if necessary }
+            IF flag = loop THEN
+                put (out,
+                     ("There is a delayless loop in function ",
+                      lookup user id (fnno),
+                      " involving instances of the functions:",
+                      newline));
+
+                { Construct query constant }
+                INT size = lookup input sizes (fn OF smake)[j];
+                add constant no (fnno, add constant (query words (size)));
+                INT query offset = constants end;
+                constants end +:= size;
+
+                { Refer loop elements to it }
+                inst := inst OF input;
+                offset := offset OF input;
+                INT loop fn := fn OF smake;
+                WHILE inst /= 0 DO
+                    { `inst' will be zero when we restart loop }
+                    put (out, (lookup user id (loop fn), newline));
+                    INT ip = (-offset - size unit) OVER (ws);
+                    REF INPUT onward = (inputs OF makes [inst])[ip];
+                    loop fn := fn OF makes [inst];
+                    REF INT (inst) := 0;
+                    REF INT (offset) := query offset;
+                    inst := inst OF onward;
+                    offset := offset OF onward
+                OD
+
+            ELIF flag = indirect THEN
+                INT src inst = inst;
+                INT src offset = offset;
+                inst := inst OF input;
+                offset := offset OF input;
+                WHILE inst /= 0 ANDTH offset < 0 DO
+                    INT ip = (-offset - size unit) OVER (ws);
+                    REF INPUT onward = (inputs OF makes [inst])[ip];
+                    REF INT (inst) := src inst;
+                    REF INT (offset) := src offset;
+                    inst := inst OF onward;
+                    offset := offset OF onward
+                OD
+            FI
+        OD
+
+    OD
+END;
+
+
+{ `transfer location' is similar to `transfer joins' but it takes a
+  `REF VECTOR [] BLOCK' descriptor of a signal (the output of the
+  function in fact although it could be any signal) and resolves any
+  indirections via inputs of component functions.  This processing is
+  required on the output of a function in order to use it for onward
+  connectivity; it is not required for monitoring.
+
+  `location' is updated in situ.  we must be careful to ensure that adjacent
+  entries in the vector describing contiguous locations are merged which
+  is guaranteed by rebuilding the vector after any adjustment by the `+'
+  operator.  The form of the loop guarantees that all entries are looked at
+  once although it may perform an unnecessary inspection of an entry that
+  has just been formed by merging two adjacent entries.
+}
+PROC transfer location = (INT fnno, REF REF VECTOR [] BLOCK location) VOID:
+FOR i FROM UPB location BY -1 TO 1 DO
+    REF BLOCK entry = location [i];
+    INT instance = inst offset OF entry;
+    INT offset =  offset OF entry;
+    IF instance /= 0 ANDTH offset < 0 THEN
+        INT make no = find make (fnno, instance);
+        INT ip no = (-offset - size unit) OVER ws;
+        INPUT ip = (inputs OF makes [make no]) [ip no];
+        inst offset OF entry := inst OF ip;
+        offset OF entry := offset OF ip;
+        location := location [:i-1] + location[i:i] + location [i+1:]
+    FI
+OD;
+
+{ Here are some utilities or stripping the extra outputs generated by
+  the function type transformation back off the output wire of a function
+  for monitoring purposes.  The `genoutput' flags are TRUE iff some of
+  the aforementioned extra outputs have been generated.
+}
+
+PROC upb type = (STYPE type) INT:
+CASE type IN
+(REF SROW r): no OF r,
+(REF SST s):
+    BEGIN
+        INT ans := 0;
+        REF SST p := s;
+        WHILE p ISNT nil sst DO ans +:= 1; p := rest OF p OD;
+        ans
+    END
+ESAC;
+
+*0 INT strip output type count := 0;
+{*0         strip output type count PLUSAB 1;}
+{{Above line was in following proc}}
+
+PROC strip output type = (STYPE type, BOOL genoutput) STYPE:
+IF genoutput THEN index type (type, 1)
+ELSE type
+FI;
+
+*0 INT strip output wire count := 0;
+{*0         strip output wire count PLUSAB 1;}
+{{Above line was in following proc}}
+
+PROC strip output wire = (WIRE wire, BOOL genoutput) WIRE:
+IF genoutput THEN index wire (wire, 1)
+ELSE wire
+FI;
+
+
+{ 'translate function' is called on any function declaration.
+  It constructs a descriptor for the instances, and calls for the generation
+  of the code representing the function body.  It calls symbol table
+  management functions to record the names used.
+}
+*0 INT translate function count := 0;
+translate function :=
+   (FNBODY body, REF FNDEC declaration, REF ENVIRON environ,
+    CLOSURE closure, INT diag level, INT outer, version, FLTPROC flt) INT:
+BEGIN
+*H  put(out, "+++ starting translate function(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+    { Process input and output types }
+*H  put(out, "+++ starting convert type(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+    SFN fntype =
+        CASE convert type (fndec_tfn (declaration ), environ, closure)IN
+            (REF SFN fn):  fn
+        ESAC;
+*H  put(out, "+++ finishing convert type(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+*H  put(out, "+++ starting flatten and add type " + time_str); newline(out);
+*H  print_stats;
+    VECTOR [] INT input types = flatten and add type (from OF fntype);
+*H  put(out, "+++ finished flatten and add type " + time_str); newline(out);
+*H  print_stats;
+*H  put(out, "+++ starting lookup type sizes " + time_str); newline(out);
+*H  print_stats;
+    VECTOR [] INT input sizes = lookup type sizes (input types);
+*H  put(out, "+++ finished lookup type sizes " + time_str); newline(out);
+*H  print_stats;
+    INT total input size := 0;
+    FOR i TO UPB input sizes DO
+        total input size +:= input sizes [i]
+    OD;
+    IF total input size > max input size THEN
+        max input size := total input size
+    FI;
+*0  translate function count PLUSAB 1;
+*H  put(out, "+++ starting process inputs " + time_str); newline(out);
+*H  print_stats;
+    VECTOR [] IP user inputs =
+          process inputs (inputs OF declaration, from OF fntype,
+                          declaration, input sizes);
+*H  put(out, "+++ finished process inputs " + time_str); newline(out);
+*H  print_stats;
+    INT output type index = add type (to OF fntype, machine width);
+    BOOL genoutput := FALSE;
+    BOOL atomic =
+       CASE body IN
+       (REF UNITTAG u): CASE tag OF u IN (REF USERIES): FALSE OUT TRUE ESAC
+       OUT TRUE
+       ESAC;
+
+    { Process atomic functions }
+    STRUCT (INT size, offset, BITS sort) instance shape := (0, 0, compound);
+    STRUCT (INT workspace, history, declid) alien shape := (0, 0, 0);
+        { undefined except for alien functions }
+    REF SRAM ramdata := nil sram;
+    WIRE output := (to OF fntype, null rvb);
+    WIRE moutput :=
+        (strip output type (to OF fntype, genoutput), null rvb);
+
+    IF atomic THEN
+        ID fn name = unique id (fnname OF declaration, outer, version);
+        VECTOR [UPB user inputs] WIRE input wires;
+        FOR i TO UPB user inputs DO
+            input wires [i] := wire OF user inputs [i]
+        OD;
+*H  put(out, "+++ starting translate atomic(" + fnname + ") " + time_str); newline(out);
+*H  print_stats;
+        instance shape := translate atomic (body, fn name, declaration,
+                                            input wires, input types,
+                                            output type index,
+                                            environ, closure, ramdata,
+                                            alien shape, flt);
+*H  put(out, "+++ finished translate atomic(" + fnname + ") " + time_str); newline(out);
+*H  print_stats;
+        INT output size = lookup type size (output type index);
+*0      translate function count PLUSAB 1;
+        HEAP VECTOR [1] BLOCK output block :=
+             BLOCK (0, offset OF instance shape, output size);
+        output := (to OF fntype, output block);
+        moutput := strip output wire (output, genoutput)
+    FI;
+
+    { Insert function into symbol table }
+*H  put(out, "+++ starting add function(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+    INT fnno = add function (fnname OF declaration, outer, version,
+                             UPB user inputs, moutput, output,
+                             ramdata, instance shape, alien shape);
+
+*H  put(out, "+++ finished add function(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+    { Search the MACSPEC row for a timescaled function.   }
+    { For the first one found, enter its scaletime into   }
+    { the symbol table only if it's simulateable. If it's }
+    { not (sort = timescale) then enter 0 into table.     }
+    { This ensures that the simulatefn command looks up   }
+    { and finds only simulateable timescaled functions.   }
+
+    BOOL found := FALSE;
+
+    IF macspecs OF declaration ISNT nilmacspecs  THEN
+     FORALL macspec IN macspecs OF declaration
+       WHILE (NOT found) DO
+         IF (sort OF macspec = timescale) OREL (sort OF macspec = sftimescale)
+         THEN
+           found := TRUE;
+           CASE spec OF macspec IN
+           (FNAME fn)
+               IF (sort OF macspec = sftimescale) THEN
+                   FORMULA f =
+                     CASE value OF (ints OF environ)[intno OF fn] IN
+                     (FORMULA ff) ff
+                     OUT flt ("keinstance: MACSPEC contains replicator"); SKIP
+                     ESAC;
+                   add scaletime (fnno, int(f))
+                ELSE
+                   add scaletime (fnno, 0)
+                FI
+           OUT
+             flt ("Keinstance: MACSPEC didn't have mode FORMULA")
+           ESAC
+         FI
+       OD
+     FI;
+
+    { Bind user inputs }
+*H  put(out, "+++ starting binding user inputs " + time_str); newline(out);
+*H  print_stats;
+    FOR i TO UPB user inputs DO
+        WIRE input = wire OF user inputs [i];
+        add binding (fnno, MAKEID "", name OF user inputs [i], input)
+    OD;
+*H  put(out, "+++ finished binding user inputs " + time_str); newline(out);
+*H  print_stats;
+
+    { Now process compound function bodies }
+    IF NOT atomic THEN
+*H  put(out, "+++ starting compound fn bodies " + time_str); newline(out);
+*H  print_stats;
+        VECTOR [UPB nametypes OF declaration] LOCAL local symbols;
+        VECTOR [UPB nametypes OF declaration] ID ids;
+        FOR i TO UPB local symbols DO
+                IF i <= UPB user inputs THEN
+                    local symbols [i] := wire OF user inputs [i];
+                    ids [i] := name OF user inputs [i]
+                ELSE
+                    local symbols [i] := EMPTY;
+                    ids [i] := nilid
+                FI
+
+        OD;
+        USERIES useries =
+            CASE body IN (REF UNITTAG u):  { It must be, since not atomic! }
+                CASE tag OF u IN (REF USERIES us): us  { Likewise }
+                ESAC
+            ESAC;
+        INT local offset = ws * (UPB input types + 1) + size unit;
+        INT constants end := local offset;
+        LOCAL body = declare (useries, fnno, declaration, environ,
+                               closure, local symbols, ids, constants end,
+                               diag level, flt);
+        transfer joins (fnno, constants end);
+        WIRE coutput := wire (body);
+        transfer location (fnno, blocks OF coutput);
+        WIRE moutput = strip output wire (coutput, genoutput);
+        add shape (fnno, (constants end, local offset, compound));
+        add output location (fnno, blocks OF moutput, blocks OF coutput)
+*H  ;put(out, "+++ finished compound fn bodies " + time_str); newline(out);
+*H  print_stats
+    FI;
+
+    { Add inputs sizes, upbs and aliases }
+*H  put(out, "+++ starting inputs sizes etc " + time_str); newline(out);
+*H  print_stats;
+*0  translate function count PLUSAB 1;
+    add input sizes (fnno, HEAP VECTOR [UPB input sizes] INT := input sizes);
+    REF VECTOR [] INT expansion = lookup expansion (fnno);
+    FOR i TO UPB expansion DO
+        SMAKE component = makes [expansion[i]];
+        REF VECTOR [] INPUT inputs = inputs OF component;
+        FOR j TO UPB inputs DO
+            INPUT input = inputs [j];
+            INT offset = offset OF input;
+            IF offset < 0 THEN
+                INT ip = (-offset - size unit) OVER (ws);
+                add input alias (fn no, ip, instance OF component, j,
+                                 fn OF component)
+            FI
+        OD
+    OD;
+    INT fanout = lookup total input fanout (fn no);
+    IF fanout > max input fanout THEN max input fanout := fanout FI;
+*H  put(out, "+++ finished inputs sizes etc " + time_str); newline(out);
+*H  print_stats;
+
+*H  put(out, "+++ finished translate function(" + fnname OF declaration + ") " + time_str); newline(out);
+*H  print_stats;
+    fnno
+END;
+
+
+{ 'translate top level' takes a list of function numbers (ie handles
+  into the symbol table) which represent the top level functions of
+  the closure.  These do not get their inputs supplied by any other
+  function, so need to be joined to the circuit parameters.  This is
+  done by including them all in a single pseudo-function.
+  The return value is the symbol table number for this extra
+  pseudo function.
+
+  Note that, in common with other compound functions, this extra
+  function gets instance data set up.  Although not visible in
+  the code of this procedure, only the evaluation flag is used,
+  and this is used for the very special purpose of controlling
+  the iterations when loops in combinatorial logic have been
+  broken -- all generic identities used for combinatorial loop
+  breaks fanout to this instance ** WHICH MUST BE THE FIRST **
+  (so that the evaluation flag coincides with the global symbol
+  'global iterations').
+}
+PROC translate top level = (VECTOR [] INT fnnos) INT:
+BEGIN
+    WIRE null wire = (null stype, null rvb);
+    INT fn = add function (MAKEID "", 0, -1, 0,
+                           null wire, null wire, nil sram,
+                           (ws + size unit, ws + size unit, compound),
+                           SKIP);
+    ID cpname = MAKEID "$CP";
+    ID cpuname = unique id (cpname, 0, -1);
+    INT cp = add function (cpname, 0, -1, 0,
+                           null wire, null wire, nil sram,
+                           translate data source (max input size, cpuname),
+                           SKIP);
+    INT circuit param source = next instance (fn, cp); { relative no. }
+    INT cp make = add make (cp, circuit param source);
+    add expansion (fn, cp make);
+    cp instance no := circuit param source + 1;        { absolute no. }
+    FOR i TO UPB fnnos DO
+        INT inst offset = next instance (fn, fnnos [i]);
+        INT make = add make (fnnos [i], inst offset);
+        add expansion (fn, make);
+        REF VECTOR [] INT input sizes := lookup input sizes (fnnos [i]);
+        INT whence := ws + size unit;
+        FOR j TO UPB input sizes DO
+            add connection (circuit param source, whence, make, j);
+            whence +:= input sizes [j]
+        OD
+    OD;
+    add make (fn, 1)
+END;
+
+
+
+
+
+{ Cleanup at End of Simulation }
+{ ============================ }
+
+
+{ The clearing of the temorary data structures, normally done in
+  'construct calls', is repeated here as well because this procedure
+  may be called on an exception which terminates the kernel processing.
+}
+*0 INT remove instances count := 0;
+PROC remove instances = VOID:
+BEGIN
+*0  remove instances count PLUSAB 4;
+    instance ptrs := NIL;
+    probe instance ptrs := NIL;
+    circuit fnenv := empty fnenv;
+    FOR i TO UPB probe fnenv DO probe fnenv[i] := empty fnenv OD;
+    makes := HEAP VECTOR [0] SMAKE;
+    last make := 0;
+    constants := HEAP VECTOR [0] WORD;
+    last constant := 0;
+    max input size := 0
+END;
+
+
+
+{ Saving and Restoring }
+{ ==================== }
+
+
+{ Only the 'instance ptrs' contain information which is required after
+  the translation process, and therefore need to be saved as part of
+  the simulation state.
+}
+PROC save instance ptrs = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    write int (cp instance no, ferry, flt);
+    write int (UPB instance ptrs, ferry, flt);
+    FOR i TO UPB instance ptrs DO
+        write int (fnno OF instance ptrs [i], ferry, flt);
+        write int (offset OF instance ptrs [i], ferry, flt)
+    OD;
+    write int (UPB probe instance ptrs, ferry, flt);
+    FOR i TO UPB probe instance ptrs DO
+       REF PROBEINSTPTRS this probe = probe instance ptrs[i];
+       write int (input instance OF this probe, ferry, flt);
+       write int (probe instance OF this probe, ferry, flt);
+       write int (fnno OF this probe, ferry, flt);
+       write int (size OF this probe, ferry, flt);
+       write int (base offset OF this probe, ferry, flt);
+       write int (UPB inst ptrs OF this probe, ferry, flt);
+       FOR i TO UPB inst ptrs OF this probe DO
+           write int (fnno OF (inst ptrs OF this probe) [i], ferry, flt);
+           write int (offset OF (inst ptrs OF this probe) [i], ferry, flt)
+       OD
+    OD
+END;
+
+PROC restore instance ptrs = (PROC (RVC, FLTPROC) VOID ferry, FLTPROC flt) VOID:
+BEGIN
+    cp instance no := read int (ferry, flt);
+    INT upb := read int (ferry, flt);
+    HEAP VECTOR [upb] INSTANCEPTR ptrs;
+    circuit instance ptrs := ptrs;
+    instance ptrs := circuit instance ptrs;
+    FOR i TO upb DO
+        fnno OF ptrs [i] := read int (ferry, flt);
+        offset OF ptrs [i] := read int (ferry, flt)
+    OD;
+    upb := read int(ferry, flt);
+    probe instance ptrs := HEAP VECTOR [upb] PROBEINSTPTRS;
+    FOR i TO UPB probe instance ptrs DO
+       REF PROBEINSTPTRS this probe = probe instance ptrs[i];
+       input instance OF this probe := read int(ferry, flt);
+       probe instance OF this probe := read int(ferry, flt);
+       fnno OF this probe := read int(ferry, flt);
+       size OF this probe := read int(ferry, flt);
+       base offset OF this probe := read int(ferry, flt);
+       upb := read int(ferry, flt);
+       inst ptrs OF this probe := HEAP VECTOR [upb] INSTANCEPTR;
+       FOR i TO UPB inst ptrs OF this probe DO
+           fnno OF (inst ptrs OF this probe) [i] := read int(ferry, flt);
+           offset OF (inst ptrs OF this probe) [i] := read int(ferry, flt)
+       OD
+    OD
+END
+
+
+KEEP
+    INSTANCEPTR,
+    instance ptrs, probe instance ptrs, cp instance no, translate function,
+    translate top level, construct calls, remove instances,
+    save instance ptrs, restore instance ptrs
+FINISH

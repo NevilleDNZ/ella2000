@@ -1,0 +1,760 @@
+DECS  compmodes  CONTEXT VOID  USE putstrings, basics, osinterface:
+
+{ " Id: compmodes.sta,v 1.1 91/10/14 14:26:33 edcad Exp $" }
+configinfo A68CONFIG "$Id: compmodes.a68,v 34.2 1995/03/29 13:03:22 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+09:09:88  Compiler modes seperated from compiler
+11:10:88  INTTEXT added to hold textual form of INT.  EVW
+25:01:89  R4B057.  Precedence order of / moved above (. MGH
+06:03:89  R4B191.  INT field added to FNCALLSTACK to hold macro param
+                      count. MGH
+13:12:89  alien = 88 added. JIT
+03:01:90  sample = 100 added. JIT
+19:01:90  faster = 145 and slower = 146 added. JIT
+06:02:90  TNULL, CTYPEVAR, PARAMVAL added. MGH
+29:03:90  Macros can now have function parameters. JIT
+18:04:90  vfn removed  (UIO).  MGH
+27:06:90  osinterface added because of kernel work.  MGH
+27:06:90  Fntypes, multiple joins & makes, named outputs. MGH
+16:07:90  Macros can now have macro parameters. JIT
+08:08:90  ident_key, numb_key and resatrictions on tokens removed. EVW
+25:02:91  MODE ERRPARAM added for compiler error messages. JIT
+24:04:91  vreplace = 150 added. JIT
+02:08:91  Extension to macro TYPE parameters. JIT
+27:08:91  seqelseof, seqnormal, seqcelse and seqnoelse removed. EVW
+16:10:91  R6B82 : BOOL alien added to COMPINT for fntypes in ALIEN. MGH
+16:10:91  R6B83 : MPARAMS mp1 added to FNCALLSTACK for implicit params. MGH
+23:10:91  Updated for new assembler modes. JIT
+19:03:92  Attribute declaration and use added. JIT
+23:03:92  Constant string can now be a series of strings. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+15:04:92  UNCHECKEDINT moved here from COMPILEPROC. JIT
+12:05:92  Changes to modes for new scoping rules. EVW
+18:06:92  R6B110. FINISH, MODULE, FN and QES removed from toks vector and
+                     End of file added; qestok also removed. JIT
+24:06:92  PORT mode introduced for holding port name info.  MGH
+02:07:92  R6B113. Extra BOOL added to MPARAMSTACK. JIT
+17:02:93  Add CINDEX, CTRIM, CREPL, CCOND, CATTR, CCONC. EVW
+             attribute modes reorganised. EVW
+03:03:93  macparam modes reorganised. EVW
+18:10:93  R6B192.  ALter joinup modes. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.033 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+INT  linesize = 160;
+VECTOR [] CHAR  omac = "{",    cmac = "}";
+
+INT textstart = -1;  { used to initialise scopes }
+
+INT  trowrow = 1, trowst = 2;
+INT  zero = 0,
+     iconst = 1, iname = 2, idop = 3, imop = 4, icond = 5, iparam = 6,
+     ivarmult = 7, icheck = 8,  iconsttext = 9,
+     tnull = 10,  tnamed = 11, trow = 12,   tst = 13, tparam = 14, tfn = 15,
+     cprim = 16,  cprimi = 17, cprimr = 18, cprimu = 19, cst = 20, crow = 21,
+     cnull = 22,  calt = 23,
+     vconc = 24,  vprim = 25,  vprimi = 26, vname = 27, vtrim = 28,
+     vindex = 29, vcallm = 30, vcalld = 31, vunn = 32,  vsharp = 33, vrow = 34,
+     vcase = 35,  vquery = 36,  vcoll = 37,  vif = 38,    vtermindex = 39,
+     vvarmult = 40,  vconst = 41,  end = 42,  fnstart = 43,  fnend = 44,
+     bmake = 45,  bjoin = 46,  bfor = 47,
+     typename = 48,  biddec = 49,  pidalts = 50,  prange = 51,  idelay = 52,
+     adelay = 53,  pt = 54,  ptflt = 55, str = 56,  {57}  dummy = 58,
+     velseof = 59,  velse = 60,  vfi = 61,
+     ram = 62,  {63}  vvarmultend = 64,
+     ktype = 65,  kint = 66,  kfn = 67,  kconst = 68, kattr = 69,
+     kend = 70,  {71} kilend = 72, {73}
+     reform = 74, cconc = 75, cattr = 76,
+     vcelse = 77,  vnormal = 78,  vnoelse = 79,
+     vseq = 80,  vpar = 81,  vdynindex = 82, vbracket = 83, ibracket = 84,
+     tbracket = 85, cbracket = 86, biop = 87, alien = 88, parend = 89,
+     seqend = 90,  seqnull = 91,  seqvoid = 92, seqlet = 93,  seqvar = 94,
+     seqper = 95,  seqassign = 96,  seqcase = 97,  seqif = 98,  seqvarmult = 99,
+     sample = 100, cindex = 101, ctrim = 102, cvarmult = 103, cif = 104,
+     seqbecomes = 105,  seqassignend = 106, seqrow= 107,  seqelse = 108,
+     seqfi = 109,  seqvarmultend = 110,  vthen = 111,  seqthen = 112,
+     c_type = 113, cquery = 114, imported = 115, inull = 116, normalfn = 117,
+     brief = 118, inst = 119, macparam = 120, intname = 121, idef = 122,
+     multjoin = 123, {124} {Do not use 125 or 126} {127}
+     pstring = 128, pchar = 129, pcharrange = 130,
+     cstring = 131, cprimch = 132, cprimst = 133, cprimchr = 134,
+     vstring = 135, vprimch = 136, vprimst = 137, tstring = 138,
+     cnamed = 139,  constname = 140,
+     vnull = 141, cvoid = 142, cparam = 143, vprimc = 144,
+     faster = 145, slower = 146, bjoinend = 147, tvoid= 148, vvoid=149,
+     vreplace = 150, attrname = 151, attid =152, attdata = 153,
+     attbracket = 154, attstr = 155, attnull = 156;
+
+INT  in1bytetok = 251, in2bytetok = 252, in3bytetok = 253, in4bytetok = 254;
+
+INT int_tok = 126, inid_tok = 159;  {not output as tokens by compiler}
+
+{{ NOTE:: Tokens can now be in the range 0 to 255, (0 - 157) are held more
+          compactly in the IL  but SID can not cope with > 159
+}}
+
+INT  diplus = 1, diminus = 2;    INT sfnequals = 503;
+INT flattenleft = 1, flattenright = 2, flattenboth = 3;
+
+INT constint =1, constint2 = 2, const2int = 3, const2int2 = 4, idelayintcon = 5;
+
+INT vnamesource = 1, vnamesink = 2, vnameiosource = 3, vnameiosink = 4;
+
+INT stringindex = -1;
+INT inseq = 1, inpar = 2, inconst = 3, inother = 4;
+
+BOOL  caseelseof := FALSE;
+
+MODE  INTEGER,
+         TYPE,
+        CTYPE,
+       IDINFO,
+         ATTR,
+
+      MACINFO = STRUCT (ID id, INT sort, fnno, index, xno, ATTR attr),
+
+        UNSET = STRUCT (INT unset),
+      INTTEXT = STRUCT (INT int, ID text),
+       MAXINT = STRUCT (ID text),
+          FLT = STRUCT (INT flt),
+     INTCHECK = STRUCT (INTEGER integer, standard, INT test),
+       INTVAR = STRUCT (REF MACINFO im),
+       INTDOP = STRUCT (INT opno, INTEGER l, r),
+       INTMOP = STRUCT (INT opno, INTEGER r),
+   INTVARMULT = STRUCT (INT varmultno, INTEGER lwb, upb, index),
+      INTCOND = STRUCT (INTEGER cond, INTEGER t, f),
+       IPARAM = STRUCT (INT p),
+       INTDEF = STRUCT (REF IDINFO idinfo, INT intno, INTEGER i),
+     IBRACKET = STRUCT (INTEGER ibracket),
+       INULL  = STRUCT (INT inull),
+      INTEGER = UNION (INT, REF MAXINT, REF INTTEXT, FLT, REF INTCHECK,
+                        REF INTVAR, REF INTDOP, REF INTMOP, REF INTCOND,
+                          REF INTVARMULT, IPARAM, REF INTDEF, REF IBRACKET,
+                            INULL, UNSET),
+
+INTEGERSTACK = STRUCT (INTEGER i, REF INTEGERSTACK rest),
+
+  CHARRANGE = STRUCT (CHAR lwchar, upchar),
+  CHARALTS  = STRUCT (UNION (CHAR, CHARRANGE) alts, REF CHARALTS rest),
+
+     CNULLT = STRUCT (TYPE ct),
+        REC = STRUCT (INT rec),
+     NOTDEC = STRUCT (INT notdec),
+     PRANGE = STRUCT (REF IDINFO idinfo, INTEGER lwb, upb),
+      PALTS = STRUCT (REF IDINFO idinfo, REF TYPE u, REF PALTS rest),
+    PSTRING = STRUCT (REF IDINFO idinfo, REF VECTOR [] BOOL charcheck,
+                                            REF CHARALTS charalts),
+    PRIMSET = STRUCT (REF IDINFO idinfo, INT typeno,
+                      UNION (PRANGE, REF PALTS, PSTRING) u),
+      NAMED = STRUCT (REF IDINFO idinfo, INT typeno, TYPE t),
+         ST = STRUCT (TYPE t, REF ST rest),
+        ROW = STRUCT (TYPE t, INTEGER size),
+    TYPEVAR = STRUCT (REF MACINFO tm, TYPE t),
+     FNTYPE = STRUCT (TYPE from, to),
+   TBRACKET = STRUCT (TYPE tbracket),
+   TSTRING  = STRUCT (INTEGER size, TYPE tstring),
+      TNULL = STRUCT (INT tnull),
+     TVOID  = STRUCT (INT tvoid),
+       TYPE = UNION (REF PRIMSET, REF NAMED, REF ST, REF TYPEVAR, TNULL,
+                     REF FNTYPE,   REF ROW, REF TBRACKET, REF TSTRING,FLT,
+                     UNSET, TVOID),
+
+     TYPEID = STRUCT (TYPE t),
+      INTID = STRUCT (INTEGER i),
+    CTYPEID = STRUCT (CTYPE ct),
+     PRIMID = STRUCT (TYPE type, INT index),
+
+        PORT,
+    PORTDATA = STRUCT (ID id, INT fnno, nameno, index, TYPE type, BOOL single,
+                                                           REF PORTDATA rest),
+   PORTMMAKE = STRUCT (PORT port, INTEGER i),
+        PORT = UNION (REF PORTDATA, REF PORTMMAKE, FLT),
+   PORTSTACK = STRUCT (PORT port, REF PORTSTACK rest),
+
+JOINVARSTACK= STRUCT (INTEGER lwb, upb, BOOL index, REF JOINVARSTACK rest),
+     JOINUP,
+     JOINED = STRUCT (INT j),
+     JOINST = STRUCT (JOINUP jst, REF JOINST rest),
+     JOINFN = STRUCT (JOINED joined),
+    JOINROW = STRUCT (REF VECTOR [] JOINUP jrow),
+     JOINIO = STRUCT (JOINUP source, sink),
+    JOINREP = STRUCT (JOINUP jrep, JOINVARSTACK jvarstack),
+     JOINUP = UNION (REF JOINST, REF JOINFN, REF JOINROW, REF JOINIO,
+                      REF JOINED, REF JOINREP, FLT),
+  JOINSTACK = STRUCT (JOINUP joinup, REF JOINSTACK rest),
+JOINMULTSTACK = STRUCT (JOINUP joinup, BOOL source, REF JOINMULTSTACK rest),
+
+     DECIDS = STRUCT (INT decno, origin, REF INTEGERSTACK makeint,
+                         TYPE type, JOINUP jsource, jsink, PORT input, output),
+
+ATTR, ATTRDEF,
+ STRINGLIST = STRUCT (ID id, REF STRINGLIST rest),
+   ATTRDATA = STRUCT (ID classname, REF STRINGLIST data),
+    ATTRSTR = STRUCT (ATTR elem, REF ATTRSTR rest),
+   ABRACKET = STRUCT (ATTR abracket),
+   ATTRNULL = STRUCT (INT anull),
+    ATTRVAR = STRUCT (REF MACINFO am),
+       ATTR = UNION (REF ATTRDEF, REF ATTRDATA, REF ATTRSTR, REF ABRACKET,
+                     REF ATTRVAR, ATTRNULL, FLT),
+
+     ATTRID = STRUCT(ATTR a),
+    ATTRDEF = STRUCT (REF IDINFO idinfo, INT attrno, ATTR attr),
+
+      VARID = STRUCT (TYPE type, INT decno),
+    IDUNION = UNION (INTID, TYPEID, CTYPEID, PRIMID, REF DECIDS, ATTRID,
+                      VARID, FLT, REC, NOTDEC),
+     IDINFO = STRUCT (INT scope, vnno, BOOL text, outofdate, inscope, export,
+                      ID id, IDUNION u),
+        IDS = STRUCT (REF IDINFO idinfo, BOOL declaration, ATTR attr,
+                      REF IDS rest),
+
+      CNAMED = STRUCT (REF IDINFO idinfo, INT ctypeno, CTYPE ct, TYPE t),
+     CPRANGE = STRUCT (TYPE t, INTEGER lwb, upb),
+     CPINDEX = STRUCT (TYPE t, INTEGER index),
+        CUNN = STRUCT (REF PRIMID p, CTYPE ct),
+        CROW = STRUCT (CTYPE ct, INTEGER size),
+         CST = STRUCT (CTYPE cst, REF CST rest),
+    CTYPEVAR = STRUCT (REF MACINFO cm, TYPE t),
+       CALTS = STRUCT (CTYPE calt, REF CALTS rest),
+      CQUERY = STRUCT (TYPE querytype),
+    CBRACKET = STRUCT (CTYPE cbracket),
+    CPCHAR   = STRUCT (TYPE t, CHAR char),
+    CPSTRING = STRUCT (INTEGER size, CTYPE ct, REF STRINGLIST strings),
+    CPCHRANGE= STRUCT (TYPE t, CHAR lwb, upb),
+     CVOID   = STRUCT (INT cvoid),
+      CINDEX = STRUCT (CTYPE ct, INTEGER index),
+       CTRIM = STRUCT (CTYPE ct, INTEGER lwb, upb),
+       CCOND = STRUCT (INTEGER test, CTYPE then, else),
+       CREPL = STRUCT (REF IDS ids, CTYPE ct),
+       CCONC = STRUCT (BOOL string, INT sort, CTYPE left, right),
+       CATTR = STRUCT (CTYPE ct, ATTR attr),
+
+       CTYPE = UNION (REF CNAMED, REF CPRANGE, REF CPINDEX, REF PRIMID,
+                      REF CUNN, REF CROW, REF CST, REF CALTS, REF CNULLT, FLT,
+                      UNSET, REF CBRACKET, REF CQUERY, REF CPSTRING, REF CPCHAR,
+                      REF CPCHRANGE, REF CTYPEVAR, CVOID, REF CINDEX, REF CTRIM,
+                      REF CCOND, REF CREPL, REF CCONC, REF CATTR
+                     ),
+
+      DDECS = STRUCT (TYPE t, REF IDS ids, REF DDECS rest),
+
+MPARAMS, FNDEC,
+    MACSORT = UNION (REF ATTRVAR, REF INTVAR, REF TYPEVAR, REF CTYPEVAR,
+                     REF FNDEC, FLT),
+
+    MPARAMS = STRUCT (INT sort, mparamno, MACSORT value, REF MPARAMS rest),
+
+
+     FNINFO = STRUCT(INT scope, vnno, status, BOOL text, outofdate, import,
+                     export),
+      FNDEC = STRUCT (REF FNINFO fninfo, INT sort, fnno, BOOL macro, ID id,
+                      INT mparamno,  REF MPARAMS mp, REF REF MPARAMS nextmp,
+                      ATTR attr, REF DDECS inputs, outputs, TYPE param, ans,
+                      INT num_names),
+
+        FNS = STRUCT (REF FNDEC fndec, BOOL declaration, REF FNS rest),
+    FNSTACK = STRUCT (REF FNDEC dec, REF FNSTACK rest);
+
+MODE ERRPARAM = UNION (TYPE, ID, REF FNDEC, CTNAME, INTEGER, CTYPE);
+
+MODE IDDECS = STRUCT (REF IDS ids, INT macsort, xno, BOOL new,REF IDDECS rest);
+
+
+
+REF PALTS nilpalts = NIL;      REF IDS nilids = NIL;
+REF ST nilst = NIL;            REF TYPE niltype = NIL;
+REF DDECS nildecs = NIL;       REF REF MPARAMS nilnextmp = NIL;
+REF FNS nilfns = NIL;          REF MPARAMS nilmparams = NIL;
+REF CALTS nilcalts = NIL;      REF CST nilcst = NIL;
+REF CHARALTS nilcharalts = NIL; REF ATTRSTR nilattrstr = NIL;
+REF STRINGLIST nilstringlist = NIL;  REF FNINFO nilfninfo = NIL;
+REF JOINST niljoinst = NIL;          REF JOINSTACK niljoinstack = NIL;
+REF FNDEC nilfndec = NIL;
+REF JOINVARSTACK niljoinvarstack = NIL;  REF FNSTACK nilfnstack = NIL;
+REF JOINMULTSTACK niljoinmultstack = NIL;
+REF PORTDATA nilportdata = NIL;
+REF PORTSTACK nilportstack = NIL;
+REF IDDECS niliddecs = NIL;
+
+REF VECTOR[]BOOL nilrb = NIL;  REF VECTOR [] REF VECTOR[]BOOL nilrrb = NIL;
+
+NOTDEC notdec = HEAP NOTDEC;        FLT flt = HEAP FLT;
+TYPE o = HEAP FLT;                  REC rec = HEAP REC;
+CNULLT cnullt;                 IPARAM ip;
+UNSET unset = HEAP UNSET;
+INULL intnull = HEAP INULL;     ATTRNULL attrnull = HEAP ATTRNULL;
+TVOID typevoid = HEAP TVOID;
+CVOID constvoid = HEAP CVOID;
+
+JOINED jtrue, jfalse, jcheck, jfault, jvoid;
+j OF jtrue := 1; j OF jfalse := 2; j OF jcheck := 3; j OF jfault := 4;
+j OF jvoid := 5;
+
+INT  idtok = 1,   subtok = 21,  elsetok = 36,    bangtok = 16;
+INT  recovertok = 10,  outputtok = 26,  mactok = 28,  typetok = 30,
+     fntok = 31,  lettok = 32,  illegaltok = 0,  maketok = 33,  jointok = 38,
+     fortok = 71,  importstok = 66,  finishtok = 41,  eoftok = 72,
+     vartok = 73, seqtok = 75, semitok = 77;
+INT  fitok = 61,  thentok = 60, endtok = 40,  esactok = 37,  oftok = 35,
+     moduletok = 29,  bustok = 22,  omactok = 23,  cmactok = 24,
+     stoptok = 20,  goestotok = 19, crdtok = 15,   colontok = 13,
+     rintdentok = 2,  intdentok = 2,  stringtok = 3,  fnnametok = 5,
+     op1tok = 4,  op2tok = 6,  equalstok = 7,  ordtok = 14,  uptotok = 17,
+     slashtok = 11, becomestok = 9,  pormtok = 79, tordtok =80,
+     chartok = 84, begintok = 39, casetok = 34, iftok = 59,
+     spacetok = 45, andtok = 25;
+
+INT inputtok = -26;
+
+TNULL typenull = HEAP TNULL;
+
+MODE  FNCALL,
+      PARAMVAL  = UNION (INTID, TYPEID, CTYPEID, FNCALL, ATTRID, FLT),
+      PARAMVALS = STRUCT (PARAMVAL val, REF PARAMVALS rest),
+        FNCALL  = STRUCT (REF FNDEC f, REF PARAMVALS pvals,
+                          REF REF PARAMVALS nextpvals, ATTR attr);
+
+
+MODE  TYPESTACK = STRUCT (TYPE t, REF TYPESTACK rest),
+ FNCALLSTACK = STRUCT (REF FNCALL fncall, BOOL explicitparam,
+                       REF REF MPARAMS nextmp, REF FNCALLSTACK rest),
+       SUCSTACK = STRUCT (INTEGER i, TYPE t, CTYPE ct, ATTR a, INT w,
+                          REF SUCSTACK rest),
+      CASESTACK = STRUCT (TYPE param, output, REF CALTS tested,
+                          REF CASESTACK rest),
+      PALTSTACK = STRUCT (REF IDINFO idinfo, REF TYPE u, REF PALTSTACK rest),
+    IDINFOSTACK = STRUCT (IDINFO i, REF IDINFOSTACK rest),
+       SOPSTACK = STRUCT (INT i, ID name, REF SOPSTACK rest),
+      NAMESTACK = STRUCT (ID id, REF NAMESTACK rest),
+     SCOPESTACK = STRUCT (INT scope, REF IDS ids, REF FNS fns,
+                          REF SCOPESTACK rest),
+     STATESTACK = STRUCT (INT state, REF STATESTACK rest),
+        LASTOPS = STRUCT (ID last, REF LASTOPS rest),
+      LASTCALLS = STRUCT (ID last, REF LASTCALLS rest),
+
+    DECNOCHECK = STRUCT (INT decno, REF DECNOCHECK rest);
+
+REF PARAMVALS nilparamvals = NIL;
+REF SCOPESTACK nilscope = NIL;
+REF STATESTACK nilstate = NIL;
+REF LASTOPS nillastops = NIL;
+REF LASTCALLS nillastcalls = NIL;
+REF INTEGERSTACK nilintegerstack = NIL;
+REF DECNOCHECK nildecnocheck = NIL;
+REF FNCALLSTACK nilfncallstack = NIL;
+
+MODE  MOP = STRUCT (INT param, ans), DOP = STRUCT (INT l, r, ans);
+
+VECTOR [] TYPE modes =
+   ( HEAP NAMED:= (HEAP IDINFO:= (0, 0, TRUE, FALSE, TRUE, FALSE,
+                           HEAP VECTOR [7] CHAR := "boolean", flt), 0, flt),
+     HEAP NAMED:= (HEAP IDINFO:= (0, 0, TRUE, FALSE, TRUE, FALSE,
+                           HEAP VECTOR [7] CHAR := "integer", flt), 0, flt),
+     HEAP NAMED:= (HEAP IDINFO:= (0, 0, TRUE, FALSE, TRUE, FALSE,
+                           HEAP VECTOR [4] CHAR := "type", flt),    0, flt),
+     HEAP NAMED:= (HEAP IDINFO:= (0, 0, TRUE, FALSE, TRUE, FALSE,
+                           HEAP VECTOR [8] CHAR := "constant", flt), 0, flt)
+   );
+
+INT exported = 3;
+INT  noboth = 2;
+
+{ Mac parameter sorts }
+INT flt_par = 0, expl_par = 1,   impl_par = 2,  impl_expl = 3, impl_impl = 4;
+
+{FNINFO status }
+INT fn_notdec = 0, fn_flt = 1, fn_rec = 2, fn_ok = 3;
+
+{FNDEC sorts }
+INT outerdec = 1, localdec = 2, macpardec = 3;
+
+
+INT  wbool = 1,  winteger = 2,  wtype = 3,  wctype = 4,  wflt = 5, wfn = 6,
+     wattr = 7;
+
+VECTOR [] MOP mops =
+    ( (winteger, winteger),    CO   +   CO
+      (winteger, winteger),    CO   -   CO
+      (wbool,   wbool   ),     CO  not  CO
+      (0,       0       ),     CO dummy CO
+      (winteger, winteger),    CO inot  CO
+      (winteger, winteger),    CO sqrt  CO
+      (winteger, winteger) );  CO  abs  CO
+
+VECTOR [] DOP dops =
+    ( (winteger, winteger, winteger),   CO +  CO
+      (winteger, winteger, winteger),   CO -  CO
+      (winteger, winteger, winteger),   CO *  CO
+      (winteger, winteger, winteger),   CO %  CO
+      (winteger, winteger, wbool   ),   CO =  CO
+      (winteger, winteger, wbool   ),   CO /= CO
+      (winteger, winteger, wbool   ),   CO <= CO
+      (winteger, winteger, wbool   ),   CO >= CO
+      (winteger, winteger, wbool   ),   CO <  CO
+      (winteger, winteger, wbool   ),   CO >  CO
+      (wbool,   wbool,   wbool   ),     CO and CO
+      (wbool,   wbool,   wbool   ),     CO or CO
+      (0, 0, 0),
+      (winteger, winteger, winteger),   CO sl CO
+      (winteger, winteger, winteger),   CO sr CO
+      (winteger, winteger, winteger),   CO iand CO
+      (winteger, winteger, winteger),   CO ior CO
+      (winteger, winteger, winteger) ); CO mod CO
+
+VECTOR [] STRUCT (ID id, INT tokno)  toks =
+  ( (HEAP VECTOR [6] CHAR := "OUTPUT",       outputtok),
+    (HEAP VECTOR [11] CHAR := "End of file", eoftok),
+    (HEAP VECTOR [2] CHAR := "FI",           fitok),
+    (HEAP VECTOR [4] CHAR := "THEN",         thentok),
+    (HEAP VECTOR [3] CHAR := "END",          endtok),
+    (HEAP VECTOR [4] CHAR := "ESAC",         esactok),
+    (HEAP VECTOR [2] CHAR := "OF",           oftok),
+    (HEAP VECTOR [1] CHAR := "]",            bustok),
+    (HEAP VECTOR [1] CHAR := "}",            cmactok),
+    (HEAP VECTOR [1] CHAR := ".",            stoptok),
+    (HEAP VECTOR [1] CHAR := ";",            semitok),
+    (HEAP VECTOR [1] CHAR := ")",            crdtok),
+    (HEAP VECTOR [1] CHAR := ":",            colontok),
+    (HEAP VECTOR [4] CHAR := "ELSE",         elsetok),
+    (HEAP VECTOR [8] CHAR := "a string",     stringtok),
+    (HEAP VECTOR [6] CHAR := "a name",       idtok),
+    (HEAP VECTOR [9] CHAR := "a FN name",    fnnametok),
+    (HEAP VECTOR [9] CHAR := "a FN name",    op1tok),
+    (HEAP VECTOR [9] CHAR := "a FN name",    op2tok),
+    (HEAP VECTOR [1] CHAR := "=",            equalstok),
+    (HEAP VECTOR [2] CHAR := ":=",           becomestok),
+    (HEAP VECTOR [1] CHAR := "/",            slashtok),
+    (HEAP VECTOR [1] CHAR := "(",            ordtok),
+    (HEAP VECTOR [1] CHAR := "|",            bangtok),
+    (HEAP VECTOR [2] CHAR := "..",           uptotok),
+    (HEAP VECTOR [1] CHAR := "'",            chartok)
+  );
+
+OP GETINTEGER = (INTEGER int) INTEGER:
+CASE int IN
+   (REF INTCHECK ic) HEAP INTCHECK := (GETINTEGER integer OF ic,
+                                       GETINTEGER standard OF ic, test OF ic),
+   (REF INTDOP id) HEAP INTDOP := (opno OF id, GETINTEGER l OF id,
+                                               GETINTEGER r OF id),
+   (REF INTMOP im) HEAP INTMOP := (opno OF im, GETINTEGER r OF im),
+   (REF INTVARMULT im)
+           HEAP INTVARMULT := (varmultno OF im, GETINTEGER lwb OF im,
+                               GETINTEGER upb OF im, GETINTEGER index OF im),
+   (REF INTCOND ic) HEAP INTCOND := (GETINTEGER cond OF ic, GETINTEGER t OF ic,
+                                     GETINTEGER f OF ic),
+   (REF IBRACKET ib) GETINTEGER ibracket OF ib
+   OUT int
+ESAC;
+
+OP GETTYPE = (TYPE type) TYPE:
+(  PROC getst = (REF ST st)REF ST:
+   IF st ISNT nilst THEN HEAP ST := (GETTYPE t OF st, getst(rest OF st))
+                    ELSE NIL
+   FI;
+   CASE type IN
+       (REF NAMED n) HEAP NAMED := (idinfo OF n, typeno OF n, GETTYPE t OF n),
+       (REF ROW r) HEAP ROW := (GETTYPE t OF r,GETINTEGER size OF r),
+       (REF FNTYPE f) HEAP FNTYPE := (GETTYPE from OF f, GETTYPE to OF f),
+       (REF ST s) (REF ST st := s; HEAP ST := getst(st)),
+       (REF TSTRING ts) (HEAP TSTRING := (GETINTEGER size OF ts,
+                                                  GETTYPE tstring OF ts)
+                        ),
+       (REF TBRACKET tb) GETTYPE tbracket OF tb,
+       (REF TYPEVAR tv) HEAP TYPEVAR := (tm OF tv, GETTYPE t OF tv)
+
+      OUT type
+   ESAC
+);
+
+      PROC primtype = (TYPE t, BOOL simp_tvar) TYPE :
+      { Removes TBRACKET, NAMED, part of TYPEVAR }
+        CASE t IN
+         (REF NAMED n)     primtype(t OF n, simp_tvar),
+         (REF TBRACKET tb) primtype(tbracket OF tb, simp_tvar),
+         (REF TYPEVAR tv)
+            IF simp_tvar THEN primtype(t OF tv, simp_tvar) ELSE t FI,
+         (REF ST s)
+            ( REF ST st := s;
+              REF ST new := nilst;
+              REF REF ST next := new;
+              WHILE st ISNT nilst
+              DO REF REF ST (next) := HEAP ST
+                                   := (primtype(t OF st, simp_tvar), NIL);
+                 next := rest OF next;
+                 st := rest OF st
+              OD;
+              new
+            ),
+         (REF ROW r)
+            HEAP ROW := (primtype(t OF r, simp_tvar), size OF r),
+         (REF TSTRING tg)
+            HEAP TSTRING := (size OF tg, primtype(tstring OF tg, simp_tvar)),
+         (REF FNTYPE ft)
+            HEAP FNTYPE := (primtype(from OF ft, simp_tvar),
+                            primtype(to OF ft, simp_tvar))
+         OUT t
+         ESAC;
+
+
+
+OP MAKEIBRACKET = (INTEGER int) REF IBRACKET:
+   (HEAP IBRACKET ibr; ibracket OF ibr := int; ibr);
+
+OP MAKETBRACKET = (TYPE type) REF TBRACKET:
+   (HEAP TBRACKET tbr; tbracket OF tbr := type; tbr);
+
+OP MAKECBRACKET = (CTYPE ctype) REF CBRACKET:
+   (HEAP CBRACKET cbr; cbracket OF cbr := ctype; cbr);
+
+OP MAKEABRACKET = (ATTR attr) REF ABRACKET:
+   (HEAP ABRACKET abr; abracket OF abr := attr; abr);
+
+OP MAKEINTID = (INTEGER i) INTID:
+   (HEAP INTID id;  i OF id := i; id );
+
+OP MAKETYPEID = (TYPE t) TYPEID:
+   (HEAP TYPEID td;  t OF td := t; td );
+
+OP MAKECTYPEID = (CTYPE ct) CTYPEID:
+   (HEAP CTYPEID ctd;  ct OF ctd := ct; ctd );
+
+OP MAKEATTRID = (ATTR at) ATTRID:
+  (HEAP ATTRID atd; a OF atd := at; atd );
+
+OP MAKEATTRVAR = (REF MACINFO m) REF ATTRVAR:
+  ( HEAP ATTRVAR av; am OF av := m; av );
+
+OP MAKEINTVAR = (REF MACINFO m) REF INTVAR:
+  ( HEAP INTVAR iv; im OF iv := m; iv );
+
+OP MAKECQUERY = (TYPE t) REF CQUERY:
+  ( HEAP CQUERY cq; querytype OF cq := t; cq );
+
+MODE MULTLETS = STRUCT (INT num, REF MULTLETS rest);
+
+MODE COMPINT = STRUCT (INT macsort, vss, maxvss,  k, which, scope,
+                        ID  lastop, lastcall,
+                        BOOL errorswitch, lhsjoin,
+                        REF JOINSTACK joinstack, REF JOINST joinst,
+                     REF JOINUP joinup, REF JOINVARSTACK joinvarstack,
+                     REF JOINMULTSTACK joinmultstack,
+                     REF JOINST joinvarst),
+    COMPTYP = STRUCT (INTEGER integer, TYPE type, jointype, REF ST sts),
+    COMPSTA = STRUCT (REF FNCALLSTACK fncallstack,
+                        REF LASTOPS lastops, REF LASTCALLS lastcalls,
+                        REF IDS decids, REF ST mltype, REF REF ST nextmltype,
+                        REF MULTLETS multlets, multiassign),
+      COMPREM = STRUCT (REF DECNOCHECK decnocheck,
+                        PORT portinfo, REF PORTSTACK portstack),
+     COMPILEFN = STRUCT (REF FNDEC fndec, REF COMPINT cint, REF COMPTYP ctyp,
+                         REF COMPSTA csta, REF COMPREM crem);
+
+
+   MODE COMPILEFNSTACK = STRUCT(REF COMPILEFN val, REF COMPILEFNSTACK rest);
+
+PROC print_joinup = (REF JOINUP join, INT sp)VOID:
+( PROC print = (VECTOR [] OUTMODE line)VOID: put(screen, line);
+  PROC spaces = (INT s) VOID:(FOR i TO s DO print(" ") OD);
+  spaces(sp);
+  CASE join IN
+    (REF JOINIO ji) (print(("Joinio", newline));
+                     print_joinup(source OF ji, sp+2);
+                     print_joinup(sink OF ji, sp+4)
+                    ),
+    (REF JOINFN jf) (print(("Joinfn "));
+                     IF (j OF joined OF jf) = 1 THEN print(("true",newline))
+                     ELIF (j OF joined OF jf) =2 THEN print(("false",newline))
+                     ELIF (j OF joined OF jf) =3 THEN print(("check",newline))
+                     ELIF (j OF joined OF jf) =4 THEN print(("fault",newline))
+                     ELSE print(("unknown",newline)) FI),
+    (REF JOINST st) (print(("Joinst ",newline));
+                     REF JOINST jst := st;
+                     WHILE jst ISNT niljoinst
+                     DO print_joinup(jst OF jst, sp+2);
+                        jst := rest OF jst
+                     OD
+                     ),
+   (REF JOINROW jr) (print(("Joinrow ", UPB (jrow OF jr), newline));
+                     FOR i TO UPB (jrow OF jr)
+                     DO print_joinup((jrow OF jr)[i], sp+2) OD
+                     ),
+  (REF JOINED b) IF (j OF b) = 1 THEN print(("true",newline))
+                  ELIF (j OF b) =2 THEN print(("false",newline))
+                  ELIF (j OF b) =3 THEN print(("check",newline))
+                  ELIF (j OF b) =4 THEN print(("fault",newline))
+                  ELSE print(("unknown",newline)) FI,
+   (FLT f) print(("flt", newline))
+     OUT print(("!!!!!!!!!", newline))
+  ESAC
+);
+
+      OP UNCHECKEDINT = (INTEGER a) INTEGER:
+      BEGIN
+         CASE a IN
+            (REF INTCHECK  ic)  UNCHECKEDINT integer OF ic ,
+            (REF INTDOP  idop)  HEAP INTDOP:= (opno OF idop, UNCHECKEDINT
+                                       l OF idop, UNCHECKEDINT r OF idop) ,
+            (REF INTMOP  imop)  HEAP INTMOP:= (opno OF imop,
+                                       UNCHECKEDINT r OF imop) ,
+            (REF INTCOND icond) HEAP INTCOND:= (UNCHECKEDINT cond OF icond,
+                                       UNCHECKEDINT t OF icond,
+                                       UNCHECKEDINT f OF icond),
+            (REF INTDEF idef) HEAP INTDEF := (idinfo OF idef, intno OF idef,
+                                               UNCHECKEDINT i OF idef),
+            (REF IBRACKET ib)
+               HEAP IBRACKET := MAKEIBRACKET (UNCHECKEDINT ibracket OF ib)
+            OUT  a
+         ESAC
+      END;
+
+PROC get_intvarmult = (REF IDS ids) REF INTVARMULT:
+   CASE u OF (idinfo OF ids) IN
+  (INTID id)
+      CASE i OF id IN
+      (REF INTVARMULT iv) iv
+      OUT sys fault("get_intvarmult"); SKIP
+      ESAC
+   OUT sys fault("get_intvarmult"); SKIP
+   ESAC;
+
+
+OP JOINEQUAL = (JOINED lhs, rhs)BOOL: (j OF lhs) = (j OF rhs);
+
+   PROC ddecs_type = (REF DDECS decs) TYPE:
+      IF decs IS nildecs
+      THEN typevoid
+      ELSE REF IDS il;
+           REF DDECS d := decs;
+           REF ST s := nilst;
+           WHILE d ISNT nildecs
+           DO il := ids OF d;
+              WHILE il ISNT nilids
+              DO s := HEAP ST := (t OF d, s);
+                 il := rest OF il
+              OD;
+              d := rest OF d
+           OD;
+           IF rest OF s IS nilst THEN t OF s ELSE s FI
+      FI;
+
+SKIP
+
+KEEP COMPINT, COMPTYP, COMPSTA, COMPREM, COMPILEFN, COMPILEFNSTACK, MULTLETS,
+     textstart,
+     linesize, omac, cmac,  trowrow, trowst, iconst, iconsttext, iname,  idop,
+     imop, icond, iparam, ivarmult, icheck, tnull,  tnamed, trow,   tst,
+     tparam, tfn, cprim,  cprimi, cprimr, cprimu, cst, crow, cnull,  calt,
+     vconc,  vprim,  vprimi, vname, vtrim, vindex, vcallm, vcalld, vunn,
+     vsharp, vrow, vcase,  vquery,  vcoll,  vif,   vvarmult,  vconst,
+     end,  fnstart,  fnend, bmake,  bjoin,  bfor, typename,  biddec,  pidalts,
+     prange,  idelay, adelay,  pt,  ptflt, str,  dummy, velseof,
+     velse,  vfi, ram,  kilend, vvarmultend, ktype, kint, kfn,
+     kconst,  kend,  reform,  vseq ,  vpar,
+     vdynindex,  parend, seqend,  seqnull,  seqvoid, seqlet,  seqvar, seqper,
+     seqassign,  seqcase,  seqif,  seqvarmult, seqbecomes,  seqassignend,
+     seqelse, seqfi,  seqvarmultend,  vthen,  seqthen, seqrow,
+     zero, multjoin,  idef, intname, macparam,
+     normalfn, inull, imported, cquery, c_type,
+     vcelse,  vnormal,  vnoelse,  vbracket, inst,
+     ibracket, tbracket, cbracket, biop, in1bytetok, in2bytetok, in3bytetok,
+     in4bytetok, pstring, pchar, pcharrange, cstring, cprimch, cprimst,
+     cprimchr, vstring, vprimch, vprimst, tstring, cnamed, constname,
+     diplus, diminus, sfnequals, constint, constint2,
+     flattenleft, flattenright, flattenboth, inseq, inpar, inconst, inother,
+     const2int, const2int2, idelayintcon, stringindex,
+     caseelseof, cindex, ctrim, cvarmult, cif, cconc, cattr,
+     alien, sample, faster, slower, vreplace,
+     UNSET , MAXINT , INTTEXT , FLT , INTCHECK , INTVAR , INTDOP , INTMOP ,
+     INTVARMULT , INTCOND , IPARAM , INTDEF , IBRACKET , INULL  , INTEGER ,
+     CHARRANGE , CHARALTS  , CNULLT , REC , NOTDEC , PRANGE , PALTS , PSTRING ,
+     PRIMSET , NAMED , ST , ROW , TYPEVAR , FNTYPE , TBRACKET , TSTRING  ,
+     TYPE ,  TYPEID , INTID , CTYPEID , PRIMID ,  ATTRID, MACINFO,
+     VARID , IDUNION , IDINFO , IDS , MACSORT, MPARAMS , FNSTACK,
+     FNDEC , FNINFO , FNS , DDECS , CNAMED ,
+     CPRANGE , CPINDEX , CUNN , CROW , CST , CALTS , CQUERY , CBRACKET ,
+     CPCHAR  , CPSTRING , CPCHRANGE , CTYPE , CTYPEVAR,
+     CINDEX, CTRIM, CREPL, CCOND, CCONC, CATTR,
+     nilpalts , nilids , nilst , niltype , nildecs , nilfns ,  nilnextmp,
+     nilmparams , nilcalts , nilcst , nilcharalts , nilrb , nilrrb , nilfnstack,
+     notdec , flt , o , rec , cnullt , ip , unset , intnull ,
+     idtok, subtok, elsetok, bangtok, recovertok, outputtok, mactok, typetok,
+     fntok, lettok, illegaltok, maketok, jointok, fortok, importstok,
+     finishtok, eoftok, vartok, seqtok, semitok, fitok, thentok, endtok,
+     esactok, oftok, moduletok, bustok, omactok, cmactok, stoptok, goestotok,
+     crdtok, colontok, rintdentok, intdentok, stringtok, fnnametok, op1tok,
+     op2tok, equalstok, ordtok, uptotok, slashtok, becomestok, pormtok,
+     tordtok, chartok,
+     STRINGLIST, ATTRDEF, ATTRDATA, ATTRSTR, ABRACKET, ATTRNULL, ATTRVAR, ATTR,
+     nilattrstr, nilstringlist, attrnull, kattr, attrname, attid,
+     attdata, attbracket, attstr, attnull, wattr,
+     PARAMVAL, PARAMVALS, FNCALL , TYPESTACK , FNCALLSTACK ,
+     INTEGERSTACK , SUCSTACK , CASESTACK , PALTSTACK , IDINFOSTACK ,
+     SOPSTACK , NAMESTACK , SCOPESTACK , LASTOPS , LASTCALLS , STATESTACK,
+     nilscope , nillastops , nillastcalls , nilstate,
+     nilparamvals, nilfninfo, nilfndec, nilfncallstack,
+     MOP , DOP , modes , exported,
+     noboth , wbool , winteger , wtype , wctype , wflt , wfn, mops, dops, toks,
+     flt_par, expl_par, impl_par, impl_expl, impl_impl,
+     fn_notdec, fn_flt, fn_rec, fn_ok, outerdec, localdec, macpardec,
+     GETINTEGER(INTEGER) , GETTYPE(TYPE) ,
+     MAKEIBRACKET(INTEGER) , MAKETBRACKET(TYPE) , MAKECBRACKET(CTYPE),
+     MAKEABRACKET(ATTR), MAKEINTID(INTEGER), MAKETYPEID(TYPE), MAKEATTRID(ATTR),
+     MAKECTYPEID(CTYPE), MAKEATTRVAR(REF MACINFO), MAKEINTVAR(REF MACINFO),
+     MAKECQUERY(TYPE),
+     TNULL, typenull, vnull , cparam , vprimc,
+     begintok , casetok , iftok , spacetok , andtok,
+     TVOID, typevoid, CVOID, cvoid, constvoid,
+
+     JOINUP, DECIDS, JOINST, JOINFN, JOINROW, JOINIO, JOINREP,
+     JOINMULTSTACK, JOINVARSTACK, JOINSTACK,
+     JOINED, JOINEQUAL(JOINED,JOINED),
+
+     niljoinst, inputtok, print_joinup, niljoinstack, nilintegerstack,
+     niljoinvarstack, niljoinmultstack,
+
+     jtrue, jfalse, jcheck, jfault, jvoid,
+     vnamesource, vnamesink, vnameiosource, vnameiosink, bjoinend, tvoid,
+     vvoid, DECNOCHECK, nildecnocheck,
+     ERRPARAM,
+     brief, UNCHECKEDINT(INTEGER),
+     vtermindex, PORT, PORTDATA, PORTMMAKE, PORTSTACK, nilportdata,
+     nilportstack, IDDECS, niliddecs,
+
+     primtype, ddecs_type, get_intvarmult
+FINISH

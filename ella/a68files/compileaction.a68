@@ -1,0 +1,3773 @@
+DECS  compileaction  CONTEXT VOID  USE  putstrings, osinterface, basics,
+      impmacro, charset, compmodes, compileproc, messageproc, sidanalyser:
+
+{                 " Id: compileaction.sta,v 1.1 91/10/14 14:26:22 edcad Exp $" }
+configinfo A68CONFIG "$Id: compileaction.a68,v 34.2 1995/03/29 13:03:20 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1984
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+            Taken from :ellasystem.normcompile(107) based on dct-compile(103)
+            incorporating macro checks (via ICHECK in IL)
+22:08:84  DJS modification to FNs made permanent (1906)
+05:02:85  REFORM, CASE disjointness, operator priorities, multiple joins
+            and a few bug corrections.
+            Procedures moved around because of compiler block limit.
+10:06:85  Tidy up of the use of capital letters in error messages.
+            BUG20. FNSETs were handled wrong in DELAY and REFORM.
+            BUG23. corrected scoping test in PROC checkequals for identical
+            external and internal types.
+02:09:85  BUG26. new proc "namefaultp" for ambiguous error messages.
+            IDs have been extended.
+07:10:85  Extra unnecessary parameter removed from PROC indexio.
+            BUG27. "/" added in cpindex in PROC outctype.
+            BUG28. You need to use MAKE to make a function-set.
+08:11:85  Reader changed to read - and + as noncombining symbols if they are
+            followed by a digit.
+            Restriction on negative ELLA integers removed.
+22:11:85  1906 removed
+26:11:85  CR 072.   Consequential error messages removed in <sind>, <srange>,
+                      <sunn> and <dop>.  EVW
+18:03:86  Fault not handled properly in joininputs and <rck>
+16:04:86  Bug 179.  corrections to PROC merge types.
+23:04:86  Bug 167.  "You cant use a visible space in a symbolic name"
+23:04:86  Bug 180.  <conc> integer checks incorrectly output.
+20:03:86  CR 250.   attcall and attprim added for attribute hooks. EVW
+06:10:86  CR 180.   Sequences.  EVW
+            CR 225.   trim and indexing error messages.  EVW
+            CR 258.   trimming of structures which are not coerced to rows.  EVW
+            CR 299.   remove LET (bool: a b) -> c.  EVW
+14:11:86  CR 170.   Maximum negative integer:-  PROC outint changed (uses
+                      putstrings). PROC shortenandtest replaces overflow checks.
+                      Reader delivers UNION (INT, MAXINT) for ints which is
+                      reduced to INT in PROC simplify. MAXINT = maxint plus one.
+                      Reader tidied - exp and strings after "r" removed.  EVW
+27:01:87  CR 205.   MAKE [n] and FNSET [n] removed multiple join actions. EVW
+            CR 130.   FNSET indexing and IO.
+            CR 157.   allow trims within multiple JOINs.
+09:02:87  CR 239.   Nested BEGIN...ENDs - completeness of JOINs now
+                      PROC check_joins.  add vthen and seqthen,
+                      also output locsind at id declarations.  EVW
+            CR 408.   allow skipping over THEN or ELSE arms in assembler
+            CR 161.   conditional IO statements.
+14:05:87  CR 295.   Action <fin> now jumps right out (rather than to end of
+                      compile_fn),
+            CR 475.   flt procedure added to analyser to test end of stack. DCT
+21:05:87  CR 135.   SQRT, ABS, MOD added.  MGH
+02:06:87  CR 160.   PROC containalts and <checknoalts> added, to prevent
+                      constant alternatives in DELAYs and RAMs.  EVW
+02:06:87  CR 183.   missing "dummy" in PROC loadctype and <case1>.  EVW
+02:06:87  CR 409.   PROC inexttypes wrong if no external types used.  EVW
+04:06:87  CR 226.   Bug in PROC mergetypes for rows with INT sizes.  EVW
+04:06:87  CR 291.   BOOL outofdate added to IDINFO and FNINFO, setup by PROC
+                      inexttypes, used by PROC samespecid and checkspecfns. EVW
+16:06:87  CR 201.   Operator precedence added.  MGH
+18:08:87  CR 133.   Allow non ELLA integer output in ARITH.  EVW
+19:08:87  CR 167.   fault MOC as the start of a comment.  EVW
+26:08:87  CR 129.   Bugs in trimorindex, sttorow, testequals, <salts2>.  EVW
+09:09:87  CR 404, CR 400, CR432, Tidying error messages.  EVW
+14:09:87  CR 284.   fault recursive functions - REC added to FNUNION.  EVW
+21:09:87  Porting changes integrated.  JER
+30:09:87  CR 201.   Fix to operator precedence.  MGH
+06:10:87  CR 436.   Change of spec if FN changed to MAC or viceversa.  EVW
+06:10:87  CR 437.   Allow RAM address to start from any number.  EVW
+07:10:87  Fix to porting changes.  Must ensure big CASE clause has ELSE
+            part after 77th clause.  JER
+21:10:87  CR 201.   R3B030.  error fixed in <checkop>. MGH
+23:10:87  R3B040.  Fix maximum negative integer - 1 bug.  JER
+23:10:87  CR 553.   ?<type>.  MGH
+29:10:87  R3B048.   Operator precedence in user functions.  MGH
+03:11:87  R3B055.   Unexpected error if combining symbol and _ in comment. EVW
+03:11:87  R3B056.   namefaultp added to <del>, <dck> and <rck>.  EVW
+13:11:87  R3B072.   Allow non ELLA integer output in ARITH.  This is CR133
+            which got unintegrated at generation 11.  JER
+19:11:87  R3B088.   Int error messages and macro parameters.  EVW
+07:01:88  R3B116.   Allow inner FN/MAC to have same name as enclosing FN. EVW
+18:01:88  R3B104.   Scope bug involving declarations in nested BEGIN_END. EVW
+18:01:88  R3B147.   Check OUTPUT statement does not include local types. EVW
+25:01:88  IR3013/R3B148. pushvss added to <vnull>.  EVW
+28:01:88  IR3006/R3B149. Bug from CR239 + CR250. output 0 before attcall.  EVW
+11:02:88            Change check maechanism for DELAYs, RAMs and choosers. EVW
+17:02:88  R3B160.   LET name confused with type name in OUTPUT.  EVW
+23:02:88  R3B165.   OUTPUT bug.  EVW
+26:02:88  R3B168.   Missing param type in <seqcase2>.  EVW
+03:03:88            Replace array by REF VECTOR [] REF VECTOR.  EVW
+09:09:88  Compiler reorganised to work with PROCSID.  BIOPs, ELLA characters,
+            Implicit macros and CONSTs added.  More information to IL.   MGH
+11:10:88  Textual form of INTs now passed to IL.  EVW
+24:10:88  Use of PROC setidunn corrected for varmults.  EVW
+02:11:88  Fix to declinscope for local types in OUTPUT.  EVW
+10:11:88  RSRE53 UNCHECKEDINT removes extra checks in trimorindex, srange. EVW
+10:11:88  Error corrected in PROC check equals for type checking STRINGs.  MGH
+14:11:88  Error checks added in PROC stringrow and PROC isprimchar_ct.  MGH
+15:11:88  Extra id added to PROC t1toid for clearer error message. MGH
+01:12:88  TYPEVAR handling corrected in PROC loadctype.  EVW
+01:12:88  Characters allowed in output of ARITH and RAM enable. MGH
+09:12:88  Typing error in range test in PROC checkcharange.  EVW
+27:01:89  Add PROC charsubrange to only allow subranges of chars in CASE and
+            CONST decs, Ctype := flt in char procs when failure occurs. MGH
+30:01:89  R4B070.   PROC checkinsert now uses 'test_index OF error' for
+                      syntax error. MGH
+27:01:89  R4B079.   Add PROC charsubrange to only allow subranges of chars
+                      in CASE and CONST decs. Ctype := flt in char procs when
+                      failure occurs. MGH
+09:02:89  R4B109.   Error in reading INTTEXT, need to create heap space. MGH
+10:02:89  R4B103.   PROC callm, calld error message output added.  MGH
+13:02:89  R4B119.   Correction of comment reader to ignore character
+                      primes. MGH
+16:02:89  R4B133.   <dynindex2> altered to give INTCHECK if lwb or upb are
+                      checks. MGH
+03:03:89  R4B138.   PROC's hasinnerfntype, dechasfntype added to give error
+                      messages when fntypes appear within structures in a
+                      fnspec. MGH
+06:03:89  R4B191.   FNCALLSTACK altered to stack macro parameter count. MGH
+08:11:89  R4B522.   Simplify functionsetsize output after Kfn. MGH
+13:12:89  PROC alienstart added. JIT
+03:01:90  PROCs samp, sampintpr, sampint2pr and sampint3pr added for use with
+            SAMPLE. JIT
+22:01:90  PROCs needed for time scaling added. JIT
+31:01:90  PROC sampint3pr removed and notypeset added. JIT
+01:02:90  Major changes to the timescaling PROCs. JIT
+06:02:90  Multiple LETs and CONST macro params added. MGH
+06:02:90  Compiler split into compileaction and compileproc due to refmap. MGH
+29:03:90  Macros can now have function parameters. JIT
+27:06:90  Fntypes, multiple joins & makes, named outputs, void. MGH
+16:07:90  Macros can now have macro parameters. JIT
+08:08:90  Output of string in pt4 altered. EVW
+16:10:90  Changes to IL for CTYPE, `type' now put out rather than `int'. MGH
+16:10:90  Changes to JOINUP for replicators and FN instances. MGH
+12:11:90  Combine actions <resetfninfo> <unstackmp> <setwfn> as <resetfninfo>.
+                                                                        JIT
+14:01:91  R6B6:  PROC rhsbracket altered to give type result of collatoral
+                   only. MGH
+15:01:91  R6B9:  mp1 rest to nil in `calld', `callm' after implicit macro
+                   parameters evaluated.  MGH
+27:02:91  R6B21: Wording of error message 138 changed. EVW
+21:03:91  Major change to the way error messages are handled. JIT
+22:04:91  R6B17: (Ctrans side effects removed).  analyser separated.  DCT
+26:04:91         Error recovery reinstated.   DCT
+30:04:91         Actions for REPLACE added. JIT
+20:05:91  R6B36: dec of errorrecov moved to compileproc - not initialised. DCT
+09:07:91  Syntax error checks put around `getreplicate' to stop stackdump. MGH
+31:07:91  R6B64 Values in (tis OF fncall) set to flt in PROC mcall2. JIT
+02:08:91  Extension to macro TYPE parameters. JIT
+13:08:91  R6B65  Local Type check go from `parendpr' to `checkoutputtype'. MGH
+37:08:91  Simplify elseof constants in CASE clause. EVW
+10:10:91  R6B80  Message "you are using * for something else" is not output
+                   if the ident is already marked as a fault. JIT
+16:10:91  R6B82  BOOL is_alien added to stop fntype checks in ALIEN. MGH
+16:10:91  R6B83  MPARAMS mp1 added to FNCALLSTACK for implicit params. MGH
+22:10:91  Alter varmultno to be unique in FN, currentvarmultno addded.EVW
+23:10:91  Updated for new assembler modes. JIT
+16:12:91  R6B93  PROCs mcall2,3 and 4 altered for implicit params. MGH
+21:01:92  Changes made for syntax change of FN/MAC parameters of macros. JIT
+19:03:92  Attribute declaration and use added. JIT
+23:03:92  Constant string can now be a series of strings. JIT
+24:03:92  FNSETs removed. JIT
+06:04:92  Initial work for port names done. JIT
+12:05:92  R6B97  Consequential message for DELAY with fntypes, Also no check
+                   needed in seqendpr - error for SEQ with no output. EVW
+12:05:92  New scoping rules added. EVW
+02:06:92  <checknotchooser> renamed as <checknotconstfntype>.  MGH
+02:06:92  Void added as basic unit value.  MGH
+10:06:92  R6B109  <varmult3> altered to handle marco integers correctly. MGH
+10:06:92  R6B108: HEAP IDINFO needed in <assign2> for new scoping rules. EVW
+19:06:92  R6B110  <findidcall> `repl_local_make' ids now passed in. MGH
+24:06:92  <portname> added for port names work.  MGH
+25:06:92  <id1pr> altered for IO to deliver error.  MGH
+01:07:92  Extra check in PROC rp1 to prevent funtion types in REPLACE. JIT
+02:07:92  R6B113. Explicitparam now stacked in PROC stackmp. JIT
+08:09:92  R6B128. Checks in PROC rck now include type of any TYPEVARs. JIT
+02:10:92  Parameters in call of charsubrange changed. JIT
+07:10:92  R6B129. mparamintpr/typepr1 do not reduce paramnamestack after
+            syntaxerror. JIT
+19:11:92  R6B132. Checking of delay integers changed as DELAY(?bool,0) was
+            allowed. JIT
+16:02:93  R6B144. <stringrange> now dont allow ('a..'c) for type 'a|'c|'b. EVW
+17:02:93  Add cindex, ctrim, cattr, cconc, ccond and crepl. EVW
+03:03:93  mparam and attributes reorganised. EVW
+26:03:93  Change IS/ISNT nullid tests to UPB tests.  DJS
+14:06:93  R6B152. Extend BIOP parameters to include all macro parameters. EVW
+15:06:93  add Seqrow. EVW
+06:07:93  R6B161. Reorganise <mcall3> which was missing some errors. EVW
+07:07:93  R6B162. Consequential errors on FN F = (TYPE) corrected. EVW
+21:07:93  R6B163. PROC outmparams and outfncall need extra BOOL. EVW
+02:08:93  R6B164. no skew timescale incorrectly output skew = scaletime.EVW
+02:08:93  R6B166. wrong type in check in <del>. EVW
+03:08:93  R6B156. corrections to substtype because of macro MAC parameters.EVW
+05:08:93  R6B170. handling of currentstate stack after errors. EVW
+12:08:93  R6B174. explicitparam removed. EVW
+            R6B175. output ids list now used for errors in checkoutputtype
+                    and <fn2>. EVW
+22:09:93  R6B181. typo in <sfn2> in calc of macroexpected. EVW
+23:09:93  R6B182. <rck> check no assoc in all parts of 4th param. EVW
+30:09:93  R6B187. wrong wflt handling in scond. EVW
+18:10:93  R6B192. Remove JOININST and JOINCASE. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.145 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC reader = LEX:
+   IF errorrecov = 0
+   THEN  read; (t1, EMPTY)
+   ELIF errorrecov = 1
+   THEN  errorrecov:= 2;
+         (recovertok, EMPTY)
+   ELSE  errorrecov:= 0;
+         (t1, EMPTY)
+   FI;
+
+PROC fail = (VECTOR [] OUTMODE line) VOID: put(screen, line);
+
+PROC failure = (INTERNALS error) VOID:
+BEGIN
+   syntaxerror:= TRUE; (t1/= recovertok | syntaxerrmess(error));
+   nofltmess:= TRUE;
+   errorrecov:= 1;
+   WHILE
+      BOOL stayinloop := TRUE;
+      IF t1 = stoptok OREL t1 = begintok
+      THEN read;
+           stayinloop := t1 /= mactok ANDTH t1 /= fntok ANDTH t1 /= typetok
+      FI;
+      IF t1 = finishtok OREL t1 = eoftok
+      THEN  abort(0, nullmsg);  errorrecov:= 0; stayinloop := FALSE
+      FI;
+      IF stayinloop
+      THEN stayinloop := t1 /= outputtok ANDTH t1 /= lettok ANDTH
+                         t1 /= maketok ANDTH t1 /= jointok ANDTH
+                         t1 /= importstok ANDTH t1 /= fortok  ANDTH
+                         t1 /= semitok ANDTH t1 /= vartok ANDTH t1 /= seqtok
+      FI;
+      stayinloop
+   DO read OD;
+   nofltmess:= FALSE;
+   INT state =
+     IF (t1 = vartok) OREL (t1 = seqtok) OREL (t1 = semitok)
+     THEN inseq
+     ELSE inpar
+     FI;
+   currentstate := HEAP STATESTACK := (state, currentstate)
+END;
+
+PROC recpr = VOID:
+(   t1:= recovertok;  errorrecov:= 2 );
+
+PROC newidpr = VOID:
+(  CASE u OF idinfo OF id_in_scope(ident, scopestack, FALSE) IN
+   (NOTDEC) newid(ident, rec),
+   (FLT)    SKIP
+   OUT (fp3:= ident;
+        faultp(CO"you are using * for something else"CO 9, fp3);
+        newid(ident, flt)
+       )
+   ESAC
+);
+   CO leaves new id on ids, with u = rec or flt CO
+
+PROC findidcall = (ID id) VOID:
+(  INT fnno = IF cfnno = 0 THEN 0 ELSE fnno OF fndec FI;
+   REF IDS fid = findid(id);
+   idinfo := idinfo OF fid;
+   IF NOT inscope OF idinfo
+   THEN fp3:= id; faultp(CO"* cant be accessed from here"CO 12, fp3)
+   ELSE CASE u OF idinfo IN
+        (NOTDEC nd) ( fp3:= id; faultp(CO"you havent defined *"CO 10, fp3) ),
+        (REC r)
+        (  fp3:= id;
+           faultp(CO"* cant be used until its definition is complete"CO 11, fp3)
+        ),
+        (REF DECIDS d)
+        IF scope OF idinfo = fnno
+        THEN IF ioid
+             THEN joinup := HEAP JOINIO := (jsource OF d, jsink OF d);
+                  portinfo := flt
+             ELIF lhsjoin
+               THEN joinup := jsource OF d;
+                    portinfo := input OF d
+               ELSE joinup := jsink OF d;
+                    portinfo := output OF d
+             FI;
+             IF id_outside_if(id OF idinfo, scopestack, ids)  ANDTH
+                    IF NOT ioid
+                    THEN ((NOT lhsjoin) OREL has_fntype(joinup))
+                    ELSE TRUE
+                    FI
+                THEN  fp3 := id OF idinfo;
+                     faultp(CO"Input of * can't be supplied inside IF.... FI"CO
+                                                                    62, fp3);
+                      mark_join(joinup, jfault, FALSE); joinup := flt
+                  ELSE IF (((origin OF d) = maketok) OREL
+                            ((origin OF d) = lettok)) ANDTH
+                                  repl_local_make(id OF idinfo, scopestack,ids)
+                          THEN mark_join(joinup, jcheck, FALSE); joinup := flt
+                       FI;
+                       GOTO ok
+             FI
+        ELSE
+         fp3:= id; faultp(CO"* cant be accessed from here"CO 12, fp3)
+        FI,
+        (VARID v)
+         IF scope OF idinfo = fnno THEN GOTO ok ELSE
+            fp3:= id; faultp(CO"* cant be accessed from here"CO 12, fp3)
+         FI
+        OUT GOTO ok
+        ESAC
+   FI;
+   idinfo:= (fnno, 0, TRUE, FALSE, TRUE, FALSE, id, flt); newid(id, flt);
+ok:usedid(fid, scopestack)
+   CO idinfo isnt notdec or rec CO
+);
+
+
+PROC ioidpr = VOID:  ioid := TRUE;
+
+PROC findidpr = VOID: findidcall(ident);
+
+PROC findidpr2 = VOID:
+(  IF paramnamestack ISNT nonames
+   THEN findidcall(id OF paramnamestack);
+        paramnamestack := rest OF paramnamestack
+   FI
+);
+
+
+PROC attrdec1 = VOID:
+(  iddecs := HEAP IDDECS := (ids, expl_par, cattrno PLUSAB 1, FALSE, iddecs);
+   (cfnno = 0 | outints(kattr) | outints(attrname)); outid(ident)
+ );
+
+PROC attrdec2 = VOID:
+( REF IDS aids := ids OF iddecs;
+  HEAP ATTRDEF attrdef := (idinfo OF aids, xno OF iddecs, attr);
+  a OF attrid := attrdef;
+  setidunn(idinfo OF aids, attrid);
+  a OF attrid := flt;
+  IF cfnno = 0
+  THEN (samespecid(idinfo OF aids, rest OF aids) | ids:= rest OF aids);
+       k:= vnno OF idinfo OF
+              id_in_scope(id OF idinfo OF aids, nilscope, FALSE);
+       outints((dummy, ABS k, cattrno));
+       outextattrs(ids)
+  ELSE outints((dummy, xno OF iddecs))
+  FI;
+  iddecs := rest OF iddecs;
+  outattrs(attr);
+  IF cfnno = 0
+  THEN  outints(kend);
+        unscopeids(ids)
+  FI
+);
+
+PROC attr1 = VOID:  attr := attrnull;
+
+PROC newattid = VOID: atid := ident;
+
+PROC attrnamepr = VOID:
+(  findidcall(atid);
+   CASE u OF idinfo IN
+   (ATTRID ad) ( attr := a OF ad )
+   OUT attr := flt;
+       fltmessage(idinfo);
+       fault(229, nullmsg CO"You need an attribute name here"CO)
+   ESAC
+);
+
+
+
+PROC attrdata1 = VOID:
+( attr := HEAP ATTRDATA := (nullid, strings) );
+
+PROC attrdata2 = VOID:
+( addclassname(atid);
+  attr := HEAP ATTRDATA := (atid, strings)
+);
+
+PROC attrstr1 = VOID:
+( attrstr := nilattrstr; nextattr := attrstr );
+
+PROC attrstr2 = VOID:
+( REF REF ATTRSTR (nextattr) := HEAP ATTRSTR := (attr, nilattrstr);
+  nextattr := rest OF nextattr
+);
+
+PROC attrstr3 = VOID:
+( attr := IF (rest OF attrstr) IS nilattrstr
+          THEN MAKEABRACKET elem OF attrstr
+          ELSE attrstr
+          FI
+);
+
+PROC sattrpr = VOID:
+  which := wattr;
+
+PROC sattrid = VOID:
+( atid := id OF paramnamestack;
+  paramnamestack := rest OF paramnamestack
+);
+
+PROC attrcall = VOID:
+( attr OF fncall OF fncallstack := attr );
+
+PROC outattrlist = VOID: outattrs(attr);
+
+PROC stackname = VOID:
+   paramnamestack := HEAP NAMESTACK := (compsymb, paramnamestack);
+
+PROC stackid = VOID:
+   paramnamestack := HEAP NAMESTACK := (ident, paramnamestack);
+
+PROC classlist = VOID:
+   IF classnames ISNT nilstringlist
+   THEN REF STRINGLIST list := classnames;
+        BOOL first := TRUE;
+        nofault(245, nullmsg CO newline CO);
+        nofault(242, nullmsg CO"Attribute class names used:  "CO);
+        WHILE list ISNT nilstringlist
+        DO ( first | first := FALSE | nofault(243, nullmsg CO",  "CO) );
+           nofault(244, id OF list CO"*"CO);
+           list := rest OF list
+        OD;
+        nofault(245, nullmsg CO newline CO);
+        nofault(245, nullmsg CO newline CO)
+   FI;
+
+PROC startstrings = VOID: nextstring := strings := nilstringlist;
+
+PROC stackstring = VOID:
+(  REF REF STRINGLIST(nextstring) := HEAP STRINGLIST
+                     := (HEAP VECTOR [stringsize] CHAR := string[1:stringsize],
+                         nilstringlist);
+   nextstring := rest OF nextstring
+);
+
+PROC checkbool = VOID:
+   IF which/= wbool THEN
+      (which/= wflt | fault(CO"boolean expected here"CO 13, nullmsg ));
+      integer:= flt; which:= wbool
+   FI;
+
+PROC checkinteger = VOID:
+    IF which/= winteger THEN
+       (which/= wflt | fault(CO"integer expected here"CO 14, nullmsg));
+       integer:= flt; which:= winteger
+    ELSE integer := simplify(integer, FALSE)   {{{ faults if MAXINT }}}
+    FI;
+
+PROC checktypepr = VOID:
+   IF which/= wtype THEN
+      (which/= wflt | fault(CO"type expected here"CO 15, nullmsg));
+      type:= flt; which:= wtype
+   FI;
+
+PROC checkctype = VOID:
+   IF which/= wctype THEN
+      (which/= wflt | fault(CO"constant expected here"CO 16, nullmsg));
+      ctype:= flt; type:= flt; which:= wctype
+   FI;
+
+PROC checkcorttype = VOID:
+   IF which /= wctype ANDTH which /= wtype ANDTH which /= wattr ANDTH
+      which /= wflt THEN
+      fault(CO"type, constant or attribute expected here"CO 17, nullmsg);
+      ctype:= flt; type:= flt; which:= wflt
+   FI;
+
+
+PROC br1 = VOID:
+   palts1:= NIL;
+
+PROC br2 = VOID:
+(  palts1:= HEAP PALTS:= (idinfo OF paltstack, u OF paltstack, palts1);
+   paltstack:= rest OF paltstack
+);
+
+PROC br3 = VOID:
+   u OF paltstack:= HEAP TYPE:= type;
+
+PROC stackpalt = VOID:
+   paltstack:= HEAP PALTSTACK:= (idinfo OF ids, NIL, paltstack);
+
+PROC br6 = VOID:
+(  type:= HEAP PRIMSET:= (idinfo OF ids OF iddecs, xno OF iddecs, palts1);
+   REF IDS tids := ids OF iddecs;
+   FOR i WHILE palts1 ISNT nilpalts
+   DO setidunn(idinfo OF palts1, PRIMID  (type, i));
+      (cfnno = 0 | samespecid(idinfo OF palts1, rest OF tids));
+      (u OF idinfo OF palts1 | (FLT f1) u OF idinfo OF tids:= flt | SKIP);
+      palts1:= rest OF palts1
+   OD;
+   which := wtype
+);
+
+PROC br7 = VOID:
+(  integer1:= i OF integerstack; integerstack:= rest OF integerstack;
+   fp5:= integer1;  fp6:= integer;
+   test integers(checkge, integer, integer1,
+            CO"(*..*) ?  you must have a range of at least one"CO
+             111, (fp5, fp6));
+   type:= HEAP PRIMSET:= ( idinfo OF ids OF iddecs, xno OF iddecs,
+                           PRANGE  (prangedec, integer1, integer));
+   setidunn(prangedec, PRIMID  (type, 0));
+   (cfnno = 0 | samespecid(prangedec, rest OF ids OF iddecs));
+   (u OF prangedec | (FLT f1) u OF idinfo OF ids OF iddecs := flt  | SKIP);
+   which := wtype
+);
+
+PROC br8 = VOID:
+   prangedec:= idinfo OF ids;
+
+PROC sid = VOID:
+(  CASE u OF idinfo IN
+   (TYPEID ti)
+      ( type := t OF ti;
+        IF state OF currentstate = inconst THEN
+         ct OF cnullt:= type; ctype:= HEAP CNULLT:= cnullt; which:= wctype
+        ELSE which:= wtype
+        FI
+      ),
+   (INTID ii)   ( integer:= i OF ii; which:= winteger ),
+   (PRIMID pi)  ( type:= type OF pi; ctype:= HEAP PRIMID:= pi; which:= wctype ),
+   (CTYPEID ci) ( type:= ctypetotype(ct OF ci);
+                  ctype:= ct OF ci; which:= wctype
+                ),
+   (ATTRID ad)  ( attr := a OF ad;  which := wattr ),
+   (REF DECIDS d)
+      IF inarith THEN
+         IF NOT isprimrange(primtype(type OF d, TRUE)) THEN
+            fault(CO"parameter can only be an ella-integer"CO 18, nullmsg)
+         FI;
+         p OF ip:= decno OF d; integer:= ip; which:= winteger
+      ELSE GOTO flt
+      FI,
+   (FLT f) which:= wflt
+   OUT GOTO flt
+   ESAC;
+   SKIP
+   EXIT
+flt: which := wflt;  fltmessage (idinfo);
+     fault(125, nullmsg
+  CO"You need a basic value, type name, named integer, attribute name"
+    " or macro parameter here."CO)
+
+);
+
+PROC typetoctype = VOID:
+(  IF which = wtype
+   THEN  ct OF cnullt := type; ctype := HEAP CNULLT:= cnullt; which := wctype
+   FI
+);
+
+PROC cquery2 = VOID:
+(  CQUERY cquery;
+   querytype OF cquery:= type;
+   ctype:= HEAP CQUERY := cquery;
+   which:= wctype
+);
+
+PROC cattr = VOID:
+(  ctype := HEAP CATTR := (ctype, attr) );
+
+PROC sid1 = VOID:
+   CASE u OF idinfo IN
+   (PRIMID p)
+      IF index OF p = 0
+        THEN fault(CO"/ integer needed here"CO 20, nullmsg);
+             type:= flt; ctype:= flt
+        ELIF index OF p = stringindex
+          THEN fault(CO"' character needed here"CO 148, nullmsg);
+               type:= flt; ctype := flt
+          ELIF unn(type OF p, index OF p) ISNT niltype
+            THEN fault(CO"& needed here"CO 21, nullmsg);
+                 type:= flt; ctype:= flt
+      FI
+   OUT SKIP
+   ESAC;
+
+PROC sid2 = VOID:
+(  IF which = wctype THEN
+      CASE ctype IN
+      (REF CNULLT cn) SKIP
+      OUT GOTO ok
+      ESAC
+   ELIF which = wflt THEN GOTO nok
+   FI;
+   fltmessage (idinfo);
+   IF t1 = slashtok
+   THEN (fp4 := HEAP VECTOR [7] CHAR := "integer";
+         faultp(CO"  You can t use it to form an ELLA * "CO 126, fp4 ) )
+   ELIF t1 = andtok
+      THEN fault(CO"  You can t use it to form an associated value"CO
+                 127, nullmsg )
+   FI;
+nok:which:= wctype; type:= flt; ctype:= flt;
+ok:SKIP
+);
+
+PROC sind = VOID:
+(  type := t OF sucstack;
+   CASE ct OF sucstack IN
+   (REF PRIMID p)
+      IF index OF p > 0 THEN (fault(CO"/ not needed here"CO 22, nullmsg);
+                              type:= flt; ctype:= flt)
+      ELIF (index OF p) = stringindex
+        THEN (fp3 := HEAP VECTOR [1] CHAR:= "/";
+             fp4 := HEAP VECTOR [1] CHAR:= "'";
+             faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+             type:= flt; ctype := flt)
+      ELSE
+         CASE type OF p IN
+            (REF PRIMSET pst)
+               CASE u OF pst IN
+                  (PRANGE r)
+                  (   fp3:= id OF idinfo OF r;
+                      fp0:= integer; fp5:= lwb OF r;  fp6:= upb OF r;
+                      test integers(checkge, integer, lwb OF r,
+                               CO"*/* ?  this is outside the range  */(*..*)"CO
+                                     112, (fp3, fp0, fp3, fp5, fp6));
+                      test integers(checkle, integer, upb OF r,
+                               CO"*/* ?  this is outside the range  */(*..*)"CO
+                                     112, (fp3, fp0, fp3, fp5, fp6))
+                  )
+                  OUT  SKIP
+               ESAC
+            OUT SKIP
+         ESAC;
+         ctype:= HEAP CPINDEX:= (type OF p, integer)
+      FI
+   OUT SKIP
+   ESAC;
+   which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+   sucstack := rest OF sucstack
+);
+
+PROC srange = VOID:
+(  type := t OF sucstack;
+   CASE ct OF sucstack IN
+   (REF PRIMID p)
+      IF index OF p> 0 THEN
+          fault(CO"/ not needed here"CO 22, nullmsg);
+          type:= flt; ctype:= flt
+      ELIF index OF p = stringindex
+      THEN fp3 := HEAP VECTOR [1] CHAR:= "/";
+           fp4 := HEAP VECTOR [1] CHAR:= "'";
+           faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+           type:= flt; ctype := flt
+      ELSE
+         CASE type OF p IN
+            (REF PRIMSET ps)
+               CASE u OF ps IN
+                  (PRANGE r)
+                  (  fp3:= id OF idinfo OF r;
+                     fp0:= i OF integerstack;    fpcolon:= integer;
+                     fp5:= lwb OF r;   fp6:= upb OF r;
+                     test integers(checkge, i OF integerstack, lwb OF r,
+                          CO"*/(*..*) ?  this is outside the range  */(*..*)"CO
+                              113, (fp3, fp0, fpcolon, fp3, fp5, fp6));
+                     test integers(checkle, integer, upb OF r,
+                          CO"*/(*..*) ?  this is outside the range  */(*..*)"CO
+                              113, (fp3, fp0, fpcolon, fp3, fp5, fp6));
+                 test integers(checkle, i OF integerstack, UNCHECKEDINT integer,
+                               CO"*/(*..*) ?  this is not a valid range"CO
+                               114, (fp3, fp0, fpcolon))
+                  )
+                  OUT  SKIP
+               ESAC
+            OUT SKIP
+         ESAC;
+         ctype:= HEAP CPRANGE:= (type OF p, i OF integerstack, integer)
+      FI
+   OUT SKIP
+   ESAC;
+   which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+   sucstack:= rest OF sucstack; integerstack:= rest OF integerstack
+);
+
+PROC sunn = VOID:
+(  CASE ct OF sucstack IN
+   (REF PRIMID p)
+      IF (rt:= unn(type OF p, index OF p))IS niltype THEN
+         fault(CO"& not needed here"CO 23, nullmsg);
+         type:= flt; ctype:= flt
+      ELSE
+         ctype:= ( testequals(type, rt, FALSE) | HEAP CUNN:= (p, ctype) | flt);
+         type := t OF sucstack
+     FI
+   OUT type:= flt; ctype:= flt
+   ESAC;
+   which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+   sucstack:= rest OF sucstack
+);
+
+PROC stacksuc = VOID:
+   sucstack:= HEAP SUCSTACK:= (integer, type, ctype, attr, which, sucstack);
+
+PROC sstr1 = VOID:
+   IF which = wtype THEN
+      sts:= HEAP ST:= (type, NIL)
+   ELIF which = wctype THEN
+      sts:= HEAP ST:= (type, NIL);
+      cstr:= HEAP CST:= (ctype, NIL)
+   ELIF which = wattr THEN
+      CASE attr IN
+      (UNION (REF ATTRSTR, REF ABRACKET))
+          ( attr := flt;
+            fault(239, nullmsg
+                     CO"Incorrect use of bracketing in an attribute"CO);
+            which := wflt
+          )
+      OUT attrstr := HEAP ATTRSTR := (attr, nilattrstr)
+      ESAC
+   FI;
+
+PROC sstr2 = VOID:
+(  IF which /= wflt ANDTH which = w OF sucstack THEN
+      IF which = wtype THEN
+         sts:= HEAP ST:= (t OF sucstack, sts)
+      ELIF which = wctype THEN
+         sts:= HEAP ST:= (t OF sucstack, sts);
+         cstr:= HEAP CST:= (ct OF sucstack, cstr)
+      ELIF which = wattr THEN
+         attrstr := HEAP ATTRSTR := (a OF sucstack, attrstr)
+      FI
+   ELIF which /= wflt ANDTH w OF sucstack /= wflt THEN
+      fault(CO"wrong sort of element in multiple"CO 24, nullmsg); which:= wflt
+   ELSE which:= wflt
+   FI;
+   sucstack:= rest OF sucstack
+);
+
+PROC sstr3 = VOID:
+   IF which = wtype THEN type:= sts
+   ELIF which = wctype THEN type:= sts; ctype:= cstr
+   ELIF which = wattr THEN attr := attrstr
+   FI;
+
+PROC srow = VOID:
+(  fp5:= i OF integerstack;
+   test integers(checkge, i OF integerstack, 1, 67, fp5
+                 CO "[*] ?  you must have at least one item" CO);
+   IF which = wtype THEN
+      type:= HEAP ROW:= (type, i OF integerstack)
+   ELIF which = wctype THEN
+      type:= HEAP ROW:= (type, i OF integerstack);
+      ctype:= HEAP CROW:= (ctype, i OF integerstack)
+   FI;
+   integerstack:= rest OF integerstack
+);
+
+
+PROC scond = VOID:
+(  IF (which/= wflt) ANDTH errorswitch ANDTH (w OF sucstack /= wflt) ANDTH
+      (w OF sucstack /= which)
+   THEN  fp1:= modes[w OF sucstack]; fp2:= modes[which]; fp3:= MAKEID "IF";
+         faultp(CO"second parameter of * should be *, not *"CO
+                30, (fp3, fp1, fp2));
+         which:= wflt
+   FI;
+   IF which = winteger
+   THEN  integer := HEAP INTCOND
+                 := (i OF rest OF sucstack, i OF sucstack, integer)
+   ELIF which = wctype
+   THEN type := cond_type(t OF sucstack, type, integer);
+        CASE type IN
+        (FLT)  (which := wflt; ctype := flt)
+        OUT ctype := HEAP CCOND
+                  := (i OF rest OF sucstack, ct OF sucstack, ctype)
+        ESAC
+   FI;
+   sucstack:= rest OF rest OF sucstack
+);
+
+PROC sconc = VOID:
+(  IF which = wctype
+   THEN INT sort := -1; BOOL isstring := FALSE;
+        type := conc_type(t OF sucstack, type, isstring, sort);
+        CASE type IN
+        (FLT)  (which := wflt; ctype := flt)
+        OUT    ctype := HEAP CCONC := (isstring, sort, ct OF sucstack, ctype)
+        ESAC
+   FI;
+   sucstack := rest OF sucstack;
+   lastcall := HEAP VECTOR [4] CHAR := "CONC"
+);
+
+PROC sindex = VOID:
+( type := trimorindex(t OF sucstack, 0, integer, integer, integer);
+  CASE type IN
+  (FLT f)  ( which := wflt; ctype := flt )
+  OUT ( which := wctype;
+        ctype := HEAP CINDEX := (ct OF sucstack, integer)
+      )
+  ESAC;
+  sucstack:= rest OF sucstack
+);
+
+PROC strim = VOID:
+( integer1:= i OF integerstack;
+  integerstack:= rest OF integerstack;
+  INTEGER size:= simplify( HEAP INTDOP:=
+           (diplus, HEAP INTDOP:= (diminus, integer, integer1), 1), TRUE);
+  type := trimorindex(t OF sucstack, size, integer1, integer1, integer);
+  CASE type IN
+  (FLT f)  ( which := wflt; ctype := flt )
+  OUT ( which := wctype;
+        ctype := HEAP CTRIM := (ct OF sucstack, integer1, integer)
+      )
+  ESAC;
+  sucstack := rest OF sucstack
+);
+
+PROC int1 = VOID:
+(  integer:= ivread; which:= winteger );
+
+PROC sop = VOID:
+   sopstack:= HEAP SOPSTACK:= (sfnno, compsymb, sopstack);
+
+PROC removeop = VOID:
+(  lastops := HEAP LASTOPS := (lastop, lastops);
+   lastop := nullid; errorswitch := TRUE
+);
+
+PROC removeop2 = VOID:
+(  REF SOPSTACK nilsop = NIL;
+   IF (sopstack ISNT nilsop) ANDTH
+          ( UPB (last OF lastops) > 0)  { <- Needed for reading in '(' }
+   THEN lastop := name OF sopstack
+   ELSE lastop := nullid
+   FI;
+   lastops := rest OF lastops;
+   errorswitch := TRUE
+);
+
+PROC checkop = VOID:
+(  ID newop := name OF sopstack;
+   IF lastop /= nullid ANDTH lastop /= newop ANDTH
+     ((newop/="+" ANDTH newop/="-" ANDTH newop/="*" ANDTH newop/="%") OREL
+     (lastop/="+" ANDTH lastop/="-" ANDTH lastop/="*" ANDTH lastop/="%"))
+   THEN fp3 := lastop;  fp4 := name OF sopstack;
+        faultp(CO"You must show the order of the calculation of * and * by"
+                 "bracketing"CO 117, (fp3, fp4));
+        errorswitch := FALSE
+   FI;
+   lastop := name OF sopstack
+);
+
+PROC mop = VOID:
+(  MOP m; INT i:= i OF sopstack;
+   i:= (i>= 600 | i-600 |:i>500 | -1 | i-400+noboth);
+   IF i =-1 THEN
+      fp3:= name OF sopstack; faultp(CO"* needs two parameters"CO 26, fp3);
+      which:= wflt
+   ELIF i = 0 THEN
+      fp3:= name OF sopstack; faultp(CO"* is not recognised"CO 27, fp3);
+      which:= wflt
+   ELSE
+      m:= mops[i];
+      IF param OF m /= which THEN
+         IF which /= wflt THEN
+            fp1:= modes[param OF m];    fp2:= modes[which];
+            fp3:= name OF sopstack;
+            faultp(CO"parameter of * should be * not *"CO
+                      28, (fp3, fp1, fp2));
+            which:= wflt
+         FI
+      ELSE
+         which:= ans OF m;
+         integer:= simplify(HEAP INTMOP:= (i, integer), FALSE)
+      FI
+   FI;
+   sopstack:= rest OF sopstack
+);
+
+PROC dop = VOID:
+(  DOP d; INT i:= i OF sopstack;
+   i:= (i>= 600 | i-600 |:i>500 | i-500+noboth | -1);
+   IF i =-1 THEN
+      fp3:= name OF sopstack; faultp(CO"* needs only one parameter"CO 29, fp3);
+      which:= wflt
+   ELIF i = 0 THEN
+      fp3:= name OF sopstack; faultp(CO"* is not recognised"CO 27, fp3);
+      which:= wflt
+   ELSE
+      d:= dops[i];
+      IF r OF d/= which THEN
+         IF (which/= wflt) ANDTH errorswitch
+         THEN fp1:= modes[r OF d]; fp2:= modes[which]; fp3:= name OF sopstack;
+              faultp(CO"second parameter of * should be *, not *"CO
+                     30, (fp3, fp1, fp2));
+              which:= wflt
+         FI
+      ELIF l OF d/= w OF sucstack THEN
+         IF w OF sucstack/= wflt THEN
+            fp1:= modes[l OF d]; fp2:= modes[w OF sucstack];
+            fp3:= name OF sopstack;
+            faultp(CO"first parameter of * should be * not *"CO
+                   31, (fp3, fp1, fp2))
+         FI;
+         which:= wflt
+      ELSE
+         which:= ans OF d;
+         integer:= simplify(HEAP INTDOP:= (i, i OF sucstack, integer), FALSE)
+      FI
+   FI;
+   sopstack:= rest OF sopstack; sucstack:= rest OF sucstack
+);
+
+PROC stacktype = VOID:
+   typestack:= HEAP TYPESTACK:= (type, typestack);
+
+PROC salts1 = VOID:
+   calts:= HEAP CALTS:= (ctype, NIL);
+
+PROC salts2 = VOID:
+(  namestack := nonames;
+   IF NOT spec equals(type, t OF sucstack, 0, FALSE) THEN
+      fp1:= type; fp2:= t OF sucstack; fp3:= ident;
+      namefaultp(32, (fp1, fp2)
+  CO"alternatives should have the same types, but here you have * and *"CO);
+      type:= flt; ctype:= flt
+   FI;
+   ctype:= ct OF sucstack;
+   sucstack:= rest OF sucstack;
+   calts:= HEAP CALTS:= (ctype, calts)
+);
+
+PROC salts3 = VOID:
+(  ctype:= calts; which:= wctype );
+
+PROC str1 = VOID:
+(  sts:= HEAP ST:= (type, NIL); k:= 1;
+   joinst := HEAP JOINST := (joinup, NIL)
+);
+
+PROC str2 = VOID:
+(  sts:= HEAP ST:= (t OF typestack, sts); k PLUSAB 1;
+   typestack:= rest OF typestack;
+   IF joinstack ISNT niljoinstack THEN
+   joinst := HEAP JOINST := (joinup OF joinstack, joinst);
+   joinstack := rest OF joinstack FI
+);
+PROC stackinteger = VOID:
+   integerstack:= HEAP INTEGERSTACK:= (integer, integerstack);
+
+PROC intidpr = VOID:
+   integer:=
+   CASE u OF idinfo IN
+   (INTID i) i OF i,
+   (FLT f) flt
+   OUT fp3:= ident; faultp(CO"* is not an integer"CO 33, fp3); flt
+   ESAC;
+
+PROC checknoalts = VOID:
+   IF containssort(ctype, calt)
+   THEN  fault(CO"You can only use this constant in a CASE chooser"CO 138,
+               nullmsg);
+         type:= flt; ctype:= flt
+   FI;
+
+PROC checknoquery = VOID:
+   IF containssort(ctype, cquery)
+   THEN  fault(CO"You cant have a ?type here"CO 156, nullmsg);
+         type:= flt; ctype:= flt
+   FI;
+
+PROC checknotconstfntype = VOID:
+(  IF state OF currentstate = inconst THEN
+      fault(CO"you cant have a function here"CO 34, nullmsg); t1:= recovertok;
+      syntaxerror:= TRUE
+   FI
+);
+
+PROC checknofntype = VOID:
+   IF containsfntype(type) THEN
+      fault(CO"you cant have a function type here"CO 25, nullmsg); type:= flt
+   FI;
+
+PROC fntype = VOID:
+(  type:= HEAP FNTYPE:= (t OF typestack, type);
+   typestack:= rest OF typestack
+);
+
+PROC rhsbracket = VOID:
+IF (rest OF sts IS nilst)
+   THEN type := MAKETBRACKET (t OF sts)
+   ELSE type := sts
+FI;
+
+PROC stackchar = VOID:  charval1 := charval;
+
+PROC checkchar = VOID:  IF NOT charunused(ABS charval)
+                    THEN fp3 := HEAP VECTOR [2] CHAR;
+                         fp3[1] := "'"; fp3[2] := charval;
+                         faultp(142, fp3 CO"character * already defined"CO)
+                 FI;
+
+PROC char1 = VOID:  ( FORALL i IN charcheck DO i := FALSE OD;
+               charalts := nilcharalts
+             );
+
+PROC char2 = VOID:   charalts := HEAP CHARALTS
+                              := (HEAP CHAR := charval, charalts);
+
+PROC char3 = VOID:
+   ( BOOL test := TRUE;
+     INT start = ABS charval1,
+         finish = ABS charval;
+     IF check_charrange(start, finish)
+     THEN FOR charsetindex FROM start TO finish
+          DO IF NOT charunused(charsetindex)
+             THEN fp3 := HEAP VECTOR [2] CHAR := ("'", REPR charsetindex);
+                  faultp(142, fp3 CO"Character * already defined"CO)
+             FI
+          OD
+     FI;
+     charalts := HEAP CHARALTS
+              := (HEAP CHARRANGE := (charval1,charval), charalts )
+   );
+
+PROC char4 = VOID:  ( REF CHARALTS calts := nilcharalts;
+               WHILE charalts ISNT nilcharalts
+               DO calts := HEAP CHARALTS := (alts OF charalts, calts);
+                  charalts := rest OF charalts
+               OD;
+               type := HEAP PRIMSET
+                    := (idinfo OF ids OF iddecs, xno OF iddecs,
+                        PSTRING (prangedec,
+                                 HEAP VECTOR [UPB charset] BOOL :=charcheck,
+                                              calts));
+               setidunn(prangedec, PRIMID  (type, stringindex));
+               (cfnno = 0 | samespecid(prangedec, rest OF ids OF iddecs));
+               which := wtype
+             );
+
+PROC char5 = VOID:  ( CHARSET c1 := charset[ABS charval];
+               IF (type OF c1) /= bold ANDTH (type OF c1) /= letter
+                            ANDTH (type OF c1) /= digit
+                  THEN  fp3 := HEAP VECTOR [2] CHAR;
+                        fp3[1] := "'"; fp3[2] := charval;
+                        faultp(144, fp3
+                                 CO"Character * not allowed in range"CO)
+               FI
+             );
+
+PROC idsattr = VOID: ( attr OF ids OF iddecs := attr);
+
+PROC setnew = VOID:  (new OF iddecs := TRUE);
+
+PROC typedec1 = VOID:
+(  iddecs := HEAP IDDECS := (ids, expl_par, ctypeno PLUSAB 1, FALSE, iddecs);
+   outints((cfnno = 0|ktype|typename)); outid(ident)
+);
+
+PROC typedec2 = VOID:
+(  REF IDS tids := ids OF iddecs;
+   IF NOT new OF iddecs THEN
+      type:= HEAP NAMED:= (idinfo OF tids, xno OF iddecs, type)
+   FI;
+   t OF typeid:= type;
+   ( u OF idinfo OF tids | (FLT f) SKIP | setidunn(idinfo OF tids, typeid) );
+   t OF typeid:= flt;
+   IF cfnno = 0 THEN
+      IF samespecid(idinfo OF tids, rest OF tids)
+      THEN  ids:= rest OF tids
+      FI;
+      k:= vnno OF idinfo OF id_in_scope(id OF idinfo OF tids, nilscope, FALSE);
+      outints((dummy, ABS k, cattrno, cintno, ctypeno));
+      outextattrs(ids); outextints(ids); outexttypes(ids)
+   ELSE outints((dummy, xno OF iddecs))
+   FI;
+   outattrs(attr OF ids OF iddecs);
+   loadtype(type, TRUE, TRUE, FALSE);
+   macsort := macsort OF iddecs;
+   iddecs := rest OF iddecs;
+   IF cfnno = 0 THEN
+      outints(kend);
+      (type | (REF PRIMSET p) typeno OF p:=-1,
+              (REF NAMED n) typeno OF n:=-1);
+      unscopeids(ids)
+   FI
+);
+
+
+PROC intdec1 = VOID:
+(  iddecs := HEAP IDDECS := (ids, expl_par, cintno PLUSAB 1, FALSE, iddecs);
+   (cfnno = 0 | outints(kint) | outints(intname)); outid(ident)
+ );
+
+PROC intdec2 = VOID:
+(  REF IDS iids := ids OF iddecs;
+   integer :=  HEAP INTDEF :=  (idinfo OF iids, xno OF iddecs, integer);
+   i OF intid:= integer; setidunn(idinfo OF iids, intid); i OF intid:= flt;
+   IF cfnno = 0 THEN
+      (samespecid(idinfo OF iids, rest OF iids) | ids:= rest OF iids);
+      k:= vnno OF idinfo OF id_in_scope(id OF idinfo OF iids, nilscope, FALSE);
+      outints((dummy, ABS k, cattrno, cintno));
+      outextattrs(ids); outextints(ids)
+   ELSE  outints((dummy, xno OF iddecs))
+   FI;
+   outattrs(attr OF iids);
+   CASE integer IN
+       (REF INTDEF idf) IF loadint(i OF idf, FALSE)
+                           THEN i OF idf := UNCHECKEDINT i OF idf
+                        FI
+        OUT fault(0, "<intdec2>")
+   ESAC;
+   iddecs := rest OF iddecs;
+   IF cfnno = 0
+      THEN  outints(kend);
+           (integer | (REF INTDEF idef) intno OF idef := -1 | SKIP );
+            unscopeids(ids)
+   FI
+);
+
+PROC constdec1 = VOID:
+(  iddecs := HEAP IDDECS := (ids, expl_par, cctypeno PLUSAB 1, FALSE, iddecs);
+   (cfnno = 0 | outints(kconst) | outints(constname));
+   outid(ident)
+ );
+
+PROC constdec2 = VOID:
+(  REF IDS cids := ids OF iddecs;
+   ctype :=  HEAP CNAMED := (idinfo OF cids, xno OF iddecs, ctype, type);
+   ct OF ctypeid:= ctype; setidunn(idinfo OF cids, ctypeid);
+   ct OF ctypeid:= flt;
+   IF cfnno = 0 THEN
+      IF samespecid(idinfo OF cids, rest OF cids)
+      THEN ids:= rest OF cids
+      FI;
+      k:= vnno OF idinfo OF id_in_scope(id OF idinfo OF cids, nilscope, FALSE);
+      outints((dummy, ABS k, cattrno, cintno, ctypeno, cctypeno));
+      outextattrs(ids); outextints(ids); outexttypes(ids); outextctypes(ids)
+   ELSE outints((dummy, xno OF iddecs))
+   FI;
+   outattrs(attr OF ids OF iddecs);
+   CASE ctype IN
+   (REF CNAMED cn) loadctype(ct OF cn)
+   OUT fault(0, "<constdec2>")
+   ESAC;
+   iddecs := rest OF iddecs;
+   IF cfnno = 0
+   THEN  outints(kend);
+         (ctype | (REF CNAMED cn) ctypeno OF cn := -1 | SKIP );
+         unscopeids(ids)
+   FI
+);
+
+PROC id1pr = VOID:
+(  CASE u OF idinfo IN
+   (PRIMID p)
+   (  type:= type OF p;
+      IF index OF p = 0 THEN (fault(CO"integer needed here"CO 20, nullmsg);
+                              type:= flt)
+      ELIF index OF p = stringindex
+      THEN (fault(CO"' character needed here"CO 148, nullmsg); type := flt)
+      ELIF unn(type, index OF p)ISNT niltype THEN
+         (fault(CO"& needed here"CO 21, nullmsg); type:= flt)
+      ELSE
+         outints((vprim, primtypeno(type), index OF p))
+      FI
+   ),
+   (CTYPEID c)
+   (  CASE ct OF c IN
+      (REF CNAMED cn)
+         IF containssort(ct OF cn, calt)
+         THEN  fault(CO"You can only use this constant in a CASE chooser"CO
+                     138, nullmsg);
+               type:= flt
+         ELSE  type := ctypetotype(cn);
+               outints((vconst, ctypeno OF cn))
+         FI,
+       (REF CTYPEVAR cv) (type := t OF cv;
+                          outints((vprimc, xno OF cm OF cv))
+                         )
+      OUT sysfault("id1pr")
+      ESAC
+   ),
+   (REF DECIDS d)
+   (  BOOL is_outputtok = (origin OF d = outputtok);
+      type:= IF ioid
+             THEN IF (is_outputtok ANDTH NOT lhsjoin) OREL
+                     ( NOT is_outputtok ANDTH lhsjoin)
+                  THEN setiotype(type OF d, vnameiosource)
+                  ELSE fp3 := id OF idinfo;
+                       fault(CO"you cannot have IO of * here"CO 248, fp3);
+                       flt
+                  FI
+             ELSE IF (is_outputtok ANDTH NOT lhsjoin) OREL
+                     ( NOT is_outputtok ANDTH lhsjoin)
+                  THEN setiotype(type OF d, vnamesource)
+                  ELSE setiotype(type OF d, vnamesink)
+                  FI
+             FI;
+      INT vnametype =
+          IF ioid
+          THEN IF lhsjoin THEN vnameiosource ELSE vnameiosink FI
+          ELSE IF lhsjoin THEN vnamesource ELSE vnamesink FI
+          FI;
+      outints((vname, vnametype, decno OF d))
+   ),
+   (VARID v)
+   (  type:= type OF v; outints((vname, vnamesource, decno OF v)) ),
+   (FLT f)
+      type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fault(128, nullmsg
+   CO"  You need a basic value,formal parameter,LET, MAKE or VAR name here."CO)
+   ESAC;
+   ioid := FALSE;
+   pushvss(1)
+);
+
+
+PROC vquerypr = VOID:
+(  outints(vquery);  loadtype(type, FALSE, FALSE, FALSE);  pushvss(1) );
+
+PROC id2 = VOID:
+(  idinfo:= i OF idinfostack; idinfostack:= rest OF idinfostack;
+   CASE u OF idinfo IN
+   (PRIMID p)
+   (  type:= type OF p;
+      IF index OF p> 0 THEN
+         (fault(CO"/ not needed here"CO 22, nullmsg); type:= flt)
+      ELIF index OF p = stringindex
+      THEN (fp3 := HEAP VECTOR [1] CHAR:= "/";
+           fp4:= HEAP VECTOR [1] CHAR:= "'";
+           faultp(CO"* wont fit here * would"CO 2, (fp3, fp4)); type := flt)
+      ELSE
+         CASE type IN
+            (REF PRIMSET ps)
+               CASE u OF ps IN
+                  (PRANGE r)
+                  (  fp3:= id OF idinfo OF r;
+                     fp0:= integer; fp5:= lwb OF r;  fp6:= upb OF r;
+                     test integers(checkge, integer, lwb OF r,
+                               CO"*/* ?  this is outside the range  */(*..*)"CO
+                                     112, (fp3, fp0, fp3, fp5, fp6));
+                     test integers(checkle, integer, upb OF r,
+                               CO"*/* ?  this is outside the range  */(*..*)"CO
+                                     112, (fp3, fp0, fp3, fp5, fp6))
+                  )
+                  OUT  SKIP
+               ESAC
+            OUT SKIP
+         ESAC;
+         outints((vprimi, primtypeno(type))); loadint(integer, FALSE)
+      FI
+   ),
+   (FLT f)
+      type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fp4 := HEAP VECTOR [7] CHAR := "integer";
+      faultp(CO"  You can t use it to form an ELLA * ."CO 126, fp4 )
+   ESAC;
+   pushvss(1)
+);
+
+PROC id3 = VOID:
+   idinfostack:= HEAP IDINFOSTACK:= (idinfo, idinfostack);
+
+PROC id4 = VOID:
+(  idinfo:= i OF idinfostack; idinfostack:= rest OF idinfostack;
+   CASE u OF idinfo IN
+   (PRIMID p)
+      IF (rt:= unn(type OF p, index OF p))IS niltype THEN
+         fault(CO"& not needed here"CO 23, nullmsg); type:= flt
+      ELSE
+         outints((vunn, primtypeno(type OF p), index OF p));
+         test equals(type, rt, TRUE);  type:= type OF p
+      FI,
+   (FLT f)
+      type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fault(CO"  You can t use it to form an associated value"CO 127, nullmsg )
+   ESAC
+);
+
+PROC sharp = VOID:
+   CASE u OF idinfo IN
+   (PRIMID p)
+   (  testequals(type, type OF p, FALSE);
+      CASE type IN (FLT f) SKIP
+      OUT
+         IF (rt:= unn(type OF p, index OF p))IS niltype THEN
+            fp3:= ident; faultp(CO"there isnt anything after *"CO 46, fp3);
+            type:= flt
+         ELSE
+            outints((vsharp, primtypeno(type), index OF p)); type:= rt
+         FI
+      ESAC
+   ),
+   (FLT f) type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fault(CO"You can t use it to recover an associated value"CO 129, nullmsg )
+   ESAC;
+
+PROC explmac = VOID: macsort := expl_par;
+
+PROC implmac= VOID:
+   macsort := IF macro OF fndec
+              THEN impl_par
+              ELIF sort OF fndec = macpardec
+              THEN impl_expl
+              ELSE flt_par
+              FI;
+
+PROC impliffn = VOID:
+   macsort := IF (sort OF fndec = macpardec) ANDTH NOT macro OF fndec
+              THEN impl_expl
+              ELSE flt_par
+              FI;
+
+PROC implexpl = VOID:
+   IF macsort /= flt_par THEN macsort := impl_expl FI;
+
+PROC implimpl = VOID:
+   IF macsort /= flt_par THEN macsort := impl_impl FI;
+
+PROC dec1 = VOID:   decs:= NIL;
+
+PROC dec2 = VOID:
+   decs:= HEAP DDECS:= (type, NIL, decs);
+
+PROC dec3 = VOID:
+   ids OF decs:= HEAP IDS := (idinfo OF ids, TRUE, attrnull, ids OF decs);
+
+PROC dec6 = VOID:
+( attr OF ids OF decs := attr );
+
+PROC unnamedinput = VOID:  newid(nullid, rec);
+
+PROC inputpr = VOID:
+(  makedecs(decs, inputtok, fndec);
+   inputs OF fndec := decs;
+   param OF fndec := ddecs_type(decs)
+);
+
+PROC outputpr = VOID:
+(  makedecs(decs, outputtok, fndec);
+   outputs OF fndec := decs;
+   ans OF fndec := ddecs_type(decs)
+);
+
+PROC voidtype =VOID:
+( type := typevoid; which := wtype );
+
+PROC voidctype =VOID:
+( type := typevoid;
+  IF state OF currentstate = inconst
+  THEN ctype := constvoid; which := wctype
+  ELSE which := wtype
+  FI
+);
+
+PROC voidpr  =VOID: (type := typevoid;
+                     joinup := HEAP JOINED := jvoid;
+                     outints(vvoid);
+                     pushvss(1)
+                     );
+
+
+PROC letstart = VOID:
+      multlets := HEAP MULTLETS := (0, multlets);
+
+PROC let1 = VOID:
+( num OF multlets := (num OF multlets) +1;
+  decids := HEAP IDS := (idinfo OF ids, TRUE, attrnull, decids)
+);
+
+PROC let2 = VOID:
+(  decs := decs_setup(decids, type);
+   makedecs(decs, lettok, fndec);
+   IF state OF currentstate= inseq THEN outints(seqlet) ELSE outints(biddec) FI;
+   outddecs(decs, TRUE, FALSE);
+   vss MINUSAB 1;
+   TO num OF multlets DO decids := rest OF decids OD;
+   multlets := rest OF multlets
+);
+
+PROC let3 = VOID:
+( attr OF decids := attr );
+
+PROC nullets = VOID:
+(  BOOL allnull := TRUE;
+   REF IDS decids2 := decids;
+   WHILE decids2 ISNT nilids
+   DO IF allnull ANDTH (UPB id OF idinfo OF decids2 > 0)
+         THEN allnull := FALSE
+      FI;
+      decids2 := rest OF decids2
+   OD;
+   IF allnull
+      THEN fault(160, nullmsg CO "you cannot have all null names here"CO);
+           num OF multlets := 0
+   FI
+);
+
+
+PROC macrop = VOID: (macro := TRUE);
+
+
+PROC fndecp = VOID:
+( fndecsort := IF cfnno = 0 THEN outerdec ELSE localdec FI;
+  macro := FALSE
+);
+
+PROC mfndecp = VOID:
+( fndecsort := macpardec;
+  macro := FALSE
+);
+
+
+PROC callfn = VOID:
+(  setup_compilefn;
+   default(cfnno, ids, fns)
+);
+
+PROC exitfn = VOID:
+(  REF FNDEC fnans = fndec;
+   fnstack := rest OF fnstack;
+   reset_compilefn;
+   IF (sort OF fnans /= outerdec) OREL vnno OF fninfo OF fnans = vnno
+   THEN fns := HEAP FNS := (fnans, TRUE, fns)
+   FI;
+   IF fnno OF fnans = 1
+   THEN cfnno := 0; fnno OF fnans := -1;
+        scope OF fninfo OF fnans := -1
+   FI
+);
+
+
+PROC fn1 = VOID:
+(  IF sort OF fndec = macpardec
+   THEN nonunitbody := TRUE
+   ELSE pushvss(1); outfndec(fndec, TRUE)
+   FI
+);
+
+PROC fn2 = VOID:
+(  REF FNINFO fi = fninfo OF fndec;
+   IF NOT (syntaxerror OREL nonunitbody OREL nooutput)
+           { BIOP, ALIEN, REFORM, IMPORT or no OUTPUT}
+   THEN REF DDECS outdecs := outputs OF fndec;
+        WHILE (outdecs ISNT nildecs)
+        DO REF IDS idsout := ids OF outdecs;
+           WHILE (idsout ISNT nilids)
+           DO CASE u OF idinfo OF idsout IN
+              (REF DECIDS ds) ( check_off(jsource OF ds, TRUE, TRUE);
+                                check_off(jsink OF ds, FALSE, TRUE)
+                              )
+              OUT SKIP
+              ESAC;
+              idsout := rest OF idsout
+           OD;
+           outdecs := rest OF outdecs
+        OD;
+        testequals(type, ans OF fndec, TRUE)
+   FI;
+{{ output decno ints which need assembler checks }}
+   IF sort OF fndec /= macpardec
+   THEN  REF IDS ids2 := ids;
+         WHILE REF IDS (ids OF scopestack) ISNT ids2
+         DO  IF declaration OF ids2
+             THEN CASE u OF idinfo OF ids2 IN
+                  (REF DECIDS dids)
+                     IF has_join_check(jsource OF dids) OREL
+                                         has_join_check(jsink OF dids)
+                     THEN decnocheck := HEAP DECNOCHECK
+                                     := (decno OF dids, decnocheck)
+                     FI
+                  OUT SKIP
+                  ESAC
+             FI;
+             ids2 := rest OF ids2
+         OD;
+         WHILE decnocheck ISNT nildecnocheck
+         DO outints((dummy, decno OF decnocheck));
+               decnocheck := rest OF decnocheck
+      OD;
+      outints((fnend, fnno OF fndec, num_names OF fndec, maxvss))
+   FI;
+   unscope(scopestack, ids, fns);
+   status OF fninfo OF fndec := fn_ok;
+   IF scope = 0 THEN
+      num_names_extfns(fns);
+      checkspecfns(fndec, fns);
+      outints((kilend));
+      outints((kfn, cfnno));
+      outints((dummy, cattrno, cintno, ctypeno, cctypeno));
+      outextattrs(ids); outextints(ids);
+      outexttypes(ids); outextctypes(ids); outextfns(fns);
+      outfndec(fndec, FALSE);
+      outints((dummy, vnno OF fi, ABS import OF fi));
+      outints(kend);
+      unscopeids(ids)
+   FI
+);
+
+PROC fn3 = VOID:
+(  REF FNDEC f = fndec OF fn_in_scope(compsymb, fns, nilscope, FALSE);
+   IF (scope OF fninfo OF f = scope OREL (scope = 0 ANDTH text OF fninfo OF f))
+      ANDTH status OF fninfo OF f = fn_ok
+   THEN fp3:= compsymb; faultp(CO"you have already defined *"CO 48, fp3)
+   FI;
+   newscope(fnstart, ids, fns);
+   cfnno PLUSAB 1;
+   INT status = IF macro THEN fn_ok ELSE fn_rec FI;
+   REF FNDEC newfd = defaultfndec(compsymb, macro, status, cfnno, fndecsort);
+   fns := HEAP FNS := (newfd, TRUE, fns);
+   fnstack := HEAP FNSTACK := (fndec OF fns, fnstack);
+   fndec := dec OF fnstack
+);
+
+
+PROC fn5 = VOID:
+( attr OF fndec := attr );
+
+PROC mparamint = VOID:
+(  ID id = id OF idinfo OF ids OF iddecs;
+   IF macsort OF iddecs /= flt_par
+   THEN STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+        HEAP MACINFO macinfo
+           := (id, macsort OF iddecs, fnno_mpno[1], fnno_mpno[2],
+               xno OF iddecs, attr OF ids OF iddecs);
+        REF INTVAR ivar = MAKEINTVAR macinfo;
+        HEAP MPARAMS mps := (macsort OF iddecs, fnno_mpno[2], ivar, nilmparams);
+        add_mparam(mps, fnstack);
+        i OF intid := ivar
+   ELSE i OF intid := flt
+   FI;
+   iddecs := rest OF iddecs;
+
+  {had to add new scope because of sid clash with [INT i = 1..3] = now remove}
+   unscope(scopestack, ids, fns);
+   CASE u OF idinfo OF id_in_scope(id, scopestack, FALSE) IN
+   (NOTDEC) newid(id, rec),
+   (FLT)    SKIP
+   OUT (fp3:= id;
+        faultp(CO"you are using * for something else"CO 9, fp3);
+        newid(id, flt)
+       )
+   ESAC;
+   setidunn(idinfo OF ids, intid);
+   IF NOT macro OF fndec
+   THEN insert_idinfo(idinfo OF ids, scopestack, ids)
+   FI;
+   integer := i OF intid;
+   which := winteger;
+   i OF intid:= flt
+);
+
+PROC mparamtype1 = VOID:
+( iddecs := HEAP IDDECS := (ids, macsort, ctypeno PLUSAB 1, FALSE, iddecs) );
+
+PROC mparamtype = (BOOL withbody) VOID:
+(  REF IDS tids := ids OF iddecs;
+   IF withbody
+   THEN IF NOT new OF iddecs
+        THEN  type := HEAP NAMED := (idinfo OF tids , xno OF iddecs, type)
+        FI
+   ELSE type := typenull
+   FI;
+   ID tyname = id OF idinfo OF tids;
+   macsort := macsort OF iddecs;
+   IF macsort /= flt_par
+   THEN STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+        HEAP MACINFO macinfo := (tyname, macsort OF iddecs, fnno_mpno[1],
+                                 fnno_mpno[2], xno OF iddecs, attr OF tids);
+        HEAP TYPEVAR tvar := (macinfo, type);
+        HEAP MPARAMS mps := (macsort, fnno_mpno[2], tvar, nilmparams);
+        add_mparam(mps, fnstack);
+        t OF typeid := tvar
+   ELSE t OF typeid := flt
+   FI;
+   ( u OF idinfo OF tids | (FLT f) SKIP | setidunn(idinfo OF tids, typeid) );
+   which := wtype;
+   type := t OF typeid;     { So param is a TYPEVAR if this is implicit. }
+   IF NOT macro OF fndec
+   THEN insert_idinfo(idinfo OF tids, scopestack, ids)
+   FI;
+   t OF typeid:= flt;
+   iddecs := rest OF iddecs
+);
+
+PROC mparamtype3 = VOID:  mparamtype(TRUE);
+
+PROC mparamtype4 = VOID:  mparamtype(FALSE);
+
+PROC mparamconst1 = VOID:
+( iddecs := HEAP IDDECS := (ids, macsort, cctypeno PLUSAB 1, FALSE, iddecs) );
+
+PROC mparamconst2 = VOID:
+(  REF IDS cids := ids OF iddecs;
+   IF macsort OF iddecs /= flt_par
+   THEN STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+        HEAP MACINFO macinfo :=
+              (id OF idinfo OF cids, macsort OF iddecs, fnno_mpno[1],
+               fnno_mpno[2], xno OF iddecs, attr OF cids);
+        HEAP CTYPEVAR cvar := (macinfo, type);
+        HEAP MPARAMS mps:= (macsort OF iddecs, fnno_mpno[2], cvar, nilmparams);
+        add_mparam(mps, fnstack);
+        ct OF ctypeid := cvar
+   ELSE ct OF ctypeid := flt
+   FI;
+   setidunn(idinfo OF cids, ctypeid);
+   iddecs := rest OF iddecs;
+   which := wctype;
+   ct OF ctypeid:= flt
+);
+
+PROC mparamattrpr = VOID:
+(  IF macsort /= flt_par
+   THEN STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+        HEAP MACINFO macinfo := (id OF idinfo OF ids, macsort, fnno_mpno[1],
+                                 fnno_mpno[2], cattrno PLUSAB 1, attrnull);
+        REF ATTRVAR avar = MAKEATTRVAR macinfo;
+        HEAP MPARAMS mps := (macsort, fnno_mpno[2], avar, nilmparams);
+        add_mparam(mps, fnstack);
+        a OF attrid := avar
+   ELSE a OF attrid := flt
+   FI;
+   setidunn(idinfo OF ids, attrid);
+   a OF attrid := flt;
+   which := wattr
+);
+
+
+PROC mparamfn = VOID:
+(  IF macsort /= flt_par
+   THEN STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+        HEAP MPARAMS mps := (macsort, fnno_mpno[2], fndec OF fns, nilmparams);
+        add_mparam(mps, fnstack)
+   FI;
+   which := wfn
+);
+
+
+
+
+PROC sfnpr = VOID:
+(  paramfncall := fncall OF fncallstack;
+   which := wfn
+);
+
+
+PROC macconst1 = VOID:
+( BOOL cc =
+    IF (nextmp OF fncallstack ISNT nilnextmp)
+        ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+    THEN REF MPARAMS mp := nextexpl_par(nextmp OF fncallstack);
+         (mp ISNT nilmparams) ANDTH
+                   CASE value OF mp IN (REF CTYPEVAR) TRUE OUT FALSE ESAC
+
+    ELSE FALSE
+    FI;
+    currentstate := HEAP STATESTACK
+                 := ( IF cc THEN inconst ELSE inother FI,  currentstate )
+);
+
+PROC checkmacnotfn = VOID:
+   IF (macsort = expl_par) OREL (macsort = flt_par)
+   THEN fault(CO"Implicit parameter only allowed in input of MAC declarations"CO
+             153, nullmsg );
+        syntaxerror:= TRUE
+   FI;
+
+PROC sfn1 = VOID:
+(  errormessage := 3;
+   id1 := name OF sopstack;
+   sopstack := rest OF sopstack
+);
+
+PROC sfn2 = VOID:
+(  IF (nextmp OF fncallstack ISNT nilnextmp)
+        ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+   THEN REF MPARAMS mp := nextexpl_par(nextmp OF fncallstack);
+        macroexpected :=
+             (mp ISNT nilmparams) ANDTH
+             CASE value OF mp IN (REF FNDEC fd) macro OF fd OUT FALSE ESAC
+   FI
+);
+
+PROC findfnpr = VOID:
+(  REF FNS fs = findfn(id1, fns);
+   fndec := fndec OF fs;
+   REF FNINFO fi = fninfo OF fndec;
+   IF status OF fi = fn_notdec
+   THEN fp3:= id1; faultp(CO"you havent defined *"CO 10, fp3)
+   ELIF status OF fi = fn_rec
+   THEN fp3:= id1;
+        faultp(CO"* cant be used until its definition is complete"CO 11, fp3)
+   ELSE GOTO ok
+   FI;
+   status OF fi := fn_flt;
+   fns := HEAP FNS := (fndec, TRUE, fns);
+ok: usedfn(fs, scopestack)
+);
+
+PROC mcall1 = VOID:
+(   id1:= compsymb;
+    macroexpected := FALSE
+);
+
+PROC mcall2 = VOID:  { macro parameters present }
+( REF FNINFO fi = fninfo OF fndec;
+  HEAP FNCALL fncall := (fndec, nilparamvals, NIL, attrnull);
+  nextpvals OF fncall := pvals OF fncall;
+  fncallstack := HEAP FNCALLSTACK :=
+    IF (status OF fi /= fn_flt)
+    THEN IF (mp OF fndec IS nilmparams)
+             OREL macroexpected {MAC parameter to macro}
+         THEN fp3 := id1;
+              faultp(CO"* does not need parameters here"CO 187, fp3);
+              (fncall_flt(fndec), FALSE, NIL, fncallstack)
+         ELSE BOOL explicitparam = anyexplicit(mp OF fndec);    {r6b93}
+              (fncall, explicitparam, NIL, fncallstack)
+         FI
+     ELSE (fncall_flt(fndec), FALSE, NIL, fncallstack)
+     FI;
+   nextmp OF fncallstack :=
+        IF mp OF fndec IS nilmparams
+        THEN nilnextmp
+        ELSE REF REF MPARAMS (mp OF fndec)
+        FI;
+   fndec := IF fnstack ISNT nilfnstack THEN dec OF fnstack ELSE fndec_flt FI
+);
+
+PROC mcall6 = VOID:  { no macro parameters present }
+(  HEAP FNCALL fncall := (fndec, nilparamvals, NIL, attrnull);
+   nextpvals OF fncall := pvals OF fncall;
+   fncallstack := HEAP FNCALLSTACK :=
+      IF (status OF fninfo OF fndec /= fn_flt) ANDTH NOT macroexpected
+           ANDTH (mp OF fndec ISNT nilmparams) { ie MAC parameter to macro }
+           ANDTH anyexplicit(mp OF fndec)
+      THEN fp3:= id1;
+           faultp(CO"* needs parameters"CO 49, fp3);
+           ( fncall_flt(fndec), FALSE, NIL, fncallstack)
+      ELSE ( fncall, FALSE, NIL, fncallstack)
+      FI;
+   nextmp OF fncallstack :=
+        IF mp OF fndec IS nilmparams
+        THEN nilnextmp
+        ELSE REF REF MPARAMS (mp OF fndec)
+        FI;
+   fndec := IF fnstack ISNT nilfnstack THEN dec OF fnstack ELSE fndec_flt FI
+);
+
+PROC mcall3 = VOID:
+(  REF REF MPARAMS nextmp = nextmp OF fncallstack; { list moved down by action }
+   REF FNCALL fncall = fncall OF fncallstack; { pvals OF fncall filled in }
+   REF FNDEC fd = f OF fncall;
+
+   namestack := nonames;
+   REF REF MPARAMS mp1 := nextmp;
+   BOOL has_implicit := FALSE;
+
+   IF status OF fninfo OF fd /= fn_flt
+   THEN
+     IF  (nextmp IS nilnextmp) OREL (REF REF MPARAMS(nextmp) IS nilmparams)
+     THEN fp3:= id OF fd;
+          faultp(CO"* hasnt this many parameters"CO 50, fp3);
+          fncall := fncall_flt(fd)
+
+     ELIF (sort OF nextmp = impl_expl) OREL (sort OF nextmp = impl_impl)
+                            {{ implicit par to explicit CONST, TYPE, FN }}
+     THEN has_implicit := TRUE;
+          WHILE (mp1 ISNT nilmparams) ANDTH sort OF mp1 /= expl_par
+          DO mp1 := rest OF mp1 OD
+
+     ELIF (sort OF nextmp /= expl_par) ANDTH explicitparam OF fncallstack
+     THEN  fault(CO"Implicit parameter must be supplied separately to "CO
+                 CO"explicit parameters"CO  228, nullmsg);
+           fncall := fncall_flt(fd)
+     FI
+   FI;
+   IF status OF fninfo OF f OF fncall /= fn_flt
+   THEN
+     PARAMVAL pval =
+        IF mp1 IS nilmparams
+        THEN flt
+        ELSE
+           CASE value OF mp1 IN
+           (REF ATTRVAR)
+             ( IF which /= wattr THEN
+                (which/= wflt | fault(240, nullmsgCO"attribute needed here"CO));
+                 attr := flt
+               ELSE CASE attr IN
+                    (REF ATTRDATA ad)
+                       IF classname OF ad /= nullid
+                       THEN fault(241, nullmsg CO"Brackets needed here"CO);
+                            attr := flt
+                       FI
+                     OUT SKIP
+                     ESAC
+               FI;
+               MAKEATTRID attr
+             ),
+           (REF INTVAR)
+             ( IF which/= winteger THEN
+                (which/= wflt | fault(CO"integer needed here"CO 51, nullmsg));
+                integer:= flt
+               FI;
+               MAKEINTID integer
+             ),
+
+           (REF TYPEVAR tve)
+             ( IF which/= wtype
+               THEN (which/= wflt | fault(CO"type needed here"CO 15, nullmsg));
+                    type:= flt
+               ELIF (which = wtype) ANDTH containsfntype(type)
+                    ANDTH
+                    CASE t OF tve IN (TNULL) TRUE OUT FALSE ESAC
+               THEN fault(CO"you cant have a function here"CO 52, nullmsg);
+                    type:= flt
+               ELSE TYPE ty1 := primtype(tve, FALSE);
+                    TYPE ty2 = primtype(type, FALSE);
+                    BOOL t_ok := TRUE;
+                    IF has_implicit
+                    THEN t_ok := impl_macro(ty1, ty2, fncallstack)
+                    FI;
+                    CASE t OF tve IN
+                    (TNULL) SKIP
+                    OUT  ty1 := substtype(fncall, fnno OF fd, ty1);
+                         IF  NOT t_ok OREL NOT equiv_types(ty1, ty2, 0)
+                         THEN IF which /= wflt
+                              THEN fp1 := ty2; fp2 := ty1;
+                                   namefaultp(222, (fp1, fp2)
+                                         CO"* cannot be substituted for *"CO)
+                              FI;
+                              type := flt
+                         FI
+                   ESAC
+               FI;
+               MAKETYPEID type
+             ),
+
+           (REF CTYPEVAR ct)
+             ( IF which/= wctype
+               THEN (which/= wflt | fault(CO"const needed here"CO 16, nullmsg));
+                    type:= flt; ctype:= flt
+               ELSE BOOL c_ok := TRUE;
+                    TYPE cty1 := primtype(t OF ct, FALSE);
+                    TYPE cty2 = primtype(type, FALSE);
+                    IF has_implicit
+                    THEN c_ok := impl_macro(cty1, cty2, fncallstack)
+                    FI;
+                    cty1 := substtype(fncall, fnno OF fd, cty1);
+                    IF NOT c_ok OREL NOT equals(cty1, type)
+                    THEN IF which/= wflt
+                         THEN fp1 := cty1; fp2 := type;
+                               namefaultp(CO"* and * are different types"CO
+                                           3, (fp1, fp2))
+                         FI;
+                         type:= flt; ctype:= flt
+                    FI
+               FI;
+               MAKECTYPEID ctype
+             ),
+
+           (REF FNDEC fpar)
+             ( IF status OF fninfo OF fpar /= fn_flt
+               THEN
+                 IF which/= wfn
+                 THEN IF macro OF fpar
+                      THEN fault(CO"MAC parameter needed here"CO 188, nullmsg)
+                      ELSE fault(CO"FN parameter needed here"CO 186, nullmsg)
+                      FI;
+                      paramfncall := fncall_flt(fpar)
+                 ELSE REF FNDEC fval = f OF paramfncall;
+                      IF status OF fninfo OF fval = fn_flt
+                      THEN paramfncall := fncall_flt(fpar)
+                      ELSE
+                         BOOL f_ok := TRUE;
+                         TYPE valspec = primtype(
+                             HEAP FNTYPE:= (param OF fval, ans OF fval), FALSE);
+                         TYPE parspec := primtype(
+                             HEAP FNTYPE:= (param OF fpar, ans OF fpar), FALSE);
+                         IF has_implicit
+                         THEN f_ok := impl_macro(parspec, valspec, fncallstack)
+                         FI;
+                         parspec := substtype(fncall, fnno OF fpar-1, parspec);
+                         IF NOT macro OF fpar
+                         THEN IF NOT f_ok OREL
+                                  type test(valspec, parspec) = false
+                              THEN fp1 := valspec; fp2 := parspec;
+                                   fp3 := id OF fval;
+                                   namefaultp(185, (fp3, fp1, fp2)
+                       CO"Specification of * is *, but parameter requires *"CO);
+                                   paramfncall := fncall_flt(fpar)
+                               FI
+                         ELSE HEAP FNDEC fd2:= fpar;
+                              CASE parspec IN
+                              (REF FNTYPE ft) (param OF fd2 := from OF ft;
+                                               ans OF fd2 := to OF ft
+                                              )
+                              OUT sysfault("mcall3 - macpar")
+                              ESAC;
+                              INT message = samespecfns(fval, fd2, FALSE);
+                              fp3 := id OF fval;
+                              IF message = 3 OREL message = 4
+                              THEN fp1 := valspec; fp2 := parspec;
+                                   namefaultp(185, (fp3, fp1, fp2));
+                        CO"Specification of * is *, but parameter requires *"CO
+                                   paramfncall := fncall_flt(fpar)
+                              ELIF message /= 0
+                              THEN fp7 := fval; fp8 := fd2;
+                                   namefaultp(189, (fp3, fp7, fp8)
+                                       CO"* is * but parameter requires *"CO);
+                                   specsflt(message);
+                                   paramfncall := fncall_flt(fpar)
+                              FI
+                         FI
+                     FI
+                 FI
+               FI;
+               paramfncall
+             )
+           OUT flt
+           ESAC
+        FI;
+
+       REF REF PARAMVALS (nextpvals OF fncall)
+               := HEAP PARAMVALS  := (pval, NIL);
+        nextpvals OF fncall := rest OF nextpvals OF fncall;
+        nextmp OF fncallstack := rest OF nextmp OF fncallstack
+   FI
+);
+
+PROC mcall4 = VOID:
+(  REF FNCALL fncall = fncall OF fncallstack;
+   REF FNDEC fd = f OF fncall;
+   IF status OF fninfo OF fd /= fn_flt
+   THEN
+     IF (nextmp OF fncallstack ISNT nilnextmp)
+          ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+     THEN BOOL moreexplicit = anyexplicit(nextmp OF fncallstack);
+          IF NOT explicitparam OF fncallstack
+              OREL (explicitparam OF fncallstack ANDTH moreexplicit)
+          THEN
+               fp3:= id OF fd;
+               faultp(CO"* needs more parameters"CO 53, fp3)
+          ELSE explicitparam OF fncallstack := moreexplicit
+          FI
+    ELSE
+         HEAP FNDEC d:= fd;
+         param OF d:= substtype(fncall, fnno OF fd, param OF fd);
+         ans OF d:= substtype(fncall, fnno OF fd, ans OF fd);
+         f OF fncall :=d
+     FI
+  FI
+);
+
+PROC errorm1 = VOID: errormessage := 1;
+
+PROC errorm2 = VOID: errormessage := 2;
+
+PROC mcall5 = VOID:
+(   IF (status OF fninfo OF f OF fncall OF fncallstack /= fn_flt)
+        ANDTH (nextmp OF fncallstack ISNT nilnextmp)
+        ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+        ANDTH NOT macroexpected
+    THEN fp3:= id OF f OF fncall OF fncallstack;
+         CASE errormessage IN
+         (faultp(154, fp3
+                   CO"Implicit parameters of * must be supplied in a MAKE"CO)),
+         (faultp(168, fp3
+              CO"Implicit parameters of * must be supplied in timescaling"CO)),
+         (faultp(184, fp3
+         CO"Implicit parameters of * must be supplied in a macro parameter"CO))
+         OUT SKIP
+         ESAC
+   FI
+);
+
+PROC pullfncall = VOID:
+(  fncallstack:= rest OF fncallstack );
+
+PROC checkcall = VOID:
+(  ID newcall :=id OF (f OF fncall OF fncallstack);
+   IF lastcall /= nullid ANDTH lastcall /= newcall ANDTH
+   ((newcall/="+" ANDTH newcall/="-" ANDTH newcall/="*" ANDTH newcall/="%") OREL
+   (lastcall/="+" ANDTH lastcall/="-" ANDTH lastcall/="*" ANDTH lastcall/="%"))
+   THEN fp3 := lastcall;  fp4 := newcall;
+        faultp(CO"You must show the order of the calculation of * and * by"
+                 "bracketing"CO 117, (fp3, fp4));
+        errorswitch := FALSE
+   FI;
+   lastcall := newcall
+);
+
+PROC removecall1 = VOID:
+(  lastcalls := HEAP LASTCALLS := (lastcall, lastcalls);
+   lastcall := nullid; errorswitch := TRUE;
+   joinup := flt
+);
+
+PROC removecall2 = VOID:
+(  IF (fncallstack ISNT nilfncallstack) ANDTH
+         ( UPB (last OF lastcalls) > 0)  { <- Needed for reading in '(' }
+     THEN lastcall := id OF (f OF (fncall OF fncallstack))
+     ELSE lastcall := nullid
+   FI;
+   lastcalls := rest OF lastcalls;
+   errorswitch := TRUE
+);
+
+PROC callm = VOID:
+(  REF FNCALL fncall = fncall OF fncallstack;
+   REF FNDEC fd := f OF fncall;
+   BOOL matchspec := TRUE;
+   IF status OF fninfo OF fd /= fn_flt
+   THEN
+      namestack := nonames;
+      IF (macro OF fd) ANDTH (nextmp OF fncallstack ISNT nilnextmp)
+           ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+      THEN matchspec := impl_macro(primtype(param OF fd, FALSE),
+                                   primtype(type, FALSE), fncallstack);
+           IF matchspec
+           THEN HEAP FNDEC d := fd;
+                param OF d:= substtype(fncall, fnno OF fd, param OF fd);
+                ans OF d:= substtype(fncall, fnno OF fd, ans OF fd);
+                f OF fncall := d;  {updates fncall OF fncallstack}
+                fd := f OF fncall;
+                (nextmp OF fncallstack) := nilnextmp
+           FI
+      FI;
+      IF NOT matchspec OREL NOT check type eq(type, param OF fd, TRUE)
+      THEN  fp1:= param OF fd; fp2:= type; fp3:= id OF fd;
+            namefaultp(CO"* needs a * parameter not *"CO 54, (fp3, fp1, fp2))
+      ELSE  outints(vcallm);
+            outfncall(fncall, FALSE)
+      FI;
+      type:= ans OF fd;
+      joinup := join_setup(type, TRUE)
+   ELSE type := flt; mark_join(joinup, jfault, TRUE); joinup :=flt
+   FI
+ );
+
+PROC calld = VOID:
+(  type:= HEAP ST:= (t OF typestack, HEAP ST:= (type, NIL));
+   typestack:= rest OF typestack;
+   lastcall := id OF (f OF fncall OF fncallstack);
+   REF FNCALL fncall = fncall OF fncallstack;
+   REF FNDEC fd := f OF fncall;
+   BOOL matchspec := TRUE;
+   IF status OF fninfo OF fd /= fn_flt
+   THEN
+      namestack := nonames;
+      IF (macro OF fd) ANDTH  (nextmp OF fncallstack ISNT nilnextmp)
+          ANDTH (REF REF MPARAMS(nextmp OF fncallstack) ISNT nilmparams)
+      THEN matchspec := impl_macro(primtype(param OF fd, FALSE),
+                                   primtype(type, FALSE), fncallstack);
+           IF matchspec
+           THEN HEAP FNDEC d := fd;
+                param OF d:= substtype(fncall, fnno OF fd, param OF fd);
+                ans OF d:= substtype(fncall, fnno OF fd, ans OF fd);
+                f OF fncall := d;
+                fd := f OF fncall;
+                nextmp OF fncallstack := nilnextmp
+           FI
+      FI;
+      IF NOT matchspec OREL  NOT check type eq(type, param OF fd, TRUE)
+         ANDTH errorswitch
+      THEN  fp1:= param OF fd; fp2:= type; fp3:= id OF fd;
+            namefaultp(CO"* needs a * parameter not *"CO 54, (fp3, fp1, fp2))
+      ELSE  vss MINUSAB 1;
+            outints(vcalld);
+            outfncall(fncall, FALSE)
+      FI;
+      type:= ans OF fd;
+      joinup := join_setup(type, TRUE)
+   ELSE type := flt; mark_join(joinup, jfault, TRUE); joinup :=flt
+   FI
+);
+
+PROC portname = VOID:
+( REF PORTDATA pinfo := get_port_info(portinfo, ident);
+  IF pinfo ISNT nilportdata
+    THEN IF NOT (single OF pinfo)
+           THEN IF joinvarstack ISNT niljoinvarstack
+                  THEN joinvarstack := HEAP JOINVARSTACK
+                          := (index OF pinfo, index OF pinfo, TRUE,joinvarstack)
+                  ELSE joinup := gettrim(joinup, index OF pinfo, index OF pinfo)
+                FI
+         FI;
+         outints((vtermindex, fnno OF pinfo, nameno OF pinfo));
+         type := type OF pinfo;
+         portinfo := flt
+    ELSE type := flt; mark_join(joinup, jfault, TRUE); joinup := flt;
+         portinfo :=flt
+   FI
+);
+
+
+PROC index = VOID:
+(  t:= type;
+   type := trimorindex(t, 0, integer, integer, integer);
+   outints(vindex);
+   portinfo := CASE portinfo IN
+                 (REF PORTMMAKE pmm) port OF pmm
+                OUT flt
+               ESAC;
+   IF loadint(integer, FALSE) THEN  integer:= UNCHECKEDINT integer FI;
+   IF (joinvarstack ISNT niljoinvarstack) OREL ihasvmno(integer)
+      THEN joinvarstack := HEAP JOINVARSTACK
+                        := (integer, integer, TRUE, joinvarstack)
+      ELSE joinup := jointrim(joinup, integer, integer)
+   FI
+);
+
+PROC trim = VOID:
+(  INTEGER size; t:= type;
+   integer1:= i OF integerstack; integerstack:= rest OF integerstack;
+   size:= simplify( HEAP INTDOP:=
+           (diplus, HEAP INTDOP:= (diminus, integer, integer1), 1), TRUE);
+   type := trimorindex(t, size, integer1, integer1, integer);
+   outints(vtrim);
+   portinfo := CASE portinfo IN
+                 (REF PORTDATA pd) flt
+                OUT portinfo
+               ESAC;
+   IF loadint(integer1, FALSE) THEN integer1:= UNCHECKEDINT integer1 FI;
+   IF loadint(integer, FALSE) THEN integer:= UNCHECKEDINT integer FI;
+   IF (joinvarstack ISNT niljoinvarstack) OREL ihasvmno(integer)
+          OREL ihasvmno(integer1)
+      THEN joinvarstack := HEAP JOINVARSTACK
+                        := (integer1, integer, FALSE, joinvarstack)
+      ELSE joinup := jointrim(joinup, integer1, integer)
+   FI
+);
+
+PROC dynindex1 = VOID:
+(  typestack := HEAP TYPESTACK := (type, typestack);
+   outints(vdynindex);   vss MINUSAB 1;
+   portstack := HEAP PORTSTACK := (portinfo, portstack)
+);
+
+
+PROC dynindex2 = VOID:
+(  PRANGE pr := (NIL, flt, flt);
+   t:= t OF typestack;  typestack := rest OF typestack;
+   type := primtype(type, TRUE);
+   IF NOT isprimrange(type)
+   THEN fault(CO"index can only be an ELLA integer"CO 56, nullmsg)
+   ELSE pr := primrange(type)
+   FI;
+   integer := flt;
+   type := trimorindex(t, 0, flt, lwb OF pr, upb OF pr);
+   outints(end);
+   IF isintcheck(lwb OF pr) THEN loadint(lwb OF pr, FALSE) FI;
+   IF isintcheck(upb OF pr) THEN loadint(upb OF pr, FALSE) FI;
+   joinup := flt;
+   portinfo := CASE port OF portstack IN
+                 (REF PORTMMAKE pmm) port OF pmm
+                OUT flt
+               ESAC;
+   portstack := rest OF portstack
+);
+
+
+PROC joinrep = VOID:
+(  INT size = GIVEINT i OF integerstack;
+   IF size < 0
+     THEN mark_join(joinup, jcheck, lhsjoin);
+          joinup := HEAP JOINED := jcheck
+     ELSE HEAP JOINROW jrr;
+          jrow OF jrr := HEAP VECTOR [size] JOINUP;
+          FOR step TO size
+          DO
+             (jrow OF jrr)[step] := HEAP JOINUP := joinup
+          OD;
+          joinup := jrr
+   FI
+);
+
+PROC vrowpr = VOID:
+(  integer:= i OF integerstack; integerstack:= rest OF integerstack;
+   fp5:= integer;
+   test integers(checkge, integer, 1,
+                 CO"[*] ?  you must have at least one item"CO 67, fp5);
+   BOOL insequence = (state OF currentstate = inseq);
+   IF insequence THEN outints(seqrow) ELSE outints(vrow) FI;
+   IF loadint(integer, FALSE) THEN integer:= UNCHECKEDINT integer FI;
+   IF NOT insequence THEN type:= HEAP ROW:= (type, integer) FI
+);
+
+PROC varmult1 = VOID:
+(  INT tok = IF (state OF currentstate= inseq) THEN seqvarmult ELSE vvarmult FI;
+   newscope(tok, ids, fns);
+   newid(ident, rec);
+   iddecs := HEAP IDDECS := (ids, macsort, cintno PLUSAB 1, FALSE, iddecs)
+);
+
+
+PROC varmult2 = VOID:
+(  fp3:= id OF idinfo OF ids; fp5 := i OF integerstack;
+   fp6 := integer;
+   test integers(checkle, i OF integerstack, integer,
+                 CO"'int' * = *..* ?  you must have a range of at least one"CO
+                 110, (fp3, fp5, fp6));
+   INTEGER lwb := i OF integerstack;
+   INTEGER upb := integer;
+
+   INTEGER uncheck_lwb, uncheck_upb;
+   INT state = state OF currentstate;
+   IF state = inconst
+   THEN uncheck_lwb := UNCHECKEDINT lwb;
+        uncheck_upb := UNCHECKEDINT upb
+   ELSE INT tok = IF state = inseq THEN seqvarmult ELSE vvarmult FI;
+        outints((tok, xno OF iddecs));
+        outid(id OF idinfo OF ids OF iddecs);
+        outattrs(attr OF ids OF iddecs);
+        IF loadint(lwb, FALSE) THEN lwb := UNCHECKEDINT lwb FI;
+        IF loadint(upb, FALSE) THEN upb := UNCHECKEDINT upb FI;
+        uncheck_lwb := lwb;
+        uncheck_upb := upb
+   FI;
+
+   integer:= HEAP INTDOP:= (diminus, uncheck_upb, uncheck_lwb);
+   i OF integerstack:= simplify(HEAP INTDOP:= (diplus, integer, 1),FALSE);
+
+   i OF intid := HEAP INTVARMULT := (xno OF iddecs, lwb, upb, flt);
+   setidunn(idinfo OF ids OF iddecs, intid); i OF intid:= flt
+);
+
+PROC varmult3 = VOID:
+   CASE type IN (FLT f) SKIP OUT
+       type:= IF thasvmno(type, xno OF iddecs) THEN
+                fault(95, nullmsg);
+CO"the type of the repeated part must not depend on the multiplier variable"CO
+                flt
+             ELSE
+                IF NOT (state OF currentstate = inconst)
+                THEN  joinup := varmult_joinup(iddecs, joinup)
+                ELSE  ctype := HEAP CREPL := (ids OF iddecs, ctype)
+                FI;
+                HEAP ROW:= (type, i OF integerstack)
+             FI
+   ESAC;
+
+PROC varmult4 = VOID:
+(  unscope(scopestack, ids, fns);
+   integerstack:= rest OF integerstack;
+   iddecs := rest OF iddecs;
+   INT state = state OF currentstate;
+   IF state = inseq   THEN outints(seqvarmultend)
+   ELIF state = inpar THEN outints(vvarmultend)
+   FI
+);
+
+
+PROC for = VOID:
+(  outints(bfor) );
+
+PROC checkconc = VOID:
+   IF lastcall /= nullid ANDTH lastcall /= "CONC"
+   THEN fp3 := lastcall;  fp4 := HEAP VECTOR [4] CHAR := "CONC";
+        faultp(CO"You must show the order of the calculation of * and * by"
+                 "bracketing"CO 117, (fp3, fp4))
+   FI;
+
+PROC conc = VOID:
+(  INT sort := -1;  BOOL stringbool := FALSE;
+   type := conc_type(t OF typestack, type, stringbool, sort);
+
+   JOINUP j1 := joinup OF joinstack, j2 := joinup;
+   joinstack := rest OF joinstack;
+   INT size; HEAP JOINROW jr;
+   (j1 | (REF JOINST jst) j1:=joinsttorow(jst) | SKIP);
+   (j2 | (REF JOINST jst) j2:=joinsttorow(jst) | SKIP);
+   joinup :=
+      CASE type IN
+      (FLT)  flt
+      OUT    IF sort=1
+             THEN CASE j1 IN
+                  (REF JOINROW jr1)
+                     ( size:= 1+UPB(jrow OF jr1);
+                       REF VECTOR [] JOINUP jj := HEAP VECTOR [size]JOINUP;
+                       FOR i TO size-1
+                         DO jj[i] := HEAP JOINUP := (jrow OF jr1)[i] OD;
+                       jj[size] := HEAP JOINUP := j2;
+                       jrow OF jr := jj;
+                       jr
+                     )
+                  OUT flt
+                  ESAC
+             ELIF sort=2
+             THEN CASE j2 IN
+                  (REF JOINROW jr2)
+                     ( size:= 1+UPB(jrow OF jr2);
+                       REF VECTOR [] JOINUP jj := HEAP VECTOR [size]JOINUP;
+                       FOR i FROM 2 TO size
+                         DO jj[i] := HEAP JOINUP := (jrow OF jr2)[i-1] OD;
+                       jj[1] := HEAP JOINUP := j1;
+                       jrow OF jr := jj;
+                       jr
+                     )
+                  OUT flt
+                  ESAC
+             ELIF sort=3
+             THEN CASE j1 IN
+                  (REF JOINROW jr1)
+                     CASE j2 IN
+                     (REF JOINROW jr2)
+                        ( INT size := UPB(jrow OF jr1)+UPB(jrow OF jr2);
+                          REF VECTOR [] JOINUP jj := HEAP VECTOR [size]JOINUP;
+                          FOR i TO UPB(jrow OF jr1)
+                            DO jj[i] := HEAP JOINUP := (jrow OF jr1)[i] OD;
+                          FOR i TO UPB(jrow OF jr2)
+                            DO jj[i+UPB(jrow OF jr1)] := HEAP JOINUP
+                                                      := (jrow OF jr2)[i] OD;
+                          jrow OF jr := jj;
+                          jr
+                        )
+                      OUT flt
+                      ESAC
+                  OUT flt
+                  ESAC
+             ELSE flt
+             FI
+      ESAC;
+   CASE joinup IN
+   (FLT)  ( mark_join(j1,jfault, FALSE); mark_join(j2,jfault, FALSE) )
+   OUT SKIP
+   ESAC;
+
+   outints((vconc, ABS stringbool, sort));
+   typestack:= rest OF typestack; vss MINUSAB 1;
+   lastcall := HEAP VECTOR [4] CHAR := "CONC"
+);
+
+
+PROC coll = VOID:
+   IF rest OF sts IS nilst
+      THEN outints(vbracket); type:= t OF sts;
+           joinup := jst OF joinst
+      ELSE type:= sts;
+           outints((vcoll, k)); vss MINUSAB (k-1);
+           joinup := joinst
+   FI;
+
+PROC bracket = VOID:
+     IF (which = winteger) OREL (which = wbool)
+     THEN integer := MAKEIBRACKET (integer)
+     ELIF which = wtype
+     THEN type := MAKETBRACKET (type)
+     ELIF which = wctype
+     THEN type := MAKETBRACKET (type);
+          ctype := MAKECBRACKET (ctype)
+     ELIF which = wattr
+     THEN CASE attr IN
+          (UNION (REF ATTRSTR, REF ABRACKET))
+               ( fault(239, nullmsg
+                          CO"Incorrect use of bracketing in an attribute"CO);
+                 attr := flt; which := wflt
+               )
+          OUT attr := MAKEABRACKET (attr)
+          ESAC
+     ELSE SKIP
+     FI;
+
+PROC make1 = VOID:
+(  outints(bmake);
+   REF INTEGERSTACK mint := makeint;
+   WHILE mint ISNT nilintegerstack
+   DO IF loadint(i OF mint, FALSE) THEN i OF mint := UNCHECKEDINT i OF mint FI;
+      mint := rest OF mint
+   OD;
+   outints(zero);
+   REF FNDEC f = f OF fncall OF fncallstack;
+   loadtype(param OF f, FALSE, FALSE, FALSE);
+   loadtype(ans OF f, FALSE, FALSE, FALSE);
+   outfncall(fncall OF fncallstack,  FALSE)
+);
+
+
+PROC make2 = VOID:
+(  FNCALL fncall = fncall OF fncallstack;
+   REF FNDEC fd = f OF fncall;
+   REF INTEGERSTACK mint := makeint;
+   TYPE t1 := HEAP FNTYPE := (param OF fd, ans OF fd);
+   IF status OF fninfo OF fd /= fn_flt
+   THEN
+      TYPE jinput := ans OF fd;
+      TYPE joutput := param OF fd;
+      PORT pinput := port_setup(outputs OF fd, fncall);
+      PORT poutput := port_setup(inputs OF fd, fncall);
+      WHILE mint ISNT nilintegerstack
+      DO t1 := HEAP ROW := (t1, i OF mint);
+         pinput := HEAP PORTMMAKE := (pinput, i OF mint);
+         poutput := HEAP PORTMMAKE := (poutput, i OF mint);
+         jinput := HEAP ROW := (jinput, i OF mint);
+         joutput := HEAP ROW := (joutput, i OF mint);
+         mint := rest OF mint
+      OD;
+      setidunn(idinfo OF ids,
+                HEAP DECIDS := (num_names OF fndec PLUSAB 1, maketok, makeint,
+                                t1, join_setup(jinput, TRUE),
+                                    join_setup(joutput, FALSE), pinput, poutput)
+              );
+      outints((dummy, num_names OF fndec)); outid(id OF idinfo OF ids)
+   ELSE
+    makedecs(HEAP DDECS :=
+                (flt, HEAP IDS := (idinfo OF ids, TRUE, attrnull, nilids),
+                 nildecs), maketok, fndec)
+   FI
+);
+
+PROC make3 = VOID:
+   outints(zero);
+
+PROC make4 = VOID:
+   makeint:= nilintegerstack;
+
+PROC make5 = VOID:
+(  fp5:= integer;
+   makeint := HEAP INTEGERSTACK
+           := (IF test integers(checkge, integer, 1,
+                        CO"[*] ?  you must have at least one item"CO 67, fp5 )
+                 THEN integer
+                 ELSE flt
+               FI, makeint)
+);
+
+
+PROC case1 = VOID:
+(  REF CALTS test;
+   TEST result; BOOL macrocheck := FALSE;
+   IF NOT caseelseof THEN outints(vnormal) FI;
+   caseelseof := FALSE;
+   loadctype(ctype);
+   tested OF casestack:= HEAP CALTS:= (ctype, tested OF casestack);
+   namestack := nonames;
+   result := type test(type, param OF casestack);
+   IF result = false
+   THEN fp1:= type; fp2:= param OF casestack;
+        namefaultp(CO"the test should be of type *, not *"CO 68,(fp2, fp1));
+        type := flt;
+        calt OF (tested OF casestack) := flt
+   ELIF CASE (param OF casestack) IN (FLT f) (FALSE)  OUT (TRUE) ESAC
+   THEN macrocheck := (result = unknown);
+        test := tested OF casestack;
+        WHILE (rest OF test ISNT nilcalts)
+        DO result := checkdisjoint (ctype, calt OF (rest OF test));
+           IF result = false
+           THEN fpopen := ctype;  fpclose := calt OF (rest OF test);
+                faultp(CO"you cant have * overlapping with *"CO
+                       118, (fpopen, fpclose))
+           ELIF result = unknown
+           THEN macrocheck := TRUE
+           FI;
+           test := rest OF test
+        OD
+   FI;
+   outints((dummy, ABS macrocheck))
+);
+
+PROC case2 = VOID:
+(  casestack:= HEAP CASESTACK:= (type, unset, NIL, casestack);
+   IF state OF currentstate = inseq THEN outints(seqcase) ELSE outints(vcase) FI
+);
+
+PROC case3 = VOID:
+(  IF state OF currentstate = inpar
+   THEN  CASE output OF casestack IN
+         (UNSET u) output OF casestack:= type
+         OUT
+          namestack := nonames;
+          IF NOT check type eq(type, output OF casestack, TRUE) THEN
+            fp1:= output OF casestack; fp2:= type;
+            CO"* and * are incompatible alternatives of case"CO
+            namefaultp(69, (fp1, fp2));
+            output OF casestack:= flt
+         FI
+        ESAC;
+        vss MINUSAB 1
+   FI
+);
+
+PROC case7 = VOID:
+(  outints(velseof);
+   caseelseof := TRUE;
+   tested OF casestack := nilcalts
+);
+
+PROC case4 = VOID:
+(  outints(vcelse);
+   outints(cnull)
+);
+
+PROC case6 = VOID:
+(  outints(vnoelse);
+   outints(cnull);
+   IF state OF currentstate = inseq
+   THEN outints(seqnull)
+   ELSE outints(vquery);
+        loadtype(output OF casestack, FALSE, FALSE, FALSE);
+        pushvss(1)
+   FI
+);
+
+PROC case5 = VOID:
+(  outints(end);
+   type:= output OF casestack; casestack:= rest OF casestack
+);
+
+PROC vcond1 = VOID:
+(  outints(vif);
+   newscope(vif, ids, fns);
+   IF loadint(integer, FALSE) THEN integer:= UNCHECKEDINT integer FI;
+   integerstack:= HEAP INTEGERSTACK:= (integer, integerstack);
+   outints(vthen)
+);
+
+PROC vcond2 = VOID:
+(  typestack:= HEAP TYPESTACK:= (type, typestack); outints(velse) );
+
+PROC vcond3 = VOID:
+(  type := cond_type(t OF typestack, type, i OF integerstack);
+   scopestack := rest OF scopestack;
+   integerstack:= rest OF integerstack;
+   typestack:= rest OF typestack; vss MINUSAB 1; outints(vfi)
+);
+
+
+PROC inconstp = VOID:
+   currentstate := HEAP STATESTACK := (inconst, currentstate);
+
+PROC inotherp = VOID:
+   currentstate := HEAP STATESTACK := (inother, currentstate);
+
+PROC inparp = VOID:
+   currentstate := HEAP STATESTACK := (inpar, currentstate);
+
+PROC inseqp = VOID:
+   currentstate := HEAP STATESTACK := (inseq, currentstate);
+
+PROC unstackstate = VOID:
+   currentstate := rest OF currentstate;
+
+
+PROC beginp = VOID:
+(  INT tok = IF state OF currentstate = inseq THEN vseq ELSE vpar FI;
+   outints(tok);
+   newscope(tok, ids, fns)
+);
+
+PROC endp = VOID:
+(  INT tok = IF state OF currentstate = inseq THEN seqend ELSE parend FI;
+   outints(tok);
+   unscope(scopestack, ids, fns)
+);
+
+
+PROC checkoffjoinup = VOID:
+(  IF NOT syntaxerror ANDTH
+      (scopestack ISNT nilscope) ANDTH ((rest OF scopestack) ISNT nilscope)
+         ANDTH ( scope OF rest OF scopestack /= fnstart )
+   THEN joinup := replicate_joinup(ids, iddecs, joinup)
+                                    {{i.e. comes from nested begin-end}}
+   FI;
+   check_off(joinup, TRUE, FALSE);
+   joinup := flt
+);
+
+
+PROC checkoutputtype = VOID: { BEGIN <SEQ> ... OUTPUT END }
+( IF NOT syntaxerror ANDTH
+      (scopestack ISNT nilscope) ANDTH ((rest OF scopestack) ISNT nilscope)
+         ANDTH ( scope OF rest OF scopestack = fnstart )
+         ANDTH check_if_output_joined(outputs OF fndec)
+  THEN fault(174, nullmsg CO"You have already joined to parts of the output"CO)
+  FI;
+  IF containslocaltype(type, scopestack)
+  THEN  fp1 := type; faultp(79, fp1)
+      CO"You cant have a locally declared type in OUTPUT, but here you have *"CO
+  FI
+);
+
+PROC checkoutputscope = VOID:  { BEGIN <SEQ> ... END }
+IF NOT syntaxerror ANDTH
+   (scopestack ISNT nilscope) ANDTH ((rest OF scopestack) ISNT nilscope) ANDTH
+   ((scope OF rest OF scopestack) /= fnstart)
+   THEN fault(175, nullmsg CO"OUTPUT statement needed here"CO); type:=flt
+          { i.e comes from nested BEGIN-END }
+   ELSE BOOL named_outputs := TRUE;
+        REF DDECS outdecs := outputs OF fndec;
+        WHILE (outdecs ISNT nildecs)  ANDTH named_outputs
+        DO REF IDS idsout := ids OF outdecs;
+           WHILE (idsout ISNT nilids) ANDTH named_outputs
+           DO IF UPB (id OF idinfo OF idsout) = 0
+              THEN named_outputs := FALSE
+              FI;
+              idsout := rest OF idsout
+           OD;
+           outdecs := rest OF outdecs
+        OD;
+        IF  (NOT named_outputs) ANDTH (NOT isvoid(ans OF fndec))
+           THEN fault(175, nullmsg CO"OUTPUT statement needed here"CO)
+        FI;
+        outints(vnull);
+        nooutput := TRUE
+FI;
+
+
+PROC seqvoidpr = VOID:
+(  outints(seqvoid);
+   newscope(seqvoid, ids, fns)
+);
+
+PROC semicolonflt = VOID:
+(  syfault(CO "; not needed here" CO 98, nullmsg) );
+
+PROC vardec1 = VOID:
+(  decs := decs_setup(decids, type);
+   makevardecs(decs, fndec);
+   outints(seqvar);
+   outddecs(decs, TRUE, FALSE);
+   vss MINUSAB 1;
+   TO num OF multlets DO decids := rest OF decids OD;
+   multlets := rest OF multlets
+);
+
+PROC vardec2 = VOID:
+(  decs := decs_setup(decids, type);
+   makevardecs(decs, fndec);
+   outints(seqper);
+   loadctype(ctype);
+   loadtype(type, FALSE, FALSE, FALSE);
+   outddecs(decs, TRUE, FALSE);
+   TO num OF multlets DO decids := rest OF decids OD;
+   multlets := rest OF multlets
+);
+
+PROC assign1 = VOID:
+(  outints(seqassign);
+   multiassign := HEAP MULTLETS := (1, multiassign)
+);
+
+PROC assign2 = VOID:
+(  CASE u OF idinfo IN
+   (VARID vi) (REF SCOPESTACK s := scopestack;
+               WHILE NOT scope_start(scope OF s) OREL (scope OF s = seqvarmult)
+                 DO s := rest OF s OD;
+               REF IDS fid = id_in_scope(id OF idinfo, s, TRUE);
+               IF CASE u OF idinfo OF fid IN (NOTDEC) TRUE  OUT FALSE ESAC
+               THEN fp3 := id OF idinfo;
+                    faultp(CO"You cant assign to VAR * here"CO 47, fp3 )
+               ELSE outints((vname, vnamesource, decno OF vi));
+                    pushvss(1)
+               FI;
+               type := type OF vi
+              ),
+   (FLT flt)  (type := flt)
+   OUT (type := flt;
+        fltmessage(idinfo); fault(CO"You need a VAR name here."CO 115, nullmsg)
+       )
+   ESAC;
+   REF IDS idscheck := decids;
+   TO num OF multiassign -1
+   DO IF (id OF idinfo) = (id OF idinfo OF idscheck)
+        THEN fp3 := id OF idinfo;
+             faultp(159, fp3
+             CO"* can only appear once in any multiple assignment statement"CO)
+      FI;
+      idscheck := rest OF idscheck
+   OD;
+   decids := HEAP IDS := (HEAP IDINFO := idinfo, FALSE, attrnull, decids)
+);
+
+PROC assign3 = VOID:
+(  typestack := HEAP TYPESTACK := (type, typestack);
+   BOOL allnull := TRUE;
+   TO num OF multiassign
+   DO allnull := allnull ANDTH UPB (id OF idinfo OF decids) = 0;
+      decids := rest OF decids
+   OD;
+   IF allnull
+      THEN fault(160, nullmsg CO"you cannot have all null names here"CO)
+   FI;
+  outints(seqbecomes); vss MINUSAB 1
+);
+
+PROC assign4 = VOID:
+(  namestack := nonames;
+   IF NOT equals(t OF typestack, type) THEN
+      fp1:= t OF typestack; fp2:= type;
+      fp3 := HEAP VECTOR [2] CHAR := ":=";
+      namefaultp(CO"you cant have * * *"CO 93, (fp1, fp3, fp2)) FI;
+   check equals(t OF typestack, type, TRUE, FALSE, FALSE, 0);
+   typestack := rest OF typestack;
+   outints(seqassignend); vss MINUSAB 1
+);
+
+PROC unstvoid = VOID:
+( scopestack := rest OF scopestack;
+  mltype := nilst;
+  nextmltype := mltype;
+  REF REF ST (nextmltype) := HEAP ST := (type, nilst);
+  nextmltype := rest OF nextmltype
+);
+
+PROC outmultass = VOID:
+( outints((vcoll, num OF multiassign));
+  type := HEAP ST := mltype
+);
+
+PROC multassend = VOID:
+( IF (multiassign ISNT nilmultlets) ANDTH (num OF multiassign) > 1
+    THEN outints(seqend)
+  FI;
+  multiassign := rest OF multiassign
+);
+
+PROC multtype = VOID:
+( REF REF ST (nextmltype) := HEAP ST := (type, nilst);
+  nextmltype := rest OF nextmltype;
+  num OF multiassign PLUSAB 1
+);
+
+PROC nullassign = VOID:
+( outints(vnull);
+  pushvss(1);
+  decids := HEAP IDS :=
+     (HEAP IDINFO := (-1,0,TRUE,FALSE,TRUE,FALSE,nullid,notdec),
+      FALSE, attrnull, decids);
+  type := flt
+);
+
+PROC seqnullpr = VOID:
+(  outints(seqnull) );
+
+PROC seqcond1 = VOID:
+(  outints(seqif);      loadint(integer, FALSE);     outints(seqthen);
+   newscope(seqif, ids, fns)
+);
+
+PROC seqcond2 = VOID:
+(  outints(seqelse) );
+
+PROC seqcond3 = VOID:
+(  outints(seqfi);  scopestack := rest OF scopestack );
+
+
+PROC pt1 = VOID:
+   outints(pt);
+
+PROC pt2 = VOID:
+   outints(ptflt);
+
+PROC pt3 = VOID:
+   loadint(integer, FALSE);
+
+PROC pt4 = VOID:
+(  outints(str);
+   outstring(string[1:stringsize])
+);
+
+PROC pt5 = VOID:
+   loadint(integer, FALSE);
+
+PROC pt6 = VOID:
+   outints(end);
+
+PROC pt7 = VOID:
+   outints(inull);
+
+PROC aliensetup = VOID:
+  ( outid(compsymb);
+    REF FNDEC alienfd = defaultfndec(compsymb, TRUE, fn_ok, -1, localdec);
+    fnstack := HEAP FNSTACK := (alienfd, fnstack);
+    fndec := dec OF fnstack;
+    HEAP FNCALL fncall := (fndec, nilparamvals, NIL, attrnull);
+    nextpvals OF fncall := pvals OF fncall;
+    fncallstack := HEAP FNCALLSTACK := ( fncall, TRUE, NIL, fncallstack)
+  );
+
+PROC biopstart = VOID:
+  ( outints(biop);  aliensetup );
+
+PROC alienstart = VOID:
+  ( outints(alien); aliensetup );
+
+PROC bioppr = VOID:
+  ( outmparams(fncall OF fncallstack, FALSE);
+    nonunitbody := TRUE;
+    fnstack := rest OF fnstack;
+    fndec := dec OF fnstack;
+    type := ans OF fndec
+  );
+
+PROC biopparampr = VOID:
+  ( PARAMVAL pval =
+      IF which = wattr      THEN MAKEATTRID attr
+      ELIF which = winteger THEN MAKEINTID integer
+      ELIF which = wtype    THEN MAKETYPEID type
+      ELIF which = wctype   THEN MAKECTYPEID ctype
+      ELIF which = wfn      THEN paramfncall
+      ELSE flt
+      FI;
+    REF FNCALL fncall = fncall OF fncallstack;
+    STRUCT 2 INT fnno_mpno = next_mparamno(fnstack);
+    add_mparam(HEAP MPARAMS := (expl_par, fnno_mpno[2], flt, nilmparams),
+               fnstack);
+    REF REF PARAMVALS (nextpvals OF fncall) := HEAP PARAMVALS  := (pval, NIL);
+    nextpvals OF fncall := rest OF nextpvals OF fncall
+  );
+
+PROC constintpr = VOID:
+  ( delaytype := constint; ctype := unset; type := unset; integer := unset );
+
+PROC const2int2pr = VOID:  delaytype := const2int2;
+
+PROC constint2pr  = VOID: delaytype := constint2;
+
+PROC del = VOID:
+  (  integer1 := i OF integerstack;
+     CTYPE ctype1 = ct OF sucstack;
+     TYPE ans = ans OF fndec;
+     TEST test1, test2 := true, test3 := true;
+     test1 := type test(param OF fndec, ans);
+     IF test1 = false
+      THEN fault(CO"parameter and result of delay must have same type"CO
+                 71, nullmsg)
+      ELSE test2 := type test(t OF sucstack, ans);
+           IF test2 = false
+           THEN  namestack := nonames;
+                 fp1:= ans; fp2:= t OF sucstack;
+                 namefaultp(CO"delay initialisation should be *, not *"CO
+                            72, (fp1, fp2))
+           FI;
+           IF CASE ctype IN (UNSET) FALSE OUT TRUE ESAC
+             THEN test3 := type test(type, ans);
+                  IF test3 = false
+                     THEN namestack := nonames;
+                          fp1:= ans; fp2:= type;
+                          namefaultp(CO"ambiguity value should be *, not *"CO
+                                     106, (fp1, fp2))
+                   FI
+           FI
+    FI;
+    IF delaytype = constint2 OREL delaytype = const2int2
+    THEN fp5:= GIVEINT integer1;  fp6:= GIVEINT integer;
+         test integers(checkge, integer1, 0, 73, fp5 CO
+           "* ?  time to intermediate value of delay mustn t be negative" CO );
+         test integers(checkge, integer, 1, 76, fp6 CO
+           "* ?  time to output of delay must be greater than zero" CO);
+         test integers(checkge, integer, integer1, 74, (fp6, fp5) CO
+           "* ?  second integer of delay must not be smaller than first: *" CO)
+    ELSE fp5:= GIVEINT integer;
+         test integers(checkge, integer, 1, 76, fp5 CO
+           "* ?  time to output of delay must be greater than zero" CO)
+    FI;
+
+    IF delaytype = idelayintcon
+    THEN outints(idelay)
+    ELSE outints((adelay, delaytype))
+    FI;
+
+    outints((dummy,
+              ABS(test1 = unknown OREL test2 = unknown OREL test3 = unknown) ));
+    IF delaytype = idelayintcon
+       THEN loadint(integer1, FALSE);  loadctype(ctype1)   {{ idelay }}
+       ELIF delaytype = const2int2
+         THEN loadctype(ctype1);  loadint(integer1, FALSE);  {{ t,i,t,i }}
+              loadctype(ctype);  loadint(integer, FALSE)
+         ELIF delaytype = constint2
+           THEN loadctype(ctype1);  loadint(integer1, FALSE);  {{ t,i,i }}
+                loadctype(ctype1);  loadint(integer, FALSE)
+           ELIF delaytype = constint
+             THEN loadctype(ctype1);  loadint(integer1, FALSE);
+                  loadctype(ctype1);  loadint(integer1, FALSE)   {{ t,i }}
+             ELIF delaytype = const2int
+               THEN loadctype(ctype1);  loadint(integer1, FALSE);
+                    loadctype(ctype);  loadint(integer1, FALSE)   {{ t,i,t }}
+             ELSE fault(0, "<del>")
+    FI;
+    integerstack := rest OF integerstack;
+    sucstack := rest OF sucstack;
+    nonunitbody := TRUE;
+    type := ans
+  );
+
+PROC idel = VOID:
+  (  fp5:= GIVEINT i OF integerstack;
+     test integers(checkge, i OF integerstack, 1, 75, fp5 CO
+        "* ?  parameter of idelay must be greater than zero" CO);
+     delaytype := idelayintcon
+  );
+
+
+PROC sampintpr = VOID:
+   ( sampletype := ints1;
+     fp5 := integer;
+     intervalok := test integers(checkge, integer, 1, 162, fp5 CO
+                       "* ?  interval of SAMPLE must be greater than zero"CO)
+   );
+
+PROC sampint2pr = VOID:
+   ( sampletype := ints2;
+     fp5 := i OF integerstack;
+     fp6 := integer;
+     INTEGER s = UNCHECKEDINT i OF integerstack;
+     IF intervalok
+     THEN test integers(checkge, integer, HEAP INTDOP := (diminus, 1, s),
+                        163, (fp6, fp5, fp5)
+                        CO"* ?  skew of SAMPLE must be between -(*) and *"CO);
+          test integers(checkle, integer, HEAP INTDOP := (diminus, s, 1),
+                        163, (fp6, fp5, fp5)
+                        CO"* ?  skew of SAMPLE must be between -(*) and *"CO)
+     FI
+   );
+
+PROC notypeset = VOID:
+   ( integer := 0;
+     CQUERY cquery;
+     type := param OF fndec;
+     querytype OF cquery := type;
+     ctype := HEAP CQUERY := cquery
+   );
+
+PROC samp = VOID:
+   ( outints((sample, sampletype));
+     IF isvoid(param OF fndec) OREL isvoid(ans OF fndec)
+     THEN fault(191, nullmsg
+                 CO"Parameter and result of SAMPLE cannot be void"CO)
+     ELSE TEST test1, test2 := true;
+          test1 := type test(param OF fndec, ans OF fndec);
+          IF test1 = false
+          THEN fault(164, nullmsg
+                       CO"parameter and result of SAMPLE must have same type"CO)
+          ELSE test2 := type test(type, ans OF fndec);
+               IF test2 = false
+               THEN  namestack := nonames;
+                     fp1:= ans OF fndec; fp2:= type;
+                     namefaultp(165, (fp1, fp2)
+                                CO"SAMPLE initialisation should be *, not *"CO)
+               FI
+          FI;
+          outints((dummy, ABS(test1 = unknown OREL test2 = unknown) ));
+          IF sampletype > 0
+          THEN  loadint(i OF integerstack, FALSE); loadctype(ctype);
+                loadint(integer, FALSE)
+          ELSE fault(0, "<samp>")
+          FI
+     FI;
+     integerstack := rest OF integerstack;
+     nonunitbody := TRUE;
+     type := ans OF fndec
+   );
+
+PROC timeintpr = VOID:
+   ( timetype := ints1;
+     fp5 := integer;
+     intervalok := test integers(checkge, integer, 1, 166, fp5 CO
+                       "* ?  scale of timescaling must be greater than zero"CO)
+   );
+
+PROC timeint2pr = VOID:
+   ( timetype := ints2;
+     fp5 := i OF integerstack;
+     fp6 := integer;
+     INTEGER s = UNCHECKEDINT i OF integerstack;
+     IF intervalok
+     THEN test integers(checkge, integer, HEAP INTDOP := (diminus, 1, s),
+                        167, (fp6, fp5, fp5)
+                     CO"* ?  skew of timescaling must be between -(*) and *"CO);
+          test integers(checkle, integer, HEAP INTDOP := (diminus, s, 1),
+                        167, (fp6, fp5, fp5)
+                     CO"* ?  skew of timescaling must be between -(*) and *"CO)
+     FI
+   );
+
+PROC fast = VOID: tfaster := TRUE;
+
+PROC slow = VOID: tfaster := FALSE;
+
+PROC notypeset2 = VOID:
+   ( integer := 0;
+     CQUERY cquery;
+     type := IF tfaster THEN ans OF fndec ELSE param OF fndec FI;
+     querytype OF cquery := type;
+     ctype := HEAP CQUERY := cquery
+   );
+
+PROC tscale = VOID:
+(  IF tfaster THEN outints(faster) ELSE outints(slower) FI;
+   outfncall(fncall OF fncallstack,  FALSE);
+   REF FNDEC spec = fndec,
+             body = f OF fncall OF fncallstack;
+   IF (status OF fninfo OF spec /= fn_flt) ANDTH
+      (status OF fninfo OF body /= fn_flt)
+   THEN
+     HEAP FNTYPE spectype := (param OF spec, ans OF spec),
+                 bodytype := (param OF body, ans OF body);
+     namestack := nonames;
+     IF tfaster ANDTH isvoid(ans OF spec)
+     THEN fault(192, nullmsg CO"Result for FASTER cannot be void"CO)
+     ELIF NOT tfaster ANDTH isvoid(param OF spec)
+     THEN fault(193, nullmsg CO"Parameter for SLOWER cannot be void"CO)
+     ELSE TEST test1, test2 := true;
+          test1 := type test(bodytype, spectype);
+          IF test1 = false
+          THEN fp1 := spectype; fp2 := bodytype; fp3 := id OF spec;
+               namefaultp(169, (fp3, fp1, fp2) CO
+ "Specification and body of * must have the same type, but you have * and *"CO)
+          ELSE TYPE inittype =
+                  IF tfaster THEN ans OF spec ELSE param OF spec FI;
+               test2 := type test(type, inittype);
+               IF test2 = false
+               THEN fp1 := inittype; fp2 := type;
+                    namefaultp(170, (fp1, fp2)
+                    CO"Time scaling initialisation should be *, not *"CO)
+               FI
+          FI;
+          outints((dummy, ABS(test1 = unknown OREL test2 = unknown)));
+          IF timetype > 0
+          THEN outints((dummy, timetype));
+               loadint(i OF integerstack, FALSE); loadctype(ctype);
+               loadint(integer, FALSE)
+          ELSE fault(0, "<tscale>")
+          FI
+     FI;
+     integerstack := rest OF integerstack;
+     nonunitbody := TRUE;
+     type := ans OF spec
+   FI
+);
+
+PROC rck = VOID:
+(  TEST test1 := unknown, test2 := unknown;
+   TYPE ans = ans OF fndec;
+   CASE param OF fndec IN
+   (REF ST st)
+      (   INTEGER lower:= flt, upper:= flt;
+          ID id := nullid;
+          REF ST therest:= rest OF st;
+          CASE t OF st IN
+          (FLT flt)  SKIP
+          OUT
+            ( test1 := type test(t OF st, ans);
+              IF test1 = false
+              THEN  fault(77, nullmsg)
+                          CO"input and output of ram must have the same type"CO
+              ELSE  test2 := type test(type, ans);
+                    IF test2 = false
+                    THEN  namestack := nonames;
+                          fp1:= ans; fp2:= type;
+                          namefaultp(78, (fp1, fp2))
+                                    CO"ram initialisation should be *, not *"CO
+                    FI
+             FI
+          )
+       ESAC;
+       CASE primtype(t OF therest, TRUE) IN
+       (FLT) SKIP,
+       (REF PRIMSET rp)
+          CASE  u OF rp  IN
+          (PRANGE pra)
+             ( id:= id OF idinfo OF pra;
+               lower:= simplify(lwb OF pra, TRUE);
+               upper:= simplify(upb OF pra, TRUE)
+             )
+          OUT  fault(80, nullmsg)
+  CO"second parameter of ram is not of correct type for write address"CO
+          ESAC
+       OUT  fault(80, nullmsg)
+  CO"second parameter of ram is not of correct type for write address"CO
+       ESAC;
+       therest:= rest OF therest;
+       IF  therest IS nilst
+       THEN  fault(CO"not enough parameters for ram"CO 81, nullmsg)
+       ELSE
+         CASE primtype(t OF therest, TRUE) IN
+         (FLT) SKIP,
+         (REF PRIMSET rp)
+            CASE  u OF rp  IN
+            (PRANGE pra)
+                ( fp0:= lwb OF pra;  fpcolon:= lower;
+                  fp5:= upb OF pra;  fp6:= upper;
+                  fp3:= id;                  fp4:= id OF idinfo OF pra;
+                  test integers(checkeq, lower, lwb OF pra, 107,
+                                (fp4, fp0, fp5, fp3, fpcolon, fp6));
+      CO"ram read range */(*..*) and write range */(*..*) must be the same"CO
+                  test integers(checkeq, upper, upb OF pra, 107,
+                                (fp4, fp0, fp5, fp3, fpcolon, fp6))
+      CO"ram read range */(*..*) and write range */(*..*) must be the same"CO
+                )
+            OUT  fault(108, nullmsg)
+  CO"third parameter of ram is not of correct type for read address"CO
+            ESAC
+         OUT  fault(108, nullmsg)
+ CO"third parameter of ram is not of correct type for read address"CO
+         ESAC;
+         therest:= rest OF therest;
+         IF  therest IS nilst
+         THEN  fault(CO"not enough parameters for ram"CO 81, nullmsg)
+         ELSE
+           INT altnum := 0;
+           CASE  primtype(t OF therest, TRUE) IN
+           (FLT flt) SKIP,
+           (REF PRIMSET rp)
+              CASE  u OF rp  IN
+              (REF PALTS rpal)
+                 ( REF PALTS pa := rpal;
+                   WHILE (altnum <3) ANDTH (pa ISNT nilpalts)
+                   DO  IF  u OF pa ISNT niltype
+                       THEN fault(83, nullmsg);
+                            CO"wrong type for write enable of ram"CO
+                            altnum := 0;
+                            pa := nilpalts
+                       ELSE altnum PLUSAB 1;
+                            pa := rest OF pa
+                       FI
+                   OD
+                 ),
+              (PSTRING ps)
+                 ( REF CHARALTS chalts := charalts OF ps;
+                   WHILE (altnum < 3) ANDTH(chalts ISNT nilcharalts)
+                   DO CASE alts OF chalts IN
+                      (CHAR ch) altnum PLUSAB 1,
+                      (CHARRANGE cr)
+                          altnum := altnum +1 +
+                                    value OF (charset[ABS(upchar OF cr)])-
+                                    value OF (charset[ABS(lwchar OF cr)])
+                       ESAC;
+                       chalts := rest OF chalts
+                   OD
+                 )
+                OUT  fault(86, nullmsg)
+        CO"fourth parameter of ram is not of correct type for write enable"CO
+                ESAC
+           OUT  fault(86, nullmsg)
+  CO"fourth parameter of ram is not of correct type for write enable"CO
+           ESAC;
+           IF altnum = 1
+           THEN fault(84, nullmsg)
+                      CO"only one alternative for write enable of ram"CO
+           ELIF altnum > 2
+           THEN fault(85, nullmsg)
+                      CO"too many alternatives for write enable of ram"CO
+           FI;
+           IF  (rest OF therest) ISNT nilst
+           THEN  fault(CO"too many parameters for ram"CO 87, nullmsg)
+           FI
+         FI
+       FI
+      )
+   OUT  fault(CO"not enough parameters for ram?"CO 88, nullmsg)
+   ESAC;
+   outints(ram);
+   outints((dummy, ABS(test1 = unknown  OREL  test2 = unknown) ));
+   loadctype(ctype);
+   nonunitbody := TRUE;
+   type := ans
+);
+
+PROC arith1 = VOID:
+(  IF NOT arithtype (ans OF fndec) THEN
+      fault (139, nullmsg)
+
+      CO "Output can only be ELLA integer, character or non-associated"
+         "enumerated type" CO
+   FI;
+   inarith:= TRUE
+);
+
+PROC arith2 = VOID:
+(  inarith:= FALSE;
+   IF loadint(integer, FALSE) THEN integer:= UNCHECKEDINT integer FI;
+   nonunitbody := TRUE;
+   type := ans OF fndec
+);
+
+PROC reformpr = VOID:
+(  TYPE ans = ans OF fndec;
+   TEST result := reformcheck( param OF fndec, ans);
+   IF result = false
+     THEN fp1 := param OF fndec;  fp2 := ans;
+          faultp(CO"You can t reform  * to *"CO 116, (fp1, fp2));
+          type := flt
+     ELSE outints((reform, ABS (result = unknown) ))
+   FI;
+   nonunitbody := TRUE;  { to stop further join checks }
+   type := ans
+);
+
+PROC mod2 = VOID:
+( currentstate := HEAP STATESTACK := (inother, NIL);
+  scopestack := nilscope;
+  newscope(textstart, ids, fns)
+);
+
+PROC impctn = VOID:
+(  context OF ctname:= ident; ident:= nullid );
+
+PROC impsetct = VOID:
+(  import OF ctname:= ident; kids:= NIL; kfns:= NIL;
+   INT j;
+   IF setcontext(ctname) THEN
+      WHILE (j:= nextkept)/= 0 DO
+      inkept(findkid, j=exported, newkid, newkfn)
+                               OD CO includes non-exported CO
+
+   ELSE
+      fp9:= ctname; faultp(CO"i cant find context *"CO 102, fp9);
+      context OF ctname:= nullid
+   FI
+);
+
+PROC impfn1 = VOID:
+   fna:= fnb:= compsymb;
+
+PROC impfn2 = VOID:
+   fna:= compsymb;
+
+PROC impfn3 = VOID:
+(  REF FNDEC fd1 = fndec OF fn_in_scope(fna, fns, nilscope, TRUE),
+             fd2 = fndec OF fn_in_scope(fnb, kfns, nilscope, TRUE);
+   REF FNINFO f1 = fninfo OF fd1,
+              f2 = fninfo OF fd2;
+   IF status OF f1 = fn_notdec
+   THEN  fp3:= fna;
+         faultp(CO"i cant find * in the importing context"CO 103, fp3);
+         status OF f1:= fn_flt
+   ELIF (status OF f1 = fn_ok) ANDTH NOT import OF f1
+   THEN fp3:= fna; faultp(CO"* doesnt need importing"CO 99, fp3);
+        status OF f1:= fn_flt
+   FI;
+   IF status OF f2 = fn_notdec
+   THEN IF context OF ctname/= nullid THEN
+         fp3:= fnb; fp9:= ctname;
+         faultp(CO"i cant find * in context *"CO 97, (fp3, fp9))
+        FI
+   ELIF status OF f2 = fn_ok
+   THEN IF NOT export OF f2 THEN
+           fp3:= fnb; faultp(CO"* hasnt been exported"CO 100, fp3)
+        ELIF status OF f1 = fn_ok
+        THEN  namestack := nonames;
+              INT message = samespecfns(fd1, fd2, FALSE);
+              IF message = 0
+              THEN nextimport(fna, fnb, ctname)
+              ELSE fp3:= fna; fp7:= fd1; fp8:= fd2;
+                   namefaultp(CO"* is * but you are importing *"CO
+                              101, (fp3, fp7, fp8));
+                   specsflt(message)
+              FI
+         FI
+    FI
+);
+
+PROC importpr = VOID:
+(  IF scope/= 0 THEN
+      fault(CO"a fn/mac declared inside another cant be an import"CO
+            104, nullmsg)
+   FI;
+   outints(imported);
+   import OF fninfo OF fndec := TRUE;
+   nonunitbody := TRUE;
+   type := ans OF fndec
+);
+
+PROC multjoinpr = VOID:
+    outints(multjoin);
+
+PROC char = VOID:
+  ( type := t OF sucstack;
+    CASE ct OF sucstack IN
+       (REF PRIMID p)
+         IF index OF p > 0
+           THEN fault(145, nullmsg CO"' not needed here"CO); ctype := flt
+           ELIF index OF p = 0
+           THEN fp3 := HEAP VECTOR [1] CHAR:= "'";
+                fp4 := HEAP VECTOR [1] CHAR:= "/";
+                faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+                type := flt; ctype := flt
+           ELSE
+              CASE type OF p IN
+                 (REF PRIMSET ps)
+                    CASE u OF ps IN
+                     (PSTRING pst) IF NOT (charcheck OF pst)[ABS charval]
+                                      THEN fp1 := type OF p;
+                                           fp3 := HEAP VECTOR [2] CHAR;
+                                           fp3[1]:="'"; fp3[2]:=charval;
+                                           namefaultp(CO"* not defined for *"CO
+                                                       147, (fp3, fp1));
+                                            type := flt; ctype := flt
+                                      ELSE ctype := HEAP CPCHAR
+                                                 := (type OF p, charval)
+                                   FI
+                       OUT ctype := HEAP CPCHAR := (type OF p, charval)
+                    ESAC
+                  OUT ctype := HEAP CPCHAR := (type OF p, charval)
+              ESAC
+          FI
+       OUT SKIP
+       ESAC;
+       which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+       sucstack := rest OF sucstack
+ );
+
+PROC stringpr = VOID:
+  ( BOOL stringfail := FALSE;
+    type := t OF sucstack;
+    CASE ct OF sucstack IN
+       (REF PRIMID p)
+         IF index OF p >0
+           THEN fault(146, nullmsg CO" "" not needed here" CO); ctype := flt
+           ELIF index OF p = 0
+           THEN fp3 := id OF toks[17]; {{ a string }}
+                fp4 := HEAP VECTOR [1] CHAR:= "/";
+                faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+                type := flt; ctype := flt
+          ELSE
+              CASE type OF p IN
+                 (REF PRIMSET ps)
+                    CASE u OF ps IN
+                     (PSTRING pst)
+                        ( REF VECTOR [] CHAR string := joinstrings(0, strings);
+                          FORALL i IN string
+                          DO IF NOT (charcheck OF pst)[ABS i]
+                             THEN fp1 := type OF p;
+                                  fp3 := HEAP VECTOR [2] CHAR;
+                                  fp3[1]:="'"; fp3[2]:=i;
+                                  namefaultp(CO"* not defined for *"CO
+                                                       147, (fp3, fp1));
+                                  stringfail := TRUE
+                             FI
+                          OD
+                        )
+                    OUT SKIP
+                    ESAC
+              OUT SKIP
+              ESAC;
+              IF stringfail
+                 THEN type := flt; ctype := flt
+                 ELSE integer1 := length(strings);
+                      type := HEAP TSTRING := (integer1, type);
+                      ctype := HEAP CPSTRING
+                                := (integer1, ct OF sucstack, strings)
+              FI
+          FI
+       OUT SKIP
+       ESAC;
+       which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+       sucstack := rest OF sucstack
+ );
+
+PROC stringrange = VOID:
+(   BOOL stringfail := FALSE;
+    type := t OF sucstack;
+    CASE ct OF sucstack IN
+       (REF PRIMID p)
+         IF index OF p > 0
+           THEN fault(145, nullmsg CO" ' not needed here"CO); ctype := flt
+           ELIF index OF p = 0
+          THEN fp3 :=HEAP VECTOR [1] CHAR:= "'";
+                fp4 := HEAP VECTOR [1] CHAR:= "/";
+                faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+                type := flt; ctype := flt
+            ELSE
+              CASE type OF p IN
+                 (REF PRIMSET ps)
+                    CASE u OF ps IN
+                     (PSTRING pst)
+                       ( INT start = ABS charval1,
+                             finish = ABS charval;
+                         IF NOT check_charrange(start, finish)
+                         THEN stringfail := TRUE
+                         ELIF NOT charsubrange(start, finish, charalts OF pst)
+                         THEN fp3 := HEAP VECTOR [6] CHAR
+                                  := ("'",charval1,".",".","'",charval);
+                              fp4 := id OF idinfo OF pst;
+                              faultp(157, (fp3, fp4)
+                                     CO"* is not a subrange of *"CO );
+                              stringfail := TRUE
+                         FI
+                       )
+                       OUT SKIP
+                    ESAC
+                  OUT SKIP
+              ESAC;
+              IF stringfail
+                 THEN type := flt; ctype := flt
+                 ELSE ctype := HEAP CPCHRANGE := (type OF p, charval1, charval)
+              FI
+          FI
+       OUT SKIP
+       ESAC;
+       which := CASE ctype IN (FLT flt) (wflt) OUT wctype ESAC;
+       sucstack := rest OF sucstack
+ );
+
+PROC stringrow = VOID:
+( {{ test for chars }}
+   fp5:= i OF integerstack;
+   test integers(checkge, i OF integerstack, 1, 67, fp5
+                 CO "[*] ?  you must have at least one item" CO);
+   IF which = wtype OREL which = wctype THEN
+      IF containsfntype(type) THEN
+         fault(CO"you cant have a function type here"CO 25, nullmsg); type:= flt
+      ELSE
+         IF  isprimchar_t(type)
+           THEN type:= HEAP TSTRING := (i OF integerstack, type)
+           ELSE fault( 149, nullmsg
+                       CO"STRING must be composed of single ELLA characters"CO);
+                type := flt
+         FI
+      FI
+   FI;
+   IF which = wctype
+   THEN CASE type IN
+        (FLT) ctype := flt
+        OUT  ctype := HEAP CPSTRING := (i OF integerstack, ctype, nilstringlist)
+        ESAC
+   FI;
+   integerstack:= rest OF integerstack
+);
+
+PROC charid = VOID:
+(  idinfo:= i OF idinfostack; idinfostack:= rest OF idinfostack;
+   BOOL charfail := FALSE;
+   CASE u OF idinfo IN
+   (PRIMID p)
+   (  type:= type OF p;
+      IF index OF p > 0 THEN
+         fault(CO"' not needed here"CO 145, nullmsg); type:= flt
+      ELIF index OF p = 0
+      THEN fp3:= HEAP VECTOR [1] CHAR:= "'"; fp4 :=HEAP VECTOR [1] CHAR:= "/";
+           faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+           type := flt
+      ELSE
+         CASE type IN
+            (REF PRIMSET ps)
+               CASE u OF ps IN
+                    (PSTRING p) IF NOT (charcheck OF p)[ABS charval]
+                                    THEN fp1 := type;
+                                         fp3 := HEAP VECTOR [2] CHAR;
+                                         fp3[1]:="'"; fp3[2]:=charval;
+                                         charfail := TRUE;
+                                         namefaultp(CO"* not defined for *"CO
+                                                       147, (fp3, fp1))
+                                 FI
+                  OUT  SKIP
+               ESAC
+            OUT SKIP
+         ESAC;
+         IF charfail
+            THEN type := flt
+            ELSE outints((vprimch, primtypeno(type)));
+                 outid(HEAP VECTOR [1] CHAR := charval)
+            FI
+      FI
+   ),
+   (FLT f)
+      type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fp4 := HEAP VECTOR [9] CHAR := "character";
+      faultp(CO"  You can t use it to form an ELLA *."CO 126, fp4 )
+   ESAC;
+   pushvss(1)
+);
+
+PROC stringid = VOID:
+(  idinfo:= i OF idinfostack; idinfostack:= rest OF idinfostack;
+   BOOL stringfail := FALSE;
+   CASE u OF idinfo IN
+   (PRIMID p)
+   (  type:= type OF p;
+      IF index OF p> 0 THEN
+         fault(CO" "" not needed here"CO 146, nullmsg); type:= flt
+      ELIF index OF p = 0
+      THEN fp3:= id OF toks[17];  {{ a string }}
+           fp4:= HEAP VECTOR [1] CHAR :="/";
+           faultp(CO"* wont fit here * would"CO 2, (fp3, fp4));
+           type := flt
+      ELSE
+         CASE type IN
+            (REF PRIMSET ps)
+               CASE u OF ps IN
+                    (PSTRING p)
+                        ( REF VECTOR [] CHAR string := joinstrings(0, strings);
+                          FORALL i IN string
+                          DO IF NOT (charcheck OF p)[ABS i]
+                             THEN fp1 := type ;
+                                  fp3 := HEAP VECTOR [2] CHAR;
+                                  fp3[1]:="'"; fp3[2]:=i;
+                                  stringfail := TRUE;
+                                  namefaultp(CO"* not defined for *"CO
+                                                       147, (fp3, fp1))
+                             FI
+                          OD)
+                  OUT  SKIP
+               ESAC
+            OUT SKIP
+         ESAC;
+         IF stringfail
+            THEN type := flt
+            ELSE outints((vprimst, primtypeno(type)));
+                 outstringlist(strings);
+                 type := HEAP TSTRING := (length(strings), type)
+            FI
+      FI
+   ),
+   (FLT f)
+      type:= flt
+   OUT
+      type:= flt; fltmessage (idinfo);
+      fp4 := HEAP VECTOR [6] CHAR := "string";
+      faultp(CO"  You can t use it to form an ELLA *."CO 126, fp4 )
+   ESAC;
+   pushvss(1)
+);
+
+PROC stringsec = VOID:  ( integer := i OF integerstack;
+                   fp5 := integer;
+                   test integers(checkge, integer, 1, 67, fp5
+                                 CO"[*]? you must have at least on item"CO );
+                   outints(vstring);
+                   IF loadint(integer, FALSE)
+                   THEN integer := UNCHECKEDINT integer FI;
+                   IF isprimchar_t(type)
+                     THEN type := HEAP TSTRING := (integer, type)
+                     ELSE fault(149, nullmsg
+               CO"STRING must be composed of single ELLA characters"CO);
+                          type := flt
+                   FI;
+                   integerstack := rest OF integerstack
+                 );
+
+PROC return = RESULT:
+(  exitcomp:= TRUE; HEAP RESULT := ABS exitcomp );
+
+{{ ++++++++++++++++++++++++ new join procs +++++++++++++++++++++++++++++ }}
+
+PROC stackjoin = VOID:
+     joinstack := HEAP JOINSTACK := (joinup, joinstack);
+
+PROC setsource = VOID: lhsjoin := TRUE;
+
+PROC startindex2 = VOID:
+  ( lhsjoin := FALSE;
+    jointype := type;
+    outints(bjoin)
+  );
+
+
+PROC endindex2 = VOID:
+(  IF NOT syntaxerror
+   THEN joinup := replicate_joinup(ids, iddecs, joinup);
+        check_off(joinup, FALSE, FALSE)
+   FI;
+   joinup := flt;
+   IF NOT check type eq(jointype, type, TRUE)
+   THEN fp1:= jointype; fp2:= type;
+        namefaultp(CO"you cant join * to *"CO 66, (fp1, fp2))
+   FI;
+   lhsjoin := TRUE;
+   outints(bjoinend)
+);
+
+PROC multstack1 = VOID:
+(  joinmultstack := HEAP JOINMULTSTACK := (joinup, TRUE, joinmultstack);
+   jointype := type;
+   joinup := flt
+);
+
+PROC multstack2 = VOID:
+(  joinmultstack := HEAP JOINMULTSTACK := (joinup, FALSE, joinmultstack);
+   joinup := flt;
+   IF NOT check type eq(jointype, type, TRUE)
+   THEN fp1:= jointype; fp2:= type;
+        namefaultp(CO"you cant join * to *"CO 66, (fp1, fp2))
+   FI;
+   lhsjoin := TRUE;
+   outints(bjoinend)
+);
+
+PROC multjoinoff = VOID:
+( INT isize = GIVEINT (i OF integerstack);
+  REF JOINMULTSTACK jmstack := joinmultstack;
+  joinmultstack := niljoinmultstack;
+  WHILE jmstack ISNT niljoinmultstack
+  DO joinup :=
+        IF isize > 0
+        THEN varmult_joinup(iddecs, joinup OF jmstack)
+        ELSE gettrim(joinup OF jmstack, isize, isize) {set checks if row or str}
+     FI;
+     joinmultstack := HEAP JOINMULTSTACK
+                   := (joinup, source OF jmstack, joinmultstack);
+     joinup := flt;
+     jmstack := rest OF jmstack
+  OD
+);
+
+PROC multjoinmark = VOID:
+WHILE joinmultstack ISNT niljoinmultstack
+DO check_off(joinup OF joinmultstack, source OF joinmultstack, FALSE);
+   joinmultstack := rest OF joinmultstack
+OD;
+
+
+
+PROC joinvar = VOID:
+  IF joinvarstack ISNT niljoinvarstack
+   THEN REF JOINVARSTACK jstack := niljoinvarstack;
+        WHILE joinvarstack ISNT niljoinvarstack
+        DO jstack := HEAP JOINVARSTACK
+                  := (lwb OF joinvarstack, upb OF joinvarstack,
+                      index OF joinvarstack, jstack);
+           joinvarstack := rest OF joinvarstack
+        OD;
+        joinup := HEAP JOINREP := (joinup, jstack)
+  FI;
+
+PROC rp1 = VOID:
+( TYPE t := type;
+  CASE rowtype(t) IN
+  (REF ROW trow)
+     IF containsfntype(t OF trow)
+     THEN fault(249, nullmsg
+                      CO"You cant have a row of a function type in REPLACE"CO);
+          t := flt
+     FI
+  OUT fault(223, nullmsg CO"First parameter of REPLACE must be a row"CO);
+      t := flt
+  ESAC;
+  typestack:= HEAP TYPESTACK:= (t, typestack)
+);
+
+PROC rp2 = VOID:
+( TYPE t = primtype(type, TRUE);
+  IF NOT isprimrange(t)
+  THEN fault(224, nullmsg
+             CO"Second parameter of REPLACE must be an ELLA integer"CO)
+  ELSE PRANGE pr = primrange(t);
+       REF INTEGER lwb = HEAP INTEGER := UNCHECKEDINT(lwb OF pr);
+       REF INTEGER upb = HEAP INTEGER := UNCHECKEDINT(upb OF pr);
+       CASE rowtype(t OF typestack) IN
+       (REF ROW trow)
+         (test integers(checkge, lwb, 1, 226, 1
+            CO"Lower bound of ELLA integer used for the index must be >= *"CO);
+          fp5 := UNCHECKEDINT(size OF trow);
+          test integers(checkle, upb, fp5, 227, fp5
+            CO"Upper bound of ELLA integer used for the index must be <= *"CO);
+          IF isintcheck(lwb) THEN loadint(lwb, FALSE) FI;
+          IF isintcheck(upb) THEN loadint(upb, FALSE) FI)
+       OUT SKIP
+       ESAC
+  FI
+);
+
+PROC rp3 = VOID:
+( CASE rowtype(t OF typestack) IN
+  (REF ROW trow) IF NOT equals(type, t OF trow)
+                 THEN type := flt;
+                      fault(225, nullmsg CO
+"Third parameter of REPLACE must match the element TYPE of the first parameter"
+                            CO)
+                 ELSE check equals(type, t OF trow, TRUE, FALSE, FALSE,0);
+                      type := t OF typestack;
+                      outints(vreplace)
+                 FI
+  OUT type := flt
+  ESAC;
+  typestack := rest OF typestack
+)
+
+KEEP  fnstart,  fnend,  dummy,  vvarmult,
+      vvarmultend,  typename,  kfn,  kend,
+      seqvarmult, seqvarmultend, vthen, velse, vfi, seqthen, seqelse, seqfi,
+      starter, proset,  errorrecov, reader, failure, return, default,
+      kids, kfns, inkept, findkid, newkid, newkfn,
+
+{ actions }
+   mod2,   newidpr,   intdec1,   intdec2,  checkinteger,   removeop,
+   removeop2,   sop,   mop,   int1,   findidpr,   sid,   stackinteger,
+   sindex, strim, cattr, sconc,
+   scond,   checktypepr,   checknofntype,   cquery2,  checkmacnotfn,
+   mparamtype1,  mparamtype3,  mparamtype4,   sid1,   sid2,
+   char,   checkctype,   sunn,
+   stackchar,   stringrange,   stringpr,   sind,   checkbool,   checkcorttype,
+   stringrow,   mparamint,  srow,   checknotconstfntype,
+   stacktype,   fntype, fndecp, mfndecp, macrop,
+   srange,   stacksuc,   sstr2,   sstr3,   salts2,   salts3,   bracket,
+   salts1,   sstr1,   checkop,   dop,   callfn,   fn3,   fn2,
+   exitfn,   fn1,   dec1,   dec2,   unnamedinput,   dec3,
+   arith1,   arith2,   reformpr,   importpr,   rck,   constintpr, const2int2pr,
+   constint2pr,  idel,   del,   biopstart,   bioppr,   removecall1,
+   removecall2, mcall2,    mcall6,  callm,   vcond1,
+   vcond2,   vcond3,   stringsec,   vquerypr,
+   findfnpr,   mcall1,   mcall3,   mcall4,   newattid,    case2,   case5,
+   for,   pt2,   pt6,   pt7,   pt3,   pt4,   intidpr,   pt5,   pt1,   varmult4,
+   varmult1,   varmult2,   multjoinpr,   mcall5,   make1,   make3,   make5,
+   make4,   make2,   letstart,  beginp,  endp,
+   let1,   let2,   assign1,   assign2,   assign3,   assign4,
+   seqcond1,   seqcond2,   seqcond3,
+   unstvoid, outmultass, multtype, multassend, nullassign,
+   seqvoidpr,   dynindex1,   dynindex2,   index,   trim,   seqnullpr,
+   case1,   case3,   case7,   case4,   case6,   vardec2,   checknoalts,
+   vardec1,   coll,   str2,   str1,   sharp,   id3,   id4,   id1pr,
+   charid,   id2,   stringid,   vrowpr,   varmult3,   checkcall,   calld,
+   checkconc,   conc,   biopparampr,
+   typedec1,   typedec2,  br6,   br8,   stackpalt,   br3,   br2,   br1,   char1,
+   char4,   br7,   checkchar,   char2,   char5,   char3,   fn5,
+   impctn,   impsetct,   impfn1,   impfn3,
+   impfn2,   recpr,   fail,  constdec1,  constdec2,  checknoquery, typetoctype,
+   mparamconst1,  mparamconst2, macconst1, nullets,
+   alienstart, samp, sampintpr, sampint2pr,
+   notypeset, timeintpr, timeint2pr, fast, slow, tscale, notypeset2,
+   explmac, implmac, implimpl, implexpl, impliffn,
+   inputpr, outputpr, voidtype, checkoutputscope, checkoffjoinup,
+   setsource, startindex2, endindex2, stackjoin, checkoutputtype,
+   ioidpr, voidpr, joinvar,
+   rhsbracket,  mparamfn, errorm1, errorm2, pullfncall,
+   sfn1, sfn2, sfnpr, semicolonflt,
+   multstack1, multstack2, multjoinoff,
+   multjoinmark, rp1, rp2, rp3, setnew, stackname,
+   attr1, attrnamepr, attrdata1, attrdata2, attrstr1, attrstr2, attrstr3,
+   attrcall, stackid, dec6, outattrlist, idsattr,
+   let3, sattrpr, sattrid, attrdec1,
+   attrdec2, mparamattrpr, findidpr2, classlist, startstrings, stackstring,
+   voidctype, portname, joinrep, inparp, inseqp, inconstp, inotherp,
+   unstackstate
+
+FINISH
+
+
