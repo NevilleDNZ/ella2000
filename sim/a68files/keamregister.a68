@@ -1,0 +1,646 @@
+DECS keamregister CONTEXT VOID USE  putstrings, basics, kesymbols, keambasics,
+     keamstandard, keconv, kebasics:
+
+{  " Id: keamregister.sta,v 2.1 91/02/22 18:34:16 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamregister.a68,v 34.2 1995/03/29 13:04:38 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+    This module provides abstract machine support for the REGISTER primitive.
+
+    Created : 14-Dec-89  by  MHC  (MIKEC)
+
+    Status  : OK - Under Development
+
+    Changes :  15:Feb:90  Translate full register added since a full
+                          (4 parameter) register is now a special ALIEN.
+                          Translate register is always called with delay=0
+                          in the case of a SAMPLE.
+11:05:90   Added next event setting. MDR.
+26:10:90   Added event setter for combinatorial registers, to
+                          provoke evaluation at the correct sample time. A
+                          consequnce of next event optimisation. MDR.
+04:12:90   Made both sample and output events vote
+                          for next event. MDR.
+17:12:90   Enhanced parameter mechanism for REGISTER, so as
+                          to make all but the interval optional.  PAR.
+21:02:90   Changed 'delay' to conform to LRM.  PAR.
+09:12:91   BOOL check removed from mode SAMPLE. EVW
+31:07:92   Changes made for CONST / UNIT mode change. JIT
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.007 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+    The outline algorithm of the 'translate register' procedure is :-
+
+    BEGIN
+        extract register parameters {interval, skew, delay};
+        combinatorial flag = (delay = 0);
+        construct environment;
+        register initialiser();
+        IF (combinatorial flag) THEN
+          translate register combinatorial();
+        ELSE
+          register event setter();
+          IF (delay = 1) THEN
+            unit delay register event handler();
+          ELSE
+            general register event handler();
+          FI
+        FI
+        return value calculation
+    END
+
+    The 'translate register combinatorial' phase expands to :-
+
+    BEGIN
+      IF (current time < last stored output event time) THEN
+        jump to end;
+      ELSE
+        calculate nearest multiple of interval from current time;
+        store as new output event time;
+        IF (current time = new output event time) THEN
+          copy inputs to output;
+        ELSE
+          jump to end;
+        FI
+      FI
+    END.
+
+
+    The REGISTER environments are as follows :-
+
+        Combinatorial                             General
+
+    +-------------------+                   +-------------------+
+    |    Eval Flag      |                   |    Eval Flag      |
+    |-------------------|                   |-------------------|
+    |    No. inputs     |                   |    No. inputs     |
+    |-------------------|                   |-------------------|
+    |  N Input Ptrs     |                   |   N Input Ptrs    |
+    |-------------------|                   |-------------------|
+    | Output event time |                   | Output event time |
+    |-------------------|                   |-------------------|
+    |   Output area     |                   | Sample event time |
+    /                   /                   |-------------------|
+                                            |     Hold area     |
+                                            |-------------------|
+                                            |   Output area     |
+                                            /                   /
+
+}
+
+{ AM code sequences are accompanied by a comment representing the }
+{ stack state after the statement has executed. The following are }
+{ used as abbreviations :  cp        - Callinst Pointer           }
+{                          t         - Current global time        }
+{                          oet       - Output event time          }
+{                          set       - Sample event time          }
+{                          evt(addr) - Event (Address)            }
+{                          y/n       - Yes or No condition        }
+
+{Constants to index into the event array}
+
+INT output = 1;
+INT sample = 2;
+
+
+{ This procedure initialises the output area and sets the first output      }
+{ event time. If the REGISTER has no combinatorial action (delay /= 0)      }
+{ then the sample event time is set and the sample hold area is initialised }
+
+PROC register initialiser = (SVALUE init, BOOL combinatorial flag,
+                             INT output type, INT output offset,
+                             INT interval, skew, delay,
+                             INT hold offset, [] INT event offsets
+                            ) VOID :
+BEGIN
+
+  {Precondition - (cp)}
+
+  {Calculate skew and (skew + delay) as events in positive time}
+
+  INT sample time = (skew + 1) MOD interval;
+  INT output time = (skew + delay) MOD interval;
+
+  IF NOT combinatorial flag THEN
+    {Setup hold area and sample event}
+
+    translate output constant (init, output type, hold offset, leave flag, 1);
+
+    am local (0);                            {(cp:cp)}
+    am pushint (event offsets [sample]);     {(evt:cp:cp)}
+    am add;                                  {(evt+cp:cp)}
+    am pushint (sample time);                {(set:evt+cp:cp)}
+    am store (ws, indirect)                  {(cp)}
+  FI;
+
+  {Setup output area and output event time}
+
+  translate output constant (init, output type, output offset, leave flag, 1);
+
+  am pushint (event offsets [output]);     {(evt:cp)}
+  am add;                                  {(evt+cp)}
+  am pushint (output time);                {(oet:evt+cp)}
+  am store (ws, indirect);                 {()}
+
+  am ret (0)
+
+  {Postcondition : ())}
+
+END;   {PROC register initialiser}
+
+
+
+{ This procedure generates code for a REGISTER with a     }
+{ combinatorial phase. This occurs only if delay is zero. }
+
+PROC translate register combinatorial = (INT event offset,
+                                         [] INT event offsets,
+                                         INT input offset, INT output offset,
+                                         VECTOR [] INT input types,
+                                         INT output type, INT interval,
+                                         INT fixed part size
+                                        ) VOID :
+BEGIN
+
+  {Precondition : Evaluation flag SET and (cp)}
+
+  LABEL no work to do label = new label;
+
+  {Compare the last known output event time with the current time}
+
+  am local (0);                          {(cp:cp)}
+  am global (ws, global time label);     {(t:cp:cp)}
+  am local (0);                          {(t:t:cp:cp)}
+  am pushint (event offsets[output]);    {(evt:t:t:cp:cp)}
+  am local (3);                          {(cp:evt:t:t:cp:cp)}
+  am add;                                {(evtaddr:t:t:cp:cp)}
+  am global (ws, indirect);              {(oet:t:t:cp:cp)}
+  am local (0);                          {(oet:oet:t:t:cp:cp)}
+  am local (2);                          {(t:oet:oet:t:t:cp:cp)}
+  am gt;                                 {(y/n:oet:t:t:cp:cp)}
+  am not;                                {(y/n:oet:t:t:cp:cp)}
+  am jumpno (4, no work to do label);
+
+    {Time has advanced past our last known output event time so  }
+    {update output event time to the nearest multiple of interval}
+    {and see if this matches the current time.                   }
+
+    am local (1);                        {(t:oet:t:t:cp:cp)}
+    am sub;                              {((oet-t):t:t:cp:cp)}
+    am pushint (interval);               {(int:(oet-t):t:t:cp:cp)}
+    am mod;                              {((oet-t) mod int:t:t:cp:cp)}
+    am add;                              {(newoet:t:cp:cp)}
+    am local (2);                        {(cp:newoet:t:cp:cp)}
+    am pushint (event offsets [output]); {(evt:cp:newoet:t:cp:cp)}
+    am add;                              {(evtaddr:newoet:t:cp:cp)}
+    am local (1);                        {(newoet:evtaddr:newoet:t:cp:cp)}
+    am store (ws, indirect);             {(newoet:t:cp:cp)}
+    am eq;                               {(y/n:cp:cp)}
+    am jumpno (1, no work to do label);
+
+      {Time = new output event time so copy input to output}
+
+      am drop (1);
+      translate copy inputs (input types, input offset,
+                             lookup type (output type),
+                             output offset, reset flag, 1);
+
+
+  {Time /= new output event time so just clean up}
+  am label (1, no work to do label);     {(cp)}
+  translate end function setting flag (fixed part size, 1)
+
+  {We've finished}
+
+END;   {PROC translate register combinatorial}
+
+
+
+{ These constants are the event types in the next two PROCs }
+
+INT output event = 0,
+    sample event = 1;
+
+
+{ This procedure generates the code to set the specified event a given }
+{ number of time units ahead.                                          }
+
+PROC set event = (INT event type, event offset, ahead, d) VOID:
+
+BEGIN
+    {Precondition : (cp) }
+
+    am local (d-1);                                {(cp:cp)}
+    am pushint (event offset + ws * event type);   {(evt:cp:cp)}
+    am add;                                        {(evtaddr:cp)}
+    am local (0);                                  {(evtaddr:evtaddr:cp)}
+    am global (ws,indirect);                       {(t:evtaddr:cp)}
+    am pushint (ahead);                            {(ahead:t:evtaddr:cp)}
+    am add;                                        {(newevttime:evtaddr:cp)}
+    am store (ws, indirect)                       {(cp)}
+
+    {Postcondition : (cp) }
+END;
+
+
+
+{ This procedure compiles a test of the specified type of event, to see }
+{ whether there is any event handling to do.  The code generated leaves }
+{ 'Yes' on the abstract machine stack if the event is due, else 'No'.   }
+
+PROC event due = (INT event type, event offset, d) VOID:
+BEGIN
+    am local (d-1);                               {(cp:cp)}
+    am pushint (event offset + ws * event type);  {(evt:cp:cp)}
+    am add;                                       {(evtaddr:cp)}
+    am global (ws, indirect);                     {(evttime:cp)}
+    am global (ws, global time label);            {(t:evttime:cp)}
+    am eq                                         {(y/n:cp)}
+END;
+
+
+
+
+{ This procedure generates AM code to set the event times for sampling }
+{ and outputting. It is only called for non-combinatorial REGISTERs.   }
+
+PROC register event setter = (INT interval time, INT event offset,
+                              [] INT event offsets
+                             ) VOID :
+
+BEGIN
+
+  {Precondition : Eval Flag is SET and (cp)}
+
+  LABEL check sample event label = new label;
+  LABEL finished label = new label;
+
+  {Set a new output event only if current time >= the last stored event time }
+
+  am local (0);                                 {(cp:cp)}
+  am pushint (event offsets[output]);           {(evt:cp:cp)}
+  am add;                                       {(evtaddr:cp)}
+  am global (ws, indirect);                     {(oet:cp)}
+  am global (ws, global time label);            {(t:oet:cp)}
+  am le;                                        {(y/n:cp)}
+  am jumpno (0, check sample event label);      {(cp)}
+
+    {We need to set a new output event interval time units ahead}
+
+    set event (output event, event offset, interval time, 1);
+
+  am label (1, check sample event label);       {(cp)}
+
+  IF UPB event offsets = sample THEN
+     {Set a new sampling event only if current time >= last stored event time }
+
+     am local (0);                                 {(cp:cp)}
+     am pushint (event offsets[sample]);           {(evt:cp)}
+     am add;                                       {(evtaddr:cp)}
+     am global (ws, indirect);                     {(set:cp)}
+     am global (ws, global time label);            {(t:set:cp)}
+     am le;                                        {(y/n:cp)}
+     am jumpno (0, finished label);                {(cp)}
+
+       {We need to set a new sampling event interval time units ahead }
+
+       set event (sample event, event offset, interval time, 1);
+
+     am label (1, finished label);                  {(cp)}
+     translate set next event (event offset + ws * sample event, 1)
+  FI;
+  translate set next event (event offset + ws * output event, 1);
+  am ret (0)
+
+  {Postcondition : Eval flag is SET}
+
+END;   {PROC register event setter}
+
+
+
+
+{This procedure handles the sampling and output events for REGISTERs }
+{if the delay time is greater than one.                              }
+
+PROC general register event handler = (INT hold offset, INT input offset,
+                                       INT output offset, INT output type,
+                                       INT event offset,
+                                       VECTOR [] INT input types,
+                                       INT fixed part size
+                                      ) VOID :
+BEGIN
+
+  {Precondition : Eval Flag is SET and (cp)}
+
+  LABEL check sample event due label = new label;
+  LABEL finished label = new label;
+  event due (output event, event offset, 1);                 {(y/n:cp)}
+  am jumpno (0, check sample event due label);               {(cp)}
+
+    {We need to do an output event moving the held value to the output. }
+
+    translate copy value (output type, hold offset, output offset,
+                          reset flag, 1);                           {(cp)}
+
+    {The copy will have reset the flag iff the output changed, so in }
+    {this case we need to do fanout.                                 }
+
+    am local  (0);                                           {(cp:cp)}
+    am local  (0);                                           {(cp:cp:cp)}
+    am global (size unit, indirect);                         {(flg:cp:cp)}
+    am test;                                                 {(y/n:cp:cp)}
+    am not;                                                  {(y/n:cp:cp)}
+    am jumpno (0, check sample event due label);             {(cp:cp)}
+      am fanout (fixed part size);                           {(cp)}
+
+
+  am label (1, check sample event due label);                {(cp)}
+
+  event due (sample event, event offset, 1);                 {(y/n:cp)}
+  am jumpno (0, finished label);                             {(cp)}
+
+    {We need to do a sample event copying the input to the hold area }
+    {The eval flag state is left for a possible fanout action.       }
+
+    translate copy inputs (input types, input offset,
+                           lookup type (output type),
+                           hold offset, leave flag, 1);
+
+
+  am label (1, finished label);                              {(cp)}
+
+  {Explicitly SET the eval flag to call event setting next time}
+
+  am pushint (1);                                            {(1:cp)}
+  am store (size unit, indirect);                            {()}
+  am ret (0)
+
+  {Postcondition: Flag is SET}
+
+END;   {PROC general register event handler}
+
+
+
+
+{This procedure handles events for registers having a delay of one.}
+{In this case sampling is done before outputting.                  }
+
+PROC unit delay register event handler = (INT hold offset, INT input offset,
+                                          INT output offset, INT output type,
+                                          INT event offset,
+                                          VECTOR [] INT input types,
+                                          INT fixed part size
+                                         ) VOID :
+BEGIN
+  {Precondition : Eval Flag is SET and (cp)}
+
+  LABEL check output event due label = new label;
+  LABEL finished label = new label;
+  event due (sample event, event offset, 1);                 {(y/n:cp)}
+  am jumpno (0, check output event due label);               {(cp)}
+
+    {We need to do a sample event copying the input to the hold area }
+    {The eval flag state is left for a possible fanout action.       }
+
+    translate copy inputs (input types, input offset,
+                           lookup type (output type),
+                           hold offset, leave flag, 1);
+
+  am label (1, check output event due label);                {(cp)}
+
+  event due (output event, event offset, 1);                 {(y/n:cp)}
+  am jumpno (0, finished label);                             {(cp)}
+
+    {We need to do an output event moving the held value to the output. }
+
+    translate copy value (output type, hold offset, output offset,
+                          reset flag, 1);                          {(cp)}
+
+    {The copy will have reset the flag iff the output changed, so in }
+    {this case we need to do fanout.                                 }
+
+    am local  (0);                                           {(cp:cp)}
+    am local  (0);                                           {(cp:cp:cp)}
+    am global (size unit, indirect);                         {(flg:cp:cp)}
+    am test;                                                 {(y/n:cp:cp)}
+    am not;                                                  {(y/n:cp:cp)}
+    am jumpno (1, finished label);                           {(cp:cp)}
+      am fanout (fixed part size);                           {(cp)}
+
+  am label (1, finished label);                              {(cp)}
+
+  {Explicitly SET the eval flag to call event setting next time}
+
+  am pushint (1);                                            {(1:cp)}
+  am store (size unit, indirect);                            {()}
+  am ret (0)
+
+  {Postcondition: Flag is SET}
+
+END;   {PROC unit delay register event handler}
+
+
+
+
+PROC translate register = (SAMPLE body, ID name, FNDEC declaration,
+                           VECTOR [] INT input types, INT output type,
+                           INT delay time,
+                           ENVIRON environ, CLOSURE closure, FLTPROC flt
+                          ) STRUCT (INT size, offset, BITS sort) :
+BEGIN
+
+  {Extract parameters}
+
+  INT interval time = int (interval OF body);
+  INT skew time     = int (skew OF body);
+
+  INT data size = lookup type size (output type);
+
+  BOOL combinatorial flag = (delay time = 0);
+
+  {Construct environment}
+
+  INT input offset = size unit + ws;
+  INT event offset = input offset + (UPB input types * ws);
+
+  [] INT event offsets = IF combinatorial flag THEN
+                           event offset
+                         ELSE
+                           (event offset, event offset + ws)
+                         FI;
+
+  INT hold offset = event offset + (UPB event offsets * ws);
+
+  INT output offset = IF combinatorial flag THEN
+                        hold offset
+                      ELSE
+                        hold offset + data size
+                      FI;
+
+  INT fixed part size = output offset + data size;
+
+  {Initialise}
+
+  SVALUE init value = convert const (init OF body, environ, closure);
+  CASE init value IN
+      { Fix the type if it was a query -- *may* be wrong because of the
+        hack in 'translate full register'.
+      }
+      (REF SQUERY q): type OF q := lookup type (output type)
+  OUT SKIP
+  ESAC;
+  translate start initialiser (name);
+  register initialiser (init value,
+                        combinatorial flag, output type, output offset,
+                        interval time, skew time, delay time,
+                        hold offset, event offsets);
+
+  {Main Processing}
+
+  IF combinatorial flag THEN
+    translate start function (name);
+    translate register combinatorial (event offset, event offsets,
+                                      input offset, output offset,
+                                      input types, output type,
+                                      interval time, fixed part size);
+    translate start event setter (name);
+    register event setter  (interval time, event offset, event offsets)
+  ELSE
+    translate start event setter (name);
+    register event setter  (interval time, event offset, event offsets);
+
+    translate start event handler (name);
+
+    IF (delay time = 1) THEN
+      unit delay register event handler (hold offset, input offset,
+                                         output offset, output type,
+                                         event offset,
+                                         input types, fixed part size)
+    ELSE
+      general register event handler (hold offset, input offset,
+                                      output offset, output type,
+                                      event offset,
+                                      input types, fixed part size)
+    FI
+
+  FI;
+
+  (fixed part size, output offset,
+   IF combinatorial flag THEN
+     initialised OR combinatorial OR event setting
+   ELSE
+     initialised OR event setting OR event handling
+   FI
+  )
+
+END;   {PROC translate register}
+
+
+{ This procedure translates a register with 4 parameters which }
+{ is implemented as a special ALIEN internal to ELLA.          }
+
+PROC translate full register = (ALIENCODE body, ID name, FNDEC declaration,
+                                VECTOR [] INT input types, INT output type,
+                                ENVIRON environ, CLOSURE closure, FLTPROC flt
+                               ) STRUCT (INT size, offset, BITS sort) :
+BEGIN
+    IF UPB macparams OF body < 1 OREL UPB macparams OF body > 4 THEN
+        flt ("Wrong number of parameters to REGISTER")
+    FI;
+
+    FORMULA interval =
+        CASE (param OF ((macparams OF body)[1])) IN
+            (FORMULATAG ft): tag OF ft
+        OUT
+            flt ("Wrong type for interval time parameter to REGISTER");
+            SKIP
+        ESAC;
+
+    UNIT init =
+        IF UPB macparams OF body >= 2 THEN
+        CASE (param OF ((macparams OF body)[2])) IN
+            (UNITTAG ft): tag OF ft
+            OUT
+            flt ("Wrong type for initial value parameter to REGISTER");
+            SKIP
+        ESAC
+    ELSE
+            { This is a gross hack!  See above, in translate register, for
+              the correction of the type (in simulator terms).  Note that
+              all this query has to go through in this form is 'convert const'.
+            }
+            HEAP CQUERY query;
+            querytype OF query := tnull;
+            query
+        FI;
+
+    FORMULA skew =
+        IF UPB macparams OF body >= 3 THEN
+            CASE (param OF ((macparams OF body)[3])) IN
+                (FORMULATAG ft): tag OF ft
+            OUT
+                flt ("Wrong type for skew time parameter to REGISTER");
+                SKIP
+            ESAC
+        ELSE
+            HEAP FINT := (0, nullid)
+        FI;
+
+    FORMULA delay =
+        IF UPB macparams OF body = 4 THEN
+            CASE (param OF ((macparams OF body)[4])) IN
+                (FORMULATAG ft): tag OF ft
+            OUT
+                flt ("Wrong type for delay time parameter to REGISTER");
+                SKIP
+            ESAC
+        ELSE
+            HEAP FINT := (0, nullid)
+        FI;
+
+    HEAP SAMPLE register := (0, interval, init, skew);
+
+    translate register (register, name, declaration, input types,
+                        output type, int (delay), environ, closure, flt)
+END
+
+
+KEEP
+
+    translate register, translate full register
+
+
+FINISH
