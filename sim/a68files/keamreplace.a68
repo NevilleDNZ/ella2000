@@ -1,0 +1,701 @@
+DECS keamreplace CONTEXT VOID
+USE assmodes, basics, kesignals, kesymbols, keambasics, keamstandard,
+    kebasics, keconv:
+
+{ "  Id: keamdynassign.sta,v 2.1 91/02/22 18:34:10 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamreplace.a68,v 34.2 1995/03/29 13:04:38 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+11:10:88 Module created to translate dynamic assignment primitives.
+02:12:88 Bug 48. MDR.
+19:12:88 Bug 72. BJE.
+28:02:89 R4b155. MDR
+06:03:89 R4B157. PAR.
+13:04:89 R4B271. MDR.
+09:06:89 Corrected for up. MDR.
+14:07:89 Fixed STRING case. R4B387. MDR.
+02:08:89 Re-written to translate multi-dimensional dynamic assignments. MDR.
+21:09:89 enclosing length not multiplied by bits per byte.  LTS1.  SPT.
+21:09:89 string indirect contains spurious addition for up.  LTS1.  SPT.
+22:09:89 difference between newval and rhs caused problems in copy
+            indexed lhs to indexed output where for arrays of strings,
+            the slice of input types used corresponded to the rhs and not
+            a string of rhs.  Solution is to recognise rhs and newval
+            individually.  LTS1.  SPT.
+03:10:89 Top level of translate dynassign incorrect for whole string
+            assignments. LTS1. MDR.
+20:10:91 Renamed KEAMREPLACE - now needs to ojnly handle 1 - dim,
+            but I've left the code unchanged. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.014 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+This design implements multi-dimensional dynamic assignment. It as assumed
+that the signals that comprise the unit to be indexed are all of equal size.
+ie all static trimming and indexing (esp. into structures) has been removed.
+
+   The algorithm can take one of three states :
+    outputting lhs value,
+    outputting rhs value,
+    outputting ? value.
+
+   An initial state of unknown is also included.
+
+   An index into the flattened representation of the input value is
+   calculated in partial vector index.
+
+dimension(i, partial vector index, number of dimensions, outputting state) ::==
+  if i <= number of dimensions then
+     for current elem from 0 to up dim(i)
+        new outputting state :=
+          if (outputting state != outputting lhs value) &&
+             (lwb adressed range(i) <= current elem <= upb addressed range(i))
+           then
+             if (outputting state == outputting ? value) ||
+                (index(i) == ?) then
+                   outputting ? value
+             else
+                   outputting rhs value
+             fi
+           else
+             outputting lhs value
+           fi
+        dimension(i+1, partial vector index + current elem * weigth(i),
+                  number of dimensions, new outputting state)
+     rof
+  else { i > number of dimensions }
+     case outputting state of
+     outputting ? value:
+          generic query  @ partial vector index
+     outputting rhs value:
+          pushint (partial vector index)
+          copy rhs to indexed output (elemwidth, elemprimno, input types, rhs
+                          offset, output offset, d+(number of dimensions*k+c))
+     outputting lhs value:
+          pushint (partial vector index)
+          copy indexed lhs to output (elemwidth, elemprimno, input types, lhs
+                  input offset, lhs output offset, d+(number of dimensions*k+c))
+     esac
+  fi
+
+
+dynassign(n) ::==  dimension(1, 0, n, unknown)
+
+}
+
+{ Complete translation of an n-dimensional REPLACE function.
+  am stack before generated code :-
+  (cp : s)
+
+  am stack after generated code :-
+  (cp : s)
+}
+PROC translate replace = (UREPLACE body, ID name, FNDEC declaration,
+                            VECTOR [] INT input types, INT output type,
+                            ENVIRON environ, CLOSURE closure,
+                            FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+
+   PROC next dimension = (STYPE i) STYPE:
+      CASE i IN
+        (REF SROW srow): type OF srow,
+        (REF SST sst): t OF sst,
+        (REF SSTRING sstring): t OF sstring
+      OUT nullstype
+      ESAC;
+
+   STYPE output unit = lookup type (output type);
+   INT inputs size = raw signal width (output unit);
+   INT number of dimensions := 1;
+   UNIT head := unit OF body;
+
+   {newval is a basic element of the array.  Nothing smaller is assigned to.
+    Except for arrays of STRINGs this is the same size as the rhs.
+    For arrays of STRINGs newval is a STRING of the rhs.  The size of the
+    string is that of the final dimension. }
+
+   STYPE newval type := output unit;
+   STYPE rhs type;
+   TO number of dimensions -1 DO
+      newval type := next dimension(newval type)
+   OD;
+
+   BOOL last dyindex is on string;
+   CASE newval type IN
+      (REF SSTRING sstring):
+       BEGIN
+          rhs type := next dimension (newval type);
+          last dyindex is on string := TRUE
+       END
+   OUT
+      newval type := next dimension(newval type);
+      rhs type := newval type;
+      last dyindex is on string := FALSE
+   ESAC;
+
+   INT newval width = machine width (newval type);
+   INT newval primno = raw signal width(newval type);
+
+   INT rhs primno := raw signal width (rhs type);
+
+  {  The instance data for dynamic assignment is in the format specified
+     in KEAMSTANDARD. Given that Number of input pointers (N) is
+     assumed to be the same as the number of primitives which make up
+     the output, and 0 bytes of function specific storage exist, the
+     following are offsets into the instance space for any dynamic
+     assignment primitive.}
+
+   INT input count offset = size unit;
+   INT input offset = input count offset + ws;
+   INT index offset = input offset + (inputs size * ws);
+   INT rhs offset = index offset + (number of dimensions *ws);
+   INT output offset = rhs offset + (rhs primno * ws);
+   INT fixed part size = output offset + lookup type size (output type);
+   INT index input = inputs size +1;
+
+   PROC generic query = (INT width, address depth, flag adjust, d)VOID:
+      BEGIN
+         am local(d-1);
+         am local(address depth+1);
+         am pushint (width);
+         am mul;
+         am pushint (output offset);
+         am add;
+         am pushint(width);
+         am call (3, label ("Genericquery"));
+         am drop (3)
+     END;
+
+   {this procedure is a modified version of translate copy inputs in
+   keamstandard.}
+   PROC copy rhs to indexed output = (INT pvi depth, d)VOID:
+   BEGIN
+       {( .. : pvi: .. cp)}
+       VECTOR [newval primno] INT sizes;
+       FORALL s IN sizes, t IN input types[1: newval primno]DO
+           s := lookup type size (t)
+       OD;
+       compress sizes (sizes, newval type);
+
+       am local(d-1);
+
+       am local (pvi depth+1);
+       am pushint (newval width);
+       am mul;
+       am local(d+1);
+       am add;
+
+       {(input base: output base: ..: pvi: ..: cp)}
+
+       translate some inputs (sizes, rhs offset, output offset,
+                              reset flag, d+2);
+       {(input base: output base: ..: pvi: ..: cp)}
+
+       am drop (2)
+       {( .. : pvi: .. cp)}
+   END;
+
+   PROC copy indexed lhs to indexed output = (INT pvi depth, d)VOID:
+   BEGIN
+       {( .. : pvi: .. cp)}
+       VECTOR [newval primno] INT sizes;
+       FORALL s IN sizes, t IN input types[1: newval primno]DO
+           s := lookup type size (t)
+       OD;
+       compress sizes (sizes, newval type);
+
+       am local (pvi depth);
+       am pushint (ws*newval primno);
+       am mul;
+       am local(d);
+       am add;
+
+       am local (pvi depth+1);
+       am pushint (newval width);
+       am mul;
+       am local(d+1);
+       am add;
+       {(input base: output base: ..: pvi: ..: cp)}
+
+       translate some inputs (sizes, input offset, output offset,
+                              reset flag, d+2);
+       {(input base: output base: ..: pvi: ..: cp)}
+
+       am drop (2)
+       {( .. : pvi: .. cp)}
+   END;
+
+   PROC push index query flag = (INT i, d)VOID:
+      BEGIN
+          { ( ..: cp) }
+          am local (d-1);
+          am pushint (index offset + ((i-1)*ws));
+          am add;
+          am global (ws, indirect);
+          am global (ws, indirect)
+          { ( index query flag ..: cp) }
+      END;
+
+
+   { store a multiple of ws bits at offset o (also multiple of ws bits)
+     from the msb of enclosing string}
+   PROC store indirect = (INT store len, enclosing len)VOID:
+   BEGIN
+      {( v: a: o )}
+      INT word bit size = ws * bits per byte;
+
+      am local(2);
+      am pushint(word bit size);
+      am div;
+      am pushint(ws);
+      am mul;
+      {( rounded o: v: a: o ); NB rounded o is in bytes}
+
+      IF NOT am version up THEN
+         am local(2);
+         am add;
+         {( a+rounded o: v: a: o )}
+
+         am local (1);
+         {( v: a+rounded o: v: a: o )}
+
+         am bstore( store len, indirect);
+         {( v: a: o )}
+         am drop (3)
+      ELSE
+         am neg;
+         {( -rounded o: v: a: o )}
+         am pushint (enclosing len OVER bits per byte -ws);
+         am add;
+         am local (2);
+         am add;
+         {( (a+len)-rounded o -ws: v: a: o )}
+         am pushint(0);
+         am local(1);
+         am local(3);
+         {( v: (a+len)-rounded o -ws: 0: (a+len)-rounded o -ws: v: a: o )}
+         am bstore(store len, indirect);
+         {( (a+len)-rounded o -ws: v: a: o )}
+         am drop(4)
+      FI
+   END;
+
+   PROC string indirect = (INT len, enclosing len) VOID:
+   BEGIN
+      {( o: a)}
+      am local(0);
+      {( o: o: a)}
+      am pushint(ws * bits per byte);
+      am div;
+      am pushint(ws * bits per byte);
+      am mul;
+
+      am local(2);
+      {( a: rounded o: o : a)}
+      am bstring (len, enclosing len, indirect)
+
+      {( v: o: a )}
+   END;
+
+   { compare and set flag, modified version of KEAMSTANDARD routine }
+   PROC compare and set flag = (INT size, flag adjust, d) VOID:
+       IF flag adjust /= leave flag THEN
+           LABEL same label = new label;
+           am local (1);
+           am local (1);
+           am neq;
+           am jumpno (0, same label);
+           am local (d-1);                    { Instance ptr = flag address }
+           IF flag adjust = set flag THEN
+               am pushint (1)
+           ELSE
+               am pushint (0)
+           FI;
+           am store (size unit, indirect);
+           am label (d, same label)
+       FI;
+
+   PROC copy indexed string to indexed output = (REF SSTRING s,
+                                                 INT pvi depth, i, d) VOID:
+      BEGIN
+         {(..: pvi:..:cp)}
+         INT enclosing len = (newval width - size unit) * bits per byte;
+         LABEL row end label = new label;
+         push index query flag(i, d);
+         {(qf: ..: pvi:..:cp)}
+
+         am test;
+         am not;
+         am jump no (0, new result label);
+            {( ..: pvi:..:cp)}
+
+            {output := query}
+            generic query (newval width, pvi depth, reset flag, d);
+            {( ..: pvi:..:cp)}
+            am jump (row end label);
+
+         am label (d, new result label);
+            {( ..: pvi:..:cp)}
+
+            am local (d-1);
+            am pushint (index offset + ((i-1)*ws));
+            am add;
+            am global (ws, indirect);  {ptr to index query flag}
+            am pushint (size unit);
+            am add;                    {ptr to index}
+            am global (ws, indirect);  {index}
+            {(ind:..:pvi:..:cp) where ind = @(@(cp+io)+size unit)}
+
+            { Copy input row to output row as background for updating
+              indexed element.  Very rarley this manoeuvre will result
+              in the reevaluation flag being incorrectly reset but this
+              has limited effect and will not cause mis-simulation }
+            copy indexed lhs to indexed output(pvi depth+1, d+1);
+            {(ind:..:pvi:..:cp)}
+
+            {ouput[i] := newvalue}
+            INT charbitsize =
+              IF UPB char OF t OF s = 2 THEN 1 ELSE bits per byte FI;
+            LABEL new string label = new label;
+            am local (d);
+            am pushint (rhs offset);
+            am add;
+            {(cp+nvo:ind:..:pvi:..:cp)}
+
+            am global (ws, indirect);
+            am global (size unit, indirect);
+            {(qf:ind:..:cp) where qf = @@(cp+nvo)}
+
+            am test;
+            am not;
+            am jump no (0, new string label);
+            {(ind:..:pvi:..:cp)}
+
+            {output := query}
+            generic query(newvalwidth, pvi depth+1, reset flag, d+1);
+
+            am drop (1);
+            am jump (row end label);
+            am label (d, new string label);
+
+               {output[i] := newvalue}
+               {(i:..:pvi:..:cp)}
+               am local (d);
+               am pushint (output offset + size unit);
+               am add;
+               am local(pvi depth+2);
+               am pushint(newval width);
+               am mul;
+               am add;
+               am local (1);
+               {(i: oa: i:..:pvi:..:cp)}
+               am pushint (1);
+               am sub;
+
+               IF UPB char OF t OF s /= 2  THEN
+                  {calculate bit index of the character to be changed}
+                  am pushint (3);
+                  am shl
+               FI;
+
+               {(i-1: oa: i:..:cp)}
+               string indirect(ws * bits per byte, enclosing len);
+               {(oldval: i-1: oa: i:..:cp)}
+               am local (0);
+               {(oldval: oldval: i-1: oa: i:..:pvi:..:cp)}
+
+               {create one's compliment of mask}
+               am pushint (2^charbitsize -1);
+
+               am pushint(ws*bits per byte -charbitsize);
+               am local(4);
+               am pushint (ws*bits per byte);
+               am mod;
+               am sub;
+               am shl;
+               am com;
+               {( mask : ov: ov: i-1: oa: i:..:pvi: ..: cp)}
+               am and;
+               {( mask & ov: ov: i-1: oa: i:..:pvi: ..: cp)}
+               am local (d+4);
+               am pushint (rhs offset);
+               am add;
+               am global(ws, indirect);
+               am global(ws, indirect);
+
+               IF UPB char OF t OF s = 2 THEN
+                  {convert two-valued char into a bit}
+                  am pushint(1);
+                  am sub
+               FI;
+
+               {( new val: mask & ov: ov: i-1: oa: i:..:pvi: ..: cp)}
+               am pushint (ws*bits per byte -charbitsize);
+               am local (4);
+               am pushint (ws*bits per byte);
+               am mod;
+               am sub;
+               am shl;
+               am or;
+               {( new val | mask & ov: ov: i-1: oa: i:..:pvi: ..: cp)}
+
+               {(newval: oldval: i-1: oa: i:..:cp)}
+
+               compare and set flag (size unit, reset flag, d+5);
+               {(newval: oldval: i-1: oa: i:..:pvi:..:cp)}
+
+               am local(2);
+               am local(4);
+               am local(2);
+               {(newval: i-1: oa: newval: oldval: i-1: oa: i:..:pvi:..:cp)}
+
+               store indirect (ws * bits per byte, enclosing len);
+               {(newval: oldval: i-1: oa: i:..:pvi:..:cp)}
+               am drop (5);
+
+         am label (d, row end label)
+   END; {copy indexed string to indexed output}
+
+   {returns the number of elements in a given dimension -1}
+   PROC upb dimension = (STYPE i) INT :
+      CASE i IN
+        (REF SROW srow): no OF srow -1,
+        (REF SST sst):
+            BEGIN
+               INT rowsize := 0;
+               REF SST head := sst;
+               WHILE head ISNT nilsst DO
+                  rowsize +:=1;
+                  head := rest OF head
+               OD;
+               rowsize -1
+            END
+         OUT 0
+      ESAC;
+
+
+   PROC weight = (STYPE unit, INT i) INT :
+      BEGIN
+         INT result := 1;
+         STYPE dim := unit;
+         FOR j FROM i+1 TO number of dimensions DO
+            dim := next dimension(dim);
+            result := result * (upb dimension (dim) +1)
+         OD;
+         result
+      END;
+
+   {generate code to test index at top of stack against ELLA index}
+   PROC in addressed range = (INT weight_i, i, pvi depth, d) VOID:
+      CASE lookup type(input types[index input + (i-1)]) IN
+         (REF SINT int):
+          BEGIN
+             {(curr elem: ..: pvi: .. : cp)}
+             LABEL is query = new label;
+             LABEL end = new label;
+
+             push index query flag (i, d);
+             {(qf: curr elem: ..: pvi: .. : cp)}
+             am test;
+             am jump no (0, is query);
+             {(index: .. : cp)}
+
+             am local (0);
+             am local (d);
+             am pushint (index offset + ((i-1)*ws));
+             am add;
+             am global (ws, indirect);
+             am pushint (size unit);
+             am add;
+             am global (ws, indirect);
+             {(index: curr elem: curr elem: .. : pvi: .. : cp)
+                  where index = @(@(cp+indexoffset)+su)}
+
+             am pushint (1);
+             am sub;
+             am pushint (weight_i);
+             am mul;
+             am local(pvi depth+2);
+             am add;
+             {(index*weight(i)+pvi: curr elem: curr elem: ..: pvi: .. : cp)}
+             am eq;
+             {(index*weight(i)+pvi = curr elem: curr elem: ..: pvi: .. : cp)}
+
+             am jump (end);
+             {(curr elem: ..: pvi: .. : cp)}
+
+             am label (d, is query);
+             am local (pvi depth);
+             am pushint((lwb OF int-1)*weight_i);
+             am add;
+             am local(1);
+             am le;
+             {(curr elem => (lwb-1)*weight(i)+pvi: curr elem: ..: pvi: ..: cp)}
+
+             am local (pvi depth+1);
+             am pushint((upb OF int-1)*weight_i);
+             am add;
+             am local(2);
+             am ge;
+             {(curr elem <= (upb-1)*weight(i)+pvi:
+               curr elem => (lwb-1)*weight(i)+pvi: curr elem: ..: pvi: ..: cp)}
+             am and;
+
+             {((curr elem <= (upb-1)*weight(i)+pvi) &&
+               (curr elem => (lwb-1)*weight(i)+pvi): curr elem:..: pvi ..: cp)}
+
+             am label(d+1, end)
+             {(bool: curr elem: ..: pvi: .. :cp)}
+          END
+      ESAC;
+
+
+   PROC dimension = (STYPE unit, INT i, number of dimensions, d)VOID:
+   IF i <= number of dimensions THEN
+      {(os: pvi: ..: cp)}
+      LABEL outputting lhs = newlabel;
+      LABEL newos = new label;
+      INT weight_i = weight(unit, i);
+      am local(1);
+      am pushint ((upb dimension(unit)+1)*weight_i);
+      am add;
+      am local (2);  {start of current element}
+      am repeat;
+        {(ce: upbdim: os: pvi: ..: cp)}
+           {os (outputting state) can take the values
+            0 == outputting query,
+            1 == outputting rhs value,
+            2 == outputting lhs value. }
+        in addressed range(weight_i, i, 3, d+2);
+        am local(3);
+        am pushint (2); {outputting lhs value}
+        am lt;
+        am and;
+        {(((os < 2) && in addr range): ce: upbdim: os: pvi: ..: cp)}
+        am jump no (0, outputting lhs);
+
+        {(ce: upbdim: os: pvi: ..: cp)}
+        push index query flag (i, d+2);
+        am local (3);
+        am and;
+        {(os&ind qf: ce: upbdim: os: pvi: ..: cp)}
+
+        am jump (new os);
+
+        am label(d+2, outputting lhs);
+        am pushint (2); {outputting lhs value}
+
+        am label (d+3, new os);
+        {(newos: ce: upbdim: os: pvi: ..: cp)}
+
+        dimension(next dimension(unit), i+1, number of dimensions, d+3);
+        {(newos: ce: upbdim: os: pvi: ..: cp)}
+
+        am drop (1);
+        am pushint (weight_i);
+        am add;
+        {(ce: upbdim: os: pvi: ..: cp)}
+
+        am local(1);
+        am local(1);
+        am eq;
+        am not;
+      am loop;
+      am drop (2)
+      {(os: pvi: ..: cp)}
+   ELSE
+      {(os: pvi: ..: cp)}
+      INT pvi depth =1;
+      LABEL is query = new label;
+      LABEL lhs value = new label;
+      LABEL end = new label;
+
+      am local(0);
+      am test;
+      am jump no (0, is query);
+
+      am local(0);
+      am pushint (1); {outputting rhs value}
+      am eq;
+      am jump no (0, lhs value);
+
+      {outputting rhs value, os == 1}
+      IF last dyindex is on string THEN
+         CASE unit IN
+          (REF SSTRING sstring):
+            copy indexed string to indexed output(sstring, pvi depth, i, d)
+         ESAC
+      ELSE
+         copy rhs to indexed output(pvi depth, d)
+      FI;
+         am jump (end);
+
+      {outputting query, os == 0}
+      am label (d, is query);
+         generic query(newval width, pvi depth, reset flag, d);
+         am jump (end);
+
+      {outputting lhs value, os == 2 or 3}
+      am label (d, lhs value);
+         copy indexed lhs to indexed output(pvi depth, d);
+      am label (d, end)
+      {(os: pvi: ..: cp)}
+   FI;
+
+   { body of translate replace }
+
+   translate start function(name);
+   am pushint (0);
+   am pushint (1);
+   {(unknown output state: partial vector index: cp)}
+
+   IF last dyindex is on string THEN
+      dimension(output unit, 1{first dimension}, number of dimensions-1, 3{d})
+   ELSE
+      dimension(output unit, 1{first dimension}, number of dimensions, 3{d})
+   FI;
+
+   {(unknown output state: partial vector index: cp)}
+
+   am drop (2);
+   translate end function(fixed part size, 1);
+   (fixed part size, output offset, combinatorial)
+END {translate repalce}
+
+
+KEEP
+    translate replace
+FINISH
+
