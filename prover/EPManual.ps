@@ -1,0 +1,5855 @@
+%!
+%%BoundingBox: (atend)
+%%Pages: (atend)
+%%DocumentFonts: (atend)
+%%EndComments
+%%BeginProlog
+%
+% FrameMaker postscript_prolog 3.0, for use with FrameMaker 3.0
+% This postscript_prolog file is Copyright (c) 1986-1991 Frame Technology
+% Corporation.  All rights reserved.  This postscript_prolog file may be
+% freely copied and distributed in conjunction with documents created using
+% FrameMaker.
+%
+% Known Problems:
+%	Due to bugs in Transcript, the 'PS-Adobe-' is omitted from line 1
+/FMversion (3.0) def 
+
+% Set up Color vs. Black-and-White
+
+/FMPrintInColor false def
+/colorimage where { pop
+    /currentcolortransfer where { pop
+	/FMPrintInColor true def
+	statusdict begin 
+	    /processcolors where { 
+		pop processcolors 1 le {
+		    /FMPrintInColor false def
+		} if
+	    }{
+		/deviceinfo where {
+		    pop deviceinfo /Colors known { 
+			deviceinfo /Colors get 1 le {
+			    /FMPrintInColor false def
+			} if
+		    } if
+		} if
+	    } ifelse
+	end
+	/currentcanvas where {  % NeWSprint?
+	    pop systemdict /separationdict known not {
+		/FMPrintInColor false def
+	    } if
+	} if
+    } if
+} if
+
+
+% Uncomment this line to force b&w on color printer
+%   /FMPrintInColor false def
+
+/FrameDict 195 dict def 
+systemdict /errordict known not {/errordict 10 dict def
+		errordict /rangecheck {stop} put} if
+% The readline in 23.0 doesn't recognize cr's as nl's on AppleTalk
+FrameDict /tmprangecheck errordict /rangecheck get put 
+errordict /rangecheck {FrameDict /bug true put} put 
+FrameDict /bug false put 
+mark 
+% Some PS machines read past the CR, so keep the following 3 lines together!
+currentfile 5 string readline
+00
+0000000000
+cleartomark 
+errordict /rangecheck FrameDict /tmprangecheck get put 
+FrameDict /bug get { 
+	/readline {
+		/gstring exch def
+		/gfile exch def
+		/gindex 0 def
+		{
+			gfile read pop 
+			dup 10 eq {exit} if 
+			dup 13 eq {exit} if 
+			gstring exch gindex exch put 
+			/gindex gindex 1 add def 
+		} loop
+		pop 
+		gstring 0 gindex getinterval true 
+		} def
+	} if
+/FMVERSION {
+	FMversion ne {
+		/Times-Roman findfont 18 scalefont setfont
+		100 100 moveto
+		(FrameMaker version does not match postscript_prolog!)
+		dup =
+		show showpage
+		} if
+	} def 
+/FMLOCAL {
+	FrameDict begin
+	0 def 
+	end 
+	} def 
+	/gstring FMLOCAL
+	/gfile FMLOCAL
+	/gindex FMLOCAL
+	/orgxfer FMLOCAL
+	/orgproc FMLOCAL
+	/organgle FMLOCAL
+	/orgfreq FMLOCAL
+	/yscale FMLOCAL
+	/xscale FMLOCAL
+	/manualfeed FMLOCAL
+	/paperheight FMLOCAL
+	/paperwidth FMLOCAL
+/FMDOCUMENT { 
+	array /FMfonts exch def 
+	/#copies exch def
+	FrameDict begin
+	0 ne dup {setmanualfeed} if
+	/manualfeed exch def
+	/paperheight exch def
+	/paperwidth exch def
+	/yscale exch def
+	/xscale exch def
+	currenttransfer cvlit /orgxfer exch def
+	currentscreen cvlit /orgproc exch def
+	/organgle exch def /orgfreq exch def
+	setpapername 
+	manualfeed {true} {papersize} ifelse 
+	{manualpapersize} {false} ifelse 
+	{desperatepapersize} if
+	end 
+	} def 
+	/pagesave FMLOCAL
+	/orgmatrix FMLOCAL
+	/landscape FMLOCAL
+/FMBEGINPAGE { 
+	FrameDict begin 
+	/pagesave save def
+	3.86 setmiterlimit
+	/landscape exch 0 ne def
+	landscape { 
+		90 rotate 0 exch neg translate pop 
+		}
+		{pop pop}
+		ifelse
+	xscale yscale scale
+	/orgmatrix matrix def
+	gsave 
+	} def 
+/FMENDPAGE {
+	grestore 
+	pagesave restore
+	end 
+	showpage
+	} def 
+/FMFONTDEFINE { 
+	FrameDict begin
+	findfont 
+	ReEncode 
+	1 index exch 
+	definefont 
+	FMfonts 3 1 roll 
+	put
+	end 
+	} def 
+/FMFILLS {
+	FrameDict begin
+	array /fillvals exch def
+	end 
+	} def 
+/FMFILL {
+	FrameDict begin
+	 fillvals 3 1 roll put
+	end 
+	} def 
+/FMNORMALIZEGRAPHICS { 
+	newpath
+	0.0 0.0 moveto
+	1 setlinewidth
+	0 setlinecap
+	0 0 0 sethsbcolor
+	0 setgray 
+	} bind def
+	/fx FMLOCAL
+	/fy FMLOCAL
+	/fh FMLOCAL
+	/fw FMLOCAL
+	/llx FMLOCAL
+	/lly FMLOCAL
+	/urx FMLOCAL
+	/ury FMLOCAL
+/FMBEGINEPSF { 
+	end 
+	/FMEPSF save def 
+	/showpage {} def 
+	FMNORMALIZEGRAPHICS 
+	[/fy /fx /fh /fw /ury /urx /lly /llx] {exch def} forall 
+	fx fy translate 
+	rotate
+	fw urx llx sub div fh ury lly sub div scale 
+	llx neg lly neg translate 
+	} bind def
+/FMENDEPSF {
+	FMEPSF restore
+	FrameDict begin 
+	} bind def
+FrameDict begin 
+/setmanualfeed {
+%%BeginFeature *ManualFeed True
+	 statusdict /manualfeed true put
+%%EndFeature
+	} def
+/max {2 copy lt {exch} if pop} bind def
+/min {2 copy gt {exch} if pop} bind def
+/inch {72 mul} def
+/pagedimen { 
+	paperheight sub abs 16 lt exch 
+	paperwidth sub abs 16 lt and
+	{/papername exch def} {pop} ifelse
+	} def
+	/papersizedict FMLOCAL
+/setpapername { 
+	/papersizedict 14 dict def 
+	papersizedict begin
+	/papername /unknown def 
+		/Letter 8.5 inch 11.0 inch pagedimen
+		/LetterSmall 7.68 inch 10.16 inch pagedimen
+		/Tabloid 11.0 inch 17.0 inch pagedimen
+		/Ledger 17.0 inch 11.0 inch pagedimen
+		/Legal 8.5 inch 14.0 inch pagedimen
+		/Statement 5.5 inch 8.5 inch pagedimen
+		/Executive 7.5 inch 10.0 inch pagedimen
+		/A3 11.69 inch 16.5 inch pagedimen
+		/A4 8.26 inch 11.69 inch pagedimen
+		/A4Small 7.47 inch 10.85 inch pagedimen
+		/B4 10.125 inch 14.33 inch pagedimen
+		/B5 7.16 inch 10.125 inch pagedimen
+	end
+	} def
+/papersize {
+	papersizedict begin
+		/Letter {lettertray letter} def
+		/LetterSmall {lettertray lettersmall} def
+		/Tabloid {11x17tray 11x17} def
+		/Ledger {ledgertray ledger} def
+		/Legal {legaltray legal} def
+		/Statement {statementtray statement} def
+		/Executive {executivetray executive} def
+		/A3 {a3tray a3} def
+		/A4 {a4tray a4} def
+		/A4Small {a4tray a4small} def
+		/B4 {b4tray b4} def
+		/B5 {b5tray b5} def
+		/unknown {unknown} def
+	papersizedict dup papername known {papername} {/unknown} ifelse get
+	end
+	/FMdicttop countdictstack 1 add def 
+	statusdict begin stopped end 
+	countdictstack -1 FMdicttop {pop end} for 
+	} def
+/manualpapersize {
+	papersizedict begin
+		/Letter {letter} def
+		/LetterSmall {lettersmall} def
+		/Tabloid {11x17} def
+		/Ledger {ledger} def
+		/Legal {legal} def
+		/Statement {statement} def
+		/Executive {executive} def
+		/A3 {a3} def
+		/A4 {a4} def
+		/A4Small {a4small} def
+		/B4 {b4} def
+		/B5 {b5} def
+		/unknown {unknown} def
+	papersizedict dup papername known {papername} {/unknown} ifelse get
+	end
+	stopped 
+	} def
+/desperatepapersize {
+	statusdict /setpageparams known
+		{
+		paperwidth paperheight 0 1 
+		statusdict begin
+		{setpageparams} stopped pop 
+		end
+		} if
+	} def
+/savematrix {
+	orgmatrix currentmatrix pop
+	} bind def
+/restorematrix {
+	orgmatrix setmatrix
+	} bind def
+/dmatrix matrix def
+/dpi    72 0 dmatrix defaultmatrix dtransform
+    dup mul exch   dup mul add   sqrt def
+/freq dpi 18.75 div 8 div round dup 0 eq {pop 1} if 8 mul dpi exch div def
+/sangle 1 0 dmatrix defaultmatrix dtransform exch atan def
+/DiacriticEncoding [
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /space /exclam /quotedbl
+/numbersign /dollar /percent /ampersand /quotesingle /parenleft
+/parenright /asterisk /plus /comma /hyphen /period /slash /zero /one
+/two /three /four /five /six /seven /eight /nine /colon /semicolon
+/less /equal /greater /question /at /A /B /C /D /E /F /G /H /I /J /K
+/L /M /N /O /P /Q /R /S /T /U /V /W /X /Y /Z /bracketleft /backslash
+/bracketright /asciicircum /underscore /grave /a /b /c /d /e /f /g /h
+/i /j /k /l /m /n /o /p /q /r /s /t /u /v /w /x /y /z /braceleft /bar
+/braceright /asciitilde /.notdef /Adieresis /Aring /Ccedilla /Eacute
+/Ntilde /Odieresis /Udieresis /aacute /agrave /acircumflex /adieresis
+/atilde /aring /ccedilla /eacute /egrave /ecircumflex /edieresis
+/iacute /igrave /icircumflex /idieresis /ntilde /oacute /ograve
+/ocircumflex /odieresis /otilde /uacute /ugrave /ucircumflex
+/udieresis /dagger /.notdef /cent /sterling /section /bullet
+/paragraph /germandbls /registered /copyright /trademark /acute
+/dieresis /.notdef /AE /Oslash /.notdef /.notdef /.notdef /.notdef
+/yen /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/ordfeminine /ordmasculine /.notdef /ae /oslash /questiondown
+/exclamdown /logicalnot /.notdef /florin /.notdef /.notdef
+/guillemotleft /guillemotright /ellipsis /.notdef /Agrave /Atilde
+/Otilde /OE /oe /endash /emdash /quotedblleft /quotedblright
+/quoteleft /quoteright /.notdef /.notdef /ydieresis /Ydieresis
+/fraction /currency /guilsinglleft /guilsinglright /fi /fl /daggerdbl
+/periodcentered /quotesinglbase /quotedblbase /perthousand
+/Acircumflex /Ecircumflex /Aacute /Edieresis /Egrave /Iacute
+/Icircumflex /Idieresis /Igrave /Oacute /Ocircumflex /.notdef /Ograve
+/Uacute /Ucircumflex /Ugrave /dotlessi /circumflex /tilde /macron
+/breve /dotaccent /ring /cedilla /hungarumlaut /ogonek /caron
+] def
+/ReEncode { 
+	dup 
+	length 
+	dict begin 
+	{
+	1 index /FID ne 
+		{def} 
+		{pop pop} ifelse 
+	} forall 
+	0 eq {/Encoding DiacriticEncoding def} if 
+	currentdict 
+	end 
+	} bind def
+/graymode true def
+	/bwidth FMLOCAL
+	/bpside FMLOCAL
+	/bstring FMLOCAL
+	/onbits FMLOCAL
+	/offbits FMLOCAL
+	/xindex FMLOCAL
+	/yindex FMLOCAL
+	/x FMLOCAL
+	/y FMLOCAL
+/setpattern {
+	 /bwidth  exch def
+	 /bpside  exch def
+	 /bstring exch def
+	 /onbits 0 def  /offbits 0 def
+	 freq sangle landscape {90 add} if 
+		{/y exch def
+		 /x exch def
+		 /xindex x 1 add 2 div bpside mul cvi def
+		 /yindex y 1 add 2 div bpside mul cvi def
+		 bstring yindex bwidth mul xindex 8 idiv add get
+		 1 7 xindex 8 mod sub bitshift and 0 ne
+		 {/onbits  onbits  1 add def 1}
+		 {/offbits offbits 1 add def 0}
+		 ifelse
+		}
+		setscreen
+	 {} settransfer
+	 offbits offbits onbits add div FMsetgray
+	/graymode false def
+	} bind def
+/grayness {
+	FMsetgray
+	graymode not {
+		/graymode true def
+		orgxfer cvx settransfer
+		orgfreq organgle orgproc cvx setscreen
+		} if
+	} bind def
+	/HUE FMLOCAL
+	/SAT FMLOCAL
+	/BRIGHT FMLOCAL
+	/Colors FMLOCAL
+FMPrintInColor 
+	
+	{
+	/HUE 0 def
+	/SAT 0 def
+	/BRIGHT 0 def
+	% array of arrays Hue and Sat values for the separations [HUE BRIGHT]
+	/Colors   
+	[[0    0  ]    % black
+	 [0    0  ]    % white
+	 [0.00 1.0]    % red
+	 [0.37 1.0]    % green
+	 [0.60 1.0]    % blue
+	 [0.50 1.0]    % cyan
+	 [0.83 1.0]    % magenta
+	 [0.16 1.0]    % comment / yellow
+	 ] def
+      
+	/BEGINBITMAPCOLOR { 
+		BITMAPCOLOR} def
+	/BEGINBITMAPCOLORc { 
+		BITMAPCOLORc} def
+	/BEGINBITMAPTRUECOLOR { 
+		BITMAPTRUECOLOR } def
+	/BEGINBITMAPTRUECOLORc { 
+		BITMAPTRUECOLORc } def
+	/K { 
+		Colors exch get dup
+		0 get /HUE exch store 
+		1 get /BRIGHT exch store
+		  HUE 0 eq BRIGHT 0 eq and
+			{1.0 SAT sub setgray}
+			{HUE SAT BRIGHT sethsbcolor} 
+		  ifelse
+		} def
+	/FMsetgray { 
+		/SAT exch 1.0 exch sub store 
+		  HUE 0 eq BRIGHT 0 eq and
+			{1.0 SAT sub setgray}
+			{HUE SAT BRIGHT sethsbcolor} 
+		  ifelse
+		} bind def
+	}
+	
+	{
+	/BEGINBITMAPCOLOR { 
+		BITMAPGRAY} def
+	/BEGINBITMAPCOLORc { 
+		BITMAPGRAYc} def
+	/BEGINBITMAPTRUECOLOR { 
+		BITMAPTRUEGRAY } def
+	/BEGINBITMAPTRUECOLORc { 
+		BITMAPTRUEGRAYc } def
+	/FMsetgray {setgray} bind def
+	/K { 
+		pop
+		} def
+	}
+ifelse
+/normalize {
+	transform round exch round exch itransform
+	} bind def
+/dnormalize {
+	dtransform round exch round exch idtransform
+	} bind def
+/lnormalize { 
+	0 dtransform exch cvi 2 idiv 2 mul 1 add exch idtransform pop
+	} bind def
+/H { 
+	lnormalize setlinewidth
+	} bind def
+/Z {
+	setlinecap
+	} bind def
+	/fillvals FMLOCAL
+/X { 
+	fillvals exch get
+	dup type /stringtype eq
+	{8 1 setpattern} 
+	{grayness}
+	ifelse
+	} bind def
+/V { 
+	gsave eofill grestore
+	} bind def
+/N { 
+	stroke
+	} bind def
+/M {newpath moveto} bind def
+/E {lineto} bind def
+/D {curveto} bind def
+/O {closepath} bind def
+	/n FMLOCAL
+/L { 
+ 	/n exch def
+	newpath
+	normalize
+	moveto 
+	2 1 n {pop normalize lineto} for
+	} bind def
+/Y { 
+	L 
+	closepath
+	} bind def
+	/x1 FMLOCAL
+	/x2 FMLOCAL
+	/y1 FMLOCAL
+	/y2 FMLOCAL
+	/rad FMLOCAL
+/R { 
+	/y2 exch def
+	/x2 exch def
+	/y1 exch def
+	/x1 exch def
+	x1 y1
+	x2 y1
+	x2 y2
+	x1 y2
+	4 Y 
+	} bind def
+/RR { 
+	/rad exch def
+	normalize
+	/y2 exch def
+	/x2 exch def
+	normalize
+	/y1 exch def
+	/x1 exch def
+	newpath
+	x1 y1 rad add moveto
+	x1 y2 x2 y2 rad arcto
+	x2 y2 x2 y1 rad arcto
+	x2 y1 x1 y1 rad arcto
+	x1 y1 x1 y2 rad arcto
+	closepath
+	16 {pop} repeat
+	} bind def
+/C { 
+	grestore
+	gsave
+	R 
+	clip
+	} bind def
+	/FMpointsize FMLOCAL
+/F { 
+	FMfonts exch get
+	FMpointsize scalefont
+	setfont
+	} bind def
+/Q { 
+	/FMpointsize exch def
+	F 
+	} bind def
+/T { 
+	moveto show
+	} bind def
+/RF { 
+	rotate
+	0 ne {-1 1 scale} if
+	} bind def
+/TF { 
+	gsave
+	moveto 
+	RF
+	show
+	grestore
+	} bind def
+/P { 
+	moveto
+	0 32 3 2 roll widthshow
+	} bind def
+/PF { 
+	gsave
+	moveto 
+	RF
+	0 32 3 2 roll widthshow
+	grestore
+	} bind def
+/S { 
+	moveto
+	0 exch ashow
+	} bind def
+/SF { 
+	gsave
+	moveto
+	RF
+	0 exch ashow
+	grestore
+	} bind def
+/B { 
+	moveto
+	0 32 4 2 roll 0 exch awidthshow
+	} bind def
+/BF { 
+	gsave
+	moveto
+	RF
+	0 32 4 2 roll 0 exch awidthshow
+	grestore
+	} bind def
+/G { 
+	gsave
+	newpath
+	normalize translate 0.0 0.0 moveto 
+	dnormalize scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	closepath fill
+	grestore
+	} bind def
+/A { 
+	gsave
+	savematrix
+	newpath
+	2 index 2 div add exch 3 index 2 div sub exch 
+	normalize 2 index 2 div sub exch 3 index 2 div add exch 
+	translate 
+	scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	restorematrix
+	stroke
+	grestore
+	} bind def
+	/x FMLOCAL
+	/y FMLOCAL
+	/w FMLOCAL
+	/h FMLOCAL
+	/xx FMLOCAL
+	/yy FMLOCAL
+	/ww FMLOCAL
+	/hh FMLOCAL
+	/FMsaveobject FMLOCAL
+	/FMoptop FMLOCAL
+	/FMdicttop FMLOCAL
+/BEGINPRINTCODE { 
+	/FMdicttop countdictstack 1 add def 
+	/FMoptop count 4 sub def 
+	/FMsaveobject save def
+	userdict begin 
+	/showpage {} def 
+	FMNORMALIZEGRAPHICS 
+	3 index neg 3 index neg translate
+	} bind def
+/ENDPRINTCODE {
+	count -1 FMoptop {pop pop} for 
+	countdictstack -1 FMdicttop {pop end} for 
+	FMsaveobject restore 
+	} bind def
+/gn { 
+	0 
+	{	46 mul 
+		cf read pop 
+		32 sub 
+		dup 46 lt {exit} if 
+		46 sub add 
+		} loop
+	add 
+	} bind def
+	/str FMLOCAL
+/cfs { 
+	/str sl string def 
+	0 1 sl 1 sub {str exch val put} for 
+	str def 
+	} bind def
+/ic [ 
+	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0223
+	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0223
+	0
+	{0 hx} {1 hx} {2 hx} {3 hx} {4 hx} {5 hx} {6 hx} {7 hx} {8 hx} {9 hx}
+	{10 hx} {11 hx} {12 hx} {13 hx} {14 hx} {15 hx} {16 hx} {17 hx} {18 hx}
+	{19 hx} {gn hx} {0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12}
+	{13} {14} {15} {16} {17} {18} {19} {gn} {0 wh} {1 wh} {2 wh} {3 wh}
+	{4 wh} {5 wh} {6 wh} {7 wh} {8 wh} {9 wh} {10 wh} {11 wh} {12 wh}
+	{13 wh} {14 wh} {gn wh} {0 bl} {1 bl} {2 bl} {3 bl} {4 bl} {5 bl} {6 bl}
+	{7 bl} {8 bl} {9 bl} {10 bl} {11 bl} {12 bl} {13 bl} {14 bl} {gn bl}
+	{0 fl} {1 fl} {2 fl} {3 fl} {4 fl} {5 fl} {6 fl} {7 fl} {8 fl} {9 fl}
+	{10 fl} {11 fl} {12 fl} {13 fl} {14 fl} {gn fl}
+	] def
+	/sl FMLOCAL
+	/val FMLOCAL
+	/ws FMLOCAL
+	/im FMLOCAL
+	/bs FMLOCAL
+	/cs FMLOCAL
+	/len FMLOCAL
+	/pos FMLOCAL
+/ms { 
+	/sl exch def 
+	/val 255 def 
+	/ws cfs 
+	/im cfs 
+	/val 0 def 
+	/bs cfs 
+	/cs cfs 
+	} bind def
+400 ms 
+/ip { 
+	is 
+	0 
+	cf cs readline pop 
+	{	ic exch get exec 
+		add 
+		} forall 
+	pop 
+	
+	} bind def
+/wh { 
+	/len exch def 
+	/pos exch def 
+	ws 0 len getinterval im pos len getinterval copy pop
+	pos len 
+	} bind def
+/bl { 
+	/len exch def 
+	/pos exch def 
+	bs 0 len getinterval im pos len getinterval copy pop
+	pos len 
+	} bind def
+/s1 1 string def
+/fl { 
+	/len exch def 
+	/pos exch def 
+	/val cf s1 readhexstring pop 0 get def
+	pos 1 pos len add 1 sub {im exch val put} for
+	pos len 
+	} bind def
+/hx { 
+	3 copy getinterval 
+	cf exch readhexstring pop pop 
+	} bind def
+	/h FMLOCAL
+	/w FMLOCAL
+	/d FMLOCAL
+	/lb FMLOCAL
+	/bitmapsave FMLOCAL
+	/is FMLOCAL
+	/cf FMLOCAL
+/wbytes { 
+	dup 
+	8 eq {pop} {1 eq {7 add 8 idiv} {3 add 4 idiv} ifelse} ifelse
+	} bind def
+/BEGINBITMAPBWc { 
+	1 {} COMMONBITMAPc
+	} bind def
+/BEGINBITMAPGRAYc { 
+	8 {} COMMONBITMAPc
+	} bind def
+/BEGINBITMAP2BITc { 
+	2 {} COMMONBITMAPc
+	} bind def
+/COMMONBITMAPc { 
+	/r exch def
+	/d exch def
+	gsave
+	translate rotate scale /h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+	/bitmapsave save def 
+	r                    
+	/is im 0 lb getinterval def 
+	ws 0 lb getinterval is copy pop 
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{ip} image 
+	bitmapsave restore 
+	grestore
+	} bind def
+/BEGINBITMAPBW { 
+	1 {} COMMONBITMAP
+	} bind def
+/BEGINBITMAPGRAY { 
+	8 {} COMMONBITMAP
+	} bind def
+/BEGINBITMAP2BIT { 
+	2 {} COMMONBITMAP
+	} bind def
+/COMMONBITMAP { 
+	/r exch def
+	/d exch def
+	gsave
+	translate rotate scale /h exch def /w exch def
+	/bitmapsave save def 
+	r                    
+	/is w d wbytes string def
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{cf is readhexstring pop} image
+	bitmapsave restore 
+	grestore
+	} bind def
+	/proc1 FMLOCAL
+	/proc2 FMLOCAL
+	/newproc FMLOCAL
+/Fmcc {
+    /proc2 exch cvlit def
+    /proc1 exch cvlit def
+    /newproc proc1 length proc2 length add array def
+    newproc 0 proc1 putinterval
+    newproc proc1 length proc2 putinterval
+    newproc cvx
+} bind def
+/ngrayt 256 array def
+/nredt 256 array def
+/nbluet 256 array def
+/ngreent 256 array def
+	/gryt FMLOCAL
+	/blut FMLOCAL
+	/grnt FMLOCAL
+	/redt FMLOCAL
+	/indx FMLOCAL
+	/cynu FMLOCAL
+	/magu FMLOCAL
+	/yelu FMLOCAL
+	/k FMLOCAL
+	/u FMLOCAL
+/colorsetup {
+	currentcolortransfer
+	/gryt exch def
+	/blut exch def
+	/grnt exch def
+	/redt exch def
+	0 1 255 {
+		/indx exch def
+		/cynu 1 red indx get 255 div sub def
+		/magu 1 green indx get 255 div sub def
+		/yelu 1 blue indx get 255 div sub def
+		/k cynu magu min yelu min def
+		/u k currentundercolorremoval exec def
+		nredt indx 1 0 cynu u sub max sub redt exec put
+		ngreent indx 1 0 magu u sub max sub grnt exec put
+		nbluet indx 1 0 yelu u sub max sub blut exec put
+		ngrayt indx 1 k currentblackgeneration exec sub gryt exec put
+	} for
+	{255 mul cvi nredt exch get}
+	{255 mul cvi ngreent exch get}
+	{255 mul cvi nbluet exch get}
+	{255 mul cvi ngrayt exch get}
+	setcolortransfer
+	{pop 0} setundercolorremoval
+	{} setblackgeneration
+	} bind def
+	/tran FMLOCAL
+/fakecolorsetup {
+	/tran 256 string def
+	0 1 255 {/indx exch def 
+		tran indx
+		red indx get 77 mul
+		green indx get 151 mul
+		blue indx get 28 mul
+		add add 256 idiv put} for
+	currenttransfer
+	{255 mul cvi tran exch get 255.0 div}
+	exch Fmcc settransfer
+} bind def
+/BITMAPCOLOR { 
+	/d 8 def
+	gsave
+	translate rotate scale /h exch def /w exch def
+	/bitmapsave save def 
+	colorsetup
+	/is w d wbytes string def
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{cf is readhexstring pop} {is} {is} true 3 colorimage 
+	bitmapsave restore 
+	grestore
+	} bind def
+/BITMAPCOLORc { 
+	/d 8 def
+	gsave
+	translate rotate scale /h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+	/bitmapsave save def 
+	colorsetup
+	/is im 0 lb getinterval def 
+	ws 0 lb getinterval is copy pop 
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{ip} {is} {is} true 3 colorimage
+	bitmapsave restore 
+	grestore
+	} bind def
+/BITMAPTRUECOLORc { 
+        gsave
+        translate rotate scale /h exch def /w exch def
+        /bitmapsave save def 
+        
+        /is w string def
+        
+        ws 0 w getinterval is copy pop 
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        {ip} {gip} {bip} true 3 colorimage
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPTRUECOLOR { 
+        gsave
+        translate rotate scale /h exch def /w exch def
+        /bitmapsave save def 
+        /is w string def
+        /gis w string def
+        /bis w string def
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        { cf is readhexstring pop } 
+        { cf gis readhexstring pop } 
+        { cf bis readhexstring pop } 
+        true 3 colorimage 
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPTRUEGRAYc { 
+        gsave
+        translate rotate scale /h exch def /w exch def
+        /bitmapsave save def 
+        
+        /is w string def
+        
+        ws 0 w getinterval is copy pop 
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        {ip gip bip w gray} image
+        bitmapsave restore 
+        grestore
+        } bind def
+/ww FMLOCAL
+/r FMLOCAL
+/g FMLOCAL
+/b FMLOCAL
+/i FMLOCAL
+/gray { 
+        /ww exch def
+        /b exch def
+        /g exch def
+        /r exch def
+        0 1 ww 1 sub { /i exch def r i get .299 mul g i get .587 mul
+			b i get .114 mul add add r i 3 -1 roll floor cvi put } for
+        r
+        } bind def
+/BITMAPTRUEGRAY { 
+        gsave
+        translate rotate scale /h exch def /w exch def
+        /bitmapsave save def 
+        /is w string def
+        /gis w string def
+        /bis w string def
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        { cf is readhexstring pop 
+          cf gis readhexstring pop 
+          cf bis readhexstring pop w gray}  image
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPGRAY { 
+	8 {fakecolorsetup} COMMONBITMAP
+	} bind def
+/BITMAPGRAYc { 
+	8 {fakecolorsetup} COMMONBITMAPc
+	} bind def
+/ENDBITMAP {
+	} bind def
+end 
+	/ALDsave FMLOCAL
+	/ALDmatrix matrix def ALDmatrix currentmatrix pop
+/StartALD {
+	/ALDsave save def
+	 savematrix
+	 ALDmatrix setmatrix
+	} bind def
+/InALD {
+	 restorematrix
+	} bind def
+/DoneALD {
+	 ALDsave restore
+	} bind def
+%%EndProlog
+%%BeginSetup
+(3.0) FMVERSION
+1 1 595.3 841.89 0 1 12 FMDOCUMENT
+0 0 /Palatino-Roman FMFONTDEFINE
+1 0 /Palatino-Bold FMFONTDEFINE
+2 0 /Times-Roman FMFONTDEFINE
+3 0 /Helvetica FMFONTDEFINE
+4 0 /Palatino-Italic FMFONTDEFINE
+5 0 /Times-Bold FMFONTDEFINE
+32 FMFILLS
+0 0 FMFILL
+1 0.1 FMFILL
+2 0.3 FMFILL
+3 0.5 FMFILL
+4 0.7 FMFILL
+5 0.9 FMFILL
+6 0.97 FMFILL
+7 1 FMFILL
+8 <0f1e3c78f0e1c387> FMFILL
+9 <0f87c3e1f0783c1e> FMFILL
+10 <cccccccccccccccc> FMFILL
+11 <ffff0000ffff0000> FMFILL
+12 <8142241818244281> FMFILL
+13 <03060c183060c081> FMFILL
+14 <8040201008040201> FMFILL
+16 1 FMFILL
+17 0.9 FMFILL
+18 0.7 FMFILL
+19 0.5 FMFILL
+20 0.3 FMFILL
+21 0.1 FMFILL
+22 0.03 FMFILL
+23 0 FMFILL
+24 <f0e1c3870f1e3c78> FMFILL
+25 <f0783c1e0f87c3e1> FMFILL
+26 <3333333333333333> FMFILL
+27 <0000ffff0000ffff> FMFILL
+28 <7ebddbe7e7dbbd7e> FMFILL
+29 <fcf9f3e7cf9f3f7e> FMFILL
+30 <7fbfdfeff7fbfdfe> FMFILL
+%%EndSetup
+%%Page: "i" 1
+%%BeginPaperSize: A4
+%%EndPaperSize
+595.3 841.89 0 FMBEGINPAGE
+70.87 731.34 552.76 754.02 R
+7 X
+0 K
+V
+70.87 25.52 552.76 48.19 R
+V
+70.87 70.87 552.76 697.33 R
+V
+0 12 Q
+0 X
+(DRAFT) 291.48 405.33 T
+(Miss J I Thompson) 262.12 363.33 T
+(March 1995) 281.11 321.33 T
+170.09 463.89 425.21 568.78 R
+7 X
+V
+1 18 Q
+0 X
+(ELLA Prover User Manual) 189.4 556.78 T
+0 12 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 195.57 504.78 T
+FMENDPAGE
+%%EndPage: "i" 2
+%%Page: "ii" 2
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+42.56 731.38 524.45 754.05 R
+V
+1 14 Q
+0 X
+(Use of the ELLA Prover Software and Documentation) 112.59 744.72 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+2 12 Q
+0 X
+(**********************************************************************) 73.5 689.36 T
+0 F
+1.26 (This Document and related Software \050the ELLA Prover\051 is the property of the) 70.9 675.36 P
+2.14 (Secretary of State for Defence \050United Kingdom\051 acting through the Defence) 70.9 661.36 P
+1.88 (Research Agency \050DRA\051. Use, reproduction, production of amended versions) 70.9 647.36 P
+(and/or transfer of this Document is permitted provided that:) 70.9 633.36 T
+(\050a\051) 70.9 605.36 T
+(this legend be preserved on any such reproduction and amended version,) 93.58 605.36 T
+(\050b\051) 70.9 591.36 T
+(any amended version be clearly marked to show the nature of the) 93.58 591.36 T
+(amendment and of the name of the amending organisation,) 93.58 577.36 T
+(and) 70.9 563.36 T
+(\050c\051) 70.9 549.36 T
+-0.51 (any recipient of such reproduction or amended version accept the conditions) 93.58 549.36 P
+(set out in this legend.) 93.58 535.36 T
+( Crown Copyright, \050c\051 1995) 211.57 507.36 T
+( All rights reserved.) 230.93 479.36 T
+-0.06 (The Secretary of State for Defence \050United Kingdom\051 acting through his Defence) 70.9 451.36 P
+0.84 (Research Agency \050DRA\051 gives no warranty that any element of the Software is) 70.9 437.36 P
+2.66 (suitable for any purpose and he shall not be liable for any loss or damage) 70.9 423.36 P
+0.78 (including loss or damage resulting in injury or death howsoever caused which) 70.9 409.36 P
+5.71 (results from the use of the Software, or any developments, adaptions,) 70.9 395.36 P
+(modifications, translations and enhancements thereof.) 70.9 381.36 T
+1.59 (The authors may be contacted via email on ella@dra.hmg.gb or by writing to) 70.9 353.36 P
+(ELLA Office, CIS3, DRA, St. Andrews Road, Malvern, Worcs WR14 3PS, UK.) 70.9 339.36 T
+2 F
+(**********************************************************************) 73.5 325.36 T
+(\251) 184.29 147.36 T
+0 F
+( Crown Copyright, \0501995\051) 198.46 147.36 T
+(Defence Research Agency,) 198.46 133.36 T
+(Farnborough, Hants GU14 6TD, UK.) 198.46 119.36 T
+FMENDPAGE
+%%EndPage: "ii" 3
+%%Page: "v" 3
+595.3 841.89 0 FMBEGINPAGE
+70.87 734.03 552.76 756.79 R
+7 X
+0 K
+V
+1 16 Q
+0 X
+(List of Contents) 70.87 746.12 T
+70.87 25.52 552.76 48.29 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 40.96 T
+0 11 Q
+(v) 546.54 40.96 T
+70.87 71.05 552.76 699.88 R
+7 X
+V
+1 14 Q
+0 X
+(1) 70.87 690.55 T
+(Introduction) 99.24 690.55 T
+(1) 389.89 690.55 T
+1 12 Q
+(1.1) 70.87 673.88 T
+(History) 99.24 673.88 T
+(1) 390.89 673.88 T
+(1.2) 70.87 659.88 T
+(Overview) 99.24 659.88 T
+(1) 390.89 659.88 T
+1 14 Q
+(2) 70.87 636.55 T
+(Getting Started) 99.24 636.55 T
+(2) 389.89 636.55 T
+1 12 Q
+(2.1) 70.87 619.88 T
+(Resources) 99.24 619.88 T
+(2) 390.89 619.88 T
+(2.2) 70.87 605.88 T
+(The start-up command) 99.24 605.88 T
+(2) 390.89 605.88 T
+(2.3) 70.87 591.88 T
+(At start-up) 99.24 591.88 T
+(3) 390.89 591.88 T
+(2.4) 70.87 577.88 T
+(A simple example to try) 99.24 577.88 T
+(3) 390.89 577.88 T
+1 14 Q
+(3) 70.87 554.55 T
+(Theory Definition) 99.24 554.55 T
+(6) 389.89 554.55 T
+1 12 Q
+(3.1) 70.87 537.88 T
+(Introduction) 99.24 537.88 T
+(6) 390.89 537.88 T
+(3.2) 70.87 523.88 T
+(\324Valid by construction\325 proofs) 99.24 523.88 T
+(6) 390.89 523.88 T
+(3.3) 70.87 509.88 T
+(Syntax) 99.24 509.88 T
+(7) 390.89 509.88 T
+(3.4) 70.87 495.88 T
+(Extra features allowed in theory definitions) 99.24 495.88 T
+(8) 390.89 495.88 T
+(3.5) 70.87 481.88 T
+(Contexts) 99.24 481.88 T
+(8) 390.89 481.88 T
+1 14 Q
+(4) 70.87 458.55 T
+(File Menu) 99.24 458.55 T
+(10) 382.89 458.55 T
+1 12 Q
+(4.1) 70.87 441.88 T
+(Load) 99.24 441.88 T
+(10) 384.89 441.88 T
+(4.2) 70.87 427.88 T
+(Write) 99.24 427.88 T
+(10) 384.89 427.88 T
+(4.3) 70.87 413.88 T
+(Re-run) 99.24 413.88 T
+(10) 384.89 413.88 T
+(4.4) 70.87 399.88 T
+(Restart) 99.24 399.88 T
+(10) 384.89 399.88 T
+(4.5) 70.87 385.88 T
+(Quit) 99.24 385.88 T
+(10) 384.89 385.88 T
+1 14 Q
+(5) 70.87 362.55 T
+(Proof Menu) 99.24 362.55 T
+(11) 382.89 362.55 T
+1 12 Q
+(5.1) 70.87 345.88 T
+(Prove) 99.24 345.88 T
+(11) 384.89 345.88 T
+(5.2) 70.87 331.88 T
+(Save theorem) 99.24 331.88 T
+(11) 384.89 331.88 T
+(5.3) 70.87 317.88 T
+(Display) 99.24 317.88 T
+(11) 384.89 317.88 T
+1 14 Q
+(6) 70.87 294.55 T
+(Actions Menu) 99.24 294.55 T
+(12) 382.89 294.55 T
+1 12 Q
+(6.1) 70.87 277.88 T
+(Introduction) 99.24 277.88 T
+(12) 384.89 277.88 T
+(6.2) 70.87 263.88 T
+(Apply) 99.24 263.88 T
+(12) 384.89 263.88 T
+(6.3) 70.87 249.88 T
+(Predicate) 99.24 249.88 T
+(12) 384.89 249.88 T
+(6.4) 70.87 235.88 T
+(Case split) 99.24 235.88 T
+(13) 384.89 235.88 T
+(6.5) 70.87 221.88 T
+(Induction) 99.24 221.88 T
+(13) 384.89 221.88 T
+(6.6) 70.87 207.88 T
+(Open) 99.24 207.88 T
+(13) 384.89 207.88 T
+(6.7) 70.87 193.88 T
+(Push time) 99.24 193.88 T
+(14) 384.89 193.88 T
+(6.8) 70.87 179.88 T
+(Simplify) 99.24 179.88 T
+(14) 384.89 179.88 T
+(6.9) 70.87 165.88 T
+(Split hypothesis) 99.24 165.88 T
+(14) 384.89 165.88 T
+(6.10) 70.87 151.88 T
+(Assert) 99.24 151.88 T
+(15) 384.89 151.88 T
+(6.11) 70.87 137.88 T
+(Use existential) 99.24 137.88 T
+(15) 384.89 137.88 T
+(6.12) 70.87 123.88 T
+(Undo action) 99.24 123.88 T
+(15) 384.89 123.88 T
+(6.13) 70.87 109.88 T
+(Abandon) 99.24 109.88 T
+(15) 384.89 109.88 T
+(6.14) 70.87 95.88 T
+(Drop) 99.24 95.88 T
+(15) 384.89 95.88 T
+FMENDPAGE
+%%EndPage: "v" 4
+%%Page: "vi" 4
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+42.56 25.52 524.45 49.17 R
+V
+0 10 Q
+0 X
+(vi) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(7) 42.56 716.71 T
+(Properties Menu and Help) 70.92 716.71 T
+(16) 354.57 716.71 T
+1 12 Q
+(7.1) 42.56 700.04 T
+(Display style) 70.92 700.04 T
+(16) 356.57 700.04 T
+(7.2) 42.56 686.04 T
+(Show / Hide associations) 70.92 686.04 T
+(16) 356.57 686.04 T
+(7.3) 42.56 672.04 T
+(List existentials) 70.92 672.04 T
+(17) 356.57 672.04 T
+(7.4) 42.56 658.04 T
+(Size) 70.92 658.04 T
+(17) 356.57 658.04 T
+(7.5) 42.56 644.04 T
+(Note) 70.92 644.04 T
+(17) 356.57 644.04 T
+(7.6) 42.56 630.04 T
+(Resources) 70.92 630.04 T
+(17) 356.57 630.04 T
+(7.7) 42.56 616.04 T
+(About prover) 70.92 616.04 T
+(17) 356.57 616.04 T
+(7.8) 42.56 602.04 T
+(Help) 70.92 602.04 T
+(17) 356.57 602.04 T
+1 14 Q
+(8) 42.56 578.71 T
+(Non-graphical and log file commands) 70.92 578.71 T
+(18) 354.57 578.71 T
+1 12 Q
+(8.1) 42.56 562.04 T
+(Summary of textual commands) 70.92 562.04 T
+(18) 356.57 562.04 T
+(8.2) 42.56 548.04 T
+(The source parameter) 70.92 548.04 T
+(18) 356.57 548.04 T
+(8.3) 42.56 534.04 T
+(The target parameter) 70.92 534.04 T
+(19) 356.57 534.04 T
+(8.4) 42.56 520.04 T
+(Numbering system) 70.92 520.04 T
+(19) 356.57 520.04 T
+(8.5) 42.56 506.04 T
+(WHERE parameters in the apply command) 70.92 506.04 T
+(20) 356.57 506.04 T
+(8.6) 42.56 492.04 T
+(Editing log files) 70.92 492.04 T
+(20) 356.57 492.04 T
+(8.7) 42.56 478.04 T
+(Re-run failures) 70.92 478.04 T
+(20) 356.57 478.04 T
+1 14 Q
+(9) 42.56 454.71 T
+(Conclusion) 70.92 454.71 T
+(21) 354.57 454.71 T
+(10) 42.56 430.71 T
+(References) 70.92 430.71 T
+(22) 354.57 430.71 T
+(A) 42.56 406.71 T
+(The Six Bit Counter Example) 70.92 406.71 T
+(23) 354.57 406.71 T
+1 12 Q
+(A.1) 42.56 390.04 T
+(Introduction) 70.92 390.04 T
+(23) 356.57 390.04 T
+(A.2) 42.56 376.04 T
+(ELLA declarations) 70.92 376.04 T
+(23) 356.57 376.04 T
+(A.3) 42.56 362.04 T
+(Theory definitions) 70.92 362.04 T
+(25) 356.57 362.04 T
+(A.4) 42.56 348.04 T
+(\324Valid by construction\325 theorems) 70.92 348.04 T
+(26) 356.57 348.04 T
+(A.5) 42.56 334.04 T
+(The log file) 70.92 334.04 T
+(26) 356.57 334.04 T
+(A.6) 42.56 320.04 T
+(The resulting theorem) 70.92 320.04 T
+(28) 356.57 320.04 T
+FMENDPAGE
+%%EndPage: "vi" 5
+%%Page: "1" 5
+595.3 841.89 0 FMBEGINPAGE
+70.87 25.52 552.76 48.19 R
+7 X
+0 K
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 40.86 T
+0 11 Q
+(1) 547.26 40.86 T
+113.48 317.09 524.81 657.5 C
+113.48 317.09 524.81 657.5 R
+7 X
+0 K
+V
+0 -0 595.3 841.89 C
+70.87 731.34 552.76 754.02 R
+7 X
+0 K
+V
+1 16 Q
+0 X
+(1) 70.87 743.35 T
+(Introduction) 99.24 743.35 T
+70.87 70.87 552.76 697.33 R
+7 X
+V
+1 14 Q
+0 X
+(1.1) 70.87 687.99 T
+(History) 99.22 687.99 T
+0 12 Q
+(1.1.1) 70.87 662.33 T
+0.6 (A pr) 104.89 662.33 P
+0.6 (over and language \050NODEN\051, speci\336cally for har) 129.56 662.33 P
+0.6 (dwar) 392.99 662.33 P
+0.6 (e design, was developed) 420.86 662.33 P
+0.69 (under the MoD\325s Strategic Resear) 104.89 649.33 P
+0.69 (ch Pr) 285.19 649.33 P
+0.69 (ogramme \050AS02 BN17\051. It is described in the) 312.97 649.33 P
+3.39 (r) 104.89 636.33 P
+3.39 (eport \324A window based pr) 109.41 636.33 P
+3.39 (over for a har) 262.72 636.33 P
+3.39 (dwar) 344.51 636.33 P
+3.39 (e description language\325) 372.38 636.33 P
+0 10 Q
+2.83 (1) 502.92 641.13 P
+0 12 Q
+3.39 (. It was) 507.92 636.33 P
+0.06 (decided to use the experience gained on this pr) 104.89 623.33 P
+0.06 (ogramme to develop a similar pr) 354.77 623.33 P
+0.06 (over) 528.94 623.33 P
+(based on a subset of ELLA) 104.89 610.33 T
+0 10 Q
+(2) 245.81 615.13 T
+0 12 Q
+(.) 250.81 610.33 T
+(1.1.2) 70.87 584.33 T
+1.67 (W) 104.89 584.33 P
+1.67 (ork started on the ELLA pr) 115.78 584.33 P
+1.67 (over early in 1994 with the aim of having a version) 267.1 584.33 P
+-0.18 (available for public trial by July 1995. This date was br) 104.89 571.33 P
+-0.18 (ought forwar) 390.94 571.33 P
+-0.18 (d to April 1995 to) 460.94 571.33 P
+0.93 (coincide with a r) 104.89 558.33 P
+0.93 (elease of the ELLA system into the public domain, and as a r) 195.84 558.33 P
+0.93 (esult) 527.28 558.33 P
+0.37 (this \336rst version contains a few featur) 104.89 545.33 P
+0.37 (es which have not yet been developed to their) 306.47 545.33 P
+(full potential. Wher) 104.89 532.33 T
+(e this could signi\336cantly af) 208.66 532.33 T
+(fect the user it is documented.) 350.98 532.33 T
+1 14 Q
+(1.2) 70.87 503.99 T
+(Overview) 99.22 503.99 T
+0 12 Q
+(1.2.1) 70.87 478.33 T
+0.71 (This document describes how to use the ELLA pr) 104.89 478.33 P
+0.71 (over) 372.15 478.33 P
+0.71 (. It is assumed the r) 395.08 478.33 P
+0.71 (eader has) 501.41 478.33 P
+(some knowledge of ELLA and has available a copy of \324ELLA Pr) 104.89 465.33 T
+(over Subset\325) 441.74 465.33 T
+0 10 Q
+(3) 506.81 470.13 T
+0 12 Q
+(.) 511.81 465.33 T
+(1.2.2) 70.87 439.33 T
+2.28 (The ELLA pr) 104.89 439.33 P
+2.28 (over can be r) 178.6 439.33 P
+2.28 (un in two modes - graphical and non-graphical. Both) 253.6 439.33 P
+0.55 (modes ar) 104.89 426.33 P
+0.55 (e described, although most emphasis is given to the graphical mode. How) 154.27 426.33 P
+1.05 (to start the pr) 104.89 413.33 P
+1.05 (over is described in section 2, while section 3 covers how to de\336ne a) 179.53 413.33 P
+0.05 (theor) 104.89 400.33 P
+0.05 (em \050AXIOM, THEOREM or CONJECTURE\051. Sections 4 to 7 describe the pr) 132.61 400.33 P
+0.05 (over) 528.94 400.33 P
+1.76 (operations in the or) 104.89 387.33 P
+1.76 (der in which they appear on the four menus of the graphical) 213.63 387.33 P
+-0.27 (mode. The textual form of the commands, as used in the non-graphical mode and the) 104.89 374.33 P
+(log \336le, ar) 104.89 361.33 T
+(e described in section 8.) 157.63 361.33 T
+(1.2.3) 70.87 335.33 T
+0.1 (Examples ar) 104.89 335.33 P
+0.1 (e used to illustrate some of the operations and the \336les for the pr) 170.17 335.33 P
+0.1 (oof of a) 512.91 335.33 P
+(six bit counter) 104.89 322.33 T
+0 10 Q
+(4) 180.2 327.13 T
+0 12 Q
+( ar) 185.2 322.33 T
+(e r) 198.72 322.33 T
+(epr) 211.99 322.33 T
+(oduced in annex A.) 229.48 322.33 T
+FMENDPAGE
+%%EndPage: "1" 6
+%%Page: "2" 6
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(2) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(2) 42.56 743.39 T
+(Getting Started) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(2.1) 42.56 688.03 T
+(Resources) 70.9 688.03 T
+0 12 Q
+(2.1.1) 42.56 662.36 T
+1.77 (The version of the pr) 76.57 662.36 P
+1.77 (over described her) 194.05 662.36 P
+1.77 (e is for use on a Sun r) 296.11 662.36 P
+1.77 (unning UNIX, and) 421.88 662.36 P
+0.16 (OpenW) 76.57 649.36 P
+0.16 (indows is needed for the graphical mode. In addition to the executable code,) 117.29 649.36 P
+0.55 (named \324pr) 76.57 636.36 P
+0.55 (over) 131.85 636.36 P
+0.55 (\325, two other \336les ar) 156.56 636.36 P
+0.55 (e needed. One of these \336les, \324pr) 257.62 636.36 P
+0.55 (over) 426.41 636.36 P
+0.55 (.init\325, contains) 449.34 636.36 P
+1.56 (de\336nitions of some of the inbuilt functions and macr) 76.57 623.36 P
+1.56 (os. It is r) 367.2 623.36 P
+1.56 (ead at start-up. The) 416.59 623.36 P
+1.07 (other contains the text displayed for the help command. Ther) 76.57 610.36 P
+1.07 (e ar) 410.64 610.36 P
+1.07 (e two versions of) 430.99 610.36 P
+2.92 (the help \336le, \324graphics.help\325 and \324non_graphics.help\325, one for each mode of the) 76.57 597.36 P
+0.68 (pr) 76.57 584.36 P
+0.68 (over) 88.31 584.36 P
+0.68 (. \324pr) 111.24 584.36 P
+0.68 (over) 132.99 584.36 P
+0.68 (.help\325 will be used in section 2.2 to mean the appr) 155.93 584.36 P
+0.68 (opriate version for) 424.75 584.36 P
+(the mode in which the pr) 76.57 571.36 T
+(over is to be started.) 210.1 571.36 T
+(2.1.2) 42.56 545.36 T
+0.48 (It is not necessary to have an ELLA system. However) 76.57 545.36 P
+0.48 (, if one is available, it is useful) 362.32 545.36 P
+2.06 (to check the ELLA declarations compile and simulate, and some of the standar) 76.57 532.36 P
+2.06 (d) 517.11 532.36 P
+-0.15 (ELLA transformations may be useful in r) 76.57 519.36 P
+-0.15 (emoving featur) 293.07 519.36 P
+-0.15 (es not included in the subset) 374.15 519.36 P
+(used by the pr) 76.57 506.36 T
+(over) 152.66 506.36 T
+(.) 175.6 506.36 T
+1 14 Q
+(2.2) 42.56 478.03 T
+(The start-up command) 70.9 478.03 T
+0 12 Q
+(2.2.1) 42.56 452.36 T
+0.68 (T) 76.57 452.36 P
+0.68 (o start the pr) 82.82 452.36 P
+0.68 (over issue the \324pr) 152.44 452.36 P
+0.68 (over) 245.67 452.36 P
+0.68 (\325 command, which r) 270.38 452.36 P
+0.68 (equir) 378.46 452.36 P
+0.68 (es four parameters, as) 406.18 452.36 P
+(shown below) 76.57 439.36 T
+(.) 146.52 439.36 T
+3 10 Q
+(<pathname>prover \134) 76.57 421.69 T
+(\322DIAGFILE=<pathname>prover.log\323 \322INITFILE=<pathname>prover.init\323 \134) 76.57 407.69 T
+(\322PROVER_HELP=<pathname>prover.help\323 \322FLAGS=fftffttff\323) 76.57 393.69 T
+0 12 Q
+(2.2.2) 42.56 367.36 T
+-0.08 (If a pathname is omitted the curr) 76.57 367.36 P
+-0.08 (ent dir) 250.18 367.36 P
+-0.08 (ectory is assumed. The \336rst parameter names) 285.09 367.36 P
+0.77 (the log \336le which is generated by the pr) 76.57 354.36 P
+0.77 (over and will contain commands in textual) 292.52 354.36 P
+1.79 (form so that the session can be r) 76.57 341.36 P
+1.79 (e-r) 258.34 341.36 P
+1.79 (un. The second and thir) 272.73 341.36 P
+1.79 (d parameters indicate) 405.46 341.36 P
+2.1 (wher) 76.57 328.36 P
+2.1 (e to \336nd the initialisation and help \336les and the fourth parameter sets nine) 103.84 328.36 P
+1.05 (constants. These constants ar) 76.57 315.36 P
+1.05 (e listed below in the or) 232.88 315.36 P
+1.05 (der that they ar) 358.6 315.36 P
+1.05 (e r) 443.23 315.36 P
+1.05 (eferr) 457.56 315.36 P
+1.05 (ed to in) 482.32 315.36 P
+3 10 Q
+0.54 (FLAGS) 76.57 302.36 P
+0 12 Q
+0.58 (. However) 109.36 302.36 P
+0.58 (, numbers 1, 2 and 5 wer) 164.62 302.36 P
+0.58 (e designed to aid debugging of the pr) 297.74 302.36 P
+0.58 (over) 500.62 302.36 P
+0.52 (code and it is r) 76.57 289.36 P
+0.52 (ecommended that they ar) 156.44 289.36 P
+0.52 (e switched of) 293.61 289.36 P
+0.52 (f during normal use. \050t means) 364.63 289.36 P
+(switch on this constant and f means switch it of) 76.57 276.36 T
+(f\051) 327.43 276.36 T
+(1.) 76.57 255.36 T
+( t = Display C r) 90.75 255.36 T
+(un-time messages \050the graphical user interface is written in C\051) 171.32 255.36 T
+(2.) 76.57 233.36 T
+( t = Display messages befor) 90.75 233.36 T
+(e and after a C call) 235.66 233.36 T
+(3.) 76.57 211.36 T
+(t = Display messages befor) 90.75 211.36 T
+(e and after garbage collection) 232.66 211.36 T
+(4.) 76.57 189.36 T
+(t = Suppr) 90.75 189.36 T
+(ess sounding bell at end of a split hypothesis or cases split conjectur) 140.41 189.36 T
+(e) 499.66 189.36 T
+(f = Allow bell to sound at these times) 90.75 175.36 T
+(5.) 76.57 153.36 T
+(t = Display messages during the unify functions \050see section 8.3\051) 90.75 153.36 T
+(6.) 76.57 131.36 T
+(t = Display index warning messages \050see example in paragraph 2.2.3\051) 90.75 131.36 T
+(7.) 76.57 109.36 T
+(t = Display type coer) 90.75 109.36 T
+(cion warning messages \050see example in paragraph 2.2.3\051) 200.87 109.36 T
+(8.) 76.57 87.36 T
+(t = Display the names of functions and macr) 90.75 87.36 T
+(os as they ar) 325.12 87.36 T
+(e r) 390.68 87.36 T
+(ead in) 403.96 87.36 T
+FMENDPAGE
+%%EndPage: "2" 7
+%%Page: "3" 7
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Getting Started) 464.49 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(3) 547.26 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+0 12 Q
+0 X
+(9.) 104.89 718.04 T
+(t = Start the pr) 119.06 718.04 T
+(over in non-graphical mode) 195.49 718.04 T
+(f = Start the pr) 119.06 704.04 T
+(over in graphical mode) 195.57 704.04 T
+(2.2.3) 70.87 677.04 T
+(The following macr) 104.89 677.04 T
+(o de\336nition is accepted by the pr) 208.66 677.04 T
+(over) 381.85 677.04 T
+(.) 404.78 677.04 T
+3 10 Q
+(MAC SELECT {INT n} = \050bool: a b, data: c\051 -> bool: \050a,b,c\051[n].) 104.89 659.38 T
+0 12 Q
+0.57 (However) 104.89 638.04 P
+0.57 (, it will give rise to the following two warnings if constants 6 and 7 ar) 153.56 638.04 P
+0.57 (e set) 528.69 638.04 P
+(because the r) 104.89 623.04 T
+(esulting type depends on the value of variable) 173.84 623.04 T
+3 10 Q
+(n) 422.32 623.04 T
+0 12 Q
+(.) 427.88 623.04 T
+3 10 Q
+(WARNING: Indexed type unknown:- \050bool, bool, data\051[n]) 104.89 603.38 T
+(Coercion warning: \050bool, bool, data\051[n] assumed to be bool) 104.89 591.38 T
+0 12 Q
+0.85 (NOTE:- the ELLA compiler has strict type checking r) 104.89 570.04 P
+0.85 (ules and will not compile this) 391.82 570.04 P
+(macr) 104.89 555.04 T
+(o.) 131.33 555.04 T
+1 14 Q
+(2.3) 70.87 524.71 T
+(At start-up) 99.22 524.71 T
+0 12 Q
+(2.3.1) 70.87 499.04 T
+3.72 (If the start-up is successful, the non-graphical pr) 104.89 499.04 P
+3.72 (over will pr) 386.71 499.04 P
+3.72 (oduce a message) 456.19 499.04 P
+1.29 (followed by a pr) 104.89 486.04 P
+1.29 (ompt,) 195.98 486.04 P
+3 10 Q
+1.2 (>) 231.54 486.04 P
+0 12 Q
+1.29 (, and wait for commands to be typed in. See section 8 for) 237.38 486.04 P
+(how to enter commands.) 104.89 473.04 T
+(2.3.2) 70.87 447.04 T
+1.31 (The graphical pr) 104.89 447.04 P
+1.31 (over pr) 195.24 447.04 P
+1.31 (oduces the same message in a pop-up notice window and) 235.1 447.04 P
+1.27 (the \324Continue\325 button must be selected befor) 104.89 434.04 P
+1.27 (e commands can be selected fr) 347.52 434.04 P
+1.27 (om the) 514.7 434.04 P
+0.16 (main pr) 104.89 421.04 P
+0.16 (over window which is shown in \336gur) 146.85 421.04 P
+0.16 (e 1 on page 5. The window and menus) 347.15 421.04 P
+1.18 (ar) 104.89 408.04 P
+1.18 (e manipulated in the same way as standar) 115.41 408.04 P
+1.18 (d OpenW) 346.55 408.04 P
+1.18 (indows applications. During) 398.77 408.04 P
+-0.28 (operation, messages will be pr) 104.89 395.04 P
+-0.28 (oduced in the window in which the start-up command) 264.58 395.04 P
+1.94 (was issued and this window will be r) 104.89 382.04 P
+1.94 (eferr) 316.11 382.04 P
+1.94 (ed to as the console in the r) 340.86 382.04 P
+1.94 (est of this) 498.11 382.04 P
+(document.) 104.89 369.04 T
+1 14 Q
+(2.4) 70.87 340.71 T
+(A simple example to try) 99.22 340.71 T
+0 12 Q
+(2.4.1) 70.87 315.04 T
+(Cr) 104.89 315.04 T
+(eate a text \336le called switch.elp which contains the following text:-) 117.92 315.04 T
+3 10 Q
+(TYPE state = NEW \050on | off\051.) 104.89 297.38 T
+(FN SWITCH = \050state: in\051 -> state: CASE in OF on : off, off : on ESAC.) 104.89 283.38 T
+(CONJECTURE SWITCH_TWICE = FORALL state: x WHERE _LIFT x |- SWITCH SWITCH x = x.) 104.89 255.38 T
+0 12 Q
+0.57 (Note:) 104.89 234.04 P
+3 10 Q
+0.53 (_LIFT) 137.64 234.04 P
+0 12 Q
+0.57 ( is an in-built pr) 163.76 234.04 P
+0.57 (over function which means in this example that the case) 250.57 234.04 P
+(when) 104.89 219.04 T
+3 10 Q
+(x) 137.61 219.04 T
+0 12 Q
+( is equal to the unspeci\336ed value \050i.e.) 142.61 219.04 T
+3 10 Q
+(?state) 341.41 219.04 T
+0 12 Q
+(\051 need not be consider) 368.65 219.04 T
+(ed.) 485.34 219.04 T
+(2.4.2) 70.87 191.04 T
+(Start the pr) 104.89 191.04 T
+(over in the graphical mode and perform the following operations:-) 164.13 191.04 T
+(-) 85.04 172.04 T
+(Select the \324Load\325 command fr) 104.89 172.04 T
+(om the \324File\325 menu, select \336le \324switch.elp\325 fr) 259.85 172.04 T
+(om the list) 489.56 172.04 T
+(pr) 104.89 157.04 T
+(ovided and select the \324Load\325 button. The pr) 116.62 157.04 T
+(over will r) 345.08 157.04 T
+(ead the contents of the \336le,) 399.9 157.04 T
+-0.46 (pr) 104.89 142.04 P
+-0.46 (oducing err) 116.62 142.04 P
+-0.46 (or messages if any syntax err) 177.77 142.04 P
+-0.46 (ors ar) 328.78 142.04 P
+-0.46 (e found. If necessary edit the \336le and) 358.23 142.04 P
+(try again. Once a single message saying the \336le has been r) 104.89 127.04 T
+(ead is obtained on the) 411.03 127.04 T
+(console move on to the next stage.) 104.89 112.04 T
+FMENDPAGE
+%%EndPage: "3" 8
+%%Page: "4" 8
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Getting Started) 436.17 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(4) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+0 12 Q
+0 X
+(-) 56.73 718.04 T
+(Select the \324Pr) 76.57 718.04 T
+(ove\325 command fr) 144.85 718.04 T
+(om the \324Pr) 235.18 718.04 T
+(oof) 290.08 718.04 T
+(\325 menu. Since SWITCH_TWICE is the) 307.83 718.04 T
+-0.06 (only conjectur) 76.57 703.04 P
+-0.06 (e in the pr) 151.63 703.04 P
+-0.06 (over it will alr) 205.07 703.04 P
+-0.06 (eady be selected so just select the button. This) 279.62 703.04 P
+(tells the pr) 76.57 688.04 T
+(over which conjectur) 132.68 688.04 T
+(e the user is attempting to verify) 243.72 688.04 T
+(.) 414.5 688.04 T
+(-) 56.73 667.04 T
+(Select the \324Case split\325 command fr) 76.57 667.04 T
+(om the \324Actions\325 menu, type x in the window and) 255.86 667.04 T
+(select the button. This will add a conjectur) 76.57 652.04 T
+(e to the stack for each possible value of x,) 300.25 652.04 T
+(including ?state, and the \336rst one to be consider) 76.57 637.04 T
+(ed will be displayed :-) 329.71 637.04 T
+3 10 Q
+(FORALL state: x WHERE x = off |- \050SWITCH\050SWITCH off\051\051 = off) 76.57 621.38 T
+0 12 Q
+(If each of these is pr) 76.57 600.04 T
+(oved tr) 182.01 600.04 T
+(ue the original conjectur) 219.98 600.04 T
+(e is accepted as a theor) 348.45 600.04 T
+(em.) 469.2 600.04 T
+(-) 56.73 579.04 T
+-0.37 (Select the \324Simplify\325 command fr) 76.57 579.04 P
+-0.37 (om the \324Actions\325 menu twice to pr) 248.1 579.04 P
+-0.37 (ove the case when) 426.3 579.04 P
+3 10 Q
+-0.32 (x = of) 76.57 564.04 P
+-0.32 (f) 100.49 564.04 P
+0 12 Q
+-0.34 (. The message) 103.27 564.04 P
+3 10 Q
+-0.32 (Part of proof by cases complete: \324x = of) 179.27 564.04 P
+-0.32 (f) 349.68 564.04 P
+-0.32 (\325) 352.64 564.04 P
+0 12 Q
+-0.34 (is displayed on the console and) 357.32 564.04 P
+(the next conjectur) 76.57 549.04 T
+(e to be consider) 170.47 549.04 T
+(ed is displayed in the pr) 253.12 549.04 T
+(over window) 381 549.04 T
+(. Select) 451.09 549.04 T
+(\324Simplify\325 twice mor) 76.57 534.04 T
+(e to pr) 184.65 534.04 T
+(ove the case when) 218.6 534.04 T
+3 10 Q
+(x = on) 318.21 534.04 T
+0 12 Q
+(.) 345.73 534.04 T
+(-) 56.73 513.04 T
+(This leaves the case when) 76.57 513.04 T
+3 10 Q
+(x = ?state) 215.88 513.04 T
+0 12 Q
+( :-) 259.52 513.04 T
+3 10 Q
+(FORALL state: x WHERE _false /\134 \050x = ?state\051 |- \050SWITCH\050SWITCH ?state\051\051 = ?state) 76.57 497.38 T
+0 12 Q
+0.43 (The pr) 76.57 476.04 P
+0.43 (edicate term _LIFT ?state has alr) 111.83 476.04 P
+0.43 (eady been simpli\336ed to _false, and one mor) 285.03 476.04 P
+0.43 (e) 518.7 476.04 P
+0.87 (use of the \324Simplify\325 command will r) 76.57 461.04 P
+0.87 (educe the whole pr) 275.36 461.04 P
+0.87 (edicate to _false and hence) 379.52 461.04 P
+0.31 (the conjectur) 76.57 446.04 P
+0.31 (e to _tr) 144.95 446.04 P
+0.31 (ue. W) 182.34 446.04 P
+0.31 (ith all thr) 212.98 446.04 P
+0.31 (ee cases pr) 262.4 446.04 P
+0.31 (oved, the original conjectur) 319.51 446.04 P
+0.31 (e is pr) 465.34 446.04 P
+0.31 (oved) 498.03 446.04 P
+(and is displayed on the console as a theor) 76.57 431.04 T
+(em.) 296.57 431.04 T
+(2.4.3) 42.56 403.04 T
+(In the non-graphical mode the commands needed ar) 76.57 403.04 T
+(e:-) 354.44 403.04 T
+3 10 Q
+(read switch) 76.57 385.38 T
+(prove SWITCH_TWICE) 76.57 371.38 T
+(cases_of x;) 76.57 357.38 T
+(simplify) 76.57 343.38 T
+(simplify) 76.57 329.38 T
+(simplify) 76.57 315.38 T
+(simplify) 76.57 301.38 T
+(simplify) 76.57 287.38 T
+FMENDPAGE
+%%EndPage: "4" 9
+%%Page: "5" 9
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Getting Started) 464.49 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(5) 547.26 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+70.87 72.81 552.76 726.04 C
+99.22 359.64 524.41 714.04 C
+0 X
+0 K
+%%BeginBinary:  5592     
+556 448 397.15 312.05 0 113.4 401.99
+/red <
+000000000000000000000000A04B0000000000000000420000000000A8ECFFF7
+00000000F9FFFF7F00000000FAFFFF7F0000000048F6F9F60000000000002640
+000000005450000000000000BC50000000000000060000000000000000000000
+0000353100000000000000005CC0F9F600000000000000000000000000000000
+000000006C510000000000002E51000000000000010000000000000094ECFFF7
+000000008CECFFF70000000084ECFFF700000000000000000000000054500000
+0000000054500000000000005C80FEF600000000010000000000000001000000
+00000000DCBCF3F6000000006400000000000000010000000000FFCC71E300FE
+> store
+/green <
+0000000001000000000000001082000000000000010000000000000001000000
+0000000048EEFFF7000000005CC0F9F600000000000000000000000000000000
+00000000884C00000000000000000000000000000000000000000000B633B143
+000000000000000000000000DCECFFF700000000F4ECFFF700000000944B0000
+00000000944B000000000000AC7C020000000000200000000000000000000000
+000000005C00343000000000A0823244000000000000000000000000DCECFFF7
+00000000A8ECFFF798ECFFF720ECFFF773000000010000000000000001000000
+00000000200000000000000000000000000000005CC0F9F60000FFCE72E500FF
+> store
+/blue <
+008000003CEEFFF70F000000A87C0200D631000054EEFFF706000000C8340000
+68EEFFF71C3A000068EEFFF73838000068EEFFF7060000000000000000000008
+FC7902004D320000010000005CC0F9F6070000000000000000010000FFFFFFFF
+7300000088EDFFF70000000048EEFFF744EEFFF740EEFFF73CEEFFF7883B0000
+F8EDFFF75C4B0000F0EDFFF7008000003CEEFFF734450000F8EDFFF7DC3E0000
+E8EDFFF70080000044EEFFF751320000AC7C02000000000048EEFFF75CC0F9F6
+0700000000000000000000000000000000000000E83E00000000000000000000
+0000000000000000000000000000000000000000010000000000FFA45BB700E6
+> store
+ BEGINBITMAPCOLORc
+Az
+Y<FE7t"Jt"
+FDFCY=FDFC
+Az
+Y<FD:'8Z"8'
+FCFCFCFCFCFCY9FCFCFCFCFCFCFC;'8#D"z8(
+FDFDFDFDFDFDFCFDFDY'FCFDFDFDFDFDFDFFB$y"z
+FDFDFFFDFCY(FD
+
+HrJ'8#<#>#J#>%
+FCR;FEFEFEFEFEFEFEFEFEFEFEFEO8FEFEFEFEFEFE7$E'J%J#?'J$
+FCFCFCFBFBFBFBFBFFR=FDFDFDFDOLFEFEFEFEFDFDFEFER3FCFCFC&C#9#J%>&9&8%9#8#9%9);#8#8#J&
+FEFEFEFDFDFDFCFFFDS&FEFDFEFEFEFEFDFEFEFEFEFDFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFDFEFEFDFEFEFEFEFEFEFDFDRAFDFDFEFEFEJ%>'@'
+SMFEFDFEFEFEFEFDFDFEFEFEFEFDFDFEFEI&J$I#C"=$J'
+FDFCFBFFFDR>FEFEFEFEFDFDFEFDFD;FEFDFDFDFDFDJ$J#8"G"A$8":#<"@$8"
+S(FDFDFD4FEFEFEFDFDFEFEFDFEFEFDFDFEFEFDJ$J&J%
+4FDFFFDS&FEFEFDFDFDIFDFDFDFDJ"J%>">#<%A#
+5FDSLFDFEFEFDFEFEFEFDFEFEFDFEFEJ%:%:%G%>'@'J'
+S(FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFDFDFEFEFEFEFDFDFEFEFEFEFDBFDFEFEFEFEFDJ'8'8t9#?$9#;%;#;%9#:#=#<#:#8%
+S&FDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDD"y"
+FDFCFDEyJ#
+FDS.FDFD
+
+;Z"
+YGFC<z
+YFFC;z
+YHFD;z
+YHFE;z
+YHFD
+
+
+
+
+FZJZJZJZJZ
+I7O%7O17OCQGAD#z#I#z#I#z#I#z#J#z#
+FFFFIFDFFFFFFFFO%FDFFFFFFFFO1FDFFFFFFFFOCFDFFFFQCFFFFAFDFFFFC$J$G$J$G$J$G$J$J$J$
+FFFDFDIFDFDFFFFFDFDO%FDFDFFFFFDFDO1FDFDFFFFFDFDOCFDFDFFQAFFFDFDAFDFDFFB#D"9"J#E#J#H#E#J"J#E#J"J#J#J"C#
+FFFDFEFE:FDFCFFFDCFEFEFDFCFFFD:FEHFDFCFFFDO&FE@FDFCQ?FFFD7FEFDFCA#>%J#C#>%J$I#C#?#A"J#C#>%J"J#J#>":"J#
+FFFDFEFEFEFECFDFCFFFDFEFEFEFE7FEFDFDFDFCFFFDFEFEFEO FDFCFFFDFEFEFEFEDFEFFDFCQ=FFFDFEFE9FDFCJ$9"J%J"J%J"
+6FDFDFDFDO+FDFDFDFEOJFDO5FDFDFDFEHFD@#F"=$?r<#A#F%9#;#9%=r<#A#?%;)8":#:%:$>r<#A#F%9#:%:$9*8"9$:$>r<#J#H$>%>#
+FFFDFEFEFEFEFCFDFCFFFDFEFDFEFEFEFEFEFEFEFEFEFEFCFDFCFFFDFEFDFDFEFEFEFEFDFEFEFEFEFEFEFEFEFDFEFEFEFEFEFCFDFCFFFDFEFDFEFEFEFEFEFDFEFEFEFEFEFEFDFEFEFDFEFEFEFEFEFEFEFEFEFEFEFCFDFCQ;FFFDFEFEFEFEFDFEFEFDFCJ&?'J$8%9%8%>'J*<%:%8%?'J$8%:%8&9);&8%?'J&>%
+CFEFDFDFDFEFBFBFBFBFBFFFFEFDFDFEFDFDFEFEFDFDFEFDFEFDFDFBFBFBFBFBFFFFEFDFDFDFDFDFEFDFDFEFDFDFEFEFDFDFEFEFDFDFDFBFBFBFBFBFFFFEFDFDFEFDFDFEFEFDFDFEFEFDFDFDFEFEFDFDFDFDFEFDFDFEFDFDFDFEFEFDFDFDFBFBFBFBFBFFR(FEFDFDFDFEFEFDFDFEJ$J#9#J"9#8&8#B#9#J#C#8#9"G#9#J"9#8#9"C"J#9#J%F"
+6FEFEFE7FDFCFFFDFFDFEFDFDFEFDFEFDFDFEFDFCFFFDEFEFDFEFDFDFEFDFDFCFFFDFFDFEFDFDFEFDFD?FDFCFFFDR!FEFEFEFEFDJ$A$J%J'J$J%J$H$9$J%:$
+6FDFDFDFEFEFEO!FEFEFEFDO6FEFEFEFEFEFE@FDFEFEO!FEFEFEFD7FEFEFEFEFEFEFDFEFER1FDFDFDFDFEFEFEJ%?&J$J&J%J$?&J$J%G%9$?&J%
+DFDFDFDFDFDFCFBFFFD@FDFDFDBFDFCFBFFFD?FDFDFDFDBFDFDFEFDFCFBFFFD@FDFDFD8FDFDFDFDFDFDFDFDFDFDFEFDFCFBFFFDR*FDFDFDFDJ"J#8&8#J#C#8#J#8#C"J"J"
+GFEO+FDFEFEFDFDFDFEFEFDO*FDFEFDFEFEFDO8FDFEFEFDFE4FERAFEJ&@$J%9%E$J%8$<%@%@$J%:%8&>$;&8%@$J&>%
+CFDFEFEFEFDFDFFFDMFDFEFEFDFDFEFEFDFDFFFDHFDFEFEFEFDFEFEFDFEFEFDFEFEFEFDFDFFFDMFDFEFEFDFEFEFEFDFDFEFEFEFDFDFEFEFDFEFEFEFDFEFEFEFDFDFFFDR*FDFEFEFEFDFEFEFEFD@#?"<"9"9$B"?#A#?"<"<#;#:"B"?#A#>":":$9#8":#:"9"8$B"?#A#?"<"<#;$:$9"<#8"9$9$B"?#J#?":"9$:":$>#
+FDFFFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFCFDQ;FDFFFDFDFDFDFDFDFDFDFDFCFD
+A#J#C#J#C#J#C#J"J#J#J"@#
+FDFFO!FCFDFDFFO+FCFDFDFFO7FCFDFDFF<FDO,FCFDQ=FDFF<FDFCFDB#J#E#J#E#J#E#J#J#J#
+FDFCMFCFDFDFCO)FCFDFDFCO5FCFDFDFCOGFCFDQ?FDFCEFCFDC$J$G$J$G$J$G$J$J$J$
+FDFCFCIFCFCFDFDFCFCO%FCFCFDFDFCFCO1FCFCFDFDFCFCOCFCFCFDQAFDFCFCAFCFCFDD#z#I#z#I#z#I#z#J#z#
+FDFDIFCFDFDFDFDO%FCFDFDFDFDO1FCFDFDFDFDOCFCFDFDQCFDFDAFCFDFDFzJzJzJzJz
+IFD7O%FD7O1FD7OCFDQGAFD
+
+
+
+
+
+
+
+
+
+
+
+;z8X"
+Y5FEFC<z:w
+Y3FAFD
+
+
+Jw
+Y=FCJy
+Y<FD
+JX
+Y=J"w"
+Y<FFFDFC
+
+
+J#
+YBFCFCJ"8"
+YAFCFCJ":"
+Y@FCFCJ"<"
+Y?FCFC
+Js
+Y?FD
+
+
+
+JW
+Y=Jw
+Y=FD
+
+
+
+
+
+
+
+
+
+
+
+
+Jw
+Y=FCJw
+Y=FD
+
+
+
+Js
+Y?FC
+J"<"
+Y?FDFDJ":"
+Y@FDFDJ"8"
+YAFDFDJ#
+YBFDFD
+
+
+Jw
+Y=FCJy
+Y<FDJ$
+YBFCFCFC
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+J$
+YBFDFDFD
+JX"
+Y<FCJw
+Y=FD
+
+
+<z:w
+Y3FEFC;z8y
+Y5FDFD
+
+
+
+
+
+
+
+
+
+
+
+PJP
+YH7%J%
+FDFDFDFCYIFDFDFDFC
+
+
+
+;QJQ
+Y<:(J'
+FDFDFDFDFDFDFCY=FDFDFDFDFDFDAz
+Y<FE
+7tJt
+FCY>FC
+ENDBITMAP
+%%EndBinary
+0 12 Q
+(Figur) 127.58 373.63 T
+(e 1 : The ELLA pr) 156.18 373.63 T
+(over at start-up) 249.08 373.63 T
+70.87 72.81 552.76 726.04 C
+0 -0 595.3 841.89 C
+FMENDPAGE
+%%EndPage: "5" 10
+%%Page: "6" 10
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(6) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(3) 42.56 743.39 T
+(Theory De\336nition) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(3.1) 42.56 688.03 T
+(Introduction) 70.9 688.03 T
+0 12 Q
+(3.1.1) 42.56 662.36 T
+0.61 (When designing a digital electr) 76.57 662.36 P
+0.61 (onic component it should be possible to write down) 244.33 662.36 P
+1.38 (one or mor) 76.57 649.36 P
+1.38 (e statements about how the component should behave. If this series of) 137.58 649.36 P
+-0.06 (statements, or theory) 76.57 636.36 P
+-0.06 (, about the design can be written in a formal notation which can) 187.01 636.36 P
+1.26 (be manipulated by a tool, mor) 76.57 623.36 P
+1.26 (e con\336dence can be gained in the corr) 242.77 623.36 P
+1.26 (ectness of the) 450.83 623.36 P
+0.03 (design. The ELLA pr) 76.57 610.36 P
+0.03 (over can help in this pr) 187.14 610.36 P
+0.03 (ocess for designs written in the subset of) 309.55 610.36 P
+(ELLA) 76.57 597.36 T
+0 10 Q
+(3) 107.9 602.16 T
+0 12 Q
+( which it uses.) 112.9 597.36 T
+(3.1.2) 42.56 571.36 T
+0.51 (The theory de\336nitions needed for a pr) 76.57 571.36 P
+0.51 (oof ar) 281.09 571.36 P
+0.51 (e r) 312.23 571.36 P
+0.51 (ead fr) 326.01 571.36 P
+0.51 (om one or mor) 357.12 571.36 P
+0.51 (e text \336les. They) 437.05 571.36 P
+0.29 (can be included in the same \336le as ELLA declarations but it is usually better to keep) 76.57 558.36 P
+(them separate since they will not compile in the ELLA system.) 76.57 545.36 T
+(3.1.3) 42.56 519.36 T
+2.33 (A de\336nition starts with one of thr) 76.57 519.36 P
+2.33 (ee keywor) 268.01 519.36 P
+2.33 (ds:- THEOREM \050known to be tr) 325.01 519.36 P
+2.33 (ue\051,) 504.46 519.36 P
+0.81 (AXIOM \050asserted to be tr) 76.57 506.36 P
+0.81 (ue\051 and CONJECTURE \050to be pr) 213.03 506.36 P
+0.81 (oved\051. When a conjectur) 387.73 506.36 P
+0.81 (e) 518.7 506.36 P
+-0.24 (has been pr) 76.57 493.36 P
+-0.24 (oved it is changed into a THEOREM and can be used in the pr) 137.01 493.36 P
+-0.24 (oof of other) 463.34 493.36 P
+(conjectur) 76.57 480.36 T
+(es.) 124.99 480.36 T
+(3.1.4) 42.56 454.36 T
+(A simple example conjectur) 76.57 454.36 T
+(e is:-) 223.94 454.36 T
+3 10 Q
+(CONJECTURE ROW_EQUAL = FORALL _const: n, data: x WHERE n > 0) 76.57 436.69 T
+(|- ADD_ROW {n} [n]x = MULT_N {n} x.) 218.3 422.69 T
+0 12 Q
+-0.05 (In this conjectur) 76.57 401.36 P
+-0.05 (e two variables ar) 161.4 401.36 P
+-0.05 (e de\336ned,) 254.98 401.36 P
+3 10 Q
+-0.04 (n) 310.04 401.36 P
+0 12 Q
+-0.05 ( and) 315.6 401.36 P
+3 10 Q
+-0.04 (x) 341.82 401.36 P
+0 12 Q
+-0.05 (, and a r) 346.82 401.36 P
+-0.05 (estriction is placed on the) 389.51 401.36 P
+-0.3 (value of) 76.57 386.36 P
+3 10 Q
+-0.28 (n) 121.78 386.36 P
+0 12 Q
+-0.3 ( with the pr) 127.34 386.36 P
+-0.3 (edicate expr) 188.22 386.36 P
+-0.3 (ession) 252.15 386.36 P
+3 10 Q
+-0.28 (n > 0) 287.81 386.36 P
+0 12 Q
+-0.3 (. The hypothesis, which is the expr) 309.77 386.36 P
+-0.3 (ession) 491.49 386.36 P
+0.89 (following the) 76.57 371.36 P
+3 10 Q
+0.82 (|-) 152.23 371.36 P
+0 12 Q
+0.89 ( symbol, involves instances of the two ELLA macr) 158.16 371.36 P
+0.89 (os de\336ned below) 430.29 371.36 P
+0.89 (.) 521.44 371.36 P
+2.97 (The aim is to pr) 76.57 356.36 P
+2.97 (ove that under the stated conditions the two instances always) 171.42 356.36 P
+(pr) 76.57 341.36 T
+(oduce the same r) 88.31 341.36 T
+(esult. \050Note:) 178.1 341.36 T
+3 10 Q
+(?data = ?data) 245.76 341.36 T
+0 12 Q
+( is consider) 307.2 341.36 T
+(ed tr) 366.83 341.36 T
+(ue\051.) 391.46 341.36 T
+3 10 Q
+(TYPE data = NEW d/\0500..1000\051.) 76.57 321.69 T
+(FN PLUS = \050data: a b\051 -> data: ARITH a + b.) 76.57 293.69 T
+(# Calculate the sum of values in an array of size n #) 76.57 265.69 T
+(MAC ADD_ROW {INT n} = \050[n]data: in\051 -> data:) 76.57 251.69 T
+(IF n = 1 THEN in[1] ELSE in[1] PLUS ADD_ROW {n-1} in[2..n] FI.) 76.57 237.69 T
+(# Calculate n times a by repeated addition #) 76.57 209.69 T
+(MAC MULT_N {INT n} = \050data: a\051 -> data:) 76.57 195.69 T
+(IF n = 1 THEN a ELSE a PLUS MULT_N {n-1} a FI.) 76.57 181.69 T
+1 14 Q
+(3.2) 42.56 153.03 T
+(\324V) 70.9 153.03 T
+(alid by construction\325 proofs) 84.13 153.03 T
+0 12 Q
+(3.2.1) 42.56 127.36 T
+-0.08 (The hypothesis of a conjectur) 76.57 127.36 P
+-0.08 (e can be of the form A = A, which is clearly tr) 231.04 127.36 P
+-0.08 (ue. If such) 469.95 127.36 P
+0.53 (a conjectur) 76.57 114.36 P
+0.53 (e is manipulated every hypothesis pr) 134.52 114.36 P
+0.53 (oduced will also be tr) 333.66 114.36 P
+0.53 (ue and can be) 449.86 114.36 P
+1.74 (saved as a theor) 76.57 101.36 P
+1.74 (em if r) 166.55 101.36 P
+1.74 (equir) 204.39 101.36 P
+1.74 (ed. In this case the original conjectur) 232.11 101.36 P
+1.74 (e is kept as it is) 435.79 101.36 P
+1.84 (possible to cr) 76.57 88.36 P
+1.84 (eate a number of useful theor) 149.87 88.36 P
+1.84 (ems fr) 314.48 88.36 P
+1.84 (om the same starting point. See) 349.27 88.36 P
+(annex A for an example which uses this method of pr) 76.57 75.36 T
+(oof.) 359.92 75.36 T
+FMENDPAGE
+%%EndPage: "6" 11
+%%Page: "7" 11
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Theory De\336nition) 451.64 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(7) 547.26 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(3.3) 70.87 716.71 T
+(Syntax) 99.22 716.71 T
+0 12 Q
+(3.3.1) 70.87 691.04 T
+0.96 (Part of the syntax of theory de\336nitions is given her) 104.89 691.04 P
+0.96 (e in the same format as used in) 381.98 691.04 P
+0.06 (r) 104.89 678.04 P
+0.06 (efer) 109.41 678.04 P
+0.06 (ence 2. Each item named on the left of) 129.43 678.04 P
+3 10 Q
+0.05 (:-) 333.7 678.04 P
+0 12 Q
+0.06 ( is de\336ned by the expr) 339.81 678.04 P
+0.06 (ession to the right) 457.72 678.04 P
+0.1 (of) 104.89 665.04 P
+3 10 Q
+0.09 (:-) 118.53 665.04 P
+0 12 Q
+0.1 (, with alternatives on separate lines.) 124.64 665.04 P
+3 10 Q
+0.09 (<item>) 318.32 665.04 P
+0 12 Q
+0.1 ( means this item is optional.) 348.89 665.04 P
+3 10 Q
+0.09 (item ... item) 500.89 665.04 P
+0 12 Q
+0.38 (means one or mor) 104.89 652.04 P
+0.38 (e items separated by spaces while) 201.68 652.04 P
+3 10 Q
+0.35 (item, ... , item) 385.78 652.04 P
+0 12 Q
+0.38 ( means one or mor) 446.85 652.04 P
+0.38 (e) 547.01 652.04 P
+0.7 (items separated by commas \050no comma if ther) 104.89 639.04 P
+0.7 (e is only one\051. Some additional notes) 354.16 639.04 P
+(follow the syntax.) 104.89 626.04 T
+3 10 Q
+(theory_def) 104.89 608.38 T
+(:-) 170.08 608.38 T
+(theory_sort ucname = theory_body.) 189.93 608.38 T
+(theory_sort) 104.89 594.38 T
+(:-) 170.08 594.38 T
+(THEOREM) 189.93 594.38 T
+(AXIOM) 189.93 580.38 T
+(CONJECTURE) 189.93 566.38 T
+(theory_body) 104.89 552.38 T
+(:-) 170.08 552.38 T
+(<section_defs> |- hypothesis) 189.93 552.38 T
+(section_defs) 104.89 538.38 T
+(:-) 170.08 538.38 T
+(section_def ... section_def) 189.93 538.38 T
+(section_def) 104.89 524.38 T
+(:-) 170.08 524.38 T
+(FORALL variable_defs <WHERE predicate>) 189.93 524.38 T
+(EXISTS variable_defs <WHERE predicate>) 189.93 510.38 T
+(THEOREM ucname = theory_body.) 189.93 496.38 T
+(variable_defs) 104.89 482.38 T
+(:-) 170.08 482.38 T
+(variable_def, ... , variable_def) 189.93 482.38 T
+(variable_def) 104.89 468.38 T
+(:-) 170.08 468.38 T
+(type_variable) 189.93 468.38 T
+(exp_variable) 189.93 454.38 T
+(type_variable) 104.89 440.38 T
+(:-) 170.08 440.38 T
+(type_sort : name ... name) 189.93 440.38 T
+(type_sort) 104.89 426.38 T
+(:-) 170.08 426.38 T
+(_any) 189.93 426.38 T
+(_wire) 189.93 412.38 T
+(_ranged) 189.93 398.38 T
+(_scalar) 189.93 384.38 T
+(_vector) 189.93 370.38 T
+(_struct) 189.93 356.38 T
+(exp_variable) 104.89 342.38 T
+(:-) 170.08 342.38 T
+(_const : name ... name) 189.93 342.38 T
+(type : name ... name) 189.93 328.38 T
+0 12 Q
+(NOTES:-) 104.89 307.04 T
+(-) 85.04 286.04 T
+3 10 Q
+(name) 104.89 286.04 T
+0 12 Q
+( and) 129.9 286.04 T
+3 10 Q
+(ucname) 156.21 286.04 T
+0 12 Q
+( mean lower case name and upper case name r) 191.78 286.04 T
+(espectively) 438.62 286.04 T
+(, as) 496.51 286.04 T
+(de\336ned in r) 104.89 271.04 T
+(efer) 166.29 271.04 T
+(ence 3.) 186.31 271.04 T
+(-) 85.04 250.04 T
+3 10 Q
+(hypothesis) 104.89 250.04 T
+0 12 Q
+( and) 152.69 250.04 T
+3 10 Q
+(predicate) 179 250.04 T
+0 12 Q
+( ar) 220.13 250.04 T
+(e similar to ELLA units but with extra featur) 233.66 250.04 T
+(es allowed.) 469 250.04 T
+(These ar) 104.89 235.04 T
+(e described in sections 3.4 and 3.5.) 149.33 235.04 T
+(-) 85.04 214.04 T
+3 10 Q
+(type) 104.89 214.04 T
+0 12 Q
+( includes str) 123.79 214.04 T
+(uctur) 188.13 214.04 T
+(es of types as well as single type names. \050e.g. [4]data\051) 216.37 214.04 T
+(-) 85.04 193.04 T
+3 10 Q
+(_const) 104.89 193.04 T
+0 12 Q
+( is used to de\336ne a variable which will r) 134.35 193.04 T
+(epr) 345.56 193.04 T
+(esent an integer) 363.04 193.04 T
+(, for example, a) 445.91 193.04 T
+(macr) 104.89 178.04 T
+(o parameter) 131.33 178.04 T
+(.) 194.69 178.04 T
+(-) 85.04 157.04 T
+(type variables can be used to expr) 104.89 157.04 T
+(ess theories which apply to signals of a mor) 284.64 157.04 T
+(e) 515.72 157.04 T
+(general natur) 104.89 142.04 T
+(e. Six sorts ar) 175.93 142.04 T
+(e allowed:-) 245.56 142.04 T
+3 10 Q
+(_any) 306.93 142.04 T
+0 12 Q
+( \050signals ar) 328.61 142.04 T
+(e of any type\051,) 385.95 142.04 T
+3 10 Q
+(_wire) 464.44 142.04 T
+0 12 Q
+( \050any ELLA) 488.33 142.04 T
+(type which is a simple list of alternatives\051,) 104.89 127.04 T
+3 10 Q
+(_ranged) 330.86 127.04 T
+0 12 Q
+( \050any ELLA_integer\051,) 367.55 127.04 T
+3 10 Q
+(_scalar) 481.82 127.04 T
+0 12 Q
+( \050any) 514.05 127.04 T
+-0.41 (non-str) 104.89 112.04 P
+-0.41 (uctur) 143.05 112.04 P
+-0.41 (ed type\051,) 171.28 112.04 P
+3 10 Q
+-0.38 (_vector) 220.08 112.04 P
+0 12 Q
+-0.41 ( \050any vector type\051 and) 252.87 112.04 P
+3 10 Q
+-0.38 (_struct) 370.39 112.04 P
+0 12 Q
+-0.41 ( \050any str) 400.4 112.04 P
+-0.41 (uctur) 442.87 112.04 P
+-0.41 (ed type\051. In the) 471.11 112.04 P
+(following example) 104.89 97.04 T
+3 10 Q
+(a) 207.11 97.04 T
+0 12 Q
+( and) 212.67 97.04 T
+3 10 Q
+(b) 238.99 97.04 T
+0 12 Q
+( ar) 244.55 97.04 T
+(e of type) 258.07 97.04 T
+3 10 Q
+(tp) 306.91 97.04 T
+0 12 Q
+(, but this is de\336ned to r) 315.25 97.04 T
+(epr) 437.48 97.04 T
+(esent any type:-) 454.97 97.04 T
+3 10 Q
+(AXIOM EQ_SYMM = FORALL _any : tp, tp : a b WHERE \050a = b\051 |- \050b = a\051.) 104.89 81.38 T
+FMENDPAGE
+%%EndPage: "7" 12
+%%Page: "8" 12
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Theory De\336nition) 423.32 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(8) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(3.4) 42.56 716.71 T
+(Extra features allowed in theory de\336nitions) 70.9 716.71 T
+0 12 Q
+(3.4.1) 42.56 691.04 T
+3.21 (The items) 76.57 691.04 P
+3 10 Q
+2.98 (type) 137.92 691.04 P
+0 12 Q
+3.21 (,) 156.82 691.04 P
+3 10 Q
+2.98 (hypothesis) 166.04 691.04 P
+0 12 Q
+3.21 ( and) 213.84 691.04 P
+3 10 Q
+2.98 (predicate) 246.58 691.04 P
+0 12 Q
+3.21 (, in the syntax of theory de\336nitions, may) 287.71 691.04 P
+(include some in-built featur) 76.57 678.04 T
+(es which ar) 223.82 678.04 T
+(e not allowed in ELLA declarations.) 283.98 678.04 T
+(3.4.2) 42.56 652.04 T
+(Ther) 76.57 652.04 T
+(e ar) 101.18 652.04 T
+(e thr) 120.46 652.04 T
+(ee types:-) 144.62 652.04 T
+(-) 56.73 633.04 T
+(_boolean) 76.57 633.04 T
+(This type has only two values, _tr) 141.77 633.04 T
+(ue and _false. This is the) 320.38 633.04 T
+1 F
+(only) 453.14 633.04 T
+0 F
+( type) 477.82 633.04 T
+(which does not have an unspeci\336ed value. \050i.e. ?boolean does not exist\051) 141.77 618.04 T
+(-) 56.73 597.04 T
+(_integer) 76.57 597.04 T
+(Integers in the range -2147483647 to 2147483646 inclusive.) 141.77 597.04 T
+(-) 56.73 576.04 T
+(_time) 76.57 576.04 T
+(Integers in the range 0 to 2147483646 inclusive.) 141.77 576.04 T
+(3.4.3) 42.56 548.04 T
+1.79 (Some operators which ar) 76.57 548.04 P
+1.79 (e allowed in ELLA can be used in additional places, for) 214.01 548.04 P
+1.3 (example, the \324=\325 in the hypothesis in paragraph 3.1.4. In ELLA \324=\325 is only allowed) 76.57 535.04 P
+2.73 (between signal values in an ARITH body) 76.57 522.04 P
+2.73 (. However) 309.89 522.04 P
+2.73 (, in a pr) 367.3 522.04 P
+2.73 (oof statement \324=\325 is) 415.72 522.04 P
+0.59 (tr) 76.57 509.04 P
+0.59 (eated as a tautology with ?type = ?type simpli\336ed to tr) 85.01 509.04 P
+0.59 (ue and ?type = other value) 379.87 509.04 P
+(simpli\336ed to false. \050See _LIFT in paragraph 3.4.5\051) 76.57 496.04 T
+(3.4.4) 42.56 470.04 T
+1.59 (T) 76.57 470.04 P
+1.59 (wo other \324equals\325 operators ar) 82.85 470.04 P
+1.59 (e pr) 247.71 470.04 P
+1.59 (ovided:- \324==\325 which does not simplify if either) 269.78 470.04 P
+2.67 (value is ?type, and \324~=\325 which simpli\336es to tr) 76.57 457.04 P
+2.67 (ue if the left hand value is ?type) 336.47 457.04 P
+4.03 (\050consider) 76.57 444.04 P
+4.03 (ed to mean don\325t car) 125.62 444.04 P
+4.03 (e in this case\051. Other extra operators ar) 250.59 444.04 P
+4.03 (e \324==>\325) 483.17 444.04 P
+(\050implies\051, \324~\325 \050NOT\051, \324/\134\325 \050AND\051 and \324\134/\325 \050OR\051.) 76.57 431.04 T
+(3.4.5) 42.56 405.04 T
+(The following in-built functions ar) 76.57 405.04 T
+(e pr) 259.23 405.04 T
+(ovided:-) 279.72 405.04 T
+(-) 56.73 386.04 T
+(@) 76.57 386.04 T
+(x @ t means) 141.77 386.04 T
+(the value of x at time t.) 207.25 386.04 T
+(-) 56.73 365.04 T
+(_LIFT) 76.57 365.04 T
+(_LIFT x) 141.77 365.04 T
+( simpli\336es to false if x = ?type, otherwise if x is any other known) 182.36 365.04 T
+(value it simpli\336es to tr) 141.77 350.04 T
+(ue. Used as a pr) 260.92 350.04 T
+(edicate term it r) 345.23 350.04 T
+(estricts the) 428.71 350.04 T
+(variable to known values and avoids the need to consider ?type = ?type.) 141.77 335.04 T
+(The example in annex A makes use of this function.) 141.77 320.04 T
+(-) 56.73 299.04 T
+(_POWER2) 76.57 299.04 T
+(If x is a known integer <= 30, _POWER2 x simpli\336es to the value of) 141.77 299.04 T
+(2 to the power x, with values of x less than 1 giving the r) 141.77 284.04 T
+(esult 1.) 440.36 284.04 T
+(-) 56.73 263.04 T
+(_SIGN) 76.57 263.04 T
+(If x is a known integer) 141.77 263.04 T
+(, _SIGN x simpli\336es to 1 for x >= 0 and to -1 for) 259.19 263.04 T
+(x < 0.) 141.77 248.04 T
+(-) 56.73 227.04 T
+(_CLIP) 76.57 227.04 T
+-0.31 (If x is a known integer) 141.77 227.04 P
+-0.31 (, _CLIP x simpli\336es to x for x >= 0 and to ?_integer) 257.63 227.04 P
+(for x < 0.) 141.77 212.04 T
+1 14 Q
+(3.5) 42.56 181.71 T
+(Contexts) 70.9 181.71 T
+0 12 Q
+(3.5.1) 42.56 156.04 T
+3.4 (In or) 76.57 156.04 P
+3.4 (der to r) 105.08 156.04 P
+3.4 (eason about an internal signal in an ELLA function or macr) 150.69 156.04 P
+3.4 (o an) 498.51 156.04 P
+3.01 (additional means of identifying the signal is needed since local names may be) 76.57 143.04 P
+1.54 (duplicated in dif) 76.57 130.04 P
+1.54 (fer) 167.82 130.04 P
+1.54 (ent declarations. This is done by using a context expr) 182.09 130.04 P
+1.54 (ession in) 476.48 130.04 P
+1.52 (fr) 76.57 117.04 P
+1.52 (ont of the local name that gives the enclosing declaration\325s name and any input) 85.09 117.04 P
+0.12 (parameter values that ar) 76.57 104.04 P
+0.12 (e needed. The context expr) 206.29 104.04 P
+0.12 (ession is enclosed in primes \050\325\051 to) 348.8 104.04 P
+-0.23 (distinguish it fr) 76.57 91.04 P
+-0.23 (om an or) 157.8 91.04 P
+-0.23 (dinary instance expr) 204.55 91.04 P
+-0.23 (ession. The example in annex A uses the) 312.52 91.04 P
+(context expr) 76.57 78.04 T
+(ession) 141.88 78.04 T
+3 10 Q
+(\325DESIGN\050a,loadval\051\325) 177.83 78.04 T
+0 12 Q
+( to identify the names) 267.29 78.04 T
+3 10 Q
+(micro) 385.44 78.04 T
+0 12 Q
+( and) 409.88 78.04 T
+3 10 Q
+(latch) 436.2 78.04 T
+0 12 Q
+(.) 457.32 78.04 T
+FMENDPAGE
+%%EndPage: "8" 13
+%%Page: "9" 13
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Theory De\336nition) 451.64 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(9) 547.26 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+0 12 Q
+0 X
+(3.5.2) 70.87 718.04 T
+1.91 (For local names which r) 104.89 718.04 P
+1.91 (epr) 239.08 718.04 P
+1.91 (esent values that ar) 256.56 718.04 P
+1.91 (e always constant, such as integer) 364.44 718.04 P
+-0.16 (declarations or type members, a full context expr) 104.89 705.04 P
+-0.16 (ession is not r) 362.94 705.04 P
+-0.16 (equir) 434.96 705.04 P
+-0.16 (ed. However) 462.68 705.04 P
+-0.16 (, the) 530.28 705.04 P
+0.61 (declaration in which they appear must be identi\336ed by including its name between) 104.89 692.04 P
+-0.28 (primes. For example, if function F1 has a local type declaration which includes t1 as a) 104.89 679.04 P
+(member) 104.89 666.04 T
+(, \325F1\325t1 is used to identify the type member) 148.06 666.04 T
+(.) 373.76 666.04 T
+FMENDPAGE
+%%EndPage: "9" 14
+%%Page: "10" 14
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(10) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(4) 42.56 743.39 T
+(File Menu) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(4.1) 42.56 688.03 T
+(Load) 70.9 688.03 T
+0 12 Q
+(4.1.1) 42.56 662.36 T
+3.28 (A pop-up, pinable window is pr) 76.57 662.36 P
+3.28 (oduced which lists all the \336les in the curr) 263.99 662.36 P
+3.28 (ent) 507.8 662.36 P
+1.45 (dir) 76.57 649.36 P
+1.45 (ectory with a name ending in .elp. If one of these \336les is selected and then the) 91.92 649.36 P
+-0.3 (\324Load\325 button is selected, the pr) 76.57 636.36 P
+-0.3 (over will attempt to r) 241.55 636.36 P
+-0.3 (ead the \336le. The par) 352.95 636.36 P
+-0.3 (ent dir) 456.8 636.36 P
+-0.3 (ectory) 491.49 636.36 P
+-0.14 (\050..\051 and sub-dir) 76.57 623.36 P
+-0.14 (ectories ar) 154.89 623.36 P
+-0.14 (e also included in the list and, if selected in the same way as) 208.88 623.36 P
+0.19 (a \336le name, will pr) 76.57 610.36 P
+0.19 (oduce the same sort of list for the selected dir) 176.38 610.36 P
+0.19 (ectory) 417.86 610.36 P
+0.19 (. If the default) 449.48 610.36 P
+(\336le extension \050.elp\051 has not been used for the r) 76.57 597.36 T
+(equir) 320.71 597.36 T
+(ed \336le its name can be typed.) 348.43 597.36 T
+(4.1.2) 42.56 571.36 T
+0.32 (If a \336le is r) 76.57 571.36 P
+0.32 (ead successfully) 133.51 571.36 P
+0.32 (, a message is pr) 218.38 571.36 P
+0.32 (oduced on the console. Otherwise a pop-) 305.93 571.36 P
+(up notice window is pr) 76.57 558.36 T
+(oduced and err) 199.73 558.36 T
+(or messages ar) 280.58 558.36 T
+(e pr) 358.43 558.36 T
+(oduced on the console.) 378.91 558.36 T
+1 14 Q
+(4.2) 42.56 530.03 T
+(W) 70.9 530.03 T
+(rite) 83.87 530.03 T
+0 12 Q
+(4.2.1) 42.56 504.36 T
+0.51 (A window very similar to the \324Load\325 command window is pr) 76.57 504.36 P
+0.51 (oduced and a new \336le) 405.31 504.36 P
+2.31 (name can be typed or an existing \336le can be selected into which the de\336nitions) 76.57 491.36 P
+2.18 (curr) 76.57 478.36 P
+2.18 (ently known to the pr) 98.4 478.36 P
+2.18 (over will be written. However) 221.96 478.36 P
+2.18 (, anything alr) 389.81 478.36 P
+2.18 (eady in an) 464.88 478.36 P
+1.71 (existing \336le will be over) 76.57 465.36 P
+1.71 (-written without con\336rmation r) 209.97 465.36 P
+1.71 (equested. If a \336le name is) 381.91 465.36 P
+(typed which does not include an extension, .elp will be added.) 76.57 452.36 T
+1 14 Q
+(4.3) 42.56 424.03 T
+(Re-run) 70.9 424.03 T
+0 12 Q
+(4.3.1) 42.56 398.36 T
+1.31 (A window very similar to the \324Load\325 command window is pr) 76.57 398.36 P
+1.31 (oduced but with \336le) 413.3 398.36 P
+-0.07 (names ending in .log. A log \336le is pr) 76.57 385.36 P
+-0.07 (oduced automatically during a pr) 267.67 385.36 P
+-0.07 (over session. It) 445.78 385.36 P
+0.43 (contains those successfully completed commands in textual form that ar) 76.57 372.36 P
+0.43 (e needed to) 462.47 372.36 P
+0.82 (r) 76.57 359.36 P
+0.82 (eturn the pr) 81.1 359.36 P
+0.82 (over to the \324saved\325 state. Some of the commands which do not change) 145.73 359.36 P
+-0.04 (the pr) 76.57 346.36 P
+-0.04 (oof state, such as \324W) 107.91 346.36 P
+-0.04 (rite\325, ar) 214.68 346.36 P
+-0.04 (e not put into the log \336le. The r) 252.4 346.36 P
+-0.04 (e-r) 416.04 346.36 P
+-0.04 (un command will) 430.43 346.36 P
+0.65 (r) 76.57 333.36 P
+0.65 (ead the commands and attempt to r) 81.1 333.36 P
+0.65 (epeat them. Some commands ar) 273.81 333.36 P
+0.65 (e displayed on) 445.48 333.36 P
+(the console to inform the user of pr) 76.57 320.36 T
+(ogr) 262.52 320.36 T
+(ess in a long pr) 280.27 320.36 T
+(oof.) 360.11 320.36 T
+(4.3.2) 42.56 294.36 T
+0.32 (If all the commands in the log \336le ar) 76.57 294.36 P
+0.32 (e successfully completed the curr) 270.11 294.36 P
+0.32 (ent conjectur) 447.32 294.36 P
+0.32 (e,) 515.7 294.36 P
+0.34 (if ther) 76.57 281.36 P
+0.34 (e is one, will be displayed in the pr) 108.57 281.36 P
+0.34 (over window) 296.03 281.36 P
+0.34 (. If a command fails a pop-up) 366.46 281.36 P
+1.09 (notice window is pr) 76.57 268.36 P
+1.09 (oduced and an err) 185.54 268.36 P
+1.09 (or message is displayed on the console. The) 285.64 268.36 P
+0.23 (pr) 76.57 255.36 P
+0.23 (over automatically calls the \324Restart\325 command so work done prior to the \324Re-r) 88.31 255.36 P
+0.23 (un\325) 506.89 255.36 P
+1.52 (command will be erased. All the commands to r) 76.57 242.36 P
+1.52 (epr) 343.05 242.36 P
+1.52 (oduce the work will be in the) 360.54 242.36 P
+(curr) 76.57 229.36 T
+(ent log \336le which can be accessed after quitting the pr) 98.4 229.36 T
+(over) 382.61 229.36 T
+(.) 405.54 229.36 T
+1 14 Q
+(4.4) 42.56 201.03 T
+(Restart) 70.9 201.03 T
+0 12 Q
+(4.4.1) 42.56 175.36 T
+1.93 (This command r) 76.57 175.36 P
+1.93 (eturns the pr) 167.26 175.36 P
+1.93 (over to the start-up state. A pop-up notice window) 239.2 175.36 P
+0.56 (warns that all existing work will be lost and gives the choice of \324Continue working\325) 76.57 162.36 P
+(or \324Restart Pr) 76.57 149.36 T
+(over) 146.39 149.36 T
+(\325.) 171.1 149.36 T
+1 14 Q
+(4.5) 42.56 121.03 T
+(Quit) 70.9 121.03 T
+0 12 Q
+(4.5.1) 42.56 95.36 T
+5.17 (This command ends the pr) 76.57 95.36 P
+5.17 (over session. A pop-up notice window asks for) 239.1 95.36 P
+(conformation, giving the choice of \324Continue\325 or \324Quit\325.) 76.57 82.36 T
+FMENDPAGE
+%%EndPage: "10" 15
+%%Page: "11" 15
+595.3 841.89 0 FMBEGINPAGE
+70.87 25.52 552.76 48.19 R
+7 X
+0 K
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 40.86 T
+0 11 Q
+(1) 542.36 40.86 T
+(1) 547.26 40.86 T
+70.87 731.34 552.76 754.02 R
+7 X
+V
+1 16 Q
+0 X
+(5) 70.87 743.35 T
+(Proof Menu) 99.24 743.35 T
+70.87 70.87 552.76 697.33 R
+7 X
+V
+1 14 Q
+0 X
+(5.1) 70.87 687.99 T
+(Prove) 99.22 687.99 T
+0 12 Q
+(5.1.1) 70.87 662.33 T
+0.48 (A pop-up, pinable window is pr) 104.89 662.33 P
+0.48 (oduced which lists all the conjectur) 278.31 662.33 P
+0.48 (es known to the) 467.17 662.33 P
+-0.29 (pr) 104.89 649.33 P
+-0.29 (over which ar) 116.62 649.33 P
+-0.29 (e available for pr) 189.18 649.33 P
+-0.29 (oof. If one is selected and then the \324Pr) 277.71 649.33 P
+-0.29 (ove conjectur) 473.47 649.33 P
+-0.29 (e\325) 543.67 649.33 P
+1.89 (button is selected, the body of the conjectur) 104.89 636.33 P
+1.89 (e is displayed in the pr) 347.77 636.33 P
+1.89 (over window) 477.78 636.33 P
+1.89 (.) 549.76 636.33 P
+0.64 (Mor) 104.89 623.33 P
+0.64 (e than one conjectur) 127.31 623.33 P
+0.64 (e can be stacked awaiting pr) 235.56 623.33 P
+0.64 (oof and the number of them is) 388.57 623.33 P
+-0.25 (shown on the left hand side of the bottom mar) 104.89 610.33 P
+-0.25 (gin of the pr) 348.04 610.33 P
+-0.25 (over window) 412.38 610.33 P
+-0.25 (. The number) 482.22 610.33 P
+1.91 (shown on the right hand side of this mar) 104.89 597.33 P
+1.91 (gin is the number of stages the curr) 335.89 597.33 P
+1.91 (ent) 536.11 597.33 P
+(conjectur) 104.89 584.33 T
+(e has been in.) 153.31 584.33 T
+(5.1.2) 70.87 558.33 T
+-0.12 (Figur) 104.89 558.33 P
+-0.12 (e 2 below shows the example pr) 133.48 558.33 P
+-0.12 (oof in annex A part way thr) 302.03 558.33 P
+-0.12 (ough. \050The window) 448.1 558.33 P
+(size and font have been changed fr) 104.89 545.33 T
+(om the default settings.\051) 289.17 545.33 T
+1 14 Q
+(5.2) 70.87 245.91 T
+(Save theorem) 99.22 245.91 T
+0 12 Q
+(5.2.1) 70.87 220.25 T
+-0.23 (During a \324valid by constr) 104.89 220.25 P
+-0.23 (uction\325 pr) 236.62 220.25 P
+-0.23 (oof the curr) 287.96 220.25 P
+-0.23 (ent state of the conjectur) 349.07 220.25 P
+-0.23 (e can be saved) 477.06 220.25 P
+0.17 (as a theor) 104.89 207.25 P
+0.17 (em. A pop-up window is pr) 156.02 207.25 P
+0.17 (oduced for the user to type in a valid name for) 304.64 207.25 P
+(the theor) 104.89 194.25 T
+(em.) 152.25 194.25 T
+1 14 Q
+(5.3) 70.87 165.91 T
+(Display) 99.22 165.91 T
+0 12 Q
+(5.3.1) 70.87 140.25 T
+2.12 (A pop-up, pinable window is pr) 104.89 140.25 P
+2.12 (oduced which lists all the theor) 286.5 140.25 P
+2.12 (ems and axioms) 462.85 140.25 P
+(known to the pr) 104.89 127.25 T
+(over) 189.93 127.25 T
+(. The one selected is displayed in full on the console.) 212.86 127.25 T
+70.87 70.87 552.76 697.33 C
+99.22 270.25 524.41 541.33 C
+0 12 Q
+0 X
+0 K
+(Figur) 127.58 286.02 T
+(e 2 : The ELLA pr) 156.18 286.02 T
+(over during a pr) 249.08 286.02 T
+(oof) 336.1 286.02 T
+%%BeginBinary:  17055    
+542 299 397.15 212.76 0 113.4 314.38
+/red <
+0000000000000000000000000000000000000000AB7C020000000000FFFF4200
+00000000A0ECFFF700000000F9FFFF7F0000000048F6F9F60000000000002840
+0000000054500000000000005450000000000000BC5000000000000005000000
+00000030000000000000000054500000000000005CC0F9F60000000000000000
+0000000000000000000000006C510000000000002EECFFF70000000001000000
+000000008CECFFF70000000084ECFFF7000000007CECFFF70000000000000000
+00000000B0920000000000000100000000000000010000000000000054500000
+000000005CC0F9F6000000000000000000000000000000000000FFCC71E300FE
+> store
+/green <
+00000000010000000000000064EDFFF700000000B84700000000000001000000
+00000000000000000000000003000000000000005CC0F9F600000000E4EDFFF7
+0000000003000000000000000000000000000000000000800000000000000000
+0000000088ECFFF7000000003A000000000000007C93000000000000944B0000
+00000000AC7C020000000000200000000000000000000000000000005CC0F9F6
+00000000A87C0200000000000100323000000000EC018F430000000000000000
+000000003A00000098ECFFF7A0ECFFF773000000010000000000000001000000
+00000000AC7C0200000000000300000000000000000000800000FFCE72E500FF
+> store
+/blue <
+003000003CEEFFF700000000A87C0200EA31000054EEFFF706000000C8340000
+68EEFFF71C3A000068EEFFF7060000000000000000000008FC790200A1320000
+687C02005CC0F9F6070000000000000000010000000000000000000001000000
+7300000088EDFFF70000000048EEFFF744EEFFF740EEFFF73CEEFFF79C4C0000
+F8EDFFF70030000044EEFFF702000000A87C020034450000F8EDFFF744450000
+F8EDFFF70030000044EEFFF7B6310000AC7C020000000000000000005CC0F9F6
+0700000000000000000000000000000000000000504500000000000000000080
+0000000000000000000000000000000000000000010000000000FFA45BB700E6
+> store
+ BEGINBITMAPCOLORc
+Az
+Y.FE7t"Jt"
+FDFCY/FDFC
+Az
+Y.FD:'8Z"8'
+FCFCFCFCFCFCY+FCFCFCFCFCFCFC;'8#D"z8(
+FDFDFDFDFDFDFCFDFDXGFCFDFDFDFDFDFDFFB$y"z
+FDFDFFFDFCXHFD
+
+HrJ'8#<#>#J#>%
+FCR4FEFEFEFEFEFEFEFEFEFEFEFEO8FEFEFEFEFEFE7$E'J%J#?'J$
+FCFCFCFBFBFBFBFBFFR6FDFDFDFDOLFEFEFEFEFDFDFEFER,FCFCFC&C#9#J%>&9&8%9#8#9%9);#8#8#J&
+FEFEFEFDFDFDFCFFFDRMFEFDFEFEFEFEFDFEFEFEFEFDFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFDFEFEFDFEFEFEFEFEFEFDFDR:FDFDFEFEFEJ%>'@'
+SFFEFDFEFEFEFEFDFDFEFEFEFEFDFDFEFEI&J$I#C"=$J'
+FDFCFBFFFDR7FEFEFEFEFDFDFEFDFD;FEFDFDFDFDFDJ$J#8"G"A$8":#<"@$8"
+S!FDFDFD4FEFEFEFDFDFEFEFDFEFEFDFDFEFEFDJ$J&J%
+4FDFFFDRMFEFEFDFDFDIFDFDFDFDJ"J%>">#<%A#
+5FDSEFDFEFEFDFEFEFEFDFEFEFDFEFEJ%:%:%G%>'@'J'
+S!FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFDFDFEFEFEFEFDFDFEFEFEFEFDBFDFEFEFEFEFDJ'8'8t9#?$9#;%;#;%9#:#=#<#:#8%
+RMFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDD"y"
+FDFCFDEyJ#
+FDS'FDFD
+
+;Z"
+Y9FC<z
+Y8FC;z
+Y:FD;z
+Y:FE;z
+Y:FD
+
+
+
+
+FZJZJZJZJZ
+I7O%7O17OCQGAD#z#I#z#I#z#I#z#J#z#
+FFFFIFDFFFFFFFFO%FDFFFFFFFFO1FDFFFFFFFFOCFDFFFFQCFFFFAFDFFFFC$J$G$J$G$J$G$J$J$J$
+FFFDFDIFDFDFFFFFDFDO%FDFDFFFFFDFDO1FDFDFFFFFDFDOCFDFDFFQAFFFDFDAFDFDFFB#D"9"J#E#J#H#E#J"J#E#J"J#J#J"C#
+FFFDFEFE:FDFCFFFDCFEFEFDFCFFFD:FEHFDFCFFFDO&FE@FDFCQ?FFFD7FEFDFCA#>%J#C#>%J$I#C#?#A"J#C#>%J"J#J#>":"J#
+FFFDFEFEFEFECFDFCFFFDFEFEFEFE7FEFDFDFDFCFFFDFEFEFEO FDFCFFFDFEFEFEFEDFEFFDFCQ=FFFDFEFE9FDFCJ$9"J%J"J%J"
+6FDFDFDFDO+FDFDFDFEOJFDO5FDFDFDFEHFD@#F"=$?r<#A#F%9#;#9%=r<#A#?%;)8":#:%:$>r<#A#F%9#:%:$9*8"9$:$>r<#J#H$>%>#
+FFFDFEFEFEFEFCFDFCFFFDFEFDFEFEFEFEFEFEFEFEFEFEFCFDFCFFFDFEFDFDFEFEFEFEFDFEFEFEFEFEFEFEFEFDFEFEFEFEFEFCFDFCFFFDFEFDFEFEFEFEFEFDFEFEFEFEFEFEFDFEFEFDFEFEFEFEFEFEFEFEFEFEFEFCFDFCQ;FFFDFEFEFEFEFDFEFEFDFCJ&?'J$8%9%8%>'J*<%:%8%?'J$8%:%8&9);&8%?'J&>%
+CFEFDFDFDFEFBFBFBFBFBFFFFEFDFDFEFDFDFEFEFDFDFEFDFEFDFDFBFBFBFBFBFFFFEFDFDFDFDFDFEFDFDFEFDFDFEFEFDFDFEFEFDFDFDFBFBFBFBFBFFFFEFDFDFEFDFDFEFEFDFDFEFEFDFDFDFEFEFDFDFDFDFEFDFDFEFDFDFDFEFEFDFDFDFBFBFBFBFBFFR(FEFDFDFDFEFEFDFDFEJ$J#9#J"9#8&8#B#9#J#C#8#9"G#9#J"9#8#9"C"J#9#J%F"
+6FEFEFE7FDFCFFFDFFDFEFDFDFEFDFEFDFDFEFDFCFFFDEFEFDFEFDFDFEFDFDFCFFFDFFDFEFDFDFEFDFD?FDFCFFFDR!FEFEFEFEFDJ$A$J%J'J$J%J$H$9$J%:$
+6FDFDFDFEFEFEO!FEFEFEFDO6FEFEFEFEFEFE@FDFEFEO!FEFEFEFD7FEFEFEFEFEFEFDFEFER1FDFDFDFDFEFEFEJ%?&J$J&J%J$?&J$J%G%9$?&J%
+DFDFDFDFDFDFCFBFFFD@FDFDFDBFDFCFBFFFD?FDFDFDFDBFDFDFEFDFCFBFFFD@FDFDFD8FDFDFDFDFDFDFDFDFDFDFEFDFCFBFFFDR*FDFDFDFDJ"J#8&8#J#C#8#J#8#C"J"J"
+GFEO+FDFEFEFDFDFDFEFEFDO*FDFEFDFEFEFDO8FDFEFEFDFE4FERAFEJ&@$J%9%E$J%8$<%@%@$J%:%8&>$;&8%@$J&>%
+CFDFEFEFEFDFDFFFDMFDFEFEFDFDFEFEFDFDFFFDHFDFEFEFEFDFEFEFDFEFEFDFEFEFEFDFDFFFDMFDFEFEFDFEFEFEFDFDFEFEFEFDFDFEFEFDFEFEFEFDFEFEFEFDFDFFFDR*FDFEFEFEFDFEFEFEFD@#?"<"9"9$B"?#A#?"<"<#;#:"B"?#A#>":":$9#8":#:"9"8$B"?#A#?"<"<#;$:$9"<#8"9$9$B"?#J#?":"9$:":$>#
+FDFFFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFCFDFDFFFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFCFDQ;FDFFFDFDFDFDFDFDFDFDFDFCFD
+A#J#C#J#C#J#C#J"J#J#J"@#
+FDFFO!FCFDFDFFO+FCFDFDFFO7FCFDFDFF<FDO,FCFDQ=FDFF<FDFCFDB#J#E#J#E#J#E#J#J#J#
+FDFCMFCFDFDFCO)FCFDFDFCO5FCFDFDFCOGFCFDQ?FDFCEFCFDC$J$G$J$G$J$G$J$J$J$
+FDFCFCIFCFCFDFDFCFCO%FCFCFDFDFCFCO1FCFCFDFDFCFCOCFCFCFDQAFDFCFCAFCFCFDD#z#I#z#I#z#I#z#J#z#
+FDFDIFCFDFDFDFDO%FCFDFDFDFDO1FCFDFDFDFDOCFCFDFDQCFDFDAFCFDFDFzJzJzJzJz
+IFD7O%FD7O1FD7OCFDQGAFD
+
+
+
+
+
+
+
+
+
+
+
+;z8X"
+Y'FEFC<z:w
+Y%FAFD
+
+
+Jw
+Y/FCJy
+Y.FD
+JX
+Y/J"w"
+Y.FFFDFCJ%J%J$J%J#?#J#?#
+Q2FEFEFEFEIFEFEFEFE;FEFEFE4FEFEFEFEAFEFEFEFEIFEFEFEFEAs9%9r9&9&:&J#J#J"J#J#
+FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEP#FAFAKFAFA=FA6FAFAP&FEFEA"8$:'8"8&8#<"8#:"8#J#J#
+FAFAFAFAFEFEFAFAFEFEFAFAFAFAFEFEFAFAFAFAFAFAFAFAS,FAFAO$FAFAJ$8$B&J%9(;#D&J0B$8$9%<#J%:&;$:0J"8$:%8):%<#D"8$J#
+4FEFEFAFAFEFEFEFEFAFEFE?FEFEFEFEFEFEFEFAFEFEFEFEFEFEFEFEFEFE5FEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE8FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEHFEFEFEFEFEFEFEFEFEFEFAFEFEFAFEFEFEFEFEFEFEFEFEFEFEFEQEFCFCE%J'8"8&J'J"8$8)A":":'J'9'9&9"8$8)J"8$:#:*8'J"8$J"8"
+FEFAFAFAO*FEFEFAFAFEFEFAFEFAFAFEFE4FAFAFAFAFEFE4FAFAFAFAFAFAFAFAFAFAFEFEFAFAFEFEFAFAFEFE>FEFEFAFAFEFEFAFAFAFAFEFEFEFEFAFAFEFAFAFAFAFAFAFAFAFAFAFEFEGFAFAFAFAFAFAFAFEFEFAFEFEFAFEFEFEFEFAFAFEFE5FAFAFAFAQDFCFCD"I$J$8$:">#J$8$:#J$8$E"J$8$:#J":"
+FEFEFEFAEFEFEFAFAFEFEFAFAFAO>FEFEFAFAFEFEFAFA6FEFEFAFAFEFEFAOFFEFEFAFAFEFEFAFAR)FCFCD"G%9(=#=#J%J(8%J%J%D(8%J%J"<"
+FAFEFEFEFAFEFEFAFAFAFEFEFEFEFEFEO!FEFEFEFE7FAFEFEFAFEFEFAFEFEFEFE8FEFEFEFEHFEFEFEFEFAFEFEFAFEFEFAFEFEFEFEO7FEFEFEFER0FCFCE"F%;$J&J&J'J&J&J'
+FAFAFAFEFEFEFEFEO4FEFEFAFAFA?FEFEFAFAFA8FAFAFAFAFAFAEFEFEFAFAFA6FEFEFAFAFAO7FAFAFAFAFAFAJ$8$<$:$J$8$:">#G"=#E&<"H"9$8$:#J$8$;"?";&<"F#J#I$8$:#I#Js
+4FAFEFEFEFEFAFAFEFEFAFAFA>FAFEFEFEFEFAFEFEFEFEFEFEFAFEFEFEFAFEFEFAFEFEFEFEFEFEFE6FAFEFEFEFEFAFEFEFAFEFEFEFAFEFEFE<FEFEFAFEFEFEFEFEFEFEFEFEQAFDA"8#;'8"8":#8$8#8$9"8$C';&I&8"J&8"8#8#9&8'8"J#8#9'8&8"8&8"?&8"8#8#J'9#8$>'8"J'9#8#
+FEFEFEFAFEFEFEFEFAFEFEFEFEFEFAFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFEFAFAFEFEFEFAFE<FAFEFEFEFAFEFEFEFEFEFAFEFEFEFAFEFAFAFEFEFEFA4FEFEFEFEFAFEFEFEFEFAFAFEFEFEFAFEFAFEFEFEFAFEFAFEFEFEFAFEFEFEFEFE?FAFEFEFEFEFAFEFEFEFEFEFEFAFAFEFEFEFA5FAFEFEFEFEFAFEFEFEFEA&<%9%8zB%=$;#Dr9$F$:r8':r8&;#D':%:r9r9$:r8':$J%:z8&;#F%:'
+FAFAFAFAFAFAFAFAFAFAFAFAFA=FAFAFAFAFAFAFAFAFAFAFAFEFEFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFA9FAFAFAFA0FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAJ"J"Dt
+P>FAQ%FAFEJ"8"J"J"Et
+OEFEFEBFAQ%FAFAJ%JW
+OEFAFAFAFAW4Jw
+Y/FD
+
+
+J#=#E#J#?#;#J%B#D$>#I#9#J#J$<$9%;#I#9#
+O8FEFEFEFEFEFEIFEFEFEFEFEFEDFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE4FEFEO8FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEA&s"w"r8sD$<$J%D#=$J&J"@$J$A&;'8s"sJ">":':$
+FEFEFEFEFAFEFAFEFAFEFEFEFEFAFEFEFAO#FEFEFEFEFEFEFAFEFEBFEFEFAFAFA<FAFAFEFELFEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFAFE8FAFAFEFEFAFAFEFEFAFEFEA"8$8#8$8#8$9"8(8$J#J'C#J$9$J"8#;#8#8"8$;"8"J$9$
+FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFAFAFAFAFAKFAFA?FEFEFAFAFAFEFAFAP0FEFEFAFAFEFE@FAFAFAFAFAFAFAFAFAFAFAFAFAO8FEFEFAFAFEFEE"J$<$8):%;'8(9%;%:"8$D$J"8#:%:"8$:';$;$J$J&;$<$;#?$
+FEO&FEFEFAFEFEFAFEFEFAFEFEFAFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFEFAFAFEFEFEFEFEFEFAFEFE@FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFEFEJFEFEFAO,FEFEFEFEFEFEFEFEFEFEFEFAFAFAFEFEJ%D%J*9#<'9"8%8';$:"8$JrB"8#9'9"8$9';&J$;$J(:#A'9&:&J$;$
+AFEFAFAFAFEFAFAFA;FAFEFEFAFEFEFAFEFEFAFAFEFEFAFAFEFEFAFEFAFAFAFEFEFAFAFEFEFEFEFAFAFAFAFA>FEFAFAFAFEFEFAFAFEFEFAFAFAFAFEFEFAFAFEFEFEFAFAFEFE6FEFEFAFAFEFEO'FEFAFAFAFAFAFAFAFAFAFAFAFAFEFEFEFEFAFAFEFEFEFAFAFEAFEFEFAFAFEFEJ$<"@$:"J$8"=":$8$;"JrI$8$@$8"<"J"J">"=$
+7FEFEFEFEFEFEFAFEO$FEFEFAFAFAFEFEFAFAFEFEFAIFAFEFEFAFAFEFEFEFEFAFAFAOKFEEFAFAFEFEFAD$<$<">%;"J#J"J%H#J$=$J#C"J%J$J$=$
+FEFAFEFAFAFAFAFEFEFEFAFAO*FAFA7FEO7FEFEFEFEFAFA>FEFEFAFAFEFEDFEFEFA8FEFEFEFE9FEFEFA7FEFEFAFAFEFEJ%:%<%J&JrJ'J"J&J$
+AFAFAFEFEFAFAFEFEFAFAFEFEO>FAFEFEFEFEFFE5FAFAFAFAFAFAP5FA6FEFEFAFAFA8FEFEFAD$J$J$9#@$8$9'=#JrI$8$='9#J$?$J"?">":$J$?$
+FAFAFA:FAFEFEO)FAFEFEFEFEFAFEFEFEFEFAFEFAFAFAFAFAFEFE=FAFAFEFEFEFEFEFEFEFAFAFEFEFEFE=FEFEFAFAFEFEO@FEFEFEFEFEFA8FEFEFAFAFEFEJ"8$8#8$9"8":#8$E$<$8">"8#8#8(8"8$9'9&;'9#8#:$J"8#9%8"9'8*8$8"9$J$B"8$:#8#8"8#<"8"B&8"8&8(8"9%;$
+4FEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFAFEFEFEFEFEFEFEFEFAFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFAFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFA@FEFEFEFAFEFEFEFAFAFEFEFEFEFAFAFEFEFEFEFEFAFAFEFEFAFEFEFEFEFAJFAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFAFEFAFEFEFEFAFEFAFAFEFEFEFAFEFEFEFEFEFEFEFAB#9z8vJu8'9&9':%;%<%:'J&:&;%:&8tH$A$Js8'8&<%Cr9r8yJ$A$Jw
+FAFA9FAFA;FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAGFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFAFAFEFE<FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFA4FEFEFAFAFEFEP.FCJ$<$J$J$J$8tJ$Jw
+O7FAFEFEFAFEFEO>FEFEFAO@FEFEFALFAFEFEFEOEFEFEFAPLFDJ#=#J#J#D#C#E#8tJ#D#C#
+O8FAFAFAFAO>FAFAOAFAFAFAFAFAFAFAFAFAOEFAFAFAFAFAFA
+
+
+Js
+Y1FC
+J#J%J$J%<#I#9#J#J#9%E#D$G#?#;#=#I#9#J"<"
+O8FEFEO+FEFEFEFE;FEFEFE4FEFEFEFEFEFEFEFEFEFE4FEFEO&FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEP5FDFDJ$A&;'8s"sA#J"J#>$J$A&;'8s"s;$9#J"@%D#=$<$J":"
+O7FEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFAFEFAFA=FA6FAFAFAFEFELFEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFAFAFAAFAFEFEFEFEFEFEFAFEFEFAFEFEQ!FDFDJ"8#;#8#8"8$;"8"J$9$J"8#;#8#8"8$;"8"J'C#J$9$J"8"
+OEFAFAFAFAFAFAFAFAFAFAFAFAFAP%FEFEFAFAFEFE@FAFAFAFAFAFAFAFAFAFAFAFAFAO,FEFEFAFAFAFEFAFADFEFEFAFAFEFEP6FDFDJ$J%:&;$:0E$J$J$C&:"8$:';$:%:"8$D$<$J#
+O6FEFEFAO6FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFAFEFEJFEFEFAO%FEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFEFEFEFEFAFEFEFAFEFEQ"FDFDJ(:#J'9'9&9"8$8)J$;$J(:#J'9"8$9';&:$:"8$J$;$
+P-FEFAFAFAFAFAFAFAFA4FEFEFAFAFEFEFAFAFAFAFEFEFEFEFAFAFEFAFAFAFAFAFAFAFAFAFAFEFE@FEFEFAFAFEFEO'FEFAFAFAFAFAFAFAFA4FAFAFAFAFEFEFAFAFAFAFEFEFAFAFEFEFEFAFAFEFEFEFEFAFAFAFAFAIFEFEFAFAFEFEJ"J$8$E"J"J$8"<"?"
+P,FE@FEFEFAFAFEFEFAP6FEO$FEFEFAFAFAFAJ#C"J%D(8%J$=$J#C"J%I#D"J$=$
+OKFEFEFAJFEFEFEFEFAFEFEFAFEFEFAFEFEFEFEAFEFEFAFAFEFEDFEFEFAAFEFEFEFEFAFAFEO%FEFEFAFAFEFEJ"J&J&J"J&J&Jw
+P-FAHFEFEFAFAFA6FEFEFAFAFAP&FA?FEFEFAFAFABFAFEFEFEFEQ?FCJ$8$;"?";&<"J$?$J"@'9#B'=#J$?$Jy
+PMFAFEFEFEFEFAFEFEFAFEFEFEFAFE@FEFEFAFAFEFEOIFEFEFEFAFAFEFEFEFEFEFAFAFAFAFAFEFEFFEFEFAFAFEFEP.FDJ$B"8$:#8#8"8#<"8"C#8#9'8&8"8&8"?&8"8#8#;$J$B"8$:#8#8"8#<"8"<$:#8#8&8"9'8*8$8(;'9#8#:$<$J$
+O6FAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFEFAFEFAFEFEFEFAFEFAFEFEFEFAFEFEFEFEFEFEFEFAJFAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFEFEFAFEFEFEFAFEFAFEFEFEFEFAFAFEFEFEFEFEFAFAFEFEFAFEFEFAFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFAFEFEFAQ"FCFCFCJs8'8&<%C':%:r9r9$:r8'J$A$Js8'8&<%C'9r:%:&8t8%<%:'J$A$
+OEFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFA4FEFEFAFAFEFE<FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFA<FEFEFAFAFEFEJ$8tJ$J$8tJ$J$<$
+O7FAFEFEFEP2FEFEFALFAFEFEFEHFAFEFEO>FEFEFAFEFEFAJ#8tJ#D#C#E#8tJ#J#=#D#C#
+O8FAFAFAP2FAFAFAFAFAFAFAFAFAIFAFAO>FAFAFAFAFAFAFAFA
+
+
+
+
+J#=#J#?#;#J$<$9%;#
+O8FEFEFEFE6FEFEFEFEFEFEO FEFEFEFEFEFEFEFEFEFEFEFEJ$<$C%D#=$J">":':$
+O7FEFEFAFEFEFAFEFEFEFEFEFEFAFEFEMFAFAFEFEFAFAFEFEFAFEFEJ'C#
+P!FEFEFAFAFAFEFAFAJ$<$:&;%:"8$D$J&;$<$;#?$
+O6FEFEFAFEFEFAFEFEFEFEFEFAFAFEFEFEFEFEFEFAFEFE?FEFEFEFEFEFEFEFEFEFEFEFAFAFAFEFEJ';$:"8$JrA'9&:&
+OFFAFAFAFAFEFEFEFEFAFAFAFAFA>FEFAFAFAFAFEFEFEFEFAFAFEFEFEFAFAFEJ"JrJ">"=$
+P$FAIFA8FAFAFEFEFAJ%>"J%J$
+OFFEFEFEFEFEO-FEFEFEFE9FEFEFAJ&=&Jr@&J$
+OEFEFEFAFAFAFAFEFEFEFEFFEFEFEFAFAFA8FEFEFAJ"<'=#JrD"?">":$
+OIFEFEFAFAFAFAFAFEFE=FAFEFEFEFEFEFAJ$<$9&8"8&;'9#8#:$J&8"8&8(8"9%;$
+O6FAFEFEFAFEFEFAFEFEFEFAFEFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFA>FAFEFEFEFAFEFAFEFEFEFAFEFAFAFEFEFEFAFEFEFEFEFEFEFEFAJr9%<%:'Jr9r8y
+OFFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFFAFAFAJ$<$J$J$
+O7FAFEFEFAFEFEHFEFEFAO7FEFEFAJ#=#J#J#
+O8FAFAFAFAHFAFAO8FAFA
+
+
+
+
+D#J#E#J#:#?#D%;#=#
+FEFE;FEFEFEFELFEFEFEFEFEFEFEFEFEFEFEFEFEFEJ$J%=$C#E':$<$
+JFEFEFAO#FEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFAFEFEFAFEFEJ#J'J#?";#
+O.FAFA?FEFEFAFAFAFE6FAFAFEFAFAJ$8):%;'8(9%;%<$:"8$J$<$
+IFEFEFAFEFEFAFEFEFAFEFEFEFEFEFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFEFAFAFEFEFEFEFAFEFEFEFE@FAFEFEFAFEFEJ*9#<'9"8%8';$C"8$J%Jr
+O FAFEFEFAFEFEFAFEFEFAFAFEFEFAFAFEFEFAFEFAFAFAFEFEFAFAFEFEFEFEFAFAFAFAFA7FEFEFEFA>FEJrJ$8"=":$8$;"Jr:#Jr
+5FEEFEFEFAFAFAFEFEFAFAFEFEFA@FEFAFA@FAJrJ#J"J(="
+5FAKFAFA7FE@FAFAFAFEFAFAFAFEJ&Jr
+P#FAFEFEFEFEO<FEJ$9#@$8$9'F#J#Jr
+O3FAFEFEFEFEFAFEFEFEFEFAFEFAFAFAFAFAFEFE4FEFEBFAJ$8">"8#8#8(8"8$9'9&<$;'9#8#;";';$<$
+IFAFEFEFEFEFEFEFEFEFAFEFEFEFEFEFAFEFEFEFEFAFEFEFEFEFAFAFEFEFEFEFAFEFEFAFEFEFEFEFAFEFEFEFEFAFAFEFEFEFEFAFEFEFAFEFEFAJu8'9&9':%;%E%:'B%
+O FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAJ$J$J$<$
+JFAFEFEO.FAFEFEHFEFEFAFEFEFAD#J#J#J#=#
+FAFA;FAFAO/FAFAHFAFAFAFA
+
+
+
+Jz
+P2P0FEF#J#E#J#:#?#D%;#J#:#?#D%;#J$I$=%J#:#?#D%;#=#=#
+FEFEOJFEFEFAFALFAFAFAFAFAFAFAFAFAFAFAFAO FEFEFEFEFEFEFEFEFEFEFEFE<FEFEFEFEFEFEFEFEFEFE;FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEE$8$8w%8%s@$8%8%9'9s;$J%=$C#E':$J%=$C#E':$J"J"?#G%=$C#E':$<$<$
+FEFEFAFEFEFEFEFAFEFEFEFEFEFEFAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAO#FAFAFAFAFAFAFEFAFAFAFAFEFEFAFAFEFAFAAFEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFAFEFE;FA5FAFAFAFEFEFEFEFEFEFAFEFEFEFEFAFAFEFEFAFEFEFAFEFEFAFEFEJ":"8#8$9"<"9"8"B":"8)8"8%8"8$J#J'J#?"J'J#?"J'J#?"
+4FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFAFAFEFEFAFAFAFEFEFAFAFAFA9FEFE?FAFAFEFEFEFA6FEFEFAO$FEFEFAFAFAFE6FAFAFEP#FEFEFAFAFAFE6FAFAFED$<"J";$8$<$C$8):%;'8(9%;%<$:"8$J#?$J&;%<$:"8$J#?$J$<%9$8$;$C%;%<$:"8$J#?$<$<$
+FEFEFAFELFEFEFEFAFAFEFEFAFEFEFEFEFAFEFAFEFAFAFEFAFAFAFAFAFAFAFAFAFAFEFAFAFAFAFEFAFAFAFAFAFAFAFEFEFAFAFAFAFEFAFAFAFA5FEFEFEFAFA6FEFEFEFEFEFAFAFEFEFEFEFAFEFEFEFE5FAFAFAFEFE7FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFAFEFEFEFEFAFEFEFEFE5FAFAFAFEFEFAFEFEFAFEFEJ%8'8#:#J%?*9#<'9"8%8';$C"8$J';$C"8$J&:'8":"<&A';$C"8$
+AFEFAFAFAFAFEFEFEFEFAFAFAFAFAIFEFAFAFAFAFAFAFEFAFAFEFAFAFEFEFAFAFEFEFAFAFEFAFEFEFEFAFAFEFEFAFAFAFAFEFEFEFEFEO+FAFAFAFAFEFEFEFEFAFAFAFAFAO+FEFEFAFAFEFEFEFAFAFEFEFAFAFEFAFAFEFEFEFEFAFAFEFEFEFEFAFAFAFAFAJ#="="8"J#J"J$8"=":$8$;"Jr;$J"Jr;$J"9$8$C"D$8$;"Jr;$
+7FAFEFEFAFA8FAFE9FE@FAFAFEFEFEFAFAFEFEFAFAFE@FAFAFAFEJFA@FEFEFEFABFAFEFEFAFAFEFEFAFEFEFAFAFEFEFA@FEFEFEFAJ"="8"J"J#J"J(:$J%>"J(:$J%="J(:$
+@FAFEFEO%FAFFEFE7FA@FEFEFEFAFEFEFEFAFAFE?FEFEFEFEFE@FAFAFAFEFAFAFAFEFEFAO?FEFEFEFEFE@FAFAFAFEFAFAFAFEFEFAJ#=%8'J#J%J&J$J&=&J$J':&J$
+8FAFEFAFAFEFEFEFEFAFAFEFE8FAFE9FAFAFEFEO,FEFAFAFAFAGFAFAFE?FEFEFAFAFAFAFEFEFEFEGFEFEFAO@FAFAFAFAFAFAFAFEFEFEFEGFEFEFAJ$8$<$J$9#@$8$9'F#J$G#G"<'F#J$G#H"9$8$<"<"D$8$9'F#J$
+O<FAFEFEFEFEFAFEFEFAEFEFAFAFAFAFEFAFAFAFAFEFAFEFEFEFEFEFAFA4FAFAFEFEFEFEFEFAFAFAFAFAFEFE4FEFEFAFEFEFEFAFEFEFEFEFAFEFEFAFEFEFEFEFEFEFAFAFAFAFAFEFE4FEFEFAD$9"8$9"8$9"<"9"8"B"8$:'8"8%8"8$<$8">"8#8#8(8"8$9'9&<$;'9#8#;"=%;$J&8"8&<$;'9#8#;"=%;$J&8)9&8#8&8#8#9%8"8&<$;'9#8#;"=%;$<$<$
+FAFEFEFEFEFAFAFEFEFEFEFEFEFEFEFEFEFAFAFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFAFEFEFEFAFAFAFAFAFEFAFAFAFAFAFEFAFAFAFAFEFAFAFAFAFEFEFAFAFAFAFEFAFAFEFAFAFAFAFEFAFAFAFAFEFAFAFAFAFAFAFE5FAFEFEFEFAFEFAFEFEFEFEFAFEFEFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFA6FAFEFEFEFAFEFAFAFEFEFEFEFAFAFEFEFEFAFEFEFAFEFEFEFAFEFEFEFEFAFEFEFEFAFAFEFEFEFEFAFEFEFAFEFEFEFEFAFEFEFEFEFAFEFEFEFEFEFEFAFEFEFAFEFEFAJ%8z8$9%B%8#9%9'9s?"t8'9&9':%;%E%:'A'C$Dr9%E%:'A'C$Er8%;y9':&:%E%:'A'
+4FAFAFAFA/FAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFEFEFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAFAE$JtJ$J$J$="J$J$="J$J$<$<$
+FAFEFEFFEHFAFEFEO.FEFAFAHFAFAFEFADFAFEFEHFEFEFAFAOCFAFEFEHFEFEFAFEFEFAFEFEFAF#JtJ#J#J#="J#J#="J#J#=#=#
+FAFAFFAIFAFAO/FEFEHFEFEFAFFAFAHFAFAFAOEFAFAHFAFAFAFAFAFA
+
+
+
+Jz
+P2P0FA
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+J$
+Y4FDFDFD
+JX"
+Y.FCJw
+Y/FD
+
+
+<z:w
+Y%FEFC;z8y
+Y'FDFD
+
+
+
+J"D"J"J"
+IFEFE7FEV@FEF%9"J"I%J":"C"J"
+FEFEFEFEFEO%FEFEFEFEFEV%FEFEFE@FEE&J'J"J#
+FEFDFDFDFDO<FEFDFDFDFDFEV-FDHFEFEJ%8$;$<"=$:$:%9%:#9"A"J"9$8%9#9'9"8"=#
+6FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFDFEFEFEFEFEFEFEFEFEFDV-FEFEFEFEFEFEFEFEFEFEFEFDFEFEFDFEFEFEFDFDF";+9%;#<%9&:%8%9%J%8%8%9$
+FEFDFEFDFDFDFEFDFDFDFEFEFDFDFDFEFDFEFDFDFDFEFDFDFDFEFEFDFDFEFDFEFDFDFEFDFDFEV?FEFDFDFDFDFEFDFDFEFDFDFEFEFDFDE%>"<#=#J"B";"=%J%H#8#8"@"
+FDFEFEFEFDFEFDFEFD7FDFDFDFEFEFEFEV&FEFEFEFEFEFDFDFEFDFDF%>$A"G$J&J%=$J&
+FDFDFEFEFEFEFEFEFEFEFE@FDFDFDFDFEV%FDFDFDFDFDFEFE4FDFEFDFEFDH">%A$E%J$
+FDFEFDFDFDFDFDFEFDFDFDFDW'FDFDFEPJ#?"?"="J"J#8#=$9"JP
+=FDFEFEFEFE7FEVGFDFEFEFDFDFEFDFE67%@&9+8%;"=%9&:%9$F'J%9$8%J%
+FDFDFDFCFEFEFEFEFDFDFEFEFDFDFEFEFEFDFEFDFEFEFEFDFDFEFEFDFDFEFEFEFDFEFEFEFDFDFEFEFDFEFEFEFEFDV0FEFEFEFDFDFEFEFDFEFEFDFFDFDFDFCE%;#8&9$8"9"=%9$;$;#8"9"8"=%J":"9"8$;#9#9";#:"?"
+FDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDFDV%FDFDFDFDFDFDFDFDFDFDFDFEFDFDFDJ"
+Y!FEJ"J#
+O5FDW9FDFD
+;QJQ
+Y.:(J'
+FDFDFDFDFDFDFCY/FDFDFDFDFDFDAz
+Y.FE
+7tJt
+FCY0FC
+ENDBITMAP
+%%EndBinary
+70.87 70.87 552.76 697.33 C
+0 -0 595.3 841.89 C
+FMENDPAGE
+%%EndPage: "11" 16
+%%Page: "12" 16
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(12) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(6) 42.56 743.39 T
+(Actions Menu) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(6.1) 42.56 688.03 T
+(Introduction) 70.9 688.03 T
+0 12 Q
+(6.1.1) 42.56 662.36 T
+-0.27 (Some of the commands on this menu must have part of the conjectur) 76.57 662.36 P
+-0.27 (e selected befor) 437.63 662.36 P
+-0.27 (e) 518.7 662.36 P
+0.13 (they ar) 76.57 649.36 P
+0.13 (e called. Others may be called on either the whole conjectur) 113.54 649.36 P
+0.13 (e or just part of it.) 429.91 649.36 P
+0.41 (The selection is made by clicking the left mouse button at an appr) 76.57 636.36 P
+0.41 (opriate place. The) 429.09 636.36 P
+2.95 (selected expr) 76.57 623.36 P
+2.95 (ession, which is the smallest valid expr) 148.59 623.36 P
+2.95 (ession containing the point) 372.45 623.36 P
+(clicked on, is highlighted by r) 76.57 610.36 T
+(everse video.) 233.68 610.36 T
+1 14 Q
+(6.2) 42.56 582.03 T
+(Apply) 70.9 582.03 T
+0 12 Q
+(6.2.1) 42.56 556.36 T
+0.89 (A selected expr) 76.57 556.36 P
+0.89 (ession is needed for this command which aims to r) 159.75 556.36 P
+0.89 (ewrite it using a) 436.26 556.36 P
+1.04 (theor) 76.57 543.36 P
+1.04 (em or axiom. In addition to selecting the name of the theor) 104.29 543.36 P
+1.04 (em or axiom fr) 426.18 543.36 P
+1.04 (om) 507.3 543.36 P
+0.59 (the list pr) 76.57 530.36 P
+0.59 (ovided in the pop-up window) 128.11 530.36 P
+0.59 (, two other pieces of information have to be) 289.51 530.36 P
+1.22 (supplied. These ar) 76.57 517.36 P
+1.22 (e which part of the hypothesis is to be used and how it is to be) 176.27 517.36 P
+(applied.) 76.57 504.36 T
+(6.2.2) 42.56 478.36 T
+0.9 (Theor) 76.57 478.36 P
+0.9 (ems with an hypothesis of the form A = B ar) 107.74 478.36 P
+0.9 (e usually intended to r) 350.83 478.36 P
+0.9 (ewrite an) 473.91 478.36 P
+0.57 (expr) 76.57 465.36 P
+0.57 (ession matching the left hand side \050A\051 for one matching the right hand side \050B\051) 100.25 465.36 P
+0.14 (but they can be applied in r) 76.57 452.36 P
+0.14 (everse by selecting \324Right r) 222.68 452.36 P
+0.14 (ewritten as Left\325. Theor) 365.79 452.36 P
+0.14 (ems of) 489.33 452.36 P
+-0.28 (the form A ==> B cannot be applied in r) 76.57 439.36 P
+-0.28 (everse. A thir) 285.73 439.36 P
+-0.28 (d possibility is that the whole of) 356.28 439.36 P
+0.71 (the term matches the selected expr) 76.57 426.36 P
+0.71 (ession, in which case the selected expr) 263.12 426.36 P
+0.71 (ession can) 469.47 426.36 P
+(be r) 76.57 413.36 T
+(eplaced by tr) 96.48 413.36 T
+(ue.) 165.2 413.36 T
+(6.2.3) 42.56 387.36 T
+1.78 (The hypothesis of the axiom below is in two parts, one for indexing and one for) 76.57 387.36 P
+-0.23 (trimming. Selecting \324Use term 1\325 will use the indexing part, while \324Use term 2\325 will be) 76.57 374.36 P
+2.77 (needed for the trimming part. This axiom can be used during the pr) 76.57 361.36 P
+2.77 (oof of the) 468.62 361.36 P
+(conjectur) 76.57 348.36 T
+(e in paragraph 3.1.4 to simplify the expr) 124.99 348.36 T
+(essions) 336.6 348.36 T
+3 10 Q
+(\050[n]x\051[1]) 377.64 348.36 T
+0 12 Q
+( and) 411.54 348.36 T
+3 10 Q
+(\050[n]x\051[2..n]) 437.86 348.36 T
+0 12 Q
+(.) 482.88 348.36 T
+3 10 Q
+(AXIOM INDEX_TRIM = FORALL _any: tp, tp: x, _const: n j k) 76.57 330.69 T
+(WHERE \0501 <= j\051 /\134 \050j <= k\051 /\134 \050k <= n\051) 184.29 316.69 T
+(|- \050\050[n]x\051[j] = x\051 /\134 \050\050[n]x\051[j..k] = [k-j+1]x\051.) 184.29 302.69 T
+0 12 Q
+(6.2.4) 42.56 276.36 T
+1.33 (If when matching the selected expr) 76.57 276.36 P
+1.33 (ession to part of the hypothesis of a theor) 268.67 276.36 P
+1.33 (em a) 497.77 276.36 P
+0.16 (variable cannot be assigned a value, the user will be pr) 76.57 263.36 P
+0.16 (ompted to supply one even if) 367.9 263.36 P
+1.91 (the variable is not r) 76.57 250.36 P
+1.91 (elevant in the curr) 186.28 250.36 P
+1.91 (ent situation. In the axiom above, this will) 288.61 250.36 P
+0.81 (happen when the indexing term is used since the value of) 76.57 237.36 P
+3 10 Q
+0.75 (k) 393.93 237.36 P
+0 12 Q
+0.81 ( will be unknown. Any) 398.93 237.36 P
+(value which makes the pr) 76.57 224.36 T
+(edicate tr) 213.11 224.36 T
+(ue can be supplied.) 262.22 224.36 T
+(6.2.5) 42.56 198.36 T
+0.35 (An auxiliary conjectur) 76.57 198.36 P
+0.35 (e may be generated if the system cannot be sur) 195.34 198.36 P
+0.35 (e the pr) 446.05 198.36 P
+0.35 (edicate) 486.88 198.36 P
+4.31 (of the theor) 76.57 185.36 P
+4.31 (em or axiom is tr) 146.11 185.36 P
+4.31 (ue. This conjectur) 252.97 185.36 P
+4.31 (e must be pr) 354.92 185.36 P
+4.31 (oved befor) 433.56 185.36 P
+4.31 (e the) 494.74 185.36 P
+(application can be completed.) 76.57 172.36 T
+1 14 Q
+(6.3) 42.56 144.03 T
+(Predicate) 70.9 144.03 T
+0 12 Q
+(6.3.1) 42.56 118.36 T
+-0.06 (A selected expr) 76.57 118.36 P
+-0.06 (ession is needed for this command which aims to r) 157.85 118.36 P
+-0.06 (ewrite it using one) 425.83 118.36 P
+-0.29 (of the pr) 76.57 105.36 P
+-0.29 (edicate terms. Ther) 120.92 105.36 P
+-0.29 (e ar) 221.6 105.36 P
+-0.29 (e two ways of indicating which pr) 240.59 105.36 P
+-0.29 (edicate term is to be) 419.61 105.36 P
+1.19 (used. The \336rst is to leave \324Part\325 as 0 and set \324T) 76.57 92.36 P
+1.19 (erm\325 to the number of the pr) 329.32 92.36 P
+1.19 (edicate) 486.89 92.36 P
+1.31 (term counting fr) 76.57 79.36 P
+1.31 (om the beginning of the conjectur) 165.87 79.36 P
+1.31 (e, and this is usually the easiest) 350.51 79.36 P
+FMENDPAGE
+%%EndPage: "12" 17
+%%Page: "13" 17
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Actions Menu) 471.22 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(13) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+0 12 Q
+0 X
+0.24 (method. However) 104.89 718.04 P
+0.24 (, for a complicated conjectur) 200.92 718.04 P
+0.24 (e with pr) 351.58 718.04 P
+0.24 (edicate terms in a number of) 399.95 718.04 P
+-0.25 (sections, \324Part\325 can be used to indicate the section and \324T) 104.89 705.04 P
+-0.25 (erm\325 to indicate the pr) 398.65 705.04 P
+-0.25 (edicate) 515.2 705.04 P
+-0.12 (term counting fr) 104.89 692.04 P
+-0.12 (om the beginning of that section. Pr) 191.33 692.04 P
+-0.12 (edicates of the form A = B can be) 379.32 692.04 P
+0.04 (applied \324Left as Right\325 or \324Right as Left\325 and all pr) 104.89 679.04 P
+0.04 (edicates can be \324Selected as TRUE\325.) 367.79 679.04 P
+(\050See section 8.4\051) 104.89 666.04 T
+1 14 Q
+(6.4) 70.87 637.71 T
+(Case split) 99.22 637.71 T
+0 12 Q
+(6.4.1) 70.87 612.04 T
+4.43 (This command cr) 104.89 612.04 P
+4.43 (eates a daughter conjectur) 205.9 612.04 P
+4.43 (e for every possible value of the) 357.72 612.04 P
+0.68 (expr) 104.89 599.04 P
+0.68 (ession typed in the pop-up window) 128.56 599.04 P
+0.68 (, pr) 320.6 599.04 P
+0.68 (ovided that ther) 339.02 599.04 P
+0.68 (e ar) 425.59 599.04 P
+0.68 (e not mor) 445.54 599.04 P
+0.68 (e than 256) 497.77 599.04 P
+-0.22 (values. If the conjectur) 104.89 586.04 P
+-0.22 (e contains any delay elements, its \324value\325 can change over time) 223.67 586.04 P
+0.69 (without any change in the input values, so the expr) 104.89 573.04 P
+0.69 (ession must include a time \050e.g.) 382.77 573.04 P
+3 10 Q
+3.57 (a@t1) 104.89 560.04 P
+0 12 Q
+3.85 ( in the example in annex A\051. Also, the expr) 128.94 560.04 P
+3.85 (ession must not contain any) 389.21 560.04 P
+0.5 (existential variables \050i.e. any intr) 104.89 547.04 P
+0.5 (oduced by EXISTS\051 since the implication is that the) 278.73 547.04 P
+(conjectur) 104.89 534.04 T
+(e is tr) 153.31 534.04 T
+(ue only for some values of such variables, not all possible values.) 182.19 534.04 T
+1 14 Q
+(6.5) 70.87 505.71 T
+(Induction) 99.22 505.71 T
+0 12 Q
+(6.5.1) 70.87 480.04 T
+-0.08 (This command is used to instigate a pr) 104.89 480.04 P
+-0.08 (oof by induction for a variable which has type) 309.11 480.04 P
+-0.08 (_integer) 104.89 467.04 P
+-0.08 (. The conjectur) 147.29 467.04 P
+-0.08 (e must not contain any delay elements or existential variables.) 224.64 467.04 P
+0.01 (The user supplies the variable name and the dir) 104.89 454.04 P
+0.01 (ection of the induction in the pop-up) 357.62 454.04 P
+0.05 (window) 104.89 441.04 P
+0.05 (. T) 148.16 441.04 P
+0.05 (wo conjectur) 160.48 441.04 P
+0.05 (es ar) 228.51 441.04 P
+0.05 (e cr) 252.92 441.04 P
+0.05 (eated, one for the base case \050variable = 1\051 and one for) 271.57 441.04 P
+1.31 (the induction step. For the example in paragraph 3.1.4, with induction on) 104.89 428.04 P
+3 10 Q
+1.22 (n) 511.45 428.04 P
+0 12 Q
+1.31 ( in the) 517.01 428.04 P
+(forwar) 104.89 415.04 T
+(d dir) 140.71 415.04 T
+(ection, these conjectur) 166.39 415.04 T
+(es ar) 283.3 415.04 T
+(e:-) 307.66 415.04 T
+3 10 Q
+(FORALL _const: n, data: x WHERE n = 1) 104.89 397.38 T
+(|- \050ADD_ROW{1} [1]x\051 = \050MULT_N{1} x\051) 104.89 383.38 T
+0 12 Q
+(and) 104.89 368.04 T
+3 10 Q
+(FORALL _const: n, data: x WHERE \050n > 0\051 /\134 \050n > 1\051) 104.89 353.38 T
+(THEOREM INDUCTION_HYPOTHESIS =) 104.89 339.38 T
+(FORALL data: x_1 WHERE \050n-1\051 > 0) 127.56 325.38 T
+(|- \050ADD_ROW{n-1} [n-1]x_1\051 = \050MULT_N{n-1} x_1\051.) 127.56 311.38 T
+(|- \050ADD_ROW{n} [n]x\051 = \050MULT_N{n} x\051) 104.89 297.38 T
+0 12 Q
+(6.5.2) 70.87 271.04 T
+6.7 (During pr) 104.89 271.04 P
+6.7 (oof of the second of the above conjectur) 164.73 271.04 P
+6.7 (es, the local theor) 421.26 271.04 P
+6.7 (em,) 533.41 271.04 P
+1.35 (INDUCTION_HYPOTHESIS, will be included on the list pr) 104.89 258.04 P
+1.35 (ovided for the \324Apply\325) 429.96 258.04 P
+(command and can be used in the same way as a global theor) 104.89 245.04 T
+(em or axiom.) 425.57 245.04 T
+1 14 Q
+(6.6) 70.87 216.71 T
+(Open) 99.22 216.71 T
+0 12 Q
+(6.6.1) 70.87 191.04 T
+0.61 (A selected expr) 104.89 191.04 P
+0.61 (ession is needed for this command which aims to r) 187.51 191.04 P
+0.61 (eplace a function) 461.53 191.04 P
+0.27 (or macr) 104.89 178.04 P
+0.27 (o instance by its output expr) 145.9 178.04 P
+0.27 (ession or r) 297.89 178.04 P
+0.27 (eplace a locally named variable by its) 353.21 178.04 P
+1.22 (de\336nition. DELA) 104.89 165.04 P
+1.22 (Y and ARITH functions cannot be opened. In the example above,) 195.82 165.04 P
+3 10 Q
+(MUL) 104.89 152.04 T
+(T_N{n} x) 125.26 152.04 T
+0 12 Q
+( can be opened to) 164.17 152.04 T
+3 10 Q
+(IF n = 1 THEN x ELSE PLUS \050x, MUL) 259.9 152.04 T
+(T_N{n-1} x\051 FI) 426.16 152.04 T
+0 12 Q
+(.) 488.96 152.04 T
+(6.6.2) 70.87 126.04 T
+3.16 (If an err) 104.89 126.04 P
+3.16 (or message \324Cannot open following expr) 153.24 126.04 P
+3.16 (ession:-\325 is pr) 383.95 126.04 P
+3.16 (oduced with the) 459.87 126.04 P
+-0.06 (\324following expr) 104.89 113.04 P
+-0.06 (ession\325 dif) 186.07 113.04 P
+-0.06 (fer) 239.9 113.04 P
+-0.06 (ent fr) 254.17 113.04 P
+-0.06 (om the selected expr) 282.27 113.04 P
+-0.06 (ession, an automatically called) 390.94 113.04 P
+0.9 (\324Simplify\325 command has alter) 104.89 100.04 P
+0.9 (ed the selected expr) 263.64 100.04 P
+0.9 (ession befor) 371.13 100.04 P
+0.9 (e it was passed to the) 435.44 100.04 P
+FMENDPAGE
+%%EndPage: "13" 18
+%%Page: "14" 18
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Actions Menu) 442.91 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(14) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+0 12 Q
+0 X
+3.31 (\324Open\325 command. The user must call the \324Simplify\325 command explicitly if this) 76.57 718.04 P
+(change is r) 76.57 705.04 T
+(equir) 133.39 705.04 T
+(ed.) 161.11 705.04 T
+1 14 Q
+(6.7) 42.56 676.71 T
+(Push time) 70.9 676.71 T
+0 12 Q
+(6.7.1) 42.56 651.04 T
+1.54 (This command can be applied to a selected expr) 76.57 651.04 P
+1.54 (ession or the whole conjectur) 342.94 651.04 P
+1.54 (e. It) 503.2 651.04 P
+0.21 (aims to move any applications of the time function within the selected expr) 76.57 638.04 P
+0.21 (ession to) 477.82 638.04 P
+-0.05 (a lower level. For example,) 76.57 625.04 P
+3 10 Q
+-0.05 (\050a, b, c\051@t1) 222.07 625.04 P
+0 12 Q
+-0.05 ( is changed to) 274.37 625.04 P
+3 10 Q
+-0.05 (\050a@t1, b@t1, c@t1\051) 350.27 625.04 P
+0 12 Q
+-0.05 (and) 446.62 625.04 P
+3 10 Q
+-0.05 (\050F\050a, b\051\051@t1) 469.89 625.04 P
+0 12 Q
+0.2 (is changed to) 76.57 612.04 P
+3 10 Q
+0.19 (F\050a@t1, b@t1\051) 150.27 612.04 P
+0 12 Q
+0.2 ( if function) 216.89 612.04 P
+3 10 Q
+0.19 (F) 278.47 612.04 P
+0 12 Q
+0.2 ( is combinatorial. When applied to the whole) 284.58 612.04 P
+(conjectur) 76.57 599.04 T
+(e it will be applied r) 124.99 599.04 T
+(epeatedly to push time as far as possible.) 231.02 599.04 T
+1 14 Q
+(6.8) 42.56 570.71 T
+(Simplify) 70.9 570.71 T
+0 12 Q
+(6.8.1) 42.56 545.04 T
+0.61 (This command can be applied to a selected expr) 76.57 545.04 P
+0.61 (ession or the whole conjectur) 335.47 545.04 P
+0.61 (e. The) 492 545.04 P
+-0.25 (pr) 76.57 532.04 P
+-0.25 (over has functions for simplifying the in-built functions and featur) 88.31 532.04 P
+-0.25 (es such as CASE) 438.17 532.04 P
+(clauses wher) 76.57 519.04 T
+(e some or all of the inputs ar) 144.82 519.04 T
+(e constants. For example, the CASE clause) 295.46 519.04 T
+3 10 Q
+(CASE \050a, b, t\051 OF) 76.57 501.38 T
+(\050t, t, t\051 | \050f, f, f\051 : a1,) 99.25 487.38 T
+(\050t, t, f\051 | \050f, f, t\051 : a2,) 99.25 473.38 T
+(\050t, f, f\051 | \050f, t, t\051 : a3) 99.25 459.38 T
+(ELSEOF) 76.57 445.38 T
+(\050bool, t, t\051 : a4,) 99.25 431.38 T
+(\050bool, f, f\051 : a5) 99.25 417.38 T
+(ELSEOF) 76.57 403.38 T
+(\050bool, bool, t\051 | \050bool, bool, f\051 : a6) 99.25 389.38 T
+(ELSE a7) 85.08 375.38 T
+(ESAC) 76.57 361.38 T
+0 12 Q
+(will be simpli\336ed to) 76.57 340.04 T
+3 10 Q
+(CASE \050a, b, t\051 OF) 76.57 320.38 T
+(\050t, t, t\051 : a1,) 99.25 306.38 T
+(\050f, f, t\051 : a2,) 99.25 292.38 T
+(\050f, t, t\051 : a3,) 99.25 278.38 T
+(ELSEOF) 76.57 264.38 T
+(\050bool, t, t\051 : a4) 99.25 250.38 T
+(ELSE a6) 85.08 236.38 T
+(ESAC) 76.57 222.38 T
+0 12 Q
+(6.8.2) 42.56 196.04 T
+2.79 (Instances of user functions and macr) 76.57 196.04 P
+2.79 (os will be simpli\336ed if all their inputs ar) 284.38 196.04 P
+2.79 (e) 518.7 196.04 P
+(constant.) 76.57 183.04 T
+1 14 Q
+(6.9) 42.56 154.71 T
+(Split hypothesis) 70.9 154.71 T
+0 12 Q
+(6.9.1) 42.56 129.04 T
+0.42 (If the hypothesis of the conjectur) 76.57 129.04 P
+0.42 (e curr) 251.71 129.04 P
+0.42 (ently displayed is of the form A /\134 B /\134 C ...) 282.71 129.04 P
+1.13 (or \050A1,B1,C1...\051 = \050A2,B2,C2...\051, this command will cr) 76.57 116.04 P
+1.13 (eate separate conjectur) 362.56 116.04 P
+1.13 (es with) 485.09 116.04 P
+0.37 (hypotheses A, B, C ... or A1=A2, B1=B2, C1=C2 ... which inherit all the pr) 76.57 103.04 P
+0.37 (edicates of) 467.88 103.04 P
+-0.03 (the par) 76.57 90.04 P
+-0.03 (ent conjectur) 113.93 90.04 P
+-0.03 (e. If all the separate conjectur) 181.96 90.04 P
+-0.03 (es ar) 336.12 90.04 P
+-0.03 (e pr) 360.46 90.04 P
+-0.03 (oved, the par) 380.92 90.04 P
+-0.03 (ent conjectur) 450.66 90.04 P
+-0.03 (e) 518.7 90.04 P
+(will be consider) 76.57 77.04 T
+(ed pr) 160.49 77.04 T
+(oved.) 188.3 77.04 T
+FMENDPAGE
+%%EndPage: "14" 19
+%%Page: "15" 19
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Actions Menu) 471.22 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(15) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(6.10) 70.87 716.71 T
+(Assert) 99.22 716.71 T
+0 12 Q
+(6.10.1) 70.87 691.04 T
+1.07 (This command is used to supply a value for an existential variable. The user must) 104.89 691.04 P
+1.34 (supply an expr) 104.89 678.04 P
+1.34 (ession in the form \324variable = value\325 in the pop-up window) 187.14 678.04 P
+1.34 (, wher) 512.41 678.04 P
+1.34 (e) 547.01 678.04 P
+1.41 (value is an expr) 104.89 665.04 P
+1.41 (ession of the corr) 192.61 665.04 P
+1.41 (ect type, not necessarily a constant. An auxiliary) 287.13 665.04 P
+0.83 (conjectur) 104.89 652.04 P
+0.83 (e will be generated if the system is unable to decide between accepting or) 153.31 652.04 P
+3.99 (r) 104.89 639.04 P
+3.99 (ejecting the value. An accepted value is not immediately substituted for the) 109.41 639.04 P
+0.37 (variable, the \324Use existential\325 command must be used. \050See Annex A for an example) 104.89 626.04 P
+(which needs this and the next command.\051) 104.89 613.04 T
+1 14 Q
+(6.1) 70.87 584.71 T
+(1) 87.85 584.71 T
+(Use existential) 99.22 584.71 T
+0 12 Q
+(6.1) 70.87 559.04 T
+(1.1) 85.21 559.04 T
+-0.26 (This command substitutes the values of any existential variables which have been set) 104.89 559.04 P
+1.69 (by the \324Assert\325 command. It can be applied to a selected expr) 104.89 546.04 P
+1.69 (ession or the whole) 445.03 546.04 P
+(conjectur) 104.89 533.04 T
+(e.) 153.31 533.04 T
+1 14 Q
+(6.12) 70.87 504.71 T
+(Undo action) 99.22 504.71 T
+0 12 Q
+(6.12.1) 70.87 479.04 T
+-0.17 (This command will undo the last operation on the curr) 104.89 479.04 P
+-0.17 (ent conjectur) 393.61 479.04 P
+-0.17 (e which added to) 461.51 479.04 P
+-0.26 (the \324History\325 r) 104.89 466.04 P
+-0.26 (ecor) 178.65 466.04 P
+-0.26 (d, pr) 200.8 466.04 P
+-0.26 (ovided that ther) 225.61 466.04 P
+-0.26 (e has been one since the conjectur) 310.31 466.04 P
+-0.26 (e was added) 486.69 466.04 P
+2.55 (to the stack. \050i.e. \324History\325, shown at the bottom right of the pr) 104.89 453.04 P
+2.55 (over window) 462.99 453.04 P
+2.55 (, is) 535.63 453.04 P
+2.71 (r) 104.89 440.04 P
+2.71 (educed by 1 unless it is alr) 109.41 440.04 P
+2.71 (eady 1 - see \336gur) 265.34 440.04 P
+2.71 (e 2\051 Actions which have r) 366.21 440.04 P
+2.71 (educed) 514.03 440.04 P
+-0.01 (\324History\325 \050e.g. Dr) 104.89 427.04 P
+-0.01 (op\051, or r) 194.2 427.04 P
+-0.01 (educed \324Stack depth\325 \050e.g. pr) 236.75 427.04 P
+-0.01 (oving a conjectur) 387.65 427.04 P
+-0.01 (e\051, or left both) 478.53 427.04 P
+2.38 (of these unchanged \050e.g. changing the display style\051, cannot be r) 104.89 414.04 P
+2.38 (eversed by this) 468.03 414.04 P
+(command.) 104.89 401.04 T
+1 14 Q
+(6.13) 70.87 372.71 T
+(Abandon) 99.22 372.71 T
+0 12 Q
+(6.13.1) 70.87 347.04 T
+-0.08 (This command r) 104.89 347.04 P
+-0.08 (emoves the curr) 191.55 347.04 P
+-0.08 (ent conjectur) 276.37 347.04 P
+-0.08 (e fr) 344.35 347.04 P
+-0.08 (om the stack. Depending on the sort) 361.53 347.04 P
+-0.18 (of conjectur) 104.89 334.04 P
+-0.18 (e and whether it is \324valid by constr) 166.67 334.04 P
+-0.18 (uction\325, earlier conjectur) 348.82 334.04 P
+-0.18 (es may also be) 476.68 334.04 P
+1.95 (r) 104.89 321.04 P
+1.95 (emoved. For example, if a \324Case split\325 daughter conjectur) 109.41 321.04 P
+1.95 (e is abandoned, all the) 426.44 321.04 P
+5.37 (daughter conjectur) 104.89 308.04 P
+5.37 (es will be abandoned unless the par) 210.3 308.04 P
+5.37 (ent was a \324valid by) 431.8 308.04 P
+(constr) 104.89 295.04 T
+(uction\325 pr) 137.39 295.04 T
+(oof.) 188.97 295.04 T
+1 14 Q
+(6.14) 70.87 266.71 T
+(Drop) 99.22 266.71 T
+0 12 Q
+(6.14.1) 70.87 241.04 T
+-0.07 (This command will r) 104.89 241.04 P
+-0.07 (eturn the curr) 215 241.04 P
+-0.07 (ent conjectur) 287.95 241.04 P
+-0.07 (e to the state it was in when added to) 355.95 241.04 P
+-0 (the stack. \050i.e. \324History\325, shown at the bottom right of the pr) 104.89 228.04 P
+-0 (over window) 418.88 228.04 P
+-0 (, is r) 488.96 228.04 P
+-0 (eturned) 511.06 228.04 P
+(to 1 - see \336gur) 104.89 215.04 T
+(e 2\051) 179.62 215.04 T
+FMENDPAGE
+%%EndPage: "15" 20
+%%Page: "16" 20
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(16) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(7) 42.56 743.39 T
+(Properties Menu and Help) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(7.1) 42.56 688.03 T
+(Display style) 70.9 688.03 T
+0 12 Q
+(7.1.1) 42.56 662.36 T
+-0.2 (This command allows the user to set a number of options, mainly to do with how the) 76.57 662.36 P
+2.46 (conjectur) 76.57 649.36 P
+2.46 (e is displayed in the pr) 124.99 649.36 P
+2.46 (over window) 257.85 649.36 P
+2.46 (. The pop-up window pr) 330.41 649.36 P
+2.46 (oduced is) 470.88 649.36 P
+2.49 (shown in \336gur) 76.57 636.36 P
+2.49 (e 3 as it appears at start-up. The \324Default\325 button will r) 159.34 636.36 P
+2.49 (eturn the) 473.69 636.36 P
+(system to these settings.) 76.57 623.36 T
+(7.1.2) 42.56 597.36 T
+2.41 (The \336rst option indicates whether automatic simpli\336cation is to be done or not.) 76.57 597.36 P
+-0.22 (T) 76.57 584.36 P
+-0.22 (urning the simpli\336er of) 82.85 584.36 P
+-0.22 (f will allow mor) 205.38 584.36 P
+-0.22 (e intermediate steps to be viewed. Use of the) 289.41 584.36 P
+(\324Simplify\325 command on the \324Actions\325 menu will still work as pr) 76.57 571.36 T
+(eviously) 410.75 571.36 T
+(.) 454.48 571.36 T
+(7.1.3) 42.56 545.36 T
+0.29 (The second option indicates how contexts \050see section 3.5\051 ar) 76.57 545.36 P
+0.29 (e to be displayed in the) 399.89 545.36 P
+-0.17 (pr) 76.57 532.36 P
+-0.17 (over window) 88.31 532.36 P
+-0.17 (. In annex A the context expr) 158.23 532.36 P
+-0.17 (ession) 309.4 532.36 P
+3 10 Q
+-0.16 (\325DESIGN\050a, loadval\051\325) 345.18 532.36 P
+0 12 Q
+-0.17 ( is shown in full,) 437.25 532.36 P
+2.05 (as it must be for the pr) 76.57 519.36 P
+2.05 (over r) 208.26 519.36 P
+2.05 (eader) 241.65 519.36 P
+2.05 (. However) 270.33 519.36 P
+2.05 (, by default contexts ar) 327.06 519.36 P
+2.05 (e not shown) 455.53 519.36 P
+-0.29 (during pr) 76.57 506.36 P
+-0.29 (oof as this generally makes the conjectur) 127.47 506.36 P
+-0.29 (e mor) 340.11 506.36 P
+-0.29 (e r) 370.24 506.36 P
+-0.29 (eadable. For example, if an) 383.23 506.36 P
+-0.01 (expr) 76.57 493.36 P
+-0.01 (ession r) 100.25 493.36 P
+-0.01 (educes to x = x but this does not simplify to tr) 140.71 493.36 P
+-0.01 (ue, displaying the contexts) 382.69 493.36 P
+2.66 (will indicate that the x\325s ar) 76.57 480.36 P
+2.66 (e dif) 230.25 480.36 P
+2.66 (fer) 256.27 480.36 P
+2.66 (ent. Choosing the \324Brief) 270.53 480.36 P
+2.66 (\325 option will assign a) 403.95 480.36 P
+-0.1 (dif) 76.57 467.36 P
+-0.1 (fer) 91.18 467.36 P
+-0.1 (ent number to each context so that the x = x example may become \3251\325x = \3252\325x for) 105.44 467.36 P
+(this option.) 76.57 454.36 T
+(7.1.4) 42.56 428.36 T
+1.36 (The other options can be used to change the look and size of the font used in the) 76.57 428.36 P
+(pr) 76.57 415.36 T
+(over window) 88.31 415.36 T
+(.) 158.4 415.36 T
+1 14 Q
+(7.2) 42.56 160.26 T
+(Show / Hide associations) 70.9 160.26 T
+0 12 Q
+(7.2.1) 42.56 134.59 T
+0.79 (By default pr) 76.57 134.59 P
+0.79 (edicate terms ar) 147.61 134.59 P
+0.79 (e shown separated by /\134 symbols, but internally they) 233.37 134.59 P
+2.75 (ar) 76.57 121.59 P
+2.75 (e held as instances of the /\134 function which has two parameters. The \324Show) 87.1 121.59 P
+3.13 (associations\325 command will add extra brackets to the pr) 76.57 108.59 P
+3.13 (edicate and hypothesis) 396.58 108.59 P
+0.6 (expr) 76.57 95.59 P
+0.6 (ession wher) 100.25 95.59 P
+0.6 (e necessary to show clearly the binding of this and other functions.) 164.06 95.59 P
+-0.13 (\050This is particularly useful in the non-graphical version of the pr) 76.57 82.59 P
+-0.13 (over to help the user) 415.78 82.59 P
+42.56 70.9 524.45 697.36 C
+141.77 184.59 425.23 411.36 C
+0 12 Q
+0 X
+0 K
+(Figur) 170.14 198.6 T
+(e 3 : The Display style pop-up window) 198.73 198.6 T
+%%BeginBinary:  8908     
+327 240 255.31 170.21 0 155.95 226.97
+/red <
+0000000000000000000000000000000000000000CD7C02000000000000014200
+00000000A0ECFFF700000000F9FFFF7F0000000048F6F9F60000000000002840
+0000000054500000000000005450000000000000BC5000000000000006000000
+00000030000000000000000054500000000000005CC0F9F60000000000000000
+0000000000000000000000006C510000000000002EECFFF70000000001000000
+000000008CECFFF70000000084ECFFF7000000007CECFFF70000000000000000
+00000000B092000000000000FC79020000000000010000000000000001000000
+0000000000000000000000007473F3F600000000E4ECFFF7000000CC71FEE300
+> store
+/green <
+00000000010000000000000064EDFFF700000000B84700000000000001000000
+00000000000000000000000025000000000000005CC0F9F600000000E4EDFFF7
+0000000025000000000000000000000000000000000000800000000000000000
+0000000088ECFFF7000000003A000000000000007C93000000000000944B0000
+00000000AC7C020000000000200000000000000000000000000000005CC0F9F6
+00000000A87C0200000000000100003600000000DC9946430000000000000000
+000000003A00000098ECFFF7A0ECFFF773000000010000000000000001000000
+00000000AC7C020000000000250000000000000000000080000000CE72FFE500
+> store
+/blue <
+009000003CEEFFF700000000A87C0200EA31000054EEFFF706000000C8340000
+68EEFFF71C3A000068EEFFF7060000000000000000000008FC790200A1320000
+687C02005CC0F9F6070000000000000000010000000000000000000001000000
+7300000088EDFFF70000000048EEFFF744EEFFF740EEFFF73CEEFFF74A0C02BE
+010000005C4B0000F0EDFFF7009000003CEEFFF734450000F8EDFFF744450000
+F8EDFFF70090000044EEFFF7B6310000AC7C020000000000000000005CC0F9F6
+0700000000000000000000000000000000000000504500000000000000000080
+000000000000000000000000000000000000000001000000000000A45BE6B700
+> store
+ BEGINBITMAPCOLORc
+
+
+
+9z
+TMFE;z"
+THFDFC<z
+TGFC;z$z
+0FEFDFDFDT6FEH)
+FDFDFDFBFBFBFDFCF&9"J#J#J#
+FDFDFBFDFBFBP@FFFF4FFFFLFFFFE&;#JPJ"
+FDFBFBFDFBFBFCP4O.FFJ%:#J"
+Q#FEFEFFFFFEFEO&FFD#J$9#9P9&?%9#9#<P#8&9#=%
+FDFBPCFEFFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFFFFFEFFFFFFFEFFFFFFFFFFFFFFFFI";#J';%='D)8#D'
+FDFCFEPBFFFFFEFEFEFEFFFEFFFFFFFFFEFEFFFFFFFFFEFEFEFEFEFEFEFEFFFFFEFEFFFFH$9"J">"@#B"="F"
+FBFCFCFCPFFFFEFEFEFEFFFEE";$J"8#H$:&="8#>&@#
+FDFCFCFCPEFEFFFFFFFFFFFEFFFFFEFFFEFFFFFEFFFFFEFFFFFFD":#:"J#8"F%?"=#8"B"?%
+FEFBFBFEPDFEFEFFFFFFFEFEFEFEFEFFFEFEFEFEFEF#9"J$@"J$A"@$D"
+FCFCFBP=FFFFFEFE;FEFFFFFEFEFFFFFFD#8%8"J%>P";%=(;"=P"8%;">'
+FDFCFCFCFCFCFEP8FFFFFFFEFEFFFFFFFEFEFFFFFFFEFFFFFEFEFEFFFFFFFEFEFFFFFFFFFED%:#J&;#8&<$:#9'8$>&:$8$;#9%
+FCFCFEFEFEFEP7FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFFFFFEFEFEFEFEFEFEFEFEFFFFFEFEFEFEFEFEFED#8%
+FEFEFEFEFEFEJ#J#J#
+Q8FEFE4FEFE7FEFE
+
+;z"
+THFDFC<z
+TGFC;z
+TIFE;Z
+TI;z
+TIFE
+
+
+
+
+
+Jzz"
+P"CFDBFCFDJz8z
+P#BFE@FB
+
+
+
+J#J#9#:$8#J#9#
+7FFFF9FFFFFFFFFFFFFFFFFFO FFFFFFFFE%J%J%;$8$I%
+FFFFFFFFIFFFFFEFEHFFFFFFFFFFFEFEFFFEFEFFFFFFFFD'9#J#?#J'J'
+FFFFFEFEFFFFFEFE>FEFEFEFECFFFEFEFEFEFF>FFFBFBFBFBFFH#9#9&8#:&?#8"8#8#9%9)F#:#8*G#:#9%
+FEFEFFFFFFFFFEFFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFEFFFFFFFEFEFFFFFFFFFFFEFFFFFFFFFFFBFBFFFFFBFFFFF"C);%B"8#<'J*J%
+FFFFFEFFFFFFFEFFFFFFFEFFFFFEFEFEFFFFFEFEFFFFDFEFFFEFEFEFEFFFEFE=FFFBFBFFD"8#A"9">"J'J"
+FEFFFFFEFEFEDFFFEFEFEFEFEO2FBE#8"J#<"
+FEFEFFO&FFFFFEG"J%
+FEO(FEFEFEFED#J">#F#:#J#:#
+FFFFO-FFFFFFFEFFFFFE<FBFFFFFBD'J%J'J'J'
+FEFFFFFFFFFE7FFFFFFFE7FEFFFFFFFFFE;FEFFFFFFFFFE>FBFFFFFFFFFBE%:#9#8#8#;$:#9#9#:#9%9#:#H%;":"J%;"9"
+FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE5FBFBFBFBFBFB
+J#
+IFEFE
+
+
+Jz8z
+P#BFC@FDJz
+P"O8FE
+
+
+
+
+
+
+Jzz"z"
+P"KFCGFDFCKFDFCJz8z8z
+P#JFBEFEJFE
+
+
+
+J"="J"9"J"A#
+P4FFFFIFFFF?FFFFFFJ%J"I"J":"J%J%J$
+DFFFFFFFF4FFFF6FFFFFFFFFFFFFBFFFFFFFF4FFFEFEJ'H"I"J"J$J%>"
+CFFFFFEFEFFFFFFFF@FBCFEFEFECFEFEFEFFFEJ$8#8%:&8"8#8%9#8$8&J":$:$J"9"J%8"9$9%
+BFFFFFEFEFEFFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFF:FFFFFFFFFFFFFF;FFFFAFFFEFFFFFFFFFFFFFFFFFFFFJ';'8*>"8#J%9&J$;&8%
+JFFFFFEFEFFFFFFFEFFFFFEFEFEFEFEFFFFFEFEFFFFFEFEFEAFFFBFBFBFFFBFBFBFFO3FFFEFEFFFEFEFEFFFEFFFEFEJ"H$8"<#H%J$J%9"
+O'FEFEFFFFFEFEFEFFFFFFFFHFFFFFFCFFFFFFFEFEJ#;%J%F$J$J%B$
+O4FFFFFEFFFFFE;FBFBFBFBFFFFFF5FEFEFECFEFEFEFFFFFFFFJ%9%J%J%
+O4FEFEFEFEFFFEFFFFO!FBFBFBFBO<FEFEFEFEJ$9"J"8"8$<#J"="J"J"
+BFEFFFFFF<FFFFFEFFFFFFFFAFFFF=FFO!FFJ.A,?%J%9&J%J%A&
+CFEFFFFFFFFFEFEFEFFFFFFFFFEFEFFFFFFFEFEFFFFFFFFFEFEFFFFFFAFBFFFFFBFBFFFFFFFB:FEFFFFFE<FFFFFFFEFEFFFFFFFEJ%9%:#8#9$8%9#8#8'G":"9":%9$J"=%9"9"H%9";"9$:"
+DFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFBFBFBFBFBFBFBFBFBFB4FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE
+
+
+
+
+Jz8z8z
+P#JFDEFCJFCJz
+P"PCFE
+
+
+
+
+
+
+Jzz"z"
+P"O(FCO/FDFCO.FDFCJz8z8z
+P#O'FBO-FEO-FE
+
+
+
+J"="J"J#G"
+P?FFFFO)FFO"FFFFFFJQH"J"J%JPB$J"
+O*FF6FFO)FFFFFFFFO)FFFEFE5FFJ%G"J"J'J"J&
+O,FEFEFEFEFFKFBBFFFEFEFEFEFF7FE?FEFEFEFEFFJ%:&8"8&J"9":$8":$:$I#:":#:"9"8%8"9$9%J#9$9%8$:"9"<%
+O1FFFFFFFFFFFFFEFFFFFFFFFFFEFFFF7FFFFFFFFFFFFFFFFFFFFFFFFFFFEFEFFFFFFFFFFFEFFFFFFFFFFFFFFFEFFFF6FEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFJ';'8#J%<%9&J%A$;&9$J&8+D%
+O0FFFFFEFEFFFFFFFEFFFFFEFEFEFEBFFFBFBFBFFFBFBFBFFFBFBFBFF<FFFEFEFFFFFEFEFFFEFEFEFFFFFEFE:FFFEFEFEFFFEFFFEFEFEFFFEFEFEFFFEFFFEFEJ$B"@#J#F"J#8#@"E"J"
+O,FFFFFFFEFEFE>FFFBFB?FFFEFEFFFEFEHFEJ$J$J$J$?$
+O,FEFEFEO<FFFFFFO'FFFFFFBFFFFFFFFFFFFJ%J%J%=%
+PJFFFBFBFBO'FEFEFEFEAFEFEFEFEFFFEFEFEJ#J"9#B"J#:"8#8#;"F"J#<"H"
+OFFFFF:FFFBFFFF:FEFFFFFEFFFFFEFFFF<FFFEFFFFJ'A%J$8%:%<%9'H'9%9%B&J&9&='8%>$
+O0FEFFFFFFFFFEFEFFFFFF5FFFFFFFBFFFFFBFBFFFFFFFBFFFFFBFBFFFFFFFBFFFEFFFFFFFFFEFEFFFFFEFEFFFFFEFEFFFFFFFE8FFFFFFFFFEFEFFFFFFFEFEFFFFFFFEFFFEFFFFFEFEFFFFJ#;%:#8#9'G%9%:$8":%9&I%;#;%8";"9$9"J&;$:":&9%9":#
+O*FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFBFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE4FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE
+
+
+
+
+Jz8z8z
+P#O'FDO-FCO-FCJz
+P"QGFE
+
+
+
+
+
+
+Jzz"
+P"O-FCJFDFCJz8z
+P#O,FBHFE
+
+
+
+J#J"J"="
+O:FFFFO7FFAFFFFHQH"F"J":"J%
+FFFFKFFFFO'FFFFFFFFJ%G"F"J"J%
+4FEFEFEFEFFFFMFFO,FEFEFEFFJ%:&8"8#<P#8&9#=%9#J#9%8%8#:$J#?$
+9FFFFFFFFFFFFFEFFFFFFFFFFFEFFFFFFFEFFFFFFFFFFFFFFFFFFFF;FFFFFFFBFFFFFFFBFFFFFFFFFFFFFF@FFFFFFFFFFJ';'8#;)8#D'J#<%9$9)8&J%=%
+8FFFFFEFEFFFFFFFEFFFFFEFEFEFEFFFFFEFEFEFEFEFEFEFEFFFFFEFEFFFF6FBFFFFFBFBFFFFFBFBFFFBFBFFFFFBFBFFFFFBFBFBFF>FFFEFEFFFFFEFEFEJ$B"F"F"D#J":#8#8";"9";"J%8#8#
+4FFFFFFFEFFFEFEFE4FFFFFBFBFFFBFBFBFB;FFFFFFFEFFFEFEFFJ$J"8#>&@#J"J$J%
+4FEFEFE;FEFFFFFEFFFFFEFFFFFF9FB>FFFFFF8FEFEFEFFJ#8"B"?%J#J%
+O%FEFEFFFEFEFEFEFE8FBFF;FFFBFBFBJ"@$D"8#J#8#J#8#?"
+O'FEFEFFFFFFFFFF9FBFFFFFBO&FEFFFFFEFFJ'A%;P"8%;">'J":%I'J%9%=%
+8FEFFFFFFFFFEFEFFFFFFFEFEFFFFFFFEFEFFFFFFFFFE9FBFBFFFFFBFBFFFFFFFBFF6FFFFFFFEFEFFFFFEFEFFFFFEH#;%:#8#9$;&:$8$;#9%9#G":":#9";"9"9"9&8"H%;#:":%
+FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFFFFFEFEFEFEFEFEFEFEFEFBFBFBFBFBFBFBFBFBFBFBFBFBFBFEFEFEFEFEFEFEFEFEFEFE
+J#
+O2FEFE
+
+
+Jz8z
+P#O,FDHFCJz
+P"P*FE
+
+
+
+
+
+
+Js
+Q3FDJ#J"s"
+O3FFFFOKFDFEFCJQH"J";%
+8FFO FFFFFFFFFFJ%G"G#J#;'
+:FEFEFEFEFFFEFE:FFFFFFFEFEFEFEFFJ%:&8"8#<P9#8P9%9#=#;"
+?FFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFEFEFEJ';'8#;'=$:'JZ@z
+>FFFFFEFEFFFFFFFEFFFFFEFEFEFEFFFFFEFEFEFEFEFEFEFFFFFEFEFFFFO&6PLFCJ$B"F"B$@#H#J"8z@z"
+:FFFFFFFEFFFFFFFEFEFEFFFE;FF4FBPLFBFDJ$J"8#?"=#J#JZ
+:FEFEFE;FEFFFFFFFFFF7FFFE?4J#8"@";%J#
+O+FEFEFFFEFEFEFEFE4FFFEJ"?$?"8#E#:"J"Jz"
+O-FEFFFFFEFFFFFFFFFEFF9FE@PLFDFEJ'A%;P"?$8'HQJz@z
+>FEFFFFFFFFFEFEFFFFFFFEFFFFFFFEFFFFFFFFFE<6FEPLFEJ#;%:#8#9$;&:#8&9%9#?":*
+8FEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFFFFFF
+Jy"9"z"J"s"
+OMFDFFFF0FDFC=FEFCFEJx;zB#G)G#J#J#J#J#J#
+P FC0FCFDFCFEFEFEFDFCFEFEFEFDFC4FDFC4FDFC4FDFC4FDFC4FDFCJz
+OMDFE
+
+
+
+J#J#J#J#J#J#J#J#
+Q FEFE4FEFE4FEFE4FEFE4FEFE4FEFE4FEFE4FEFE
+
+
+
+
+
+
+J"<#J%<#
+PMFFFFFFQ'FFFFFFFFFFFFJ#<%J':#
+PKFFFFFFFEFEFFQ%FFFEFEFEFEFFFFFEJ#;#8#J">#
+PKFEFEFFFEFEFFQ$FEFFFEJ#
+T6FFFEJ&
+T2FFFEFEFFFEJ#9Q
+T1FFFEJ#9(
+T0FFFEFEFEFEFEFEFFFEJ#8#J#
+Q$FEFFFFFEQ%FFFEJ%JQ
+Q%FEFFFFFEQ%J"<#J'<"
+PMFEFEFEQ&FEFEFEFEFEFEFE
+
+
+
+
+
+
+JzJzJz
+O0HFD@O$FD@O FDJ#z#J#z#J#z#
+O.FDFDHFEFDFD<FDFDO$FEFDFD<FDFDO FEFDFDJ$J$J$J$J$J$
+O-FDFEFEHFEFEFD:FDFEFEO$FEFEFD:FDFEFEO FEFEFDJ#J"B#J#J#G"@#J#J";#
+O,FDFE?FFFEFC8FDFE8FFFFFFFEFC8FDFELFFFEFCJ#?#J#J#=PB$J"=#J#?%J#
+O+FDFEFFFFCFEFC6FDFEFFFEFE5FFFEFC6FDFEFFFFFFFFGFEFCJ&J'
+Q!FEFEFEFEFFO?FFFEFEFEFEFFJ#?%:%:%="9"=#J#C#9$9%8$:"9"<%<#J#>#:"9$:%;$8$B#
+O*FDFEFFFEFEFFFFFEFFFFFFFEFFFFFFFFFEFC4FDFEFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFC4FDFEFFFEFEFFFFFFFFFEFFFFFFFFFFFFFFFFFEFCJ%:%J&8+D%J&:%9+
+O>FFFEFEFFFFFEFEFFO-FFFEFEFEFFFEFFFEFEFEFFFEFEFEFFFEFFFEFEO!FFFEFEFEFFFFFEFEFFFFFEFEFEFEFFFEFEFEFFJ"="J"J">";#
+O>FEFEO<FEO7FEFEFFFEJQJ&J$?$J$H$
+O46FEFFFEFFFEO#FFFFFFFFFFFFO5FFFFFFFFFFFFJ%J%=%J%H%
+O5FEFEFEFEO?FEFEFEFEFFFEFEFEO4FFFEFEFEFEFEFEFEJ$J#<"H"J#:"G#>"
+P#FEFFFEMFFFEFFFFO#FEFFFFFEFFFFJ%:%J&9&='8%>$J'8'@+
+O>FFFFFFFEFFFFFFFEO%FFFFFFFFFEFEFFFFFFFEFEFFFFFFFEFFFEFFFFFEFEFFFFGFEFFFFFFFFFEFEFFFFFFFEFFFEFFFFFFFEFEFFFFFFFEJ#>":":$;$:"9#?#J#>&;$:":&9%9":#<#J#@%:&8"9":$8$:"=#
+O*FEFDFEFEFEFEFEFEFEFEFEFFFEFCFE4FEFDFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFCFE4FEFDFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFCFEJ"
+P"FFJ#F"="@#?#J#J#J#J#
+O+FEFDFEFEFEFEFCFE6FEFDO*FCFE6FEFDO&FCFEJ#J#J#J#J#J#
+O,FEFCLFCFE8FEFCO(FCFE8FEFCO$FCFEJ$J$J$J$J$J$
+O-FEFCFCHFCFCFE:FEFCFCO$FCFCFE:FEFCFCO FCFCFEJ#z#J#z#J#z#
+O.FEFEHFCFEFE<FEFEO$FCFEFE<FEFEO FCFEFEJzJzJz
+O0HFE@O$FE@O FE
+
+
+
+
+
+
+
+
+
+
+
+
+
+9Z
+TM
+
+
+ENDBITMAP
+%%EndBinary
+42.56 70.9 524.45 697.36 C
+0 -0 595.3 841.89 C
+FMENDPAGE
+%%EndPage: "16" 21
+%%Page: "17" 21
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Pr) 402.5 775.82 T
+(operties Menu and Help) 416.24 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(17) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+0 12 Q
+0 X
+0.77 (write the tar) 104.89 718.04 P
+0.77 (get parameter - see section 8.3\051 \324Hide associations\325 r) 171.41 718.04 P
+0.77 (emoves these extra) 450.63 718.04 P
+(brackets. For example:-) 104.89 705.04 T
+3 10 Q
+( \050n >= 1\051 /\134 \050m >= 0\051 /\134 \050m < n\051) 104.89 687.38 T
+0 12 Q
+(can be displayed as) 237.45 687.38 T
+3 10 Q
+( \050\050n >= 1\051 /\134 \050m >= 0\051\051 /\134 \050m < n\051) 340.6 687.38 T
+1 14 Q
+(7.3) 70.87 658.71 T
+(List existentials) 99.22 658.71 T
+0 12 Q
+(7.3.1) 70.87 633.04 T
+-0.08 (This command lists the curr) 104.89 633.04 P
+-0.08 (ent values of any existential variables on the console. For) 252.4 633.04 P
+(example, if the conjectur) 104.89 620.04 T
+(e has two existential variables,) 234.43 620.04 T
+3 10 Q
+(n) 398.75 620.04 T
+0 12 Q
+( and) 404.31 620.04 T
+3 10 Q
+(m) 430.63 620.04 T
+0 12 Q
+(, the display may be:-) 438.96 620.04 T
+3 10 Q
+(n = 1) 104.89 602.38 T
+(m is undefined) 104.89 588.38 T
+1 14 Q
+(7.4) 70.87 559.71 T
+(Size) 99.22 559.71 T
+0 12 Q
+(7.4.1) 70.87 534.04 T
+2.38 (This command gives the amount of memory used \050in wor) 104.89 534.04 P
+2.38 (ds\051. The value can be) 431.77 534.04 P
+(displayed on the console or written as a comment in the log \336le.) 104.89 521.04 T
+1 14 Q
+(7.5) 70.87 492.71 T
+(Note) 99.22 492.71 T
+0 12 Q
+(7.5.1) 70.87 467.04 T
+-0.2 (Any message typed in the pop-up window will be placed in the log \336le following the) 104.89 467.04 P
+-0.09 (keywor) 104.89 454.04 P
+-0.09 (d \324note\325. During a r) 145.06 454.04 P
+-0.09 (e-r) 245.85 454.04 P
+-0.09 (un of a log \336le, any note messages found will be copied) 260.23 454.04 P
+(to the new log \336le.) 104.89 441.04 T
+1 14 Q
+(7.6) 70.87 412.71 T
+(Resources) 99.22 412.71 T
+0 12 Q
+(7.6.1) 70.87 387.04 T
+-0.17 (This command pr) 104.89 387.04 P
+-0.17 (oduces diagnostic information, some of which may be of inter) 198.6 387.04 P
+-0.17 (est to) 524.71 387.04 P
+3.19 (a user) 104.89 374.04 P
+3.19 (. T) 139 374.04 P
+3.19 (ry selecting \324All\325 and \324W) 154.47 374.04 P
+3.19 (rite to console\325 to see what is pr) 294.88 374.04 P
+3.19 (oduced. The) 483.95 374.04 P
+(information can also by placed in the log \336le as comments.) 104.89 361.04 T
+1 14 Q
+(7.7) 70.87 332.71 T
+(About prover) 99.22 332.71 T
+0 12 Q
+(7.7.1) 70.87 307.04 T
+(This command pr) 104.89 307.04 T
+(oduces the same pop-up notice window as at start-up.) 198.93 307.04 T
+1 14 Q
+(7.8) 70.87 278.71 T
+(Help) 99.22 278.71 T
+0 12 Q
+(7.8.1) 70.87 253.04 T
+1.42 (This command opens and pins a window in which the contents of the help \336le is) 104.89 253.04 P
+-0.29 (displayed if it can be found. At start-up the user pr) 104.89 240.04 P
+-0.29 (ovides the name of the help \336le, as) 371.6 240.04 P
+0.54 (a parameter to the pr) 104.89 227.04 P
+0.54 (over command, and it is passed to the graphical user interface) 218.59 227.04 P
+0.04 (code. At pr) 104.89 214.04 P
+0.04 (esent this name can be \324lost\325 during a session so the user is advised to use) 163.92 214.04 P
+(this command immediately after start-up if help is r) 104.89 201.04 T
+(equir) 379.35 201.04 T
+(ed.) 407.07 201.04 T
+FMENDPAGE
+%%EndPage: "17" 22
+%%Page: "18" 22
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(18) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(8) 42.56 743.39 T
+(Non-graphical and log \336le commands) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+1 14 Q
+0 X
+(8.1) 42.56 688.03 T
+(Summary of textual commands) 70.9 688.03 T
+0 12 Q
+(8.1.1) 42.56 662.36 T
+-0.15 (All commands start with a command name which may be followed by parameters of) 76.57 662.36 P
+2.22 (various sorts. The table below lists the main commands accor) 76.57 649.36 P
+2.22 (ding to the sort of) 421.13 649.36 P
+3.03 (parameters they take. The number in braces indicates the section in which the) 76.57 636.36 P
+0.17 (corr) 76.57 623.36 P
+0.17 (esponding graphical command is described and the user should follow up these) 97.72 623.36 P
+(r) 76.57 610.36 T
+(efer) 81.1 610.36 T
+(ences for fuller information.) 101.11 610.36 T
+(8.1.2) 42.56 358.36 T
+5.69 (Other commands available ar) 76.57 358.36 P
+5.69 (e note{7.5}, size{7.4}, diag{7.6}, simplify\050/on or) 250.1 358.36 P
+1.57 (/of) 76.57 345.36 P
+1.57 (f\051{7.1}, context{7.1} and show{7.2, 7.3}. Use the help command for mor) 94.18 345.36 P
+1.57 (e details) 479.06 345.36 P
+(about the parameters for these commands.) 76.57 332.36 T
+(8.1.3) 42.56 306.36 T
+-0.25 (ELLA de\336nitions can be added fr) 76.57 306.36 P
+-0.25 (om the command line one at a time, as can AXIOMs) 251.45 306.36 P
+(and CONJECTUREs, but not THEOREMS.) 76.57 293.36 T
+1 14 Q
+(8.2) 42.56 265.03 T
+(The source parameter) 70.9 265.03 T
+0 12 Q
+(8.2.1) 42.56 239.36 T
+0.88 (This parameter indicates how to use a speci\336ed part of a named theor) 76.57 239.36 P
+0.88 (em or axiom) 456.21 239.36 P
+3.96 (for the \324apply\325 command, and how to use a speci\336ed pr) 76.57 226.36 P
+3.96 (edicate term for the) 409.08 226.36 P
+-0.13 (\324pr) 76.57 213.36 P
+-0.13 (edicate\325 command. The part of the hypothesis or the pr) 91.64 213.36 P
+-0.13 (edicate term is speci\336ed by) 381.31 213.36 P
+3.27 (a number \050See section 8.4\051. How to use the term is indicated by one of thr) 76.57 200.36 P
+3.27 (ee) 512.95 200.36 P
+(parameters, usually followed by =number \050e.g. /use=2\051. The parameters ar) 76.57 187.36 T
+(e:-) 473.69 187.36 T
+(-) 56.73 168.36 T
+(/use) 76.57 168.36 T
+(Left r) 141.77 168.36 T
+(ewritten as Right) 170.28 168.36 T
+(-) 56.73 147.36 T
+(/r) 76.57 147.36 T
+(everse) 88.37 147.36 T
+(Right r) 141.77 147.36 T
+(ewritten as Left) 178.37 147.36 T
+(-) 56.73 126.36 T
+(/sub) 76.57 126.36 T
+(Rewrite as TRUE) 141.77 126.36 T
+(8.2.2) 42.56 98.36 T
+0.34 (If none of these parameters ar) 76.57 98.36 P
+0.34 (e pr) 235.91 98.36 P
+0.34 (esent /use=0 is assumed for the \324apply\325 command) 256.73 98.36 P
+1.75 (which means use the whole hypothesis. For the \324pr) 76.57 85.36 P
+1.75 (edicate\325 command /use=1.1 is) 359.71 85.36 P
+5 14 Q
+(Sort of parameter) 100.88 585.03 T
+(Commands) 342.82 585.03 T
+2 12 Q
+(None) 80.57 564.36 T
+-0.29 (help{7.8}, restart{4.4}, quit{4.5}, split{6.9}, undo{6.12},) 236.48 564.36 P
+(drop{6.14}, abandon{6.13}) 236.48 550.36 T
+(File name needed) 80.57 530.36 T
+(read{4.1}, write{4.2}, re_run{4.3}) 236.48 530.36 T
+(Upper case name needed) 80.57 510.36 T
+(prove{5.1}, save_theorem{5.2}, display{5.3}) 236.48 510.36 T
+(Expression needed) 80.57 490.36 T
+(\050terminate expression with ; \051) 80.57 476.36 T
+(cases_of{6.4}, induct_on{6.5}, assert{6.10},) 236.48 490.36 T
+(Source and tar) 80.57 456.36 T
+(get needed) 149.67 456.36 T
+(apply{6.2}, predicate{6.3}) 236.48 456.36 T
+(T) 80.57 436.36 T
+(ar) 87.06 436.36 T
+(get needed) 96.17 436.36 T
+(open{6.6}) 236.48 436.36 T
+(T) 80.57 416.36 T
+(ar) 87.06 416.36 T
+(get optional) 96.17 416.36 T
+-0.23 (\050if not present the command is) 80.57 402.36 P
+(applied to whole conjecture\051) 80.57 388.36 T
+(push_time{6.7}, use_existential{6.1) 236.48 416.36 T
+(1}, simplify{6.8}) 410.64 416.36 T
+76.57 597.36 76.57 381.36 2 L
+V
+2 H
+0 Z
+N
+232.48 599.36 232.48 379.36 2 L
+V
+0.5 H
+N
+521.61 597.36 521.61 381.36 2 L
+V
+2 H
+N
+75.57 598.36 522.61 598.36 2 L
+V
+N
+75.57 576.36 522.61 576.36 2 L
+V
+N
+75.57 542.36 522.61 542.36 2 L
+V
+0.5 H
+N
+75.57 522.36 522.61 522.36 2 L
+V
+N
+75.57 502.36 522.61 502.36 2 L
+V
+N
+75.57 468.36 522.61 468.36 2 L
+V
+N
+75.57 448.36 522.61 448.36 2 L
+V
+N
+75.57 428.36 522.61 428.36 2 L
+V
+N
+75.57 380.36 522.61 380.36 2 L
+V
+2 H
+N
+FMENDPAGE
+%%EndPage: "18" 23
+%%Page: "19" 23
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Non-graphical and log \336le commands) 341.86 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(19) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+0 12 Q
+0 X
+4.01 (assumed which means use the \336rst pr) 104.89 718.04 P
+4.01 (edicate term in the \336rst section of the) 328.71 718.04 P
+2 (conjectur) 104.89 705.04 P
+2 (e. If a parameter does not include a number) 153.31 705.04 P
+2 (, =1 is assumed. In the two) 399.65 705.04 P
+0.53 (following examples,) 104.89 692.04 P
+3 10 Q
+0.49 (LEQ_LSS) 216.27 692.04 P
+0 12 Q
+0.53 (is the name of the axiom to be used and) 264.01 692.04 P
+3 10 Q
+0.49 (T) 482.47 692.04 P
+0.49 (O ^a IN ... ;) 488.4 692.04 P
+0 12 Q
+0.53 ( is) 540.65 692.04 P
+(the tar) 104.89 679.04 T
+(get parameter) 138.97 679.04 T
+(.) 212.11 679.04 T
+3 10 Q
+(apply/use=1 LEQ_LSS TO ^a IN ^a;) 104.89 661.38 T
+(predicate/sub=2 TO ^a IN ^a0 = IF ~ ^a THEN ^a1 ELSE ^a2 FI;) 104.89 647.38 T
+1 14 Q
+(8.3) 70.87 618.71 T
+(The target parameter) 99.22 618.71 T
+0 12 Q
+(8.3.1) 70.87 593.04 T
+2.76 (This parameter indicates to which part of the conjectur) 104.89 593.04 P
+2.76 (e the command is to be) 416.73 593.04 P
+0.32 (applied. Special variables, whose names start with ^, ar) 104.89 580.04 P
+0.32 (e used in a tar) 401.13 580.04 P
+0.32 (get expr) 476.48 580.04 P
+0.32 (ession) 519.81 580.04 P
+0.26 (of the form \324T) 104.89 567.04 P
+0.26 (O variable IN expr) 178.22 567.04 P
+0.26 (ession\325. Each such variable must r) 278.01 567.04 P
+0.26 (eplace a complete) 458.12 567.04 P
+0.01 (expr) 104.89 554.04 P
+0.01 (ession so that it can be matched to \050uni\336ed with\051 a valid expr) 128.56 554.04 P
+0.01 (ession. However) 451.72 554.04 P
+0.01 (, it) 539.35 554.04 P
+1.04 (is not necessary to r) 104.89 541.04 P
+1.04 (eplace all the original variables. For example, selecting) 213.47 541.04 P
+3 10 Q
+0.97 (n = 1) 513.79 541.04 P
+0 12 Q
+1.04 ( in) 538.24 541.04 P
+3 10 Q
+1.17 (\050ADD_ROW{n} [n]x\051 = IF n = 1 THEN x ELSE PLUS\050x, MUL) 104.89 528.04 P
+1.17 (T_N{n-1} x\051) 381.55 528.04 P
+1.17 (FI) 438.12 528.04 P
+0 12 Q
+1.26 ( can be done in the) 447.01 528.04 P
+(following ways \050and many mor) 104.89 515.04 T
+(e\051:-) 272.13 515.04 T
+3 10 Q
+(TO ^a IN \050ADD_ROW{n} [n]x\051 = IF ^a THEN x ELSE PLUS\050x, MULT_N{n-1} x\051 FI;) 104.89 497.38 T
+(TO ^a IN ^b = IF ^a THEN x ELSE ^c FI;) 104.89 483.38 T
+(TO ^var IN ^a1 = IF ^var THEN ^a2 ELSE ^a3 FI;) 104.89 469.38 T
+0 12 Q
+(The default is) 104.89 448.04 T
+3 10 Q
+(T) 180.27 448.04 T
+(O ^a IN ^a) 186.2 448.04 T
+0 12 Q
+( so the \324apply\325 example above could have been written as:-) 232.82 448.04 T
+3 10 Q
+(apply/use=1 LEQ_LSS ;) 104.89 428.38 T
+0 12 Q
+(NOTE: the semi-colon is needed.) 246.62 428.38 T
+(8.3.2) 70.87 402.04 T
+-0.03 (/left, /right or /nodefault can be included as part of the tar) 104.89 402.04 P
+-0.03 (get parameter to indicate) 420.07 402.04 P
+0.18 (that the tar) 104.89 389.04 P
+0.18 (get expr) 163.14 389.04 P
+0.18 (ession r) 206.33 389.04 P
+0.18 (efers to the left hand side, right hand side or the whole of) 246.99 389.04 P
+2.27 (the conjectur) 104.89 376.04 P
+2.27 (e term. For example,) 175.22 376.04 P
+3 10 Q
+2.11 (open T) 296.01 376.04 P
+2.11 (O ^a IN ^b = ADD\050x, ^a\051;) 329.07 376.04 P
+0 12 Q
+2.27 ( can be written as) 451.09 376.04 P
+3 10 Q
+0.52 (open/right T) 104.89 363.04 P
+0.52 (O ^a IN ADD\050x, ^a\051;) 158.58 363.04 P
+0 12 Q
+0.56 (A default value of this option can be set for a conjectur) 251.68 363.04 P
+0.56 (e) 547.01 363.04 P
+(using) 104.89 350.04 T
+3 10 Q
+(/default=left) 137.36 350.04 T
+0 12 Q
+(,) 189.34 350.04 T
+3 10 Q
+( right) 192.34 350.04 T
+0 12 Q
+(or) 217.35 350.04 T
+3 10 Q
+( nodefault) 228.64 350.04 T
+0 12 Q
+( \050initially set to nodefault\051.) 272.56 350.04 T
+(8.3.3) 70.87 324.04 T
+-0.26 (By default the conjectur) 104.89 324.04 P
+-0.26 (e term is the hypothesis, but a pr) 229.9 324.04 P
+-0.26 (edicate term can be speci\336ed) 401.33 324.04 P
+2.74 (using /pr) 104.89 311.04 P
+2.74 (ed=\324number) 159.11 311.04 P
+2.74 (\325. For example,) 225.62 311.04 P
+3 10 Q
+2.54 (simplify/pred=1.2;) 315.14 311.04 P
+0 12 Q
+2.74 (meaning simplify all of the) 399.1 311.04 P
+2.97 (second pr) 104.89 298.04 P
+2.97 (edicate in the \336rst section \050pr) 159.63 298.04 P
+2.97 (ovided \324nodefault\325 is set for the curr) 328.02 298.04 P
+2.97 (ent) 536.11 298.04 P
+(conjectur) 104.89 285.04 T
+(e\051.) 153.31 285.04 T
+(8.3.4) 70.87 259.04 T
+-0.19 (If the hypothesis has mor) 104.89 259.04 P
+-0.19 (e than one term a particular term can be indicated using the) 238.31 259.04 P
+(option /hyp=\324number) 104.89 246.04 T
+(\325.) 224.16 246.04 T
+1 14 Q
+(8.4) 70.87 217.71 T
+(Numbering system) 99.22 217.71 T
+0 12 Q
+(8.4.1) 70.87 192.04 T
+1.23 (The number supplied for the sour) 104.89 192.04 P
+1.23 (ce parameter in the \324apply\325 command must be a) 290.19 192.04 P
+-0.15 (non-negative integer) 104.89 179.04 P
+-0.15 (. If it is 0 it means the whole hypothesis, while any other integer) 213.99 179.04 P
+-0.15 (,) 549.76 179.04 P
+0.84 (n, means the nth term \050E) 104.89 166.04 P
+0 10 Q
+0.7 (n) 239.32 163.04 P
+0 12 Q
+0.84 (\051 in an hypothesis of the form E) 245.14 166.04 P
+0 10 Q
+0.7 (1) 417.59 163.04 P
+0 12 Q
+0.84 ( /\134 ... /\134 E) 422.59 166.04 P
+0 10 Q
+0.7 (n) 483.36 163.04 P
+0 12 Q
+0.84 ( /\134 ... If the) 489.18 166.04 P
+2.24 (hypothesis does not contain the /\134 function, /use=0 and /use=1 have the same) 104.89 153.04 P
+(meaning.) 104.89 140.04 T
+(8.4.2) 70.87 114.04 T
+0.86 (If an integer) 104.89 114.04 P
+0.86 (, n, is supplied for the sour) 170.04 114.04 P
+0.86 (ce parameter in the \324pr) 316.93 114.04 P
+0.86 (edicate\325 command, it) 440.35 114.04 P
+1.04 (means the nth outer level pr) 104.89 101.04 P
+1.04 (edicate term. An alternative is to specify the pr) 259.22 101.04 P
+1.04 (edicate) 515.2 101.04 P
+2.19 (term by a decimal number) 104.89 88.04 P
+2.19 (, with the number befor) 252.99 88.04 P
+2.19 (e the point giving the part or) 387.18 88.04 P
+FMENDPAGE
+%%EndPage: "19" 24
+%%Page: "20" 24
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(Non-graphical and log \336le commands) 313.55 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(20) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+0 12 Q
+0 X
+0.35 (section of the conjectur) 76.57 718.04 P
+0.35 (e, and the number after the point giving the term within that) 199.34 718.04 P
+0.4 (section. \050Sections start with FORALL, EXISTS, THEOREM or |-, but the number for) 76.57 705.04 P
+0.44 (the last of these will never be needed in this situation as it is the hypothesis .\051 If 0 is) 76.57 692.04 P
+1.24 (used, which has no meaning for the \324pr) 76.57 679.04 P
+1.24 (edicate\325 command, it will be r) 292.53 679.04 P
+1.24 (eplaced by a) 455.8 679.04 P
+(default value of 1.1.) 76.57 666.04 T
+(8.4.3) 42.56 640.04 T
+-0.04 (Numbering for the tar) 76.57 640.04 P
+-0.04 (get parameter can be mor) 193.88 640.04 P
+-0.04 (e complex than the sour) 329.1 640.04 P
+-0.04 (ce parameter) 455.72 640.04 P
+-0.22 (since operations can be performed on the body of a local theor) 76.57 627.04 P
+-0.22 (em. For example, if the) 403.91 627.04 P
+2.02 (thir) 76.57 614.04 P
+2.02 (d section of a conjectur) 95.48 614.04 P
+2.02 (e is a local theor) 224.98 614.04 P
+2.02 (em, the following commands may be) 317.98 614.04 P
+(corr) 76.57 601.04 T
+(ect:-) 97.72 601.04 T
+3 10 Q
+(simplify/pred=3.2.4;) 76.57 583.38 T
+0 12 Q
+(simplify the fourth pr) 184.29 583.38 T
+(edicate term in the second part of the local) 299.13 583.38 T
+(theor) 184.29 571.38 T
+(em.) 212.01 571.38 T
+3 10 Q
+(simplify/pred=3.2.0;) 76.57 557.38 T
+0 12 Q
+(simplify all the pr) 184.29 557.38 T
+(edicate terms in the second part of the local) 278.69 557.38 T
+(theor) 184.29 545.38 T
+(em.) 212.01 545.38 T
+3 10 Q
+(simplify/hyp=3.1;) 76.57 531.38 T
+0 12 Q
+(simplify the \336rst term in the hypothesis of the local theor) 184.29 531.38 T
+(em.) 485.6 531.38 T
+(\050The) 184.29 519.38 T
+(graphical version will write) 211.15 519.38 T
+3 10 Q
+(simplify/hyp=3.0 TO ^a IN ^a /\134 ^a0;) 360.84 519.38 T
+0 12 Q
+(into the log \336le if the hypothesis has 2 parts.\051) 184.29 507.38 T
+1 14 Q
+(8.5) 42.56 478.71 T
+(WHERE parameters in the apply command) 70.9 478.71 T
+0 12 Q
+(8.5.1) 42.56 453.04 T
+1.85 (As explained in paragraph 6.2.4, the user may be pr) 76.57 453.04 P
+1.85 (ompted to supply values for) 366.7 453.04 P
+0.98 (variables during an \324apply\325 command. Instead of waiting to be asked, these can be) 76.57 440.04 P
+0.81 (supplied as part of the command using the form \324WHERE variable = value\325. Either) 76.57 427.04 P
+0.6 (way) 76.57 414.04 P
+0.6 (, this notation is used to enter the values in the log \336le so that pr) 97.92 414.04 P
+0.6 (ompting is not) 445.8 414.04 P
+(needed during a r) 76.57 401.04 T
+(e-r) 171.44 401.04 T
+(un. An example of this parameter is:-) 185.83 401.04 T
+3 10 Q
+(apply/use=1 INDEX_TRIM TO ^a IN \050PLUS\050^a, ^a0\051\051 = ^a1 WHERE k = 1;) 76.57 383.38 T
+1 14 Q
+(8.6) 42.56 354.71 T
+(Editing log \336les) 70.9 354.71 T
+0 12 Q
+(8.6.1) 42.56 329.04 T
+0 (It may be useful to edit log \336les to r) 76.57 329.04 P
+0 (emove commands which wer) 264.23 329.04 P
+0 (e later undone or to) 420.21 329.04 P
+0.38 (add a series of commands r) 76.57 316.04 P
+0.38 (epetitively rather than pr) 223.58 316.04 P
+0.38 (oduce the same r) 357.67 316.04 P
+0.38 (esult by hand.) 448.6 316.04 P
+3.21 (For example, with a cases_of command a lar) 76.57 303.04 P
+3.21 (ge number of conjectur) 333.58 303.04 P
+3.21 (es may be) 465.54 303.04 P
+1.04 (pr) 76.57 290.04 P
+1.04 (oduced which can all be pr) 88.31 290.04 P
+1.04 (oved with the same series of commands. Duplicating) 236.25 290.04 P
+0.64 (these the r) 76.57 277.04 P
+0.64 (equir) 132.51 277.04 P
+0.64 (ed number of times in the log \336le and then using \324r) 160.23 277.04 P
+0.64 (e_r) 436.33 277.04 P
+0.64 (un\325 may save) 452.72 277.04 P
+(time.) 76.57 264.04 T
+(8.6.2) 42.56 238.04 T
+0.5 (A log \336le can be cr) 76.57 238.04 P
+0.5 (eated to r) 177.19 238.04 P
+0.5 (un a series of unr) 228.05 238.04 P
+0.5 (elated pr) 321.48 238.04 P
+0.5 (oofs by including commands) 368.95 238.04 P
+(to \324r) 76.57 225.04 T
+(e_r) 97.9 225.04 T
+(un\325 other log \336les and \324r) 114.29 225.04 T
+(estart\325 between them.) 241.26 225.04 T
+1 14 Q
+(8.7) 42.56 196.71 T
+(Re-run failures) 70.9 196.71 T
+0 12 Q
+(8.7.1) 42.56 171.04 T
+0.47 (If the r) 76.57 171.04 P
+0.47 (e_r) 112.72 171.04 P
+0.47 (un command fails the pr) 129.12 171.04 P
+0.47 (over is automatically r) 261.06 171.04 P
+0.47 (estarted and any lost work) 381.09 171.04 P
+1.32 (has to be r) 76.57 158.04 P
+1.32 (ecover) 134.98 158.04 P
+1.32 (ed fr) 169.65 158.04 P
+1.32 (om the new log \336le. Even if the r) 195.57 158.04 P
+1.32 (e_r) 378.38 158.04 P
+1.32 (un log \336le has not been) 394.77 158.04 P
+0.26 (edited, it can still fail if the pr) 76.57 145.04 P
+0.26 (over is not in the same state as when it was cr) 234.02 145.04 P
+0.26 (eated, or) 478.15 145.04 P
+0.01 (\336les to be r) 76.57 132.04 P
+0.01 (ead have been alter) 134.57 132.04 P
+0.01 (ed. One dif) 236.99 132.04 P
+0.01 (fer) 295.87 132.04 P
+0.01 (ence it is easy to overlook is whether the) 310.14 132.04 P
+(simpli\336er is on or of) 76.57 119.04 T
+(f, as this is not r) 183.43 119.04 T
+(eset by the r) 266.54 119.04 T
+(estart command.) 330.52 119.04 T
+FMENDPAGE
+%%EndPage: "20" 25
+%%Page: "21" 25
+595.3 841.89 0 FMBEGINPAGE
+70.87 25.52 552.76 48.19 R
+7 X
+0 K
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 40.86 T
+0 11 Q
+(21) 541.76 40.86 T
+70.87 731.34 552.76 754.02 R
+7 X
+V
+1 16 Q
+0 X
+(9) 70.87 743.35 T
+(Conclusion) 99.24 743.35 T
+70.87 70.87 552.76 697.33 R
+7 X
+V
+0 12 Q
+0 X
+(9.0.1) 70.87 689.33 T
+1.11 (The ELLA Pr) 104.89 689.33 P
+1.11 (over is not yet complete but it does contain suf) 176.29 689.33 P
+1.11 (\336cient functionality to) 433.3 689.33 P
+-0.03 (perform some worthwhile pr) 104.89 676.33 P
+-0.03 (oofs. It is being r) 259.03 676.33 P
+-0.03 (eleased into the public domain early to) 346.71 676.33 P
+-0.27 (coincide with a r) 104.89 663.33 P
+-0.27 (elease of ELLA and to give users the feel of the tool. Comments fr) 192.24 663.33 P
+-0.27 (om) 535.61 663.33 P
+(users will be useful in setting priorities for futur) 104.89 650.33 T
+(e developments.) 359.39 650.33 T
+FMENDPAGE
+%%EndPage: "21" 26
+%%Page: "22" 26
+595.3 841.89 0 FMBEGINPAGE
+42.56 25.55 524.45 48.23 R
+7 X
+0 K
+V
+0 11 Q
+0 X
+(22) 42.56 40.89 T
+0 10 Q
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 40.89 T
+42.56 731.38 524.45 754.05 R
+7 X
+V
+1 16 Q
+0 X
+(10) 42.56 743.39 T
+(References) 70.92 743.39 T
+42.56 70.9 524.45 697.36 R
+7 X
+V
+0 12 Q
+0 X
+(1) 42.56 689.36 T
+4 F
+(\324A window based pr) 59.91 689.36 T
+(over for a hardwar) 156.24 689.36 T
+(e description language\325,) 245.01 689.36 T
+0 F
+(C H Pygott,) 362.57 689.36 T
+(DRA/CIS/CSE3/B36AK/93002/1.0, November 1993.) 59.91 674.36 T
+(2) 42.56 647.36 T
+4 F
+(\324ELLA2000 - A Language for Electr) 59.91 647.36 T
+(onic System Design) 233.58 647.36 T
+0 F
+(\325, J D Morison and A S Clarke,) 329.82 647.36 T
+( McGraw-Hill, October 1993, ISBN 0-07-707821-7.) 59.9 632.36 T
+(3) 42.56 605.36 T
+4 F
+(\324ELLA) 59.91 605.36 T
+(Pr) 95.58 605.36 T
+(over Subset) 107.37 605.36 T
+0 F
+(\325, Miss J I Thompson,) 163.26 605.36 T
+( DRA/CIS\050SE2\051/PROJ/SWI/TR/5/1.0, Mar) 59.91 590.36 T
+(ch 1995.) 294.94 590.36 T
+(4) 42.56 563.36 T
+(\324) 59.91 563.36 T
+4 F
+(Hardwar) 63.24 563.36 T
+(e pr) 107.02 563.36 T
+(oofs using LCF-LSM and ELLA) 125.14 563.36 T
+0 F
+(\325, W J Cullyer and C H Pygott,) 279.62 563.36 T
+(RSRE Memorandum 3832, September 1985.) 59.91 548.36 T
+FMENDPAGE
+%%EndPage: "22" 27
+%%Page: "23" 27
+595.3 841.89 0 FMBEGINPAGE
+70.87 25.52 552.76 48.19 R
+7 X
+0 K
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 40.86 T
+0 11 Q
+(23) 541.76 40.86 T
+70.87 731.34 552.76 754.02 R
+7 X
+V
+1 16 Q
+0 X
+(A) 70.87 743.35 T
+(The Six Bit Counter Example) 99.24 743.35 T
+70.87 70.87 552.76 697.33 R
+7 X
+V
+1 14 Q
+0 X
+(A.1) 70.87 687.99 T
+(Introduction) 99.22 687.99 T
+0 12 Q
+(A.1.1) 70.87 663.33 T
+0.41 (The six bit counter example used in this annex was originally published in r) 102.05 663.33 P
+0.41 (efer) 508.93 663.33 P
+0.41 (ence) 528.95 663.33 P
+-0.02 (4. It was designed as a simple illustration of how an implementation might be shown) 102.05 650.33 P
+(to be corr) 102.05 637.33 T
+(ect with r) 152.04 637.33 T
+(espect to its speci\336cation.) 201.95 637.33 T
+(A.1.2) 70.87 614.33 T
+0.83 (In A.2, function) 102.05 614.33 P
+3 10 Q
+0.77 (COUNTER) 190.4 614.33 P
+0 12 Q
+0.83 ( is the speci\336cation of the change in output of the counter) 239.84 614.33 P
+0.59 (which r) 102.05 601.33 P
+0.59 (esults fr) 142.96 601.33 P
+0.59 (om the input of one of four possible operations and a number in the) 185.63 601.33 P
+(range 0 to 63. The operations ar) 102.05 588.33 T
+(e:-) 268.55 588.33 T
+(-) 85.04 569.33 T
+3 10 Q
+(null) 104.89 569.33 T
+0 12 Q
+(keep the curr) 155.91 569.33 T
+(ent value \050) 225.76 569.33 T
+3 10 Q
+(count) 281.66 569.33 T
+0 12 Q
+(\051) 306.12 569.33 T
+(-) 85.04 548.33 T
+3 10 Q
+(load) 104.89 548.33 T
+0 12 Q
+(load the input value \050) 155.91 548.33 T
+3 10 Q
+(loadin) 270.02 548.33 T
+0 12 Q
+(\051) 296.7 548.33 T
+(-) 85.04 527.33 T
+3 10 Q
+(add1) 104.89 527.33 T
+0 12 Q
+(add 1 to the curr) 155.91 527.33 T
+(ent value) 243.51 527.33 T
+(-) 85.04 506.33 T
+3 10 Q
+(add2) 104.89 506.33 T
+0 12 Q
+(add 2 to the curr) 155.91 506.33 T
+(ent value) 243.51 506.33 T
+(A.1.3) 70.87 481.33 T
+3.16 (The implementation in function) 102.05 481.33 P
+3 10 Q
+2.93 (DESIGN) 286.48 481.33 P
+0 12 Q
+3.16 ( takes the form of a micr) 324.82 481.33 P
+3.16 (o-pr) 472.24 481.33 P
+3.16 (ogrammed) 494.52 481.33 P
+0.29 (machine and was chosen with the aim of illustrating use of the pr) 102.05 468.33 P
+0.29 (over rather than as) 451.97 468.33 P
+1.24 (an ef) 102.05 455.33 P
+1.24 (\336cient method of meeting the speci\336cation. Delays ar) 128.81 455.33 P
+1.24 (e used to hold the count) 418.91 455.33 P
+4.82 (and other internal values so time must be consider) 102.05 442.33 P
+4.82 (ed when deciding if the) 408.18 442.33 P
+(implementation meets the speci\336cation.) 102.05 429.33 T
+(A.1.4) 70.87 406.33 T
+0.21 (Conjectur) 102.05 406.33 P
+0.21 (e) 153.65 406.33 P
+3 10 Q
+0.19 (CORRECTNESS) 162.61 406.33 P
+0 12 Q
+0.21 ( in A.3 states that if the machine is in the) 239.28 406.33 P
+3 10 Q
+0.19 (fetch) 458.9 406.33 P
+0 12 Q
+0.21 ( state at some) 480.58 406.33 P
+-0.24 (time) 102.05 393.33 P
+3 10 Q
+-0.22 (t1) 128.56 393.33 P
+0 12 Q
+-0.24 (, then at some time later \050) 136.9 393.33 P
+3 10 Q
+-0.22 (t1 + n) 269.62 393.33 P
+0 12 Q
+-0.24 (\051 its output should be equivalent to that speci\336ed) 294.47 393.33 P
+0.67 (by) 102.05 380.33 P
+3 10 Q
+0.62 (COUNTER) 119.03 380.33 P
+0 12 Q
+0.67 ( and the machine will have r) 168.47 380.33 P
+0.67 (eturned to the) 323.08 380.33 P
+3 10 Q
+0.62 (fetch) 402.89 380.33 P
+0 12 Q
+0.67 ( state. Function) 424.57 380.33 P
+3 10 Q
+0.62 (_LIFT) 510.38 380.33 P
+0 12 Q
+0.67 (, in) 535.62 380.33 P
+2.08 (some of the pr) 102.05 367.33 P
+2.08 (edicate terms, is used to indicate that the unspeci\336ed value of the) 184.2 367.33 P
+0.53 (variables is not to be consider) 102.05 354.33 P
+0.53 (ed. Another time \050) 261.6 354.33 P
+3 10 Q
+0.49 (t1 + m) 360.27 354.33 P
+0 12 Q
+0.53 (\051 is included at which the load) 389.33 354.33 P
+-0.12 (value will be r) 102.05 341.33 P
+-0.12 (ead. \050i.e. for the) 177.33 341.33 P
+3 10 Q
+-0.11 (load) 262.09 341.33 P
+0 12 Q
+-0.12 ( operation to complete at time \050) 280.99 341.33 P
+3 10 Q
+-0.11 (t1 + n) 446.16 341.33 P
+0 12 Q
+-0.12 (\051,) 471.23 341.33 P
+3 10 Q
+-0.11 (loadin) 481.11 341.33 P
+0 12 Q
+-0.12 ( must be) 507.79 341.33 P
+(available by some earlier time, \050) 102.05 328.33 T
+3 10 Q
+(t1 + m) 270.69 328.33 T
+0 12 Q
+(\051, to be determined during the pr) 298.76 328.33 T
+(oof.\051) 473.07 328.33 T
+(A.1.5) 70.87 305.33 T
+1.13 (Befor) 102.05 305.33 P
+1.13 (e attempting to pr) 130.2 305.33 P
+1.13 (ove) 228.98 305.33 P
+3 10 Q
+1.05 (CORRECTNESS) 252.2 305.33 P
+0 12 Q
+1.13 (, a number of theor) 328.86 305.33 P
+1.13 (ems ar) 434.6 305.33 P
+1.13 (e cr) 470.68 305.33 P
+1.13 (eated using) 490.42 305.33 P
+-0.23 (\324valid by constr) 102.05 292.33 P
+-0.23 (uction\325 methods. These r) 183.84 292.33 P
+-0.23 (elate to the values of) 313.64 292.33 P
+3 10 Q
+-0.22 (latch) 424.38 292.33 P
+0 12 Q
+-0.23 ( and) 445.5 292.33 P
+3 10 Q
+-0.22 (micro) 471.36 292.33 P
+0 12 Q
+-0.23 ( for) 495.8 292.33 P
+3 10 Q
+-0.22 (n) 516.62 292.33 P
+0 12 Q
+-0.23 ( = 1, 2) 522.18 292.33 P
+-0.17 (and 3, and speci\336c values of) 102.05 279.33 P
+3 10 Q
+-0.16 (a@t1) 253.02 279.33 P
+0 12 Q
+-0.17 (. T) 277.07 279.33 P
+-0.17 (o help r) 289.15 279.33 P
+-0.17 (epr) 329.32 279.33 P
+-0.17 (oduce the pr) 346.81 279.33 P
+-0.17 (oof, the theor) 413.05 279.33 P
+-0.17 (ems r) 483.17 279.33 P
+-0.17 (equir) 511.96 279.33 P
+-0.17 (ed) 539.68 279.33 P
+(ar) 102.05 266.33 T
+(e summarised in A.4 and some of the log \336le commands ar) 112.57 266.33 T
+(e given in A.5.) 423.76 266.33 T
+(A.1.6) 70.87 243.33 T
+-0.18 (After conjectur) 102.05 243.33 P
+-0.18 (e) 181.02 243.33 P
+3 10 Q
+-0.17 (CORRECTNESS) 189.59 243.33 P
+0 12 Q
+-0.18 ( is veri\336ed, it is r) 266.26 243.33 P
+-0.18 (eplaced by the theor) 353.54 243.33 P
+-0.18 (em shown in A.6.) 460.53 243.33 P
+-0.16 (The) 102.05 230.33 P
+3 10 Q
+-0.15 (EXISTS _integer: n m) 124.98 230.33 P
+0 12 Q
+-0.16 ( section has been r) 221.24 230.33 P
+-0.16 (eplaced by) 317.42 230.33 P
+3 10 Q
+-0.15 (FORALL _integer: n m) 377.27 230.33 P
+0 12 Q
+-0.16 ( and two extra) 476.86 230.33 P
+1.13 (pr) 102.05 217.33 P
+1.13 (edicates ar) 113.79 217.33 P
+1.13 (e included to specify the value of) 171.09 217.33 P
+3 10 Q
+1.05 (n) 357.17 217.33 P
+0 12 Q
+1.13 (and) 366.56 217.33 P
+3 10 Q
+1.05 (m) 391.01 217.33 P
+0 12 Q
+1.13 ( for dif) 399.34 217.33 P
+1.13 (fer) 437.5 217.33 P
+1.13 (ent values of) 451.77 217.33 P
+3 10 Q
+1.05 (a@t1) 525.71 217.33 P
+0 12 Q
+1.13 (.) 549.76 217.33 P
+(Note that only for the) 102.05 204.33 T
+3 10 Q
+(load) 219.68 204.33 T
+0 12 Q
+( operation is it necessary to assert a value for) 238.57 204.33 T
+3 10 Q
+(m) 478.73 204.33 T
+0 12 Q
+(.) 487.06 204.33 T
+1 14 Q
+(A.2) 70.87 175.99 T
+(ELLA declarations) 99.22 175.99 T
+3 10 Q
+(TYPE op = NEW \050null | load | add1 | add2\051.) 104.89 152.66 T
+(TYPE value = NEW v/\0500..63\051.) 104.89 138.66 T
+(FN ADD = \050value: a b\051 -> value: ARITH IF \050a + b\051 < 64 THEN a + b ELSE \050a + b\051 - 64 FI.) 104.89 110.66 T
+FMENDPAGE
+%%EndPage: "23" 28
+%%Page: "24" 28
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(The Six Bit Counter Example) 357.98 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(24) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+3 F
+0 X
+(FN COUNTER = \050op: func, value: count loadin\051 -> value:) 76.57 719.38 T
+(CASE func OF) 85.08 705.38 T
+(null: count,) 99.25 691.38 T
+(load: loadin,) 99.25 677.38 T
+(add1: ADD\050count, v/1\051,) 99.25 663.38 T
+(add2: ADD\050count, v/2\051) 99.25 649.38 T
+(ESAC.) 85.08 635.38 T
+(TYPE node_state = NEW \050fetch | loadnode | add1node | add2node\051.) 76.57 607.38 T
+(TYPE bool = NEW \050f | t\051.) 76.57 593.38 T
+(FN D_NS = \050node_state\051 -> node_state: DELAY\050fetch, 1\051.) 76.57 565.38 T
+(FN DB = \050bool\051 -> bool: DELAY\050?bool, 1\051.) 76.57 551.38 T
+(FN DEL_V = \050value\051 -> value: DELAY\050?value, 1\051.) 76.57 537.38 T
+(FN MULTIPLEX = \050value: a b, bool: sel\051 -> value: CASE sel OF t: a ELSE b ESAC.) 76.57 513.38 T
+(FN INCLOGIC = \050value: a, bool: noinc\051 -> value: CASE noinc OF t: a ELSE ADD\050a, v/1\051 ESAC.) 76.57 489.38 T
+(FN MPLXCON = \050node_state: ns\051 -> bool: CASE ns OF loadnode : f ELSE t ESAC.) 76.57 465.38 T
+(FN INCCON = \050node_state: ns\051 -> bool: CASE ns OF fetch : t ELSE f ESAC.) 76.57 441.38 T
+(FN DOUBLE_OP = \050op: func\051 -> bool: CASE func OF load | add2 : t ELSE f ESAC.) 76.57 417.38 T
+(FN NEXT_NODE = \050node_state: ns, op: fc, bool: double\051 -> node_state:) 76.57 393.38 T
+(CASE ns OF) 85.08 379.38 T
+(fetch:) 99.25 365.38 T
+(CASE fc OF) 127.6 365.38 T
+(null: fetch,) 141.77 351.38 T
+(load: loadnode,) 141.77 337.38 T
+(add1: add1node,) 141.77 323.38 T
+(add2: add1node) 141.77 309.38 T
+(ESAC,) 127.6 295.38 T
+(loadnode: fetch,) 99.25 281.38 T
+(add1node: CASE double OF t : add2node ELSE fetch ESAC,) 99.25 267.38 T
+(add2node: fetch) 99.25 253.38 T
+(ESAC.) 85.08 239.38 T
+(FN DESIGN = \050op: func, value: loadin\051 -> value:) 76.57 211.38 T
+(BEGIN) 85.08 197.38 T
+(MAKE) 127.6 197.38 T
+(DEL_V: latch,) 161.61 197.38 T
+(DB: double,) 161.61 183.38 T
+(D_NS: micro.) 161.61 169.38 T
+(JOIN) 127.6 155.38 T
+(MULTIPLEX\050INCLOGIC\050latch, INCCON\050micro\051\051, loadin, MPLXCON\050micro\051\051) 161.61 155.38 T
+(-> latch,) 161.61 141.38 T
+(DOUBLE_OP func -> double,) 161.61 127.38 T
+(NEXT_NODE\050micro, func, double\051 -> micro.) 161.61 113.38 T
+(OUTPUT latch) 127.6 99.38 T
+(END.) 85.08 85.38 T
+FMENDPAGE
+%%EndPage: "24" 29
+%%Page: "25" 29
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(The Six Bit Counter Example) 386.3 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(25) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(A.3) 70.87 716.71 T
+(Theory de\336nitions) 99.22 716.71 T
+3 10 Q
+(AXIOM ADD_1_1 = FORALL value: val WHERE _LIFT val) 104.89 693.38 T
+(|- ADD\050ADD\050val,v/1\051,v/1\051 = ADD\050val,v/2\051.) 170.08 679.38 T
+(CONJECTURE DUMMY_OP_1 = FORALL op: a, value: loadval, _time: t1) 104.89 651.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 637.38 T
+(_LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 623.38 T
+(|- \050DESIGN\050a,loadval\051\051@\050t1+1\051 = \050DESIGN\050a,loadval\051\051@\050t1+1\051.) 170.08 609.38 T
+(CONJECTURE DUMMY_OP_2 = FORALL op: a, value: loadval, _time: t1) 104.89 581.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 567.38 T
+( _LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 553.38 T
+(|- \050DESIGN\050a,loadval\051\051@\050t1+2\051 = \050DESIGN\050a,loadval\051\051@\050t1+2\051.) 170.08 539.38 T
+(CONJECTURE DUMMY_OP_3 = FORALL op: a, value: loadval, _time: t1) 104.89 511.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 497.38 T
+( _LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 483.38 T
+(|- \050DESIGN\050a,loadval\051\051@\050t1+3\051 = \050DESIGN\050a,loadval\051\051@\050t1+3\051.) 170.08 469.38 T
+(CONJECTURE DUMMY_MICRO_1 = FORALL op: a, value: loadval, _time:t1) 104.89 441.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 427.38 T
+(_LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 413.38 T
+(|- \325DESIGN\050a,loadval\051\325micro@\050t1+1\051 = \325DESIGN\050a,loadval\051\325micro@\050t1+1\051.) 170.08 399.38 T
+(CONJECTURE DUMMY_MICRO_2 = FORALL op: a, value: loadval, _time:t1) 104.89 371.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 357.38 T
+(_LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 343.38 T
+(|- \325DESIGN\050a,loadval\051\325micro@\050t1+2\051 = \325DESIGN\050a,loadval\051\325micro@\050t1+2\051.) 170.08 329.38 T
+(CONJECTURE DUMMY_MICRO_3 = FORALL op: a, value: loadval, _time:t1) 104.89 301.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 287.38 T
+(_LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051) 212.6 273.38 T
+(|- \325DESIGN\050a,loadval\051\325micro@\050t1+3\051 = \325DESIGN\050a,loadval\051\325micro@\050t1+3\051.) 170.08 259.38 T
+(CONJECTURE CORRECTNESS = FORALL op: a, value: loadval, _time:t1 EXISTS _integer: n m) 104.89 231.38 T
+(WHERE \050\325DESIGN\050a,loadval\051\325micro@t1 = fetch\051 /\134 _LIFT\050a@t1\051 /\134) 170.08 217.38 T
+(_LIFT\050loadval\051 /\134 _LIFT\050\325DESIGN\050a,loadval\051\325latch@t1\051 /\134) 212.6 203.38 T
+(\050n >= 1\051 /\134 \050m >= 0\051 /\134 \050m < n\051) 212.6 189.38 T
+(|- \050\050DESIGN\050a,loadval\051\051@\050t1+n\051 =) 170.08 175.38 T
+(COUNTER\050a@t1, \325DESIGN\050a,loadval\051\325latch@t1, loadval@\050t1+m\051\051\051 /\134) 212.6 161.38 T
+(\050\325DESIGN\050a,loadval\051\325micro@\050t1+n\051 = fetch\051.) 189.93 147.38 T
+FMENDPAGE
+%%EndPage: "25" 30
+%%Page: "26" 30
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(The Six Bit Counter Example) 357.98 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(26) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(A.4) 42.56 716.71 T
+(\324V) 70.9 716.71 T
+(alid by construction\325 theorems) 84.13 716.71 T
+0 12 Q
+(A.4.1) 42.56 692.04 T
+0.21 (The following table summarises the theor) 73.74 692.04 P
+0.21 (ems which need to be generated and saved) 294.94 692.04 P
+1.41 (befor) 73.74 679.04 P
+1.41 (e the pr) 101.19 679.04 P
+1.41 (oof of) 144.14 679.04 P
+3 10 Q
+1.31 (CORRECTNESS) 180.61 679.04 P
+0 12 Q
+1.41 ( can be completed. All except the \336rst conjectur) 257.28 679.04 P
+1.41 (e) 518.7 679.04 P
+1.35 (r) 73.74 666.04 P
+1.35 (equir) 78.26 666.04 P
+1.35 (e the case split command on) 105.98 666.04 P
+3 10 Q
+1.25 (a@t1) 266.77 666.04 P
+0 12 Q
+1.35 (. However) 290.82 666.04 P
+1.35 (, once) 346.84 666.04 P
+3 10 Q
+1.25 (micro) 383.16 666.04 P
+0 12 Q
+1.35 ( has r) 407.6 666.04 P
+1.35 (eturned to) 438.9 666.04 P
+3 10 Q
+1.25 (fetch) 499.77 666.04 P
+0 12 Q
+1.35 (,) 521.45 666.04 P
+(that value of) 73.74 653.04 T
+3 10 Q
+(a@t1) 143.35 653.04 T
+0 12 Q
+(does not have to be consider) 170.18 653.04 T
+(ed for later times.) 320.76 653.04 T
+1 14 Q
+(A.5) 42.56 376.71 T
+(The log \336le) 70.9 376.71 T
+0 12 Q
+(A.5.1) 42.56 352.04 T
+-0.3 (A log \336le starts with a header giving the date and time it was cr) 73.74 352.04 P
+-0.3 (eated. This is followed) 405.93 352.04 P
+1.26 (by a list of commands performed during a session. A few commands, for example) 73.74 339.04 P
+0.96 (\324write\325, ar) 73.74 326.04 P
+0.96 (e not put into the \336le and commands which pr) 125.8 326.04 P
+0.96 (oduced err) 380.42 326.04 P
+0.96 (or messages ar) 438.93 326.04 P
+0.96 (e) 518.7 326.04 P
+(also omitted.) 73.74 313.04 T
+(A.5.2) 42.56 290.04 T
+0.86 (For the six bit counter example the \336rst commands ar) 73.74 290.04 P
+0.86 (e to \324r) 364.03 290.04 P
+0.86 (ead\325 the \336les containing) 395.82 290.04 P
+3.29 (the de\336nitions in A.2 and A.3. These ar) 73.74 277.04 P
+3.29 (e followed by about 150 commands to) 303.18 277.04 P
+2.12 (complete the pr) 73.74 264.04 P
+2.12 (oof of CORRECTNESS. The \336rst few commands and the last few) 160.96 264.04 P
+2.33 (commands ar) 73.74 251.04 P
+2.33 (e included her) 148.06 251.04 P
+2.33 (e to indicate how the pr) 228.67 251.04 P
+2.33 (oof is developed. They wer) 365.73 251.04 P
+2.33 (e) 518.7 251.04 P
+0.56 (pr) 73.74 238.04 P
+0.56 (oduced using a pr) 85.47 238.04 P
+0.56 (e-r) 182.89 238.04 P
+0.56 (elease version of the pr) 197.16 238.04 P
+0.56 (over in non-graphical mode and ar) 321.54 238.04 P
+0.56 (e a) 509.14 238.04 P
+3.74 (little dif) 73.74 225.04 P
+3.74 (fer) 119.13 225.04 P
+3.74 (ent to the log \336le entries which ar) 133.39 225.04 P
+3.74 (e now pr) 336.55 225.04 P
+3.74 (oduced. Also, ther) 391.05 225.04 P
+3.74 (e ar) 495.69 225.04 P
+3.74 (e) 518.7 225.04 P
+-0.12 (dif) 73.74 212.04 P
+-0.12 (fer) 88.34 212.04 P
+-0.12 (ences between log \336les pr) 102.61 212.04 P
+-0.12 (oduced graphically and non-graphically) 237.87 212.04 P
+-0.12 (. For example,) 449.72 212.04 P
+0.97 (the \336rst pr) 73.74 199.04 P
+0.97 (edicate command has to be done in two stages graphically since the two) 131.05 199.04 P
+(occurr) 73.74 186.04 T
+(ences of the expr) 107.44 186.04 T
+(ession matching) 196.21 186.04 T
+3 10 Q
+(^a) 285.13 186.04 T
+0 12 Q
+( can only be selected one at a time.) 295.38 186.04 T
+3 10 Q
+(prove DUMMY_OP_1) 76.57 168.38 T
+(open/nodefault TO ^a IN ^x_x = \050^a@^b\051;) 76.57 154.38 T
+(open/nodefault TO ^a IN ^x_x = \050^a@^b\051;) 76.57 140.38 T
+(simplify/nodefault TO ^a IN ^x_x = ^a;) 76.57 126.38 T
+(push_time) 76.57 112.38 T
+(open/nodefault TO ^a IN \050^a@^b\051 = ^x_x;) 76.57 98.38 T
+(predicate/nodefault TO ^a IN ^x_x = \050MULTIPLEX\050INCLOGIC\050^c, INCCON ^a\051, ^b, MPLXCON ^a\051\051;) 76.57 84.38 T
+5 14 Q
+(Starting conjectur) 81.32 627.71 T
+(e) 190.33 627.71 T
+(Cr) 207.62 627.71 T
+(eated theor) 223.7 627.71 T
+(ems) 290.7 627.71 T
+(Hypothesis of saved theor) 326.86 627.71 T
+(em) 480.22 627.71 T
+2 12 Q
+(DUMMY_OP_1) 80.57 607.04 T
+(OP_1) 205.3 607.04 T
+(latch@\050t1+1\051 = latch@t1) 324.35 607.04 T
+(DUMMY_MICRO_1) 80.57 587.04 T
+(MICRO_1_ADD2) 205.3 587.04 T
+(MICRO_1_ADD1) 205.3 573.04 T
+(MICRO_1_LOAD) 205.3 559.04 T
+(MICRO_1_NULL) 205.3 545.04 T
+(micro@\050t1+1\051 = add1node) 324.35 587.04 T
+(micro@\050t1+1\051 = add1node) 324.35 573.04 T
+(micro@\050t1+1\051 = loadnode) 324.35 559.04 T
+(micro@\050t1+1\051 = fetch) 324.35 545.04 T
+(DUMMY_OP_2) 80.57 525.04 T
+(OP_2_ADD2) 205.3 525.04 T
+(OP_2_ADD1) 205.3 511.04 T
+(OP_2_LOAD) 205.3 497.04 T
+-0.01 (latch@\050t1+2\051 = ADD\050latch@t1, v/1\051) 324.35 525.04 P
+-0.01 (latch@\050t1+2\051 = ADD\050latch@t1, v/1\051) 324.35 511.04 P
+(latch@\050t1+2\051 = loadval@\050t1+1\051) 324.35 497.04 T
+(DUMMY_MICRO_2) 80.57 477.04 T
+(MICRO_2_ADD2) 205.3 477.04 T
+(MICRO_2_ADD1) 205.3 463.04 T
+(MICRO_2_LOAD) 205.3 449.04 T
+(micro@\050t1+2\051 = add2node) 324.35 477.04 T
+(micro@\050t1+2\051 = fetch) 324.35 463.04 T
+(micro@\050t1+2\051 = fetch) 324.35 449.04 T
+(DUMMY_OP_3) 80.57 429.04 T
+(OP_3_ADD2) 205.3 429.04 T
+-0.01 (latch@\050t1+3\051 = ADD\050latch@t1, v/2\051) 324.35 429.04 P
+(DUMMY_MICRO_3) 80.57 409.04 T
+(MICRO_3_ADD2) 205.3 409.04 T
+(micro@\050t1+3\051 = fetch) 324.35 409.04 T
+76.57 640.04 76.57 402.04 2 L
+V
+2 H
+0 Z
+N
+201.3 642.04 201.3 400.04 2 L
+V
+0.5 H
+N
+320.35 642.04 320.35 400.04 2 L
+V
+N
+504.6 640.04 504.6 402.04 2 L
+V
+2 H
+N
+75.57 641.04 505.6 641.04 2 L
+V
+N
+75.57 619.04 505.6 619.04 2 L
+V
+N
+75.57 599.04 505.6 599.04 2 L
+V
+0.5 H
+N
+75.57 537.04 505.6 537.04 2 L
+V
+N
+75.57 489.04 505.6 489.04 2 L
+V
+N
+75.57 441.04 505.6 441.04 2 L
+V
+N
+75.57 421.04 505.6 421.04 2 L
+V
+N
+75.57 401.04 505.6 401.04 2 L
+V
+2 H
+N
+FMENDPAGE
+%%EndPage: "26" 31
+%%Page: "27" 31
+595.3 841.89 0 FMBEGINPAGE
+70.87 761.51 552.76 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(The Six Bit Counter Example) 386.3 775.82 T
+70.87 25.52 552.76 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 70.87 41.83 T
+0 11 Q
+(27) 541.76 41.83 T
+70.87 72.81 552.76 726.04 R
+7 X
+V
+3 10 Q
+0 X
+(open/nodefault TO ^a IN ^x_x = ^a;) 104.89 719.38 T
+(open/nodefault TO ^a IN ^x_x = ^a;) 104.89 705.38 T
+(save_theorem OP_1) 104.89 691.38 T
+(abandon) 104.89 677.38 T
+(prove DUMMY_MICRO_1) 104.89 663.38 T
+(open/nodefault TO ^a IN ^x_x = \050^a@^b\051;) 104.89 649.38 T
+(simplify/nodefault TO ^a IN ^x_x = ^a;) 104.89 635.38 T
+(push_time) 104.89 621.38 T
+(predicate/nodefault TO ^a IN ^x_x = \050NEXT_NODE\050^a, ^b, ^c\051\051;) 104.89 607.38 T
+(cases_of a@t1;) 104.89 593.38 T
+(open/nodefault TO ^a IN ^x_x = ^a;) 104.89 579.38 T
+(save_theorem MICRO_1_ADD2) 104.89 565.38 T
+(abandon) 104.89 551.38 T
+(open/nodefault TO ^a IN ^x_x = ^a;) 104.89 537.38 T
+(save_theorem MICRO_1_ADD1) 104.89 523.38 T
+(..........) 104.89 509.38 T
+(prove CORRECTNESS) 104.89 481.38 T
+(open/nodefault TO ^a IN \050\050^a@^b\051 = ^c\051 /\134 ^d;) 104.89 467.38 T
+(open/nodefault TO ^c IN \050\050^a@^b\051 = ^c\051 /\134 ^d;) 104.89 453.38 T
+(cases_of a@t1;) 104.89 439.38 T
+(simplify) 104.89 425.38 T
+(assert n = 3;) 104.89 411.38 T
+(use_existential/nodefault TO ^a IN ^a;) 104.89 397.38 T
+(apply/nodefault OP_3_ADD2 TO ^a IN \050^a = ^b\051 /\134 ^c;) 104.89 383.38 T
+(apply/nodefault MICRO_3_ADD2 TO ^a IN ^a = ^b;) 104.89 369.38 T
+(simplify) 104.89 355.38 T
+(assert n = 2;) 104.89 341.38 T
+(use_existential/nodefault TO ^a IN ^a;) 104.89 327.38 T
+(apply/nodefault OP_2_ADD1 TO ^a IN \050^a = ^b\051 /\134 ^c;) 104.89 313.38 T
+(apply/nodefault MICRO_2_ADD1 TO ^a IN ^a = ^b;) 104.89 299.38 T
+(simplify) 104.89 285.38 T
+(assert n = 2;) 104.89 271.38 T
+(assert m = 1;) 104.89 257.38 T
+(use_existential/nodefault TO ^a IN ^a;) 104.89 243.38 T
+(use_existential/nodefault TO ^a IN ^a;) 104.89 229.38 T
+(apply/nodefault OP_2_LOAD TO ^a IN \050^a = ^b\051 /\134 ^c;) 104.89 215.38 T
+(apply/nodefault MICRO_2_LOAD TO ^a IN ^a = ^b;) 104.89 201.38 T
+(simplify) 104.89 187.38 T
+(assert n = 1;) 104.89 173.38 T
+(use_existential/nodefault TO ^a IN ^a;) 104.89 159.38 T
+(apply/nodefault OP_1 TO ^a IN \050^a = ^b\051 /\134 ^c;) 104.89 145.38 T
+(simplify) 104.89 131.38 T
+(predicate/use=7/nodefault TO ^a IN _LIFT ^a;) 104.89 117.38 T
+(apply/nodefault MICRO_1_NULL TO ^a IN ^a = ^b;) 104.89 103.38 T
+(simplify/pred=2 TO ^a IN ^a;) 104.89 89.38 T
+FMENDPAGE
+%%EndPage: "27" 32
+%%Page: "28" 32
+595.3 841.89 0 FMBEGINPAGE
+42.56 761.51 524.45 785.16 R
+7 X
+0 K
+V
+4 14 Q
+0 X
+(The Six Bit Counter Example) 357.98 775.82 T
+42.56 25.52 524.45 49.17 R
+7 X
+V
+0 10 Q
+0 X
+(28) 42.56 41.83 T
+(DRA/CIS\050SE2\051/PROJ/SWI/TR/6/1.0) 354.32 41.83 T
+42.56 72.81 524.45 726.04 R
+7 X
+V
+1 14 Q
+0 X
+(A.6) 42.56 716.71 T
+(The resulting theorem) 70.9 716.71 T
+0 12 Q
+(A.6.1) 42.56 692.04 T
+0.41 (The layout of CORRECTNESS has been alter) 73.74 692.04 P
+0.41 (ed fr) 312.65 692.04 P
+0.41 (om that displayed by the pr) 337.67 692.04 P
+0.41 (over to) 486.75 692.04 P
+(make the two new pr) 73.74 679.04 T
+(edicate terms mor) 186.35 679.04 T
+(e r) 281.66 679.04 T
+(eadable.) 294.93 679.04 T
+3 10 Q
+(THEOREM CORRECTNESS = FORALL op: a, value: loadval, _time: t1 FORALL _integer: n m) 76.57 661.38 T
+(WHERE \050\050'DESIGN\050a, loadval\051'micro@t1\051 = fetch\051 /\134 \050_LIFT\050a@t1\051\051 /\134) 141.77 647.38 T
+(\050_LIFT loadval\051 /\134 \050_LIFT\050'DESIGN\050a, loadval\051'latch@t1\051\051 /\134) 184.29 633.38 T
+(\050n >= 1\051 /\134 \050m >= 0\051 /\134 \050m < n\051 /\134) 184.29 619.38 T
+(\050n =) 184.29 605.38 T
+(IF \050a@t1\051 = add2) 246.65 605.38 T
+(THEN 3) 328.86 605.38 T
+(ELSE IF \050a@t1\051 = add1) 218.3 591.38 T
+(THEN 2) 328.86 591.38 T
+(ELSE IF \050a@t1\051 = load) 218.3 577.38 T
+(THEN 2) 328.86 577.38 T
+(ELSE IF \050a@t1\051 = null) 218.3 563.38 T
+(THEN 1) 328.86 563.38 T
+(ELSE n) 218.3 549.38 T
+(FI FI FI FI\051 /\134) 246.65 535.38 T
+(\050m =) 184.29 521.38 T
+(IF \050a@t1\051 = add2) 246.65 521.38 T
+(THEN m) 328.86 521.38 T
+(ELSE IF \050a@t1\051 = add1) 218.3 507.38 T
+(THEN m) 328.86 507.38 T
+(ELSE IF \050a@t1\051 = load) 218.3 493.38 T
+(THEN 1) 328.86 493.38 T
+(ELSE IF \050a@t1\051 = null) 218.3 479.38 T
+(THEN m) 328.86 479.38 T
+(ELSE m) 218.3 465.38 T
+(FI FI FI FI\051) 246.65 451.38 T
+(|- \050\050\050DESIGN\050a, loadval\051\051@\050t1+n\051\051 =) 141.77 437.38 T
+(\050COUNTER\050a@t1, 'DESIGN\050a, loadval\051'latch@t1, loadval@\050t1+m\051\051\051\051 /\134) 184.29 423.38 T
+(\050\050'DESIGN\050a, loadval\051'micro@\050t1+n\051\051 = fetch\051.) 161.61 409.38 T
+FMENDPAGE
+%%EndPage: "28" 33
+%%Trailer
+%%BoundingBox: 0 0 595.3 841.89
+%%Pages: 32 1
+%%DocumentFonts: Palatino-Roman
+%%+ Palatino-Bold
+%%+ Times-Roman
+%%+ Helvetica
+%%+ Palatino-Italic
+%%+ Times-Bold
