@@ -1,0 +1,1730 @@
+DECS keamstandard CONTEXT VOID USE putstrings, basics, keambasics, kebasics,
+     kesignals, kesymbols:
+
+{ " Id: keamstandard.sta,v 2.1 91/02/22 18:34:18 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamstandard.a68,v 34.2 1995/03/29 13:04:39 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+16:09:88  Module created, by splitting the existing module 'keamgen',
+              to declare some standard abstract machine locations and
+              code sequences.
+24:11:88  Bug 35, Various changes to force CL evaluation AFTER event
+              setting/handling. Fixes to 'translate copy value', 'translate
+              output constant' and 'translate set replicated value'. MDR.
+12:12:88  `translate data source' added and `global circuit
+              params' renamed `global end'.  Bug 13.  BJE.
+20:12:88  More changes to force CL phase before & after event handling,
+              needed to tidy up after any previous CL interruptions.
+              Removed iteration count from AM stack, to allow callinst
+              optimisation. MDR.
+28:12:88  'am drop' added to 'translate time test'  (bug 84).  PAR.
+30:12:88  'translate start combinatorial loop' added, and also
+              'translate clear generic id'.  (bug 82).  PAR.
+ 5:01:89  Param type 'fixed' replaced with 'integer' as appropriate.  PAR.
+12:01:89  Param to generic id initialisation declared to be `integer'.
+              `unique id' applied to name of generic id.  Bug 90.  BJE.
+14:01:89  Calling sequence to `translate copy trimmed outputs' changed
+              to correct bug 100.  BJE.
+16:01:89  Corrections to 'translate id support' & 'translate generic id'
+              Bug118. MDR.
+23:01:89  'translate clear generic id' to set evaluation flag.
+              R4B073.  PAR.
+30:01:89  'global iterations' is now a flag, set by fanout from
+              combinatorial loop breaks.  R4B072.  PAR.
+15:02:89  'translate copy inputs' optimised for repetitions.  R4B067.  PAR.
+10:04:89  Change to signal encoding for speedup.  R4B134.  PAR.
+23:05:89  Misuse of pushstring.  R4B340.  SPT.
+03:08:89  'translate generic query' added.  R4B150.  PAR.
+14:08:89  'translate some inputs' and 'compress sizes' kept.  R4B054.  MDR.
+24:08:89  'compress sizes' improved (with parameter change).  R4B150.  PAR.
+22:02:90  Rely on `last symbol' from kesymbols to provide numeric labeling
+              of callinsts in `translate start function' etc.
+             (The number should really be looked up by name, but that would be
+              as inefficient as passing in string labels)
+              Removed the parameter list & label passed to `generate named
+              code' from the heap.  (params are initialised in `translate id
+              support'). We now assume that the labels passed to
+              `generate named code' need exist across the call only. MDR.
+28:11:89  Added calls array/break changes for Probe functions. MDR.
+01:02:90  Added 'translate end function setting flag' from Alien Code
+              baseline keamstandard.sta and put this in KEEPlist.         MHC
+14:05:90  Added next event optimisations to calls array. MDR.
+30:11:90  Forced unit del event to 1 on simulation initialise
+              phase. MDR.
+12:09:89  CR 642.  FLTPROC moved from basics to putstrings.  EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.024 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+
+{ Standard Global Memory Locations }
+{ ================================ }
+
+{ These get set during initialisation -- see below
+}
+OFFSET global time,
+       global maxtime,
+       global interrupted,
+       global initialised,
+       global action,
+       global iterations,
+       global temp1,
+       global end,
+       global comb outputs stable,
+       global monitor changed,
+       global next event,
+       global unit del event,
+       global start init list,
+       global end init list,
+       global start inst list,
+       global end inst list,
+       global instance list;
+
+
+{ Standard Labels for Large Jumps }
+{ =============================== }
+
+{ In translation, only positive numeric labels should be generated
+  except for the following which are used for specific and large
+  scale purposes.
+  Note that numeric labels may be redeclared in different functions,
+  but must be unique within any given named code sequence.
+}
+LABEL global time label         = (0, LOC VECTOR [4] CHAR := "Time"),
+      global maxtime label      = (0, LOC VECTOR [7] CHAR := "Maxtime"),
+      global interrupted label  = (0, LOC VECTOR [11] CHAR := "Interrupted"),
+      global initialised label  = (0, LOC VECTOR [11] CHAR := "Initialised"),
+      global action label       = (0, LOC VECTOR [6] CHAR := "Action"),
+      global iterations label   = (0, LOC VECTOR [10] CHAR := "Iterations"),
+      calls array code label    = (0, LOC VECTOR [11] CHAR := "Calls_array"),
+      id support code label     = (0, LOC VECTOR [9] CHAR := "Idsupport"),
+      generic id code label     = (0, LOC VECTOR [11] CHAR := "_$Genericid"),
+      data source code label    = (0, LOC VECTOR [12] CHAR := "_$Datasource"),
+      global monitor changed label
+                                = (0, LOC VECTOR [15] CHAR := "Monitor_changed"),
+      global unit del event label
+                               = (0, LOC VECTOR [14] CHAR := "Unit_del_event"),
+      global comb outputs stable label
+                                = (0, LOC VECTOR [19] CHAR := "Comb_Outputs_Stable"),
+      global next event label   = (0, LOC VECTOR [10] CHAR := "Next_event"),
+      global start init label   = (0, LOC VECTOR [15] CHAR := "Start_Init_List"),
+      global end init label     = (0, LOC VECTOR [13] CHAR := "End_Init_List"),
+      global start inst label   = (0, LOC VECTOR [15] CHAR := "Start_Inst_List"),
+      global end inst label     = (0, LOC VECTOR [13] CHAR := "End_Inst_List"),
+
+      combinatorial logic label = (-1, LOC VECTOR [0] CHAR),
+      calls loop label          = (-2, LOC VECTOR [0] CHAR),
+      end calls loop label      = (-3, LOC VECTOR [0] CHAR),
+      unchanged output label    = (-4, LOC VECTOR [0] CHAR),
+      set query output label    = (-5, LOC VECTOR [0] CHAR),
+      new result label          = (-6, LOC VECTOR [0] CHAR),
+      old result label          = (-7, LOC VECTOR [0] CHAR),
+      unchanged query label     = (-8, LOC VECTOR [0] CHAR),
+      query label               = (-9, LOC VECTOR [0] CHAR),
+      arith exception label     = (-10, LOC VECTOR [0] CHAR),
+      time test label           = (-11, LOC VECTOR [0] CHAR),
+      end calls array label     = (-12, LOC VECTOR [0] CHAR),
+      start savers label        = (-13, LOC VECTOR [0] CHAR),
+      start restorers label     = (-14, LOC VECTOR [0] CHAR),
+      start initialisation label= (-15, LOC VECTOR [0] CHAR);
+
+{ Standard Code Sequences }
+{ ======================= }
+
+{ Standard header for calls array
+}
+PROC translate start calls array = (FLTPROC flt) VOID:
+BEGIN
+    am generateca (flt);
+    am generate named code (calls array code label, nil params, nil params)
+END;
+
+PROC translate start terminators = VOID:
+BEGIN
+    am global (ws, global action label);
+    am pushint (evaluate action);
+    am neq;
+    am jump no (0, start initialisation label);
+
+    am global (ws, global action label);
+    am pushint (terminate action);
+    am eq;
+    am jump no (0, start savers label)
+END;
+
+PROC translate start savers = VOID:
+BEGIN
+    am jump (end calls array label);
+    am label (0, start savers label);
+    am global (ws, global action label);
+    am pushint (save action);
+    am eq;
+    am jump no (0, start restorers label)
+END;
+
+PROC translate start restorers = VOID:
+BEGIN
+    am jump (end calls array label);
+    am label (0, start restorers label);
+    am global (ws, global action label);
+    am pushint (restore action);
+    am eq;
+    am jump no (0, end calls array label)
+END;
+
+PROC translate start initialisers = VOID:
+BEGIN
+    am jump (end calls array label);
+    am label(0, start initialisation label);
+    am global (ws, global initialised label);
+    am test;
+    am not;
+    am jump no (0, calls loop label);
+    am pushint (1);
+    am store (ws, global initialised label);
+
+    {I'd like to set this to 0, but simulatefn may leave cominatorial
+     instances in a state which prevents them from fanning out to this
+     flag. The other options are to remove this optimisation all
+     together, or a very messy routine in 'set function' to invalidate
+     combinatorial outputs (just of functions which fanout to here). }
+    am pushint (1);
+    am store (ws, global unit del event label);
+
+    am pushint (0);
+    am store (ws, global comb outputs stable label)
+END;
+
+
+{ Standard start of the time advance loop.
+  The combinatorial phase may be skipped if 'comb outputs stable' is true.
+  This flags that the calls array was exited temporarily
+  (immediately after combinatorial evaluation) to service a
+   monitor change, and that the state of the abstract machine has not
+   changed since.
+}
+PROC translate start calls loop = VOID:
+BEGIN
+    am label (0, calls loop label);
+
+    am pushint (0);
+    am store (ws, global monitor changed label);
+
+    am repeat;                                  { Start of loop over time }
+    am global(ws, global comb outputs stable label);
+    am test;   {yes, iff we just returned here after servicing a monitor
+                change, ie we don't need to do another comb eval}
+
+    am not;
+    am jump no (0, time test label)
+END;
+
+
+{ Start of the combinatorial iterations (after loop breaks
+  have been initialised to query).
+}
+PROC translate start combinatorial loop = VOID:
+BEGIN
+       am repeat;
+           am pushint (0);
+           am store (ws, global iterations label)
+END;
+
+{ End of the combinatorial iterations
+}
+PROC translate end combinatorial loop = VOID:
+BEGIN
+          am global (ws, global iterations label);
+          am test;
+
+          am global (ws, global interrupted label);
+          am pushint (2); {hard interrupt}
+          am iand;
+          am test;
+          am not;
+
+          am and;     {ie. loop if iterations and no hard
+                       interrupts have occured}
+       am loop
+END;
+
+
+{ Standard time test before delay event setting.
+  We set the next event time to be the maximum time represented by 32 bits.
+}
+PROC translate time test = VOID:
+BEGIN
+    am pushint (1);
+    am store (ws, global comb outputs stable label);
+
+    am label (0, time test label);
+    am pushint (maxint);
+    am store (ws, global next event label);
+
+    am global (ws, global time label);
+    am global (ws, global maxtime label);
+    am neq;
+    am global (ws, global interrupted label);
+    am test;
+    am not;
+    am and;
+    am global (ws, global monitor changed label);
+    am test;
+    am not;
+    am and;
+    am local (0);              {Fall out of main loop if time = maxtime OR
+                                interrupted OR
+                                monitor changed is true. (ie /= 0)}
+    am jump no (0, end calls array label);
+    am drop (1)
+END;
+
+
+{ Standard time advance, after delay setting and before delay update.
+  If 'unit del event' flag is set, advance time by 1
+  else advance time to min('next event', 'maxtime').
+  If time' < 'next event' jump over event handling.
+}
+PROC translate time advance = VOID:
+BEGIN
+    LABEL non unit time advance = new label;
+    LABEL end time advance = new label;
+    LABEL store maxtime = new label;
+    LABEL need event handling = new label;
+    am global (ws, global unit del event label);
+    am test;
+    am jump no(0, non unit time advance);
+
+    am global (ws, global time label);
+    am pushint (1);
+    am add;
+    am local (0);
+    am store (ws, global time label);
+    am local(0);
+    am store (ws, global next event label);
+    am jump(end time advance);
+
+    am label(0, non unit time advance);
+    am global (ws, global maxtime label);
+    am global (ws, global next event label);
+    am local(1);
+    am local(1);
+    am gt;
+    am jump no (1, store maxtime);
+    am store (ws, global time label);
+    am drop (1);
+    am global (ws, global time label);
+    am jump (end time advance);
+    am label(0, store maxtime);
+    am local (0);
+    am store (ws, global time label);
+    am label(1, end time advance);
+    {(time)}
+
+    {we can ignore event handling if time < next event}
+    am global(ws, global next event label);
+    am lt;
+    am jumpno (0, need event handling);
+    am pushint (1); {force calls array loop}
+    am test;
+    am jump (end calls array label);
+
+    am label (0, need event handling);
+    am pushint (0);
+    am store (ws, global unit del event label);
+    am pushint (0);
+    am store (ws, global comb outputs stable label)
+    {()}
+END;
+
+
+{ Standard end of calls array code
+}
+PROC translate end calls array = VOID:
+BEGIN
+    am pushint (1);  {force loop}
+    am test;
+    am label (1, end calls loop label);
+    am loop;
+    am label (0, end calls array label);
+    am halt;
+    am generate endca
+END;
+
+{ loop and case statement generation for Probe instantiation}
+LABEL end loop label,
+      end case;
+PROC translate start probe loop up = VOID:
+BEGIN
+   {()}
+   end loop label := new label;
+   end case := new label;
+   am global (ws, global start inst label);
+   am repeat;
+      am local(0);
+      am global (ws, global end inst label);
+      am le;
+      {( end inst >= inst list: inst list)}
+      am local (0);
+      am jump no (0, end loop label);
+      am drop(1);
+      am local(0);
+      am store (ws, global instance list)
+      {(inst list)}
+
+END;
+LABEL end case arm;
+PROC translate start case arm = (INT fnno) VOID:
+BEGIN
+      end case arm := new label;
+      {(inst list)}
+      am local(0);
+      am global (ws, indirect);
+      am pushint (fnno);
+      am eq;
+      {(fnno != inst list-> fnno: inst list)}
+      am jump no(0, end case arm);
+      am pushint (ws);
+      am add;
+      am global (ws, indirect)
+      {(cp)}
+END;
+PROC translate end case arm = VOID:
+BEGIN
+      {(cp)}
+      am drop (1);
+      am jump (end case);
+      am label (1, end case arm)
+      {(inst list)}
+END;
+
+PROC translate end probe loop up = VOID:
+BEGIN
+      {(inst list)}
+      am drop (1);
+      am label (0, end case);
+      {()}
+      am global (ws, global instance list);
+      am pushint (ws*2);
+      am add;
+      am pushint (1);
+      am test;
+      am label(2, end loop label);
+   am loop;
+   am drop (1)
+   {()}
+END;
+
+PROC translate start probe loop down = VOID:
+BEGIN
+   {()}
+   end loop label := new label;
+   end case := new label;
+   am global (ws, global end inst label);
+   am repeat;
+      am local(0);
+      am global (ws, global start inst label);
+      am ge;
+      {(start inst <= inst list: inst list)}
+      am local (0);
+      am jump no (0, end loop label);
+      am drop(1);
+      am local(0);
+      am store (ws, global instance list)
+      {(inst list)}
+
+END;
+
+PROC translate end probe loop down = VOID:
+BEGIN
+      {(inst list)}
+      am drop (1);
+      am label (0, end case);
+      {()}
+      am global (ws, global instance list);
+      am pushint (ws*2);
+      am sub;
+      am pushint (1);
+      am test;
+      am label(2, end loop label);
+   am loop;
+   am drop (1)
+   {()}
+END;
+
+PROC translate start init loop up = VOID:
+BEGIN
+   {()}
+   end loop label := new label;
+   end case := new label;
+
+   am global (ws, global start init label);
+   am repeat;
+      am local(0);
+      am global (ws, global end init label);
+      am le;
+      {(end inst >= init list: init list)}
+      am local (0);
+      am jump no (0, end loop label);
+      am drop(1);
+      am local(0);
+      am store (ws, global instance list)
+      {(inst list)}
+END;
+
+PROC translate end init loop up = VOID:
+BEGIN
+      {(init list)}
+      am drop (1);
+      am label (0, end case);
+      {()}
+      am global (ws, global instance list);
+      am pushint (ws*2);
+      am add;
+      am pushint (1);
+      am test;
+      am label(2, end loop label);
+   am loop;
+   am drop (1);
+
+   {Empty the list}
+   am global (ws, global start init list);
+   am pushint (2*ws);
+   am sub;
+   am store (ws, global end init list)
+   {()}
+END;
+{ End of loop and case statement generation for Probe instantiation}
+
+
+{ ELLA functions have an 'evaluation flag' as the first 'size unit'
+  bytes of the instance data.  The function is only ever entered when
+  this flag is non-zero, and will always set it to zero prior to
+  exit (it may be set non-zero again by the 'fanout' instruction
+  of another function).  The 'evaluation flag' is used during the
+  evaluation of a function to indicate that the outputs have changed.
+  If this is so, it is reset before reaching the standard exit sequence,
+  otherwise the exit sequence must reset it.
+
+  The 'ptrs to inputs' are pointers to primitive components of the
+  input data, and therefore point to the output areas of the driving
+  function instances.  There may be more than one input pointer for
+  a single user declared input if its type is structured in some way.
+
+  The 'fanout list ptrs' are pointers to the function instances which
+  take any part of their input from this instance's output data.  They
+  point to the evaluation flags of the driven instances.
+
+  We often calculate the 'size' of an instance, or its 'fixed part size'.
+  This is the size in bytes of the part up to and including the output
+  area, but excluding the fanout list and its size.
+
+  Hence:      +---------------------------+
+              |    Evaluation flag        |          (size unit)
+              +---------------------------+
+              |    Number of inputs (N)   |          (ws)
+              +---------------------------+
+              +    N * ptrs to inputs     +          (N of ws)
+              +                           +
+              +---------------------------+
+              |    A bytes of function    |          (A)
+              |      specific storage     |
+              +---------------------------+
+              |    B bytes of output area |          (B)
+              |                           |
+              +---------------------------+
+              |    Size of Fanout list (F)|          (ws)
+              +---------------------------|
+              +    Fanout list ptrs       +          (F of ws)
+              +                           +
+              +---------------------------+
+
+}
+
+
+{ Standard code for the start of a function
+
+  The function labels for each 'phase' of simulation, ie initialisation,
+  combinatorial evaluation, event setting etc. are derived directly from
+  the symbol table function number of any function being declared.
+
+  Note that the instance pointer is supplied as a parameter to an ella
+  function, and that normally it will remain on the stack until it is
+  used in the standard ending below. Serveral of the phases are called
+  irrespective of the state of the evaluation flag, ie using an 'am call'
+  rather than an 'am callinst', these functions take the instance pointer
+  on the stack in the form of an integer.
+}
+
+
+{These variables are initialised in 'translate generic identity' as that
+ is the first function called in this module, they should really be constants.
+ And yes, we know it's messy.}
+PARAMS inst ptr,
+       int inst ptr;
+
+LABEL instlab := (0, LOC VECTOR[13]CHAR := "Numeric Label");
+INT comb phase       = 0;
+INT setting phase     = comb phase +1;
+INT handling phase    = setting phase +1;
+INT initialiser phase = handling phase +1;
+INT terminator phase   = initialiser phase +1;
+INT saver phase       = terminator phase +1;
+INT restorer phase    = saver phase +1;
+INT no of phases      = restorer phase +1;
+
+PROC translate start function = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +comb phase;
+    am generate named code (instlab, inst ptr, nil params);
+    am enter
+END;
+
+PROC translate start event setter = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +setting phase;
+    am generate named code (instlab, inst ptr, nil params);
+    am enter
+END;
+
+PROC translate start event handler = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +handling phase;
+    am generate named code (instlab, inst ptr, nil params);
+    am enter
+END;
+
+PROC translate start initialiser = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +initialiser phase;
+    am generate named code (instlab, inst ptr, nil params);
+    am enter
+END;
+
+{
+    The following are required (currently) for alien code only.
+    Savers, restorers and terminators must be called regardless of the setting
+    of the evaluation flag.  They are therefore called via 'am call' (rather
+    than 'am callinst') and are passed the callinst pointer as an integer.
+}
+
+PROC translate start saver = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +saver phase;
+    am generate named code (instlab, int inst ptr, nil params);
+    am enter
+END;
+
+PROC translate start restorer = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +restorer phase;
+    am generate named code (instlab, int inst ptr, nil params);
+    am enter
+END;
+
+PROC translate start terminator = (VECTOR [] CHAR name) VOID:
+BEGIN
+    lab OF inst lab := last symbol*no of phases +terminator phase;
+    am generate named code (instlab, int inst ptr, nil params);
+    am enter
+END;
+
+{ Standard ending for an ELLA function
+  'd', as usual in the translation functions, is the stack depth of the
+  abstract machine just prior to entering the code generated by this
+  procedure.
+}
+PROC translate end function = (INT inst size, d) VOID:
+BEGIN
+    IF d /= 1 THEN
+        am drop (d-1)
+    FI;
+    am local (0);                         { Address of evaluation flag }
+    am global (size unit, indirect);
+    am test;
+    am not;
+    am jump no (0, unchanged output label);
+    am fanout (inst size);                { Flag already zero -- outputs changed }
+    am ret (0);
+    am label (1, unchanged output label); { Outputs unchanged, but reset flag }
+    am pushint (0);
+    am store (size unit, indirect);
+    am ret (0)
+END;
+
+{ As 'translate end function' but sets evaluation flag if the outputs have
+  changed.  This is used for time-dependent alien code to ensure evaluation at
+  every time step.
+}
+PROC translate end function setting flag = (INT inst size, d) VOID:
+BEGIN
+    IF d /= 1 THEN
+        am drop (d-1)
+    FI;
+
+    am local (0);
+    am global (ws, indirect);
+    am test;
+    am not;
+    am jumpno (1, unchanged output label);
+
+      { ensure flag is set at the end of combinatorial phase }
+      am local (0);
+      am pushint (1);
+      am store (ws, indirect);
+
+      am fanout (inst size);
+
+    am label (0, unchanged output label);
+
+    am ret(0)
+END;
+
+{ Simplified version of the end-of-function code for the case in which
+  the output has definitely changed.  In this case no assumptions are
+  made about the flag, so it has to be reset.
+}
+PROC translate simple end function = (INT inst size, d) VOID:
+BEGIN
+    IF d /= 1 THEN
+        am drop (d-1)
+    FI;
+
+    am local (0);                         { Instance pointer }
+    am pushint (0);
+    am store (size unit, indirect);       { Reset flag }
+
+    am fanout (inst size);                { Propagate evaluation flags }
+    am ret (0)
+END;
+
+
+{ Copying of values around }
+{ ======================== }
+
+
+{ It is useful to be able to parameterise these routines by the way they
+  should adjust the evaluation flag if they are copying a changed value
+  to the destination.
+}
+INT leave flag = 0,       { No change }
+    set flag   = 1,       { Set it if there is a change }
+    reset flag = 2;       { Reset it on a change }
+
+
+{ This procedure generates the code to do the flag setting, assuming that
+  the proposed new value is on top of the stack, its size is 'size', the
+  address to which it will be written is at the stack offset 'out addr',
+  the nature of the flag change is given, and the stack depth on entry is 'd'.
+}
+PROC translate compare and set flag = (INT size, out addr, flag adjust, d) VOID:
+    IF flag adjust /= leave flag THEN
+        LABEL same label = new label;
+
+        { Load a copy of the old value }
+        IF size = ws THEN
+            am local (out addr);
+            am global (size, indirect)
+        ELSE
+            am pushint (0);
+            am local (out addr + 1);
+            am bstring (bits per byte * size, bits per byte * size, indirect)
+        FI;
+
+        am local (1);                      { The new value }
+        am neq;
+        am jumpno (0, same label);
+        am local (d-1);                    { Instance ptr = flag address }
+        IF flag adjust = set flag THEN
+            am pushint (1)
+        ELSE
+            am pushint (0)
+        FI;
+        am store (size unit, indirect);
+        am label (d, same label)
+    FI;
+
+
+{ This procedure compiles code to copy some of the inputs of a
+  function to some part of its instance data.
+  During the copy, the new value is compared with the old, and if there
+  has been a change, the evaluation flag will be changed according to
+  the 'flag adjust' (whose possible values are given above).
+
+  The total number of inputs to be copied, together with the size of
+  the data for each one, is encoded in 'input sizes'.  The encoding
+  used enables repetitions in the sizes to be made explicit, and this
+  procedure makes use of that explicit information.  The form of
+  encoding relies on the fact that the sizes are strictly positive,
+  so negative and zero entries can be used for other purposes.
+  Specifically, the elements must be interpreted in left-to-right
+  order, and have the following meanings:
+
+      n > 0    An input data size (possibly repeated)
+
+      n = 0    Padding, simply ignored
+
+      n < 0    These *may* appear in pairs, as follows:
+               The first -ve number seen is the -ve of a repeat count.
+               Normally, a repeat count will be followed by the -ve of
+               the number of immediately following array elements to
+               be repeated.
+               However, if the number following a repeat count is +ve,
+               only that element is to be repeated.
+               Once length of the repeated part has been determined
+               like this, the next -ve number will again be a repeat
+               count.
+
+  (This encoding allows an array of sizes to be transformed to one with
+  explicit repetitions in the same space.)
+
+  As normal, the stack depth is provided as the parameter 'd'.
+  The stack should contain the global memory base address of the first
+  input pointer to be used, and the base address of the first output
+  location to be used: the static offsets 'in offset' and 'out offset'
+  will be added to these base addresses.  Hence:
+
+    (out base: in base: .... cp)
+
+}
+PROC translate some inputs = (VECTOR [] INT input sizes,
+                              INT in offset, out offset, flag adjust, d) VOID:
+BEGIN
+
+    { 'total sizes' uses the same recursion pattern as 'translate some inputs',
+      to calculate the totals for a given encoded set of sizes.
+    }
+    PROC total sizes = (VECTOR [] INT sizes) STRUCT (INT inputs, data):
+    BEGIN
+        INT i := 1,
+            n := 0,
+            s := 0;
+        WHILE i <= UPB sizes DO
+            IF sizes [i] > 0 THEN
+                n +:= 1;
+                s +:= sizes [i];
+                i +:= 1
+            ELIF sizes [i] < 0 THEN
+                INT r = - sizes [i],
+                    l = IF sizes [i +:= 1] >= 0 THEN  1
+                        ELSE  - sizes [(i+:=1) - 1]
+                        FI;
+                VECTOR [] INT p = sizes [i : i + l - 1];
+                STRUCT (INT inputs, data) ps = total sizes (p);
+                n +:= r * inputs OF ps;
+                s +:= r * data OF ps;
+                i +:= l
+            ELSE
+                i +:= 1
+            FI
+        OD;
+        (n, s)
+    END;
+
+    INT index    := 1,           { Which element of 'input sizes'     }
+        get from := in offset,   { Static offset from input base ptr  }
+        write to := out offset;  { Static offset from output base ptr }
+    WHILE index <= UPB input sizes DO
+        IF input sizes [index] > 0 THEN
+            { A simple size - do in-line }
+            INT size = input sizes [index];
+            am local (0);                      { Output base ptr }
+            am pushint (write to);
+            am add;                            { Where to write output }
+            INT dd := d + 1;
+
+            { Get input value to move }
+            IF size /= ws THEN
+                am pushint (0);                { Bit offset for "Bstring" case }
+                dd +:= 1
+            FI;
+            am local (dd - d + 1);             { Input base ptr }
+            am pushint (get from);             { Where to get input ptr }
+            am add;
+            am global (ws, indirect);          { the actual input ptr }
+            IF size = ws THEN
+                am global (ws, indirect);      { Actual value }
+                translate compare and set flag (size, 1, flag adjust, d+2);
+                am store (ws, indirect)        { Store it }
+            ELSE
+                am bstring (bits per byte * size,
+                            bits per byte * size, indirect);
+                translate compare and set flag (size, 1, flag adjust, d+2);
+                am bstore (bits per byte * size, indirect)
+            FI;
+            index +:= 1;
+            get from +:= ws;
+            write to +:= size
+        ELIF input sizes [index] < 0 THEN
+            { A repeated piece - do repeat as a dynamic loop }
+            INT repeat count =  - input sizes [index];
+            INT length = IF input sizes [index +:= 1] >= 0 THEN  1
+                         ELSE  - input sizes [(index+:=1) - 1]
+                         FI;
+            VECTOR [] INT part = input sizes [index : index + length - 1];
+            STRUCT (INT inputs, data) step = total sizes (part);
+
+            am pushint (repeat count);         { The repeat count }
+            am repeat;
+                am pushint (1);                { Decrement loop count }
+                am sub;
+
+                am local (0);                  { Add dynamic part to i/p base }
+                am pushint (ws * inputs OF step);
+                am mul;
+                am local (3);
+                am add;
+
+                am local (1);                  { Add dynamic part to o/p base }
+                am pushint (data OF step);
+                am mul;
+                am local (3);
+                am add;
+
+                translate some inputs (part, get from, write to,
+                                       flag adjust, d+3);
+
+                am drop (2);                   { Drop pointers }
+
+                am local (0);                  { Test loop count }
+                am test;
+            am loop;
+            am drop (1);                       { Drop loop count }
+
+            index +:= length;
+            get from +:= ws * repeat count * inputs OF step;
+            write to +:= repeat count * data OF step
+        ELSE
+            { Entry is zero - ignore it }
+            index +:= 1
+        FI
+    OD
+END;
+
+
+{ 'compress sizes' is used to construct a set of input sizes in the
+  form described above for 'translate some inputs'.  It attempts to
+  recognise, and make explicit, repetitions in the raw size data,
+  mostly by using hints from the supplied structured output type.
+  It modifies the array of sizes it is given.
+  The only case it can handle other than repetition implied by the
+  hint is a sequence of a single element repeated at least three times.
+}
+PROC compress sizes = (REF VECTOR [] INT sizes, STYPE hint) VOID:
+    CASE hint IN
+        (REF SROW sr):
+            IF no OF sr >= 2 THEN
+                { Recursively compress one element }
+                STYPE elem type = type OF sr;
+                INT elem width = raw signal width (elem type);
+                compress sizes (sizes [1 : elem width], elem type);
+
+                { sizes := (no OF sr) repetitions of compressed element }
+                INT row width = no OF sr * elem width;
+                INT start pad;
+                IF elem width > 1 THEN
+                    sizes [3 : elem width + 2] := sizes [1 : elem width];
+                    sizes [1] := - no OF sr;
+                    sizes [2] := - elem width;
+                    start pad := elem width + 3
+                ELSE
+                    sizes [2] := sizes [1];
+                    sizes [1] := - no OF sr;
+                    start pad := 3
+                FI;
+                FOR i FROM start pad TO row width DO
+                    sizes [i] := 0
+                OD
+            ELSE
+                SKIP  { Don't alter a single element row! }
+            FI,
+        (REF SST st):
+            BEGIN
+                { Recursively compress each structure element }
+                REF SST scan := st;
+                INT elem start := 1;
+                WHILE scan ISNT nil sst DO
+                    STYPE elem type = t OF scan;
+                    INT elem width = raw signal width (elem type);
+                    compress sizes (sizes [elem start : elem start + elem width - 1],
+                                    elem type);
+                    elem start +:= elem width;
+                    scan := rest OF scan
+                OD;
+
+COMMENT -----------------------------------------------------------------
+This section has been removed, because it is not quite correct, and there
+is no time to take sufficient care to fix it.
+The problem arises because it might merge an element which is already
+replicated with an unrelated element of the same size immediately
+following it.  This would invalidate the original replication.
+It should be possible to correct this code either by merging it
+with the loop above, or by recognising replicators and jumping
+ahead.
+                { Then check for sequences of single elements across structure }
+                INT start := 1,
+                    last  := sizes [start];
+                FOR i FROM 1 TO UPB sizes DO
+                    IF i = UPB sizes OREL sizes [i+1] <= 0 OREL sizes [i+1] /= last THEN
+                        IF i - start >= 2 THEN
+                            sizes [start] :=  start - i - 1;
+                            FOR j FROM start + 2 TO i DO  sizes [j] := 0  OD
+                        FI;
+                        IF i < UPB sizes THEN
+                            start := i + 1;
+                            last := sizes [start]
+                        FI
+                    FI
+                OD
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ COMMENT SKIP
+            END
+    OUT
+        SKIP
+    ESAC;
+
+
+{ This procedure compiles code to copy the inputs of a function to the
+  specified offset 'out offset' within its instance data.
+  During the copy, the new value is compared with the old, and if there
+  has been a change, the evaluation flag will be changed according to
+  the 'flag adjust' (whose possible values are given above).
+  As normal, the stack depth is provided as the parameter 'd'.
+}
+PROC translate copy inputs = (VECTOR [] INT input types, INT in offset,
+                              STYPE out type, INT out offset, flag adjust, d) VOID:
+BEGIN
+    VECTOR [UPB input types] INT sizes;
+    FORALL s IN sizes, t IN input types DO
+        s := lookup type size (t)
+    OD;
+    compress sizes (sizes, out type);
+
+    am local (d-1);                            { Instance ptr as input base }
+    am local (d);                              { Instance ptr as output base }
+
+    translate some inputs (sizes, in offset, out offset, flag adjust, d+2);
+
+    am drop (2)                                { Drop base pointers }
+END;
+
+
+{ This procedure is very similar to `translate copy value' except that
+  `input types' is replaced by two vectors (which must have the same UPB)
+  `input sizes' and `input post offsets' which describe how many bytes are
+  to be copied and from what offset.  Calling this procedure with all elements
+  of `input sizes' set to the full sizes of the input types and all element
+  of `input post offsets' set to zero would be equivalent to calling
+  `translate copy inputs' directly.
+}
+PROC translate copy trimmed inputs = (
+   VECTOR [] INT input sizes, input post offsets,
+   INT in offset, out offset, flag adjust, d) VOID:
+BEGIN
+    INT get from := in offset;
+    INT write to := out offset;
+    FOR i TO UPB input sizes DO
+        INT post offset = input post offsets [i];
+        INT size = input sizes [i];
+        am local (d-1);                    { Instance ptr }
+        am pushint (write to);
+        am add;                            { Where to write output }
+        INT dd := d + 1;
+
+        { Get input value to move }
+        IF size /= ws THEN
+            am pushint (0);                { Bit offset for "Bstring" case }
+            dd +:= 1
+        FI;
+        am local (dd - 1);                 { Instance ptr }
+        am pushint (get from);             { Where to get input ptr }
+        am add;
+        am global (ws, indirect);          { the actual input ptr }
+        am pushint (post offset);
+        am add;                            { apply post offset }
+        IF size = ws THEN
+            am global (ws, indirect);      { Actual value }
+            translate compare and set flag (size, 1, flag adjust, d+2);
+            am store (ws, indirect)        { Store it }
+        ELSE
+            am bstring (bits per byte * size, bits per byte * size, indirect);
+            translate compare and set flag (size, 1, flag adjust, d+2);
+            am bstore (bits per byte * size, indirect)
+        FI;
+        get from +:= ws;
+        write to +:= size
+    OD
+END;
+
+
+{ The next procedure does a very similar thing, except that the data
+  is already in the instance, and is to be copied to another area
+  in the same instance.
+}
+PROC translate copy value = (INT type, in offset, out offset,
+                             flag adjust, d) VOID:
+BEGIN
+    INT size = lookup type size (type);
+    am local (d-1);                        { Instance ptr }
+    am pushint (out offset);
+    am add;                                { Where to write output }
+    IF size = ws THEN
+        am local (d)                       { Instance ptr }
+    ELSE
+        am pushint (0);                    { Bit offset for "Bstring" case }
+        am local (d+1)                     { Instance ptr, as in other case }
+    FI;
+    am pushint (in offset);    { Where to get input }
+    am add;
+    IF size = ws THEN
+        am global (ws, indirect);          { Actual value }
+        translate compare and set flag (size, 1, flag adjust, d+2);
+        am store (ws, indirect)            { Store it }
+    ELSE
+        am bstring (bits per byte * size, bits per byte * size, indirect);
+        translate compare and set flag (size, 1, flag adjust, d+2);
+        am bstore (bits per byte * size, indirect)
+    FI
+END;
+
+
+{ 'translate output constant' generates the code to put a constant in
+  the output, adjusting the evaluation flag according to 'flag adjust'
+  if there has been a change.
+}
+PROC translate output constant = (SVALUE value, INT type, output offset,
+                                  flag adjust, d) VOID:
+BEGIN
+    WORD encoding := machine (value, lookup type (type));
+    INT width = bits per byte * UPB encoding;
+
+    am local (d-1);                      { Instance ptr }
+    am pushint (output offset);
+    am add;                              { Output address }
+       { We are about to bstore encoding into memory using the pushstring
+         instruction and a bstore.  encoding is machine()'s to
+         look as it will in memory.
+         However, pushstring expects a simple string of bytes and
+         the bstore then reverses the string as it writes to AM memory.
+         We preempt this effect by calling up. }
+    up (encoding);
+    am pushstring (width, encoding);     { New output }
+
+    IF flag adjust = leave flag THEN
+        am bstore (width, indirect)          { Just store the output }
+    ELSE
+        LABEL no change = new label;
+        am pushint (0);
+        am local (2);                        { Copy output address, to get.. }
+        am bstring (width, width, indirect); {   old output }
+        am local (1);                        { Copy new output }
+        am neq;
+        am jumpno (2, no change);
+
+        am bstore (width, indirect);         { Store new output }
+        am local (d-1);                      { Instance ptr }
+        am pushint (IF flag adjust = reset flag THEN 0 ELSE 1 FI);
+        am store (ws, indirect);             { Reset evaluation flag }
+
+        am label (d, no change)
+    FI
+END;
+
+
+{ Write `count' copies of `value' to a contiguous area of the instance
+  data starting at `output offset'.  `type' give the signal type of `value'.
+  `d' is the depth of the callinst pointer on the abstract machine stack.
+}
+PROC translate set replicated constant =
+(SVALUE value, STYPE type, INT flag adjust, output offset, count, d) VOID:
+    IF count /= 0 THEN
+        { Convert value to an abstract machine string and calculate its
+          size in both bits and bytes }
+        WORD encoding := machine (value, type);
+        INT byte size = UPB encoding;
+        INT bit size = bits per byte * byte size;
+
+        am local (d-1);                        { (cp: s) }
+        am pushint (output offset);
+        am add;                                { (first addr: s) }
+        am local (0);
+        am pushint (byte size * (count - 1));
+        am add;                                { (last addr: first addr: s) }
+        am repeat;                             { (current addr: first addr: s) }
+            am local (0);
+             { We are about to bstore encoding into memory using the pushstring
+               instruction and a bstore.  encoding is machine()'s to
+               look as it will in memory.
+               However, pushstring expects a simple string of bytes and
+               the bstore then reverses the string as it writes to AM memory.
+               We preempt this effect by calling up. }
+            up (encoding);
+            am pushstring (bit size, encoding);
+            IF byte size = ws THEN
+               am stoi
+            FI;
+            IF flag adjust /= leave flag THEN
+               translate compare and set flag (byte size, 2, flag adjust, d+4)
+            FI;
+            IF byte size = ws THEN
+               am store (byte size, indirect)
+            ELSE
+               am bstore (bit size, indirect)
+            FI;                                { val at current addr updated }
+            am pushint (byte size);
+            am sub;                            { current addr -:= byte size }
+            am local (0);                      { (ca: ca: fa: s) }
+            am local (2);                      { (fa: ca: ca: fa: s) }
+            am ge;                             { ca >= fa: ca: fa: s }
+       am loop;                                { until ca < fa }
+       am drop (2)
+    FI;
+
+
+{ Generic Identity Function }
+{ ========================= }
+
+
+{ Standard code sequence, always generated, for generic identity functions.
+  There is assumed to be a the normal count of inputs, followed by the input
+  pointers themselves, and then a descriptor giving the size in bytes of the
+  thing to copy for each of the input pointers.  The output data is stored
+  after the input descriptors, preceded by its total size in bytes.
+
+  Hence:      +---------------------------+
+              |    Evaluation flag        |          (size unit)
+              +---------------------------+
+              |    Number of inputs (N)   |          (ws)
+              +---------------------------+
+              +    N * ptrs to inputs     +          (N of ws)
+              +                           +
+              +---------------------------+
+              +    N * size of data       +          (N of ws)
+              +        pointed to by i/p  +
+              +---------------------------+
+              |    Total output size (B)  |          (ws)
+              +---------------------------+
+              |    B bytes of output area |          (B)
+              |                           |
+              +---------------------------+
+              |    Fanout list as usual   |
+              |                           |
+              +---------------------------+
+
+  It is assumed that each data size value is a multiple of 'size unit'.
+  If it is not, the loop will not terminate.
+
+  A subroutine is used to move a single input, and advance the pointers to
+  the next input, the next input descriptor, and the next output location,
+  and to do a comparison with the previous output, resetting the
+  'evaluation flag' if something is changing.
+  Its parameters are:
+      Instance ptr,
+      Current count of inputs processed,
+      Address of current input ptr,
+      Address of current size descriptor,
+      Address in which to put the output for this input.
+
+  Its results are the new values of the last four parameters, together with
+  the unchanged instance pointer.
+}
+PROC translate id support = VOID:
+BEGIN
+    HEAP PARAMS params := ((instance ptr, 0), HEAP PARAMS :=
+                           ((integer, 0), HEAP PARAMS :=
+                            ((integer, 0), HEAP PARAMS :=
+                             ((integer, 0), HEAP PARAMS :=
+                              ((integer, 0), nil params)))));
+    REF PARAMS results = params;
+    am generate named code (label ("Idsupport"), params, results);
+
+    {(out:si:ip:ipcount:cp)}
+
+    am local (2);
+    am global (ws, indirect);         { Actual input data address }
+    {(@ip:out:si:ip:ipcount:cp)}
+    am local (1);                     { Copy output address }
+    am local (3);
+    am global (ws, indirect);         { Actual descriptor value (size of data) }
+    {(currsi:out:@ip:out:si:ip:ipcount:cp) where currsi = @si}
+
+    { Move that number of bytes, 'size unit' at a time }
+    am repeat;
+        am pushint (size unit);       { Decrement count }
+        am sub;
+
+        am local (1);                 { Output base address }
+        am local (1);                 { Current count value }
+        am add;                       { Addr for this output word }
+        {(currsi+out:currsi:out:@ip:out:si:ip:ipcount:cp)}
+        am local (3);                 { Input base address }
+        am local (2);                 { Current count value }
+        am add;                       { Addr of current input word }
+        am global (size unit, indirect); {   get it ! }
+       {in:currsi+out:currsi:out:@ip:out:si:ip:ipcount:cp)
+        where in = @(@ip+currsi)}
+
+        am local (0);                 { Compare with previous output word }
+        am local (2);
+        am global (size unit, indirect);
+        am neq;
+        {(@(currsi+out)/=in:in:currsi+out:currsi:out:@ip:out:si:ip:ipcount:cp)}
+        am jump no (2, unchanged output label);{ Jump is same as before }
+        am local (9);                 { Else instance pointer to reset flag }
+        {(cp:in:currsi+out:currsi:out:@ip:out:si:ip:ipcount:cp)}
+        am pushint (0);
+        am store (size unit, indirect);
+        am store (size unit, indirect); { Store data in output }
+
+        am label (8, unchanged output label);
+        {(currsi:out:@ip:out:si:ip:ipcount:cp)}
+        am local (0);                 { The current count }
+        am test;
+    am loop;                          { Loop until zero }
+
+    am drop(1);
+    am local(6);
+    {(cp:out:@ip:out:si:ip:ipcount:cp)}
+    am local (6);                     { Copy current count }
+    am pushint (1);                   {  decrement }
+    am sub;
+    {(ipcount-1:cp:out:@ip:out:si:ip:ipcount:cp)}
+    am local (6);                     { Copy current input offset }
+    am pushint (ws);                   {  increment }
+    am add;
+    {(ip+ws:ipcount-1:cp:out:@ip:out:si:ip:ipcount:cp)}
+    am local (6);                     { Current descriptor offset }
+    am pushint (ws);                   {  increment }
+    am add;
+    {(si+ws:ip+ws:ipcount-1:cp:out:@ip:out:si:ip:ipcount:cp)}
+    am local (6);                     { Current output offset }
+    am local (8);                     {  add value of previous descriptor }
+    am global (ws, indirect);
+    am add;
+    {(@si+out:si+ws:ip+ws:ipcount-1:cp:out:@ip:out:si:ip:ipcount:cp)}
+    am ret (5)                        { Those last five are the results }
+    {(@si+out:si+ws:ip+ws:ipcount-1:cp)}
+
+END;
+
+
+{ This procedure is used for generic identity instances to generate the
+  end of function code.  This is essentially the normal sequence as
+  generated by 'translate end function', but the offset of the fanout
+  list is not known at compile-time, so the effective instance pointer
+  has to be changed dynamically to point to the actual fanouts. Also,
+  the evaluation flag for the changeparameters instance is set whenever
+  a fanout is performed. This used to be performed by the normal fanout
+  mechanism, but proved to be a nuisance when relocating the fanout lists
+  in probe instantiation.
+
+  The bottom of the stack should contain the instance pointer, and the
+  next element up should be the number of inputs (already loaded from the
+  instance data).
+
+  The parameter 'final flag' is used to distinguish between the two
+  cases of either guaranteeing that the flag is reset on exit (the normal
+  combinatorial case) or guaranteeing that it is set (the initialisation
+  case).
+}
+PROC translate generic end function = (INT d, final flag) VOID:
+BEGIN
+    am drop (d-2);                     { Drop all except (ipcount: cp) }
+    {(ipcount:cp)}
+    am local (1);                      { Address of evaluation flag }
+    am global (size unit, indirect);
+    am test;
+    am not;
+    am jump no (1, unchanged output label);
+
+    {(ipcount:cp)}
+    IF final flag = 1 THEN             { Flag already zero -- outputs changed }
+        am local (1);                  { Set the flag if required             }
+        am pushint (1);
+        am store (size unit, indirect)
+    FI;
+    {(ipcount:cp)}
+    am pushint (2*ws);
+    am mul;                            { Size of both parts of inputs }
+    am pushint (size unit + ws);
+    am add;
+    am add;                            { Address of total output size }
+    {(su+ws+2*ws*ipcount+cp)}
+    am local (0);
+    am global (ws, indirect);          { Total output size itself }
+    am add;                            { Address of fanout list !! }
+    am pushint (ws);
+    am add;
+    am fanout (0);
+
+    {Force fanout to the changeparameters instance}
+    am pushint (1);
+    am store (ws, global iterations label);
+
+    am ret (0);
+
+    am label (1, unchanged output label); { Outputs unchanged, but reset flag }
+    {(cp)}                                {   if this is required             }
+    IF final flag = 0 THEN
+        am pushint (0);
+        am store (size unit, indirect)
+    FI;
+    am ret (0)
+END;
+
+
+PROC translate generic identity = VOID:
+BEGIN
+    inst ptr := ((instance ptr, 0), nil params);
+    int inst ptr := ((integer, 0), nil params);
+
+    translate id support;
+
+    { Because this procedure is called as a C-L instance it's name must
+      conform to local conventions }
+    ID generic id code = MAKEID "$Genericid";
+    lab OF inst lab := (lookup name (generic id code, 0, -1)-1)*4;
+    am generate named code (inst lab, inst ptr, nil params);
+    am enter;
+    am local (0);
+    am pushint (size unit);
+    am add;
+    am global (ws, indirect);          { Count of inputs }
+    {(ipcount:cp)}
+
+    { Set up parameters for 'Idsupport' }
+    am local (1);                      { Instance pointer }
+    am local (1);                      { Current count }
+    {(ipcount:cp:ipcount:cp)}
+    am local (3);                      { Make address of first input ptr }
+    am pushint (size unit + ws);
+    am add;
+    {(su+ws+cp:ipcount:cp:ipcount:cp)}
+    am local (0);                      { First i/p descriptor is ahead of }
+    am local (4);                      {  input by the count *words* }
+    am pushint (ws);
+    am mul;
+    am add;
+    {(ipdesc:su+ws+cp:ipcount:cp:ipcount:cp where ipdesc= ipcount*ws+su+ws+cp)}
+    am local (0);                      { And the output count appears }
+    am local (5);                      {  that much ahead again }
+    am pushint (ws);
+    am mul;
+    am add;
+    {(ipcount*ws+ipdesc:ipdesc:su+ws+cp:0:cp:ipcount:cp)}
+    am pushint (ws);                   { So add 'ws' to get start of outputs }
+    am add;
+
+    {(opdesc:ipdesc:su+ws+cp:ipcount:cp:ipcount:cp)}
+
+    { Repeatedly call, until count of those processed is the total }
+    am repeat;
+        {(opdesc:ipdesc:su+ws+cp:count:cp:ipcount:cp)}
+        am call (5, id support code label);
+        am local (3);                  { New count }
+        am test;
+        {(count/=0:opdesc:ipdesc:su+ws+cp:count:cp:ipcount:cp)}
+    am loop;
+
+    translate generic end function (7, 0)
+END;
+
+
+{ This standard code, associated with generic identity instances, is
+  used to clear the output to query, prior to the iteration phase,
+  when the generic identity is used to break a purely combinatorial
+  loop.
+
+  Note this is an ordinary subroutine, not an ELLA function, since it
+  must be called unconditionally.  The effect is an artificial mismatch
+  between the inputs and outputs of the identity, so it is necessary
+  that this code leaves the evaluation flag set to ensure that the
+  first combinatorial iteration will call the instance and restore
+  the correspondence between inputs and outputs.
+
+  Although the parameter to this function is actually an instance pointer
+  it is constucted at the call site in a manner which does not make this
+  clear to the code generator.  To avoid confusing the latter we declare
+  it here as an integer.  The effect is only to make this (rarely called)
+  procedure a bit less than optimal.
+}
+PROC translate clear generic id = VOID:
+BEGIN
+    HEAP PARAMS inst ptr := ((integer, 0), nil params);
+    am generate named code (label ("^$Genericid"), inst ptr, nil params);
+
+    am local (0);                       { Evaluation flag not necessarily set }
+    am pushint (1);                     {   on entry -- set now so that it    }
+    am store (size unit, indirect);     {   can be used to flag changed       }
+
+    am local (0);
+    am pushint (size unit);
+    am add;
+    am global (ws, indirect);           { Count of inputs  (Nip: cp) }
+    am local (0);                       { Copy it (Nip: Nip: cp) }
+
+    am pushint (2*ws);
+    am mul;                             { Size of both parts of inputs }
+    am pushint (size unit + 2*ws);
+    am add;                             { (su+2*ws+2*ws*Nip: Nip: cp) }
+    am local (2);
+    am add;                             { Address of output area (&op: Nip: cp) }
+
+    am local (0);
+    am pushint (ws);
+    am sub;                             { Address of total output size }
+    am global (ws, indirect);           { Size of output area, in bytes }
+                                        { (count: &op: Nip: cp) }
+
+    am repeat;
+        am pushint (size unit);         { Decrement count by 'size unit' }
+        am sub;
+        am local (1);                   { (&op: count: &op: Nip: cp) }
+        am local (1);                   { (count: &op: count: &op: Nip: cp) }
+        am add;                         { (&op+count: count: &op: Nip: cp) }
+
+        am local (0);                   { To pick up old output word }
+        am global (size unit, indirect);{ (old: &op+count: count: &op: Nip: cp) }
+        am test;                        { (old /= 0:&op+count:count:&op:Nip:cp) }
+        am jumpno (1, old result label);
+
+        am local (4);                   { Reset flag to indicate change }
+        am pushint (0);
+        am store (size unit, indirect);
+
+        am pushint (0);                 { (0 : &op+count: count: &op: Nip: cp) }
+        am store (size unit, indirect); { Store this word of query }
+
+        am label (4, old result label); { (count: &op: Nip: cp) }
+        am local (0);                   { Test for count <= 0 }
+        am test;
+    am loop;
+                                        { (count: &op: Nip: cp) }
+
+    translate generic end function (4, 1)
+END;
+
+
+{
+  Data source functions are used for circuit parameters, although they
+  may have future applications.  The instance data has no inputs and
+  `width' bytes of output.  The code performs an unconditional fanout.
+}
+PROC translate data source = (INT width, ID name)
+    STRUCT (INT size, offset, BITS sort):
+BEGIN
+    INT offset = ws + size unit;
+    INT size = offset + width;
+    translate start function (name);
+    am local (0);
+    am fanout (size);
+    am pushint (0);
+    am store (size unit, indirect);
+    am ret (0);
+    (size, offset, combinatorial)
+END;
+
+{ 'translate probe id' is called to generate an identity function which will
+   buffer a probe's inputs from the outside world. It is needed to avoid
+   aliasing problems when re-connecting a probe which has another probe
+   or monitor attached to it's inputs.
+}
+PROC translate probe id = (VECTOR [] INT input sizes, VECTOR [] CHAR name)
+    STRUCT (INT size, offset, BITS sort):
+BEGIN
+    INT offset := ws + size unit;
+    INT size :=0;
+    FOR i TO UPB input sizes DO
+       size +:= input sizes [i];
+       offset +:= (2*ws) {1 input ptr & 1 input size}
+    OD;
+    offset +:= ws; {output size field}
+    size +:= offset;
+
+    translate start function (name);
+    ID generic id code = MAKEID "$Genericid";
+    lab OF inst lab := (lookup name (generic id code, 0, -1)-1)*4;
+    am call (1, inst lab);
+    am ret(0);
+    (size, offset, combinatorial)
+END;
+
+
+{ 'translate generic query' is called exactly once at the start of
+  translation to generate the subroutine 'Genericquery'.
+  'Geneicquery' can be used by any primitive function to set part
+  of its instance data to zero (which will always do for query).
+
+  Its parameters are:
+      Instance pointer
+      Offset of area within instance data
+      Count of bytes to fill
+
+  The returned stack is unchanged except for the count being reduced to zero.
+}
+PROC translate generic query = VOID:
+BEGIN
+    HEAP PARAMS params := ((instance ptr, 0), HEAP PARAMS :=
+                           ((integer, 0), HEAP PARAMS :=
+                            ((integer, 0), nil params)));
+    REF PARAMS results := params;
+    am generate named code (label ("Genericquery"), params, results);
+
+    { (n : oo : cp) }
+
+    { Fill 'n' bytes with zero, 'size unit' at a time }
+    am repeat;
+        { Decrement count: }
+        am pushint (size unit);         { (su : n : oo : cp) }
+        am sub;                         { (n-su : oo : cp) }
+
+        { Calculate output address: }
+        am local (2);                   { (cp : n-su : oo : cp) }
+        am local (2);                   { (oo : cp : n-su : oo : cp) }
+        am add;                         { (oo+cp : n-su : oo : cp) }
+        am local (1);                   { (n-su : oo+cp : n-su : oo : cp) }
+        am add;                         { (oa : n-su : oo : cp) }
+
+        { See if value already zero (if so, don't change anything): }
+        am local (0);                   { (oa : oa : n-su : oo : cp) }
+        am global (size unit, indirect); { (*oa : oa : n-su : oo : cp) }
+        am test;                        { (*oa /= 0 : oa : n-su : oo : cp) }
+        am jumpno (1, unchanged output label);
+
+        { (oa : n-su : oo : cp) }
+
+        { Value changing -- reset evaluation flag and store new value: }
+        am local (3);                   { (cp : oa : n-su : oo : cp) }
+        am pushint (0);                 { (0 : cp : oa : n-su : oo : cp) }
+        am store (size unit, indirect); { (oa : n-su : oo : cp) }
+        am pushint (0);                 { (0 : oa : n-su : oo : cp) }
+        am store (size unit, indirect); { (n-su : oo : cp) }
+
+        { Repeat until count reduced to zero: }
+        am label (3, unchanged output label); { (n-su : oo : cp) }
+        am local (0);                   { (n-su : n-su : oo : cp) }
+        am test;                        { (n-su /= 0 : n-su : oo : cp) }
+    am loop;
+
+    { (0 : oo : cp) }
+
+    am ret (3)
+END;
+
+{ IF @this event offset > time && @this event offset < next event time THEN
+    next event time := @this event offset
+  FI}
+PROC translate set next event = (INT this event offset, d)VOID:
+BEGIN
+    {Set the next event time to the value found at 'event time offset'
+     if the next event time is later}
+    LABEL next event is earlier = new label;
+    LABEL this event gone = new label;
+    am local (d-1);
+    am pushint(this event offset);
+    am add;
+    am global (ws, indirect);
+    {(this event: ... : cp)}
+
+    am local (0);
+    am global (ws, global time label);          { Current time }
+    am gt;
+    am jump no(1, this event gone);
+    {(this event: ... : cp)}
+
+    am local (0);
+    am global (ws, global next event label);
+    am lt;
+    am jumpno (1, next event is earlier);
+    {(this event: ... : cp)}
+
+    am store (ws, global next event label);
+
+    am label(d,  next event is earlier);
+    am label(d, this event gone)
+END
+
+KEEP
+    global time, global maxtime, global interrupted, global initialised,
+    global action,
+    global temp1, global end, global iterations,
+    global start init list, global end init list, global start inst list,
+    global end inst list, global instance list,
+    global monitor changed, global next event, global unit del event,
+    global comb outputs stable,
+
+    global time label, global maxtime label, global interrupted label,
+    global initialised label, global action label, global iterations label,
+    global monitor changed label, global next event label,
+    global unit del event label, global comb outputs stable label,
+    calls array code label, id support code label, generic id code label,
+    global start init label, global end init label, global start inst label,
+    global end inst label,
+    end calls array label, unchanged output label, set query output label,
+    new result label, old result label, unchanged query label,
+    query label, arith exception label,
+
+    translate start calls array,
+    translate start terminators,
+    translate start savers,
+    translate start restorers,
+    translate start initialisers,
+    translate start calls loop,
+    translate start combinatorial loop,
+    translate end combinatorial loop,
+    translate time test,
+    translate time advance, translate end calls array,
+    translate start probe loop up, translate start case arm,
+    translate end case arm, translate end probe loop up,
+    translate start probe loop down, translate end probe loop down,
+    translate start init loop up, translate end init loop up,
+
+    translate start function, translate start event setter,
+    translate start event handler, translate start initialiser,
+    translate start saver, translate start restorer,
+    translate start terminator,
+
+    translate end function, translate simple end function,
+    translate end function setting flag,
+
+    translate compare and set flag, leave flag, set flag, reset flag,
+    translate some inputs, compress sizes,
+    translate copy inputs, translate copy trimmed inputs, translate copy value,
+    translate output constant, translate set replicated constant,
+
+    translate generic identity, translate clear generic id,
+    translate data source, translate probe id, translate generic query,
+    translate set next event
+FINISH
