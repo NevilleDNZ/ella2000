@@ -1,0 +1,341 @@
+DECS keconv CONTEXT VOID
+USE assmodes, putstrings, basics, kebasics, modeprocs:
+
+{ " Id: keconv.sta,v 2.1 91/02/22 18:35:09 edcad Exp$" }
+configinfo A68CONFIG "$Id: keconv.a68,v 34.2 1995/03/29 13:04:50 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+06:05:88 Created to provide conversions of assembler constructs to
+            the corresponding simulator MODE structures.
+19:10:88 This module now repeats the KEEP lists of ASSMODES and MODEPROCS
+            so that the joint functionality of the three modules can be obtained
+            by one modules USE thereby avoiding a silly CTRANS limit
+09:12:88 Remove find typedec and find constdec, using versions from
+            MODEPROCS instead which adjust the index numbers correctly to
+            refer to the local environment.
+16:12:88 Expanded constant list of ASSMODES reflected here.  BJE.
+12:01:89 Change to `convert const' to reflect better understanding of
+            MODE CQUOTE.  Bug 96.  BJE.
+10:11:89 Changes to assmodes, ENVTYPE etc added CQUERY changed.  EVW
+20:01:90 fix to `convert const' to cope with STRING[]?char. R4B582.
+23:07:90 Updated to fntype modes. EVW
+08:10:91 Updated to version 7 of assembler modes. EVW
+17:03:92 Multiple strings added to CQUOTE. EVW
+10:04:92 Bug fix in CQUOTE section. JIT
+ 5:05:92 New spec fo fndec_tfn. DJS
+30:07:92 Changes made for CONST / UNIT mode change. JIT
+13:11:92 Updated for 'chars' mode changes. JIT
+10:02:93 Remove BODYPTR. EVW
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.015 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+{ In the assembler, types are represented by a mixture of structuring
+  operations and declarations.  In the simulator all types are represented
+  uniformly by STYPEs.  This procedure converts from the assembler modes
+  to the simulator modes.
+}
+PROC convert type = (TYPE asstype, ENVIRON environ, CLOSURE closure) STYPE:
+BEGIN
+    CASE asstype IN
+        (REF TNAME name):
+            BEGIN
+                REF TYPEDEC declaration = (types OF environ)[typeno OF name];
+                CASE body OF declaration IN
+                    (REF TYPETAG tt):
+                        convert type (tag OF tt, environ, closure),
+                    (REF NEWINTS ni):
+                        HEAP SINT := (tagname OF ni,
+                                      int (lwb OF range OF ni),
+                                      int (upb OF range OF ni)),
+                    (REF NEWCHARS nc):
+                        BEGIN
+                            REF VECTOR [] CHAR chars = chars OF nc;
+                            INT no alts = UPB chars;
+                            HEAP VECTOR [no alts] CHAR schars;
+                            FOR index TO no alts
+                            DO schars[index] := chars[index] OD;
+                            HEAP SCHAR := (tagname OF nc, schars)
+                        END,
+                    (REF VECTOR [] ALTERNATIVE alts):
+                        BEGIN
+                            REF SENUM result := nil senum;
+                            FOR i FROM UPB alts BY -1 TO 1 DO
+                                result := HEAP SENUM :=
+                                    (altname OF alts [i],
+                                     convert type (assoc OF alts [i], environ, closure),
+                                     result)
+                            OD;
+                            result
+                        END
+                ESAC
+            END,
+        (REF TROW row):
+            HEAP SROW := (int (size OF row),
+                          convert type (elem OF row, environ, closure)),
+        (REF TSTR str):
+            IF str IS nil tstr THEN  nil sst
+            ELSE
+                HEAP SST :=
+                    (convert type (elem OF str, environ, closure),
+                     CASE convert type (rest OF str, environ, closure) IN
+                         (REF SST sst):  sst
+                     ESAC)
+            FI,
+        (REF TSTRING s):
+            HEAP SSTRING := (int (size OF s),
+                             CASE convert type (char OF s, environ, closure) IN
+                                 (REF SCHAR sc):  sc
+                             ESAC),
+        (REF TFN fn):
+            HEAP SFN := (convert type (from OF fn, environ, closure),
+                         convert type (to OF fn, environ, closure)),
+        (REF TVOID):
+            void stype,
+        (REF TNULL):
+            null stype
+    OUT
+        sys fault ("keconv: Unexpected type in 'convert type'"); SKIP
+    ESAC
+END;
+
+
+{ In the assembler, constants are represented by a mixture of structuring
+  operations and declarations.  In the simulator all values are represented
+  uniformly by SVALUEs.  This procedure converts from the assembler modes
+  to the simulator modes.
+  It is a precondition that the input describes a simple signal value,
+  and not a range as used in CASE clause templates, since there is no
+  simulator MODE for ranges.
+}
+PROC convert const = (UNIT assconst, ENVIRON environ, CLOSURE closure) SVALUE:
+BEGIN
+    CASE assconst IN
+        (REF CNAME name):
+            BEGIN
+                REF CONSTDEC declaration = (consts OF environ)[constno OF name];
+                convert const (value OF declaration, environ, closure)
+            END,
+        (REF CPRIM basic):
+            BEGIN
+                TNAME type;
+                typeno OF type := typeno OF basic;
+                STYPE stype = convert type (type, environ, closure);
+                CASE stype IN
+                    (REF SENUM enum):
+                        HEAP SVENUM := (enum, primno OF basic, null svalue),
+                    (REF SCHAR schar):
+                        HEAP SVCHAR := (schar, (char OF schar)[primno OF basic])
+                ESAC
+            END,
+        (REF CINT cint):
+            BEGIN
+                TNAME type;
+                typeno OF type := typeno OF cint;
+                STYPE stype = convert type (type, environ, closure);
+                CASE stype IN
+                    (REF SINT sint):
+                        HEAP SVINT := (sint, int (index OF cint))
+                ESAC
+            END,
+        (REF CQUOTE cq):
+            BEGIN
+                TNAME type;
+                typeno OF type := typeno OF cq;
+                STYPE stype = convert type (type, environ, closure);
+                REF VECTOR [] INT rvi = string OF cq;
+                INT size = UPB rvi;
+                HEAP VECTOR [size] CHAR string;
+                CASE stype IN
+                    (REF SCHAR schar):
+                      BEGIN
+                        REF VECTOR [] CHAR chars = char OF schar;
+                        FOR i TO size DO string[i] := chars[rvi[i]] OD;
+                        HEAP SVSTR := ( HEAP SSTRING := (size, schar), string )
+                      END
+                ESAC
+            END,
+        (REF USTRING cs):
+            CASE char OF cs IN
+               (REF CQUERY cq):
+                 BEGIN
+                    HEAP SQUERY result;
+                    STYPE sch = convert type (querytype OF cq,
+                                              environ, closure);
+                    type OF result := HEAP SSTRING :=
+                       (int(size OF cs), CASE sch IN (REF SCHAR sc):sc ESAC);
+                    result
+                 END,
+               (REF CPRIM cc):
+                 BEGIN
+                   TNAME type;
+                   typeno OF type := typeno OF cc;
+                   STYPE stype = convert type (type, environ, closure);
+                   INT size = int (size OF cs);
+                   CASE stype IN
+                       (REF SCHAR schar):
+                           HEAP SVSTR :=
+                               (HEAP SSTRING := (size, schar),
+                                MAKEID (size * (char OF schar)[primno OF cc]))
+                   ESAC
+                 END
+            ESAC,
+        (REF UASSOC ass):
+            BEGIN
+                TNAME type;
+                typeno OF type := typeno OF ass;
+                STYPE stype = convert type (type, environ, closure);
+                CASE stype IN
+                    (REF SENUM enum):
+                        HEAP SVENUM :=
+                            (enum,
+                             altno OF ass,
+                             convert const (assoc OF ass, environ, closure))
+                ESAC
+            END,
+        (REF UROW row):
+            BEGIN
+                INT size = int (size OF row);
+                SVALUE el = convert const (elem OF row, environ, closure);
+                REF SVST result := nil svst;
+                FOR i TO size DO
+                    result := HEAP SVST := (el, result)
+                OD;
+                result
+            END,
+        (REF USTR str):
+            IF str IS nil ustr THEN  nil svst
+            ELSE
+                HEAP SVST :=
+                    (convert const (elem OF str, environ, closure),
+                     CASE convert const (rest OF str, environ, closure) IN
+                         (REF SVST svst):  svst
+                     ESAC)
+            FI,
+        (REF CQUERY query):
+            BEGIN
+                HEAP SQUERY result;
+                type OF result :=
+                   convert type (querytype OF query, environ, closure);
+                result
+            END,
+        (REF CVOID):
+            void svalue,
+        (REF UNULL):
+            null svalue
+    OUT
+        sys fault ("keconv: Unexpected constant in 'convert const'"); SKIP
+    ESAC
+END
+
+
+KEEP
+       { ASSMODES }
+
+       CTNAME,  ID,  nullid,
+       IDS, INTS,
+       ATTR, ATTRNAME, ATTRDATA, ATTRSTR, ATTRBRACKET, ATTRNULL, ATTRDEC,
+       ATTRTAG,
+       FORMULA,  FINT,  FCHECK,  FARITH,  FNAME,  FDOP,  FMOP,
+       FCOND,  FBRACKET,  FMACPAR, FNULL,  FORMULATAG, FORMULAS,
+       INTDEC,  RANGE,  FORMULARANGE,
+       TYPE,  TNAME,  TROW,  TSTR,  TFN,  TBRACKET,  TNULL,  TYPETAG,
+       NEWCHARS, TSTRING, TMACPAR, TVOID,
+       ALTERNATIVE,  NEWINTS,  TYPEBODY,  TYPEDEC,
+       CNAME,  CTYPE,  CPRIM,  CINT,  CRANGE,  CQUERY,  CONSTDEC,
+       CPRIMRANGE, CQUOTE, CVOID,
+       UNIT,
+       UNAME,  UASSOC,   UEXTRACT, UINDEX,  UTRIM,  UDYINDEX,  UREPLACE, UALTS,
+       UROW,  USTR,  UCONC,  UMINST,  UDINST,  UCHOICES,  UCASE,  UCOND,  UREPL,
+       USEQUENCE,  USERIES,  UATTR,  UCHECK,  UBRACKET,  UNULL,  UNITTAG,
+       USTRING, UFN, UPORTNAME,
+       FNNAME,  MPARAM,  MACPARAM,  INSTANCE,  DECLARATION,
+       PRINTITEMS,  PRINT,  FAULT,  NAMES,
+       SEQLET,  SEQVAR,  SEQPVAR,  SEQASSIGN,  SEQCHOICES,  SEQCASE,  SEQCOND,
+       SEQREPL,  SEQNULL,  SEQSTEP,  SEQUENCE, SEQROW,
+       LET,  MAKE,  JOIN,  JOINS,  REPLJOIN,  STEPNULL,  STEP,  SERIES,
+       ALIENCODE,  ARITH,  REFORM,  IMPORT,  ADELAY,  IDELAY,  RAM,  SAMPLE,
+       TIMESCALE,  BODYCHECK, BODYNULL,  FNBODY,
+       MACSPEC,  NAMETYPE,
+       FNDEC,  USAGE,  ENVIRON,
+       OUTER, OUTERS, OUTERSLIST, CLOSUREDAT, CLOSURE,
+
+       niltstr,  nilualts,  nilustr,  niluchoices,  nilunit,
+       nilids,  nilints, nilprintitems,  nilnames,  nilseqchoices,  nilsequence,
+       niljoins,  nilseries,  nilimport,
+       nilattrdec,  nilintdec,  niltypedec, nilconstdec,  nilfndec,
+       nilmacparams, nilformulas, nilusage, nilattrstr,
+       nilmacspecs, nilenviron, nilouters, nilouterslist,
+
+       nullids,  nullmacparams,  nullmacspecs,  nullnametypes,
+       nullattrdecs, nullintdecs, nulltypedecs, nullconstdecs, nullfndecs,
+       nullouters, nullouter,
+
+       MAKEFARITH(INT),  MAKEFNAME(INT), MAKEFBRACKET(FORMULA),
+       MAKEFORMULATAG(FORMULA),  MAKETNAME(INT),  MAKETBRACKET(TYPE),
+       MAKETYPETAG(TYPE),  MAKECNAME(INT),  MAKECTYPE(TYPE),  MAKECQUERY(TYPE),
+       MAKESEQLET(LET),
+       MAKESEQVAR(LET),  MAKEUBRACKET(UNIT),  MAKEUNITTAG(UNIT),
+       MAKEFNNAME(INT), MAKEARITH(FORMULA),  MAKERAM(UNIT),
+       MAKEFMACPAR(INT), MAKETMACPAR(INT), MAKEATTRNAME(INT), MAKEATTRTAG(ATTR),
+       MAKEATTRBRACKET(ATTR),
+       attrnull, fnull,  tnull,  unull,  seqnull,  stepnull, bodynull,
+       reform, tvoid, cvoid,
+
+       flattenleft, flattenright, flattenboth, normalchoice,
+       elseofchoice, elsechoice, noelsechoice, explicitmacpar, implicitmacpar,
+       checktypeoutput,  checktype, checkle, checkge, checkeq, checkne, fplus,
+       fminus, fnot, finot, fsqrt, fabs, fmult, fidiv, feq, fne, fle, fge,
+       fgth, flth, fand, for, fsl, fsr, fiand, fior, fmod, constint, constint2,
+       const2int, const2int2, idelayintcon, int1, int2,
+       usource, usink, uiosource, uiosink, outerdec, localdec, macpardec,
+       outerattr, outerint, outertype, outerconst, outerfn,
+       assembler_version_no, idstable, assembler_libno, ids_hash_size,
+       make_id,  MAKEID (STR),  MAKEID (CHAR),
+
+       { MODEPROCS }
+       MAKEFINT(INT),  formula_int,  int,  simplify_formula,
+      get_outerattr, get_outerint, get_outertype, get_outerconst, get_outerfn,
+      findnewattrno, findnewintno,  findnewtypeno,  findnewconstno, findnewfnno,
+      find_attrdec, find_intdec, find_typedec, find_constdec, find_fndec,
+      fndec_tfn, tstr_size,  type_size, translate_fndec,
+      names_type, names_size, names_index, unit_type,
+      simplify_type, check_types, uportname_index,
+
+       { Local Declarations }
+       convert type, convert const
+
+FINISH
