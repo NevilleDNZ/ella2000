@@ -1,0 +1,322 @@
+{  Id: keamalien.sta,v 2.3 91/06/06 11:42:13 aap Exp$ }
+
+DECS  keamalien  CONTEXT VOID USE  putstrings, assmodes, basics, keambasics,
+      keamstandard, kesymbols, modeprocs:
+
+{  " Id: keamalien.sta,v 2.3 91/06/06 11:42:13 aap Exp$" }
+configinfo A68CONFIG "$Id: keamalien.a68,v 34.2 1995/03/29 13:04:31 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+17:09:90 Added output frozen flag to instance data. MDR.
+19:09:90 Fixed conformity clause in encode macparams. MDR.
+02:12:90 Forced setting of unit del event flag for time dependant
+              Alien code. MDR.
+10:05:91 Added "initialised" flag for savers, restorers and terminators
+              to check.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{ Label tag to guarantee uniqueness of alien code labels }
+VECTOR [5] CHAR alien tag := "ALIEN";
+
+{
+    The layout of instance data for alien code functions can be found in
+    the alien code interface specfication, N045.50.11.
+}
+
+PROC translate call alien evalfn = (LABEL l) VOID:
+BEGIN
+        { (cp) }
+    am local(0);
+        { (cp: cp) }
+    am global(ws, global action label);
+        { (action: cp: cp) }
+    am call (2, l)
+        { ( cp) }
+END;
+
+PROC translate alien initialiser = (
+    ID name,
+    REF ALIENINFO alien
+)VOID:
+BEGIN
+    translate start initialiser(name);
+        { (cp) }
+
+    { set the "initialised" flag in the instance data }
+    am local(0);
+        { (cp: cp) }
+    am pushint(4);
+        { (4: cp: cp) }
+    am add;
+        { (cp+4: cp) }
+    am global(ws, indirect);
+        { (input_count: cp) }
+    am pushint(4);
+        { (4: input_count: cp) }
+    am mul;
+        { input_count*4: cp) }
+    am pushint(32);
+        { 32: input_count*4: cp) }
+    am add;
+        { ((8+input_count)*4: cp) }
+    am local(1);
+        { cp: (8+input_count)*4: cp) }
+    am add;
+        { (&init_flag: cp) }
+    am pushint(1);
+        { (1: &init_flag: cp) }
+    am store(ws, indirect);
+        { (cp) }
+
+    { can't use global action label, as it will have been set to 'evaluate' }
+    am local(0);
+        { (cp: cp) }
+    am pushint(initialise action);
+        { (action: cp: cp) }
+    am call (2, label callinst OF alien);
+        { ( cp) }
+
+    am ret(0)
+END;
+
+PROC translate alien evaluator = (
+    ID name,
+    VECTOR [] INT input types,
+    INT output type,
+    REF ALIENINFO alien
+)STRUCT (INT size, offset, BITS sort):
+BEGIN
+   PROC push current output = (INT output type, INT output offset,
+      INT cp offset) INT:
+   {--------------------------------------------}
+   { Push the value of the output as single string on the top of the stack.
+     Locates the callinstptr via supplied offset. }
+   { XXX copied from keambiop XXX }
+      BEGIN
+         { ()  }
+         am push int (0);
+            { (0) }
+         am local (cp offset + 1);
+            { (cp: 0) }
+         am push int (output offset);
+            { (oo: cp: 0) }
+         am add;
+            { (cp+oo: 0 ) }
+         am bstring (lookup type size (output type) * bits per byte,
+                     lookup type size (output type) * bits per byte, indirect);
+            { (*(cp+oo)) }
+         1  { Increase in size of stack. }
+      END;
+
+    INT output offset =
+        size unit +             { evaluation flag }
+        ws +                    { input count }
+        UPB input types * ws +  { the inputs }
+        ws +                    { instance id }
+        ws +                    { symbol table index }
+        ws +                    { history size }
+        0 +                     { history area (not yet supported) }
+        ws +                    { workspace size }
+        ws +                    { workspace pointer }
+        ws +                    { output frozen flag }
+        ws;                     { "initialised" flag }
+
+    translate start function (name);
+        { (cp) }
+
+    { c.f. 'biop body translate' in keambiop }
+
+    { push old output onto stack for comparison with new later }
+    INT existing op size = push current output(output type, output offset, 0);
+        { (op: cp) }
+
+    am local(1);
+        { ( cp: op: cp) }
+
+    translate call alien evalfn(label callinst OF alien);
+        { ( cp: op: cp) }
+
+    am drop(1);
+        { ( op: cp) }
+
+    push current output (output type, output offset, existing op size);
+        { (op': op: cp) }
+    { XXX need to check valid output (similar to arith) }
+    am neq;
+        { (op'!=op: cp) }
+    am jump no (0, old result label);
+        { (cp) }
+    am local (0);
+        { (cp: cp) }
+    am pushint (0);
+        { (0: cp: cp:) }
+    am store (size unit, indirect);
+        { (cp) }
+    am label (1, old result label);
+        { (cp) }
+
+    INT fixed part size = output offset + lookup type size (output type);
+
+    IF history OF alien > 0
+    THEN
+       { ensure call every time step by setting evaluation flag and unit del
+         event flag}
+       am pushint (1);
+       am store (ws, global unit del event label);
+       translate end function setting flag
+    ELSE
+       { normal conbinatorial function end }
+       translate end function
+    FI (fixed part size, 1);
+
+    (fixed part size, output offset,
+        initialised OR saved OR restored OR terminated OR
+            combinatorial OR alien sort)
+END;
+
+PROC translate alien call = (
+    ID name,
+    REF ALIENINFO alien,
+    PROC (VECTOR [] CHAR) VOID translate start
+)VOID:
+BEGIN
+    LABEL skip = new label;
+
+    translate start (name);
+        { (cp) }
+
+    { Call the evalfn iff the "initialised" flag is set. }
+    { The following code assumes that this flag is at an
+      offset of (8 + UPB inputs) words in the instance data }
+    am local(0);
+        { (cp: cp) }
+    am pushint(4);
+        { (4: cp: cp) }
+    am add;
+        { (cp+4: cp) }
+    am global(ws, indirect);
+        { (input_count: cp) }
+    am pushint(8);
+        { (8: input_count: cp) }
+    am add;
+        { ((8+input_count): cp) }
+    am pushint(4);
+        { 4: (8+input_count): cp}
+    am mul;
+        { ((8+input_count)*4: cp) }
+    am local(1);
+        { cp: (8+input_count)*4: cp) }
+    am add;
+        { (&init_flag: cp) }
+    am global(ws, indirect);
+        { (init_flag: cp) }
+    am test;
+    am jump no(0, skip);
+
+    translate call alien evalfn(label int OF alien);
+        { ( cp) }
+
+    am label(1,skip);
+    am ret(0)
+END;
+
+PROC translate alien = (
+    ALIENCODE body,
+    ID name,
+    FNDEC declaration,
+    VECTOR [] INT input types,
+    INT output type,
+    ENVIRON environ,
+    CLOSURE closure,
+    REF STRUCT(INT workspace, history, declid) alien shape,
+    FLTPROC flt
+) STRUCT (INT size, offset, BITS sort):
+IF
+    VECTOR [] CHAR alien name = (name OF body);
+
+    PROC encode macparams = (REF VECTOR [] MACPARAM in) VECTOR [] INT:
+    IF in ISNT nil macparams
+    THEN
+        VECTOR [UPB in] INT out;
+        FORALL i IN in, o IN out
+        DO
+            o :=
+                CASE param OF i IN
+                (FORMULATAG f): int(tag OF f)
+                OUT
+                    flt("Aliens can't have TYPE macro parameters - " +
+                        alien name);
+                    SKIP
+                ESAC
+        OD;
+        out
+    ELSE
+        ()
+    FI;
+
+    REF ALIENINFO alien =
+        alien finder(
+            alien name,
+            input types,
+            output type,
+            encode macparams(macparams OF body),
+            flt
+        );
+    alien ISNT nil alien info
+THEN
+    { round up to multiple of ws }
+    workspace size OF alien :=
+        ((workspace size OF alien + ws - 1) % ws) * ws;
+
+    alien shape := (workspace size OF alien, history OF alien, declid OF alien);
+
+    { Generate new labels, with special tags to guarantee uniqueness }
+    label int OF alien := new label; tag OF label int OF alien := alien tag;
+    label callinst OF alien := new label; tag OF label callinst OF alien := alien tag;
+
+    translate alien initialiser(name,alien);
+    translate alien call(name,alien,translate start restorer);
+    translate alien call(name,alien,translate start terminator);
+    translate alien call(name,alien,translate start saver);
+    translate alien evaluator(name, input types, output type, alien)
+ELSE
+    flt("Can't find the alien function named " + alien name );
+    SKIP
+FI
+
+KEEP
+    translate alien
+FINISH
