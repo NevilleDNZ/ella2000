@@ -1,0 +1,123 @@
+DECS keamassoc  CONTEXT VOID USE  putstrings, assmodes, basics, kesymbols,
+     keambasics, keamstandard, keconv, kebasics, kesignals:
+
+{  " Id: keamassoc.sta,v 2.1 91/02/22 18:34:01 edcad Exp$" }
+configinfo A68CONFIG "$Id: keamassoc.a68,v 34.2 1995/03/29 13:04:32 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+01:12:88  Module created to corect bug 50.  BJE.
+05:12:88  Added 'initialised' to sort field returned by 'translate assoc'
+             Bug 50. MDR.
+17:01:89  Comment changes only.  BJE.
+24:08:89  Parameters to 'translate copy inputs' changed.  R4B150.  PAR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+{
+   This module contains the procedure `translate assoc' that generates
+   code to simulate the ELLA-text of the form `tag & name', ie
+   the construction of an association from a constant tag and a
+   (possibly) variable associated value.  This operation cannot be
+   done at assembly time because an enumerated type with associated
+   parts is treated as a primitive type and referred to from function
+   inputs by one pointer.  Hence associations must be contiguous in
+   memory.  This primitive simply collects the pieces together.
+
+   Code generation sequences are annotated with comments that
+   describe the AM machine stack after the generated code has been
+   executed.  These are of the form "(a: b: s)" meaning that the
+   value of the stack before the current procedure was called
+   (conventionally "s") has two items on top of it - "a" and "b" -
+   with "a" at the top of stack.
+
+   In this context the abbreviations "cp" stands for the callinst pointer.
+}
+
+{ This is a purely combinatorial function with initialisation.  No
+  local instance data is required.  The initialisation phase sets up
+  the constant, tag part of the output while the combinatorial-logic
+  phase collects the associated part.
+
+  This function assumes that the tag part of an enumerated type is
+  encode in `size unit' bytes.
+
+  If the association generated has paading bytes it is essential that these
+  remain zero so that the association can be compared with other values of its
+  type via a simple string comparison.  This is guarnateed by the fact that the
+  code generator ensures that global memory is clear when allocated and the
+  fact that these bytes are never subsequently written.
+}
+PROC translate assoc = (UASSOC body, ID name, FNDEC declaration,
+                        VECTOR [] INT input types, INT output type,
+                        ENVIRON environ, CLOSURE closure,
+                        FLTPROC flt) STRUCT (INT size, offset, BITS sort):
+BEGIN
+   INT output size = lookup type size (output type);
+
+   INT input offset    = size unit + ws;
+   INT output offset   = input offset + ws * UPB input types;
+   INT assoc offset    = output offset + size unit;
+   INT fixed part size = output offset + output size;
+
+   { Find the associated part of the type }
+   REF SENUM enum := CASE lookup type (output type) IN
+                         (REF SENUM enum): enum
+                     ESAC;
+   TO altno OF body - 1 DO enum := rest OF enum OD;
+
+   { Initialisation }
+   translate start initialiser (name);                      { (cp: s) }
+   am pushint (output offset);                              { (oo: cp: s) }
+   am add;                                                  { (tag ptr: s) }
+   am pushint (altno OF body);                              { (tag: tp: s) }
+   am store (size unit, indirect);                          { (s) }
+   am ret (0);
+
+   { Combinatorial logic }
+   translate start function (name);                         { (cp: s) }
+   translate copy inputs (input types, input offset,
+                          t OF enum,
+                          assoc offset, reset flag, 1);     { (cp: s) }
+   translate end function (fixed part size, 1);             { (s) }
+
+   (fixed part size, output offset, combinatorial OR initialised)
+END; { translate assoc }
+
+SKIP
+
+KEEP
+    translate assoc
+
+FINISH
