@@ -1,0 +1,3491 @@
+DECS  su_keepsake  CONTEXT VOID  USE  putstrings,  su_keepsake_interface:
+
+{ " Id: su_keepsake.sta,v 1.1 91/10/14 14:31:45 edcad Exp $" }
+configinfo A68CONFIG "$Id: su_keepsake.a68,v 34.2 1995/03/29 13:03:33 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:08:89 Received from Roy Milner
+06:12:89 New version taken
+03:07:90 Change to can_finish (calc of blocks needed to finish altered)
+            finish now reopens database
+23:10:90 Change to abort_append KRM
+27:11:90 KEEPSAKE file now opened / created externally.  DCT
+10:01:91 R6B2:  compacting garbage collector - page table size wrong.  KRM
+29:01:91 (Unused) standard transput procedures removed from KEEP list.  DCT
+12:02:91 R6B16:  Many side effect operations invalid for Ctrans.  AAP/DCT
+26:02:91 Database made portable between machines of the same byte/int/block
+            size - ints read/written as byte stream - all BIOPery removed.  DCT
+18:03:91 R6B23:  Quadratic operation removed from freelist_to_disc.  DCT
+23:02:93 Hack for OSIF Level 1.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.011 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+   REF DATABASE nildb = NIL;
+   REF DISCFILE nilfile = NIL;
+   REF DPLIST nildplist = NIL;
+   REF BLOCKLIST nilblocklist = NIL;
+   VECTOR [0] INDIR nilindirs;
+   VECTOR [0] INT nilpagetable;
+   VECTOR [0] CHAR nodata;
+   VECTOR [0] DISCPTR nodps;
+   VECTOR [0] INT noints;
+   VECTOR [0] BOOL nowanted;
+
+   REF GCDATA nilgcdata = NIL;
+   REF DISCADDRESS nildisc_address = NIL;
+   REF OLDANDNEW nilold_and_new = NIL;
+   REF DPSTACK nildpstack = NIL;
+   REF SHAKYDATA nilshakydata = NIL;
+   REF TRACED niltraced = NIL;
+   REF VARLIST nilvarlist = NIL;
+
+   OP MAKERVC = (STR s) RVC: HEAP VECTOR [UPB s] CHAR := s;
+   PROC nilfault = (STR s) VOID: SKIP;
+
+CO The following declarations map data types that can be written away onto
+   ints - used for run-time type-checking.
+CO
+
+   INT charsdps       = 1,
+       ints           = 2,
+       chars          = 3,
+       discptrs       = 4,
+       overwriteable  = 5,
+       indirs         = 6,
+       freelist_ints  = 7,
+       pagetable_ints = 8,
+       forgery        = 9; CO code >= forgery is one of the forgery checks
+                           CO
+
+   PROC type_name = (INT n) VECTOR [] CHAR:
+      CASE n IN
+       "charsdps", "ints", "chars", "discptrs", "overwriteable",
+       "indirs", "freelist_ints", "pagetable_ints"
+      ESAC;
+
+CO  Data_size used by PROC array_size to calculate the size of the buffer from
+    the data
+CO
+
+   PROC data_size = (INT n) INT:
+      CASE n-1 IN
+        int_size, 1, 1, 1, indirection_size, int_size, int_size
+      ESAC;
+
+   BOOL assignable = TRUE,
+        not_assignable = FALSE,
+        shaky = TRUE,
+        not_shaky = FALSE;
+
+   INT no_indirection = 0;
+
+   PROC min = (INT a, b) INT:
+      ( a < b | a | b );
+
+   OP < = (ADDRESS a, b) BOOL:
+      (block_num OF a < block_num OF b OREL
+       (block_num OF a = block_num OF b ANDTH offset OF a < offset OF b)
+      );
+
+   PROC address_rep = (ADDRESS addr) INT:
+
+CO Integer representation of a disc address CO
+
+      block_num OF addr * block_size + offset OF addr;
+
+   PROC is_nilindir = (INDIR ind) BOOL:
+      address OF ind = niladdress ANDTH data_elts OF ind = 0 ANDTH
+      dp_elts OF ind = 0 ANDTH code OF ind = 0 ANDTH read_size OF ind = 0;
+
+   PROC is_gcnilindir = (INDIR ind) BOOL:
+      address OF ind = nilgcaddress;
+
+   OP = = (INDIR a, b) BOOL:
+      shaky OF a = shaky OF b ANDTH
+      address OF a = address OF b ANDTH
+      data_elts OF a = data_elts OF b ANDTH
+      dp_elts OF a = dp_elts OF b ANDTH
+      code OF a = code OF b ANDTH
+      read_size OF a = read_size OF b;
+
+   PROC name_to_uc = (VECTOR [] CHAR name) RVC:
+      (INT upb = UPB name;
+       RVC new name = HEAP VECTOR [upb] CHAR;
+       FOR i TO upb
+       DO   INT abs := ABS name[i];
+            new name[i] := IF abs >= ABS "a" ANDTH abs <= ABS "z"
+                           THEN REPR (abs MINUSAB 32)
+                           ELSE name[i]
+                           FI
+       OD;
+       new name
+      );
+
+   PROC fetch_ind = (REF DISCFILE df, DISCPTR dp) INDIR:
+      (indirections OF df)[first_block(dp)];
+
+   PROC  print_dp = (DISCPTR  dp) VOID:
+   BEGIN
+      PROC  sort = STR:
+         CASE discptr_code(dp) + 1 IN
+            "Nilptr ?", "Charsdps", "Ints", "Chars", "Discptrs",
+            "Overwriteable", "Indirs", "Freelist_ints", "Pagetable_ints",
+            "Forgery"  OUT  oneline(("??", discptr_code(dp)))
+         ESAC;
+      put(screen, ( "Code ", discptr_code(dp), " (", sort, ")  ", is_shaky(dp),
+                    is_assignable(dp), "  Add ", first_block(dp), "  Off ",
+                    first_offset(dp), "  Datsz ", data_elts(dp), "  Dpsz ",
+                    dp_elts(dp), "  V ", version(dp), "  Rsz ", read_size(dp),
+                    "  Cs ", sumcheck(dp), " (", sumcheck OF dp, ")", newline
+                  ))
+   END;
+
+   PROC is_forgery = (REF DATABASE db, DISCPTR dp) BOOL:
+      IF discptr_code(dp) >= forgery OREL first_offset(dp) > block_size OREL
+         incorrect_sumcheck(dp)
+      THEN  print_dp(dp);  TRUE
+      ELSE  FALSE
+      FI;
+
+   PROC check_nilfile = (REF DISCFILE df) VOID:
+      ( df IS nilfile
+               | keepsake_fault("you are trying to use an unopened file") );
+
+   PROC check_valid_db = (REF DATABASE db) VOID:
+      ( setup OF db /= is_setup |
+               keepsake_fault("you are using an unset database") );
+
+   PROC check_forgery_use = (REF DATABASE db, DISCPTR dp) VOID:
+      ( is_forgery(db, dp) |
+               keepsake_fault("you are trying to use a forged discptr") );
+
+   PROC check_forgery_write = (REF DATABASE db, DISCPTR dp) VOID:
+      ( is_forgery(db, dp) |
+               keepsake_fault("you are trying to write a forged discptr") );
+
+   OP = = (VECTOR [] INT a, b) BOOL:
+      (BOOL result := TRUE;
+       IF UPB a = UPB b
+       THEN FOR i TO UPB a WHILE result
+            DO   ( a[i] /= b[i] | result := FALSE )
+            OD
+       ELSE result := FALSE
+       FI;
+       result
+      );
+
+   OP + = (VECTOR [] CHAR a, b) VECTOR [] CHAR:
+      (VECTOR [UPB a + UPB b] CHAR result;
+       result[1 : UPB a] := a;
+       result[UPB a + 1 : UPB a + UPB b] := b;
+       result
+      );
+
+   PROC is_nilvar = (REF DISCFILE df, DISCPTR dp) BOOL:
+      ( first_offset(dp) = 0 | address OF fetch_ind(df, dp) = niladdress
+                             | FALSE );
+
+   PROC is_nilptr = (REF DISCFILE df, DISCPTR dp) BOOL:
+      is_nildp(dp) OREL (is_assignable(dp) ANDTH is_nilvar(df, dp));
+
+   PROC check_nilptr = (REF DISCFILE df, DISCPTR dp) VOID:
+      ( is_nilptr(df, dp) | keepsake_fault("you are trying to use a nilptr") );
+
+   PROC is_gc_nil = (REF DISCFILE df, DISCPTR dp) BOOL:
+
+CO  Is "dp" a nil pointer produced by the garbage collector ?  CO
+
+      ( first_offset(dp) = 0 ANDTH first_block(dp) /= 0 |
+           INDIR indir = fetch_ind(df, dp);
+           is_gcnilindir(indir) OREL version(dp) /= version OF indir
+                             | FALSE );
+
+   PROC check_gc_nil = (REF DISCFILE df, DISCPTR dp) VOID:
+      ( is_gc_nil(df, dp) |
+           keepsake_fault("you are trying to use a garbage collected nilptr") );
+
+   PROC get_disc_address = (REF DISCFILE df, DISCPTR dp) ADDRESS:
+      (INT fblock = first_block(dp),
+           offset = first_offset(dp);
+       IF offset = 0
+       THEN INDIR ind = fetch_ind(df, dp);
+            address OF ind
+       ELSE (fblock, offset)
+       FI
+      );
+
+   PROC keepsake_file = (REF DATABASE db) MADAMFILE:
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       file OF df
+      );
+
+   PROC same_data = (REF DATABASE db, DISCPTR a, b) BOOL:
+                       { do both DISCPTRs point to the same data? }
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       check_forgery_use(db, a);
+       check_forgery_use(db, b);
+       check_gc_nil(df, a);
+       check_gc_nil(df, b);
+       (is_nildp(a) ANDTH is_nildp(b)) OREL
+       (is_nilvar(df, a) ANDTH is_nilvar(df, b) ANDTH
+        first_block(a) = first_block(b)) OREL
+        get_disc_address(df, a) = get_disc_address(df, b)
+       );
+
+   PROC same_discptr = (REF DATABASE db, DISCPTR a, b) BOOL:  a = b;
+
+   PROC data_array_size = (REF DATABASE db, REF DISCFILE df, DISCPTR dp) INT:
+
+CO  Delivers the number of chars pointed to - called by compacting garbage
+    collector.
+CO
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       check_nilptr(df, dp);
+       check_forgery_use(db, dp);
+       check_gc_nil(df, dp);
+       ( first_offset(dp) = 0 | data_elts OF fetch_ind(df, dp) | data_elts(dp) )
+      );
+
+   PROC num_chars = (REF DATABASE db, DISCPTR dp) INT:
+      data_array_size(db, df OF db, dp);
+
+   PROC dp_array_size = (REF DATABASE db, REF DISCFILE df, DISCPTR dp) INT:
+
+CO  Delivers the number of data elements pointed to - called by compacting
+    garbage collector and PROC use_fixed.
+CO
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       check_nilptr(df, dp);
+       check_forgery_use(db, dp);
+       check_gc_nil(df, dp);
+       ( first_offset(dp) = 0 | dp_elts OF fetch_ind(df, dp) | dp_elts(dp) )
+      );
+
+   PROC num_discptrs = (REF DATABASE db, DISCPTR dp) INT:
+      dp_array_size(db, df OF db, dp);
+
+   PROC array_size = (REF DATABASE db, REF DISCFILE df, DISCPTR dp) INT:
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_nilptr(df, dp);
+       check_forgery_use(db, dp);
+       check_gc_nil(df, dp);
+       INT num_chars,
+           num_dps,
+           data_code;
+       IF first_offset(dp) = 0
+       THEN INDIR ind = fetch_ind(df, dp);
+            num_chars := data_elts OF ind;
+            num_dps := dp_elts OF ind;
+            data_code := code OF ind
+       ELSE num_chars := data_elts(dp);
+            num_dps := dp_elts(dp);
+            data_code := discptr_code(dp)
+       FI;
+       ( data_code = charsdps
+               | keepsake_fault("you should be calling either 'num_discptrs' "
+                                "or 'num_chars'") );
+       INT size = IF num_chars /= 0
+                  THEN num_chars
+                  ELIF num_dps /= 0
+                  THEN num_dps
+                  ELSE 0
+                  FI;
+       size % data_size(data_code)
+      );
+
+   PROC size = (REF DATABASE db, DISCPTR dp) INT:
+      array_size(db, df OF db, dp);
+
+   PROC discptr_type = (REF DATABASE db, DISCPTR dp) INT:
+
+CO
+    0 = not a valid discptr
+    1 = garbage collected nil
+    2 = assignable and shaky
+    3 = assignable but not shaky
+    4 = shaky but not assignable
+    5 = neither assignable nor shaky
+CO
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       BOOL assignable = is_assignable(dp);
+       BOOL shaky = is_shaky(dp);
+       ( is_forgery(db, dp) | 0 |: is_gc_nil(df, dp) | 1 |:
+         assignable ANDTH shaky | 2 |: assignable | 3 |: shaky | 4 | 5 )
+      );
+
+PROC discptr_data = (REF DATABASE db, DISCPTR dp) INT:
+
+CO
+    0 = not a valid discptr
+    1 = garbage collected nil
+    2 = nilptr
+    3 = discptr to chars and discptrs
+    4 = discptr to integers
+    5 = discptr to chars
+    6 = discptr to discptrs
+    7 = discptr to overwriteable blocks
+CO
+
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       IF is_forgery(db, dp)
+       THEN 0
+       ELIF is_nildp(dp) OREL is_nilvar(df, dp)
+       THEN 2
+       ELIF first_offset(dp) = 0
+       THEN INDIR ind = fetch_ind(df, dp);
+            IF version OF ind /= version(dp)
+            THEN 1
+            ELSE CASE code OF ind IN
+                      3, 4, 5, 6, 7
+                 OUT 0
+                 ESAC
+            FI
+       ELSE CASE discptr_code(dp) IN
+                 3, 4, 5, 6, 7
+            OUT 0
+            ESAC
+       FI
+      );
+
+   PROC filetype_check = (INT fixed) VOID:
+      (INT test = ABS (BIN fixed AND BIN pass_mask);
+       IF test = out_of_date_file
+       THEN keepsake_fault("file was created using an old version of MADAM")
+       ELSE keepsake_fault("database has not been initialised")
+       FI
+      );
+
+   PROC compare = (VECTOR [] CHAR buff1, buff2) BOOL:
+      (BOOL equal := TRUE ;
+       FOR i TO UPB buff1 WHILE equal
+       DO   (buff1[i] /= buff2[i] | equal := FALSE )
+       OD;
+       equal
+      );
+
+   PROC discfile_size = (REF DATABASE db) INT:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       (file_size OF df OF db) * block_size
+      );
+
+   PROC size_of_free_space = (REF DATABASE db) INT:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+
+CO  Free disc space in VAX blocks (1 VAX block = 512 bytes)  CO
+
+       size_of_free_space OF df OF db
+      );
+
+   PROC last_update_failed = (REF DATABASE db) BOOL:
+      (check_valid_db(db);
+       last_update_failed OF df OF db
+      );
+
+   PROC overhead = (REF DATABASE db) INT:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       fixed_overhead*block_size +
+       (file_size OF df OF db - fixed_overhead) * block_heading_size
+      );
+
+   PROC create_indir = (REF DISCFILE df, REF ADDRESS addr, BOOL shaky,
+                        INT data_elts, dp_elts, data_code, read_size,
+                                                         indirection) INT:
+
+CO  Searches first for re-usable indirections - otherwise creates a new
+    indirection. Delivers the version number of the indirection used
+CO
+
+      (INT new_version := 1;
+       INDIR new_ind := (shaky, addr, data_elts, dp_elts, data_code,
+                         new_version, read_size);
+       IF indirection = 0
+       THEN REF REF VECTOR [] INDIR indirections = indirections OF df;
+            BOOL not_found := TRUE;
+            FOR i TO UPB indirections WHILE not_found
+            DO   IF is_gcnilindir(indirections[i])
+                 THEN not_found := FALSE;
+                      new_version := version OF indirections[i];
+                      version OF new_ind := new_version;
+                      indirections[i] := new_ind;
+                      addr := (i, 0)
+                 FI
+            OD;
+            IF not_found
+            THEN REF VECTOR [] INDIR temp = indirections;
+                 INT upb = UPB temp;
+                 indirections := HEAP VECTOR [upb+1] INDIR;
+                 indirections[1:upb] := temp;
+                 indirections[upb+1] := new_ind;
+                 addr := (upb+1, 0)
+            FI;
+            new_version
+       ELSE address OF (indirections OF df)[indirection] := addr;
+            addr := (indirection, 0);
+            version OF (indirections OF df)[indirection]
+       FI
+      );
+
+   PROC make_nilvar = (REF DATABASE db) DISCPTR:
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       ADDRESS addr := niladdress;
+       INT code = 0,
+           data_elts = 0,
+           dp_elts = 0,
+           read_size = 0,
+           indirection = 0;
+       check_nilfile(df);
+       INT version = create_indir(df, addr, not_shaky, data_elts, dp_elts, code,
+                                  read_size, indirection);
+       instore_vars OF df := HEAP VARLIST
+                          := (block_num OF addr, instore_vars OF df);
+       make_dp(not_shaky, assignable, code, data_elts, dp_elts, version,
+               read_size, addr)
+      );
+
+  PROC setup_writebuffer = (INT generation) WRITEBUFFER:
+    ((HEAP VECTOR [max_buffer_size*block_size] CHAR, nilblocklist,
+      HEAP INT := max_buffer_size, HEAP INT := 0, HEAP INT := generation)
+    );
+
+   PROC set_up = (REF DATABASE db, MADAMFILE file, INT generation) REF DISCFILE:
+      (REF DISCFILE df = HEAP DISCFILE;
+       write_buffer OF df := HEAP WRITEBUFFER := setup_writebuffer(generation);
+       block_buffer OF df := HEAP VECTOR [block_size] CHAR;
+
+       generation OF df := HEAP INT := generation;
+       file_size OF df := HEAP INT := file_block_size(file);
+       old_file_size OF df := HEAP INT := fixed_overhead;
+       file OF df := HEAP MADAMFILE := file;
+       name OF df := MAKERVC db_name OF db;
+       freelist_index OF df := HEAP INT := 1;
+       current_free OF df := HEAP INT := file_size OF df;
+       first_free OF df := HEAP INT := current_free OF df;
+       last_free OF df := HEAP INT := 0;
+       cbufpos OF df := HEAP INT := 0;
+       size_of_free_space OF df := HEAP INT
+                                := file_size OF df - fixed_overhead;
+                                             CO first 3 (=fixed overhead)
+                                                blocks are never free
+                                             CO
+       freelist OF df := HEAP VECTOR [file_size OF df - fixed_overhead] INT;
+       freeblock_ptr OF df := HEAP INT := 1;
+       freelist_ext_ptr OF df := HEAP INT := 0;
+       indirections OF df := nilindirs;
+       INT actual_file_size = file_size OF df - fixed_overhead;
+       append_dp OF df := HEAP DISCPTR := nilptr;
+       writeable OF df := HEAP BOOL := TRUE;
+       last_update_failed OF df := HEAP BOOL := FALSE;
+       appending OF df := HEAP BOOL := FALSE;
+       collectable OF df := HEAP BOOL := TRUE;
+       instore_vars OF df := nilvarlist;
+       appended_data OF df := HEAP INT := 0;
+       freelist_ext OF df := HEAP VECTOR [0] INT;
+       pagetable_ext OF df := HEAP VECTOR [0] INT;
+       indirs_dp OF df := HEAP DISCPTR := nilptr;
+       freelist_dp OF df := HEAP DISCPTR := nilptr;
+       pagetable_dp OF df := HEAP DISCPTR := nilptr;
+       gc_ptrs OF df := niltraced;
+       df
+      );
+
+   PROC assign_to_var = (REF DATABASE db, DISCPTR old, new) VOID:
+
+CO  Assigns "new" to "old" provided that old is assignable and not shaky  CO
+
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       ( NOT writeable OF df | keepsake_fault("file not open for writing") );
+       ( NOT is_assignable(old) |
+          keepsake_fault("you are trying to assign to a non-assignable "
+                         "discptr") );
+       ( same_discptr(db, old, append_dp OF df)
+         | keepsake_fault("you cannot assign to a discptr being appended to") );
+       INT first_new = first_block(new);
+       REF INDIR old_ind = (indirections OF df)[first_block(old)];
+       old_ind := IF is_nilptr(df, new)
+                  THEN (not_shaky, (0, 0), 0, 0, 0, version OF old_ind, 0)
+                  ELIF is_assignable(new)
+                  THEN INDIR new_ind = (indirections OF df)[first_new];
+                       (shaky OF old_ind, address OF new_ind,
+                        data_elts OF new_ind, dp_elts OF new_ind,
+                        code OF new_ind, version OF old_ind,
+                        read_size OF new_ind)
+                  ELSE (shaky OF old_ind, (first_new, first_offset(new)),
+                       data_elts(new), dp_elts(new), discptr_code(new),
+                       version OF old_ind, read_size(new))
+                  FI
+      );
+
+   PROC var_to_ptr = (REF DATABASE db, DISCPTR dp) DISCPTR:
+
+CO  converts an assignable pointer into a non_assignable one  CO
+
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       check_forgery_use(db, dp);
+       check_gc_nil(df, dp);
+       IF is_assignable(dp)
+       THEN IF is_nilvar(df, dp)
+            THEN nilptr
+            ELSE ADDRESS addr = get_disc_address(df, dp);
+                 make_dp(is_shaky(dp), not_assignable, discptr_code(dp),
+                         data_elts(dp), dp_elts(dp), version(dp), read_size(dp),
+                         addr)
+            FI
+       ELSE keepsake_fault("pointer is not assignable"); dp
+       FI
+      );
+
+   PROC setup_readbuffer = READBUFFER:
+      (READBUFFER b;
+       lwb OF b := HEAP INT := 0;
+       upb OF b := HEAP INT := 0;
+       buffer OF b := HEAP VECTOR [0] CHAR;
+       b
+      );
+
+   PROC in_readbuffer = (READBUFFER rb, INT block_num) BOOL:
+      block_num >= lwb OF rb ANDTH block_num <= upb OF rb;
+
+   PROC in_writebuffer = (REF DISCFILE df, INT block_num) BOOL:
+      (WRITEBUFFER wb = write_buffer OF df;
+       block_num > (upb OF wb - max_buffer_size + buffer_ptr OF wb) ANDTH
+       block_num <= upb OF wb ANDTH generation OF df = generation OF wb
+      );
+
+   PROC read_block = (REF DATABASE db, REF DISCFILE df,
+                      REF READBUFFER read_buffer, RVC block_buffer,
+                                           INT read_size, block_num) BOOL:
+
+CO  Fills "buffer" starting from "block_num" from file "f_num" - delivers TRUE
+    if read from disc, FALSE otherwise
+CO
+
+      (BOOL result := FALSE;
+       REF WRITEBUFFER write_buffer = write_buffer OF df;
+       REF INT lwb = lwb OF read_buffer;
+       REF INT upb = upb OF read_buffer;
+       IF block_num = current_free OF df ANDTH cbufpos OF df /= 0
+       THEN block_buffer := block_buffer OF df
+
+{  If data currently in write_buffer waiting to be written then copy }
+
+       ELIF in_writebuffer(df, block_num)
+       THEN INT start = (max_buffer_size + block_num -
+                         upb OF write_buffer - 1) * block_size;
+            block_buffer := (buffer OF write_buffer)[start+1 : start+block_size]
+       ELIF in_readbuffer(read_buffer, block_num)
+       THEN INT start = (block_num - lwb) * block_size;
+            block_buffer := (buffer OF read_buffer)[start+1: start+block_size]
+
+CO  Otherwise read from disc in the usual way and set the buffer pointers  CO
+
+       ELSE INT buffer_size = min(read_size, file_size OF df - block_num + 1);
+            buffer OF read_buffer := HEAP VECTOR [buffer_size*block_size] CHAR;
+            get_block(file OF df, buffer OF read_buffer, block_num,
+                      keepsake_msg);
+            read_transfers OF df PLUSAB 1;
+            result := TRUE;
+            block_buffer := (buffer OF read_buffer)[1:block_size];
+            lwb := block_num;
+            upb := block_num+buffer_size-1
+       FI;
+       result
+      );
+
+   PROC is_file_writeable = (REF DISCFILE df) BOOL:
+      (df ISNT nilfile) ANDTH writeable OF df;
+
+   PROC check_file_writeable = (REF DATABASE db, REF DISCFILE df) VOID:
+      ( NOT is_file_writeable(df) |
+          keepsake_fault("file " + db_name OF db + " not opened for writing") );
+
+   PROC read = (REF DATABASE db, REF DISCFILE df, UNION (RVC, RVI) data,
+                REF VECTOR [] DISCPTR dps, REF VECTOR [] BOOL wanted,
+                INT code, DISCPTR dp) VOID:
+
+
+CO  Generic read which fills "data" by reading the discptr "dp" from the file
+    "df", type-checking against the expected data indicated by "type". This
+    allows different integer types to be distinguished (e.g. pagetable ints,
+    freelist ints).
+CO
+
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_nilptr(df, dp);
+       check_forgery_use(db, dp);
+       ADDRESS addr = get_disc_address(df, dp);
+       INT char_ptr := offset OF addr,
+           b_num := block_num OF addr,
+           num_dps,
+           read_buffer_size,
+           num_chars,
+           ptr_code;
+       IF first_offset(dp) = 0
+       THEN INDIR ind = fetch_ind(df, dp);
+            num_chars := data_elts OF ind;
+            num_dps := dp_elts OF ind;
+            read_buffer_size := read_size OF ind;
+            ptr_code := code OF ind
+       ELSE num_chars := data_elts(dp);
+            num_dps := dp_elts(dp);
+            read_buffer_size := read_size(dp);
+            ptr_code := discptr_code(dp)
+       FI;
+       INT  n_data =
+                CASE data IN (RVC  c) UPB c, (RVI  i) int_size * UPB i ESAC,
+            n_ints = n_data OVER int_size;
+       ( ptr_code /= code | keepsake_fault(type_name(code) + " expected, not "
+                                           + type_name(ptr_code)) );
+       ( n_data /= num_chars
+                         | keepsake_fault("data buffer is not correct size") );
+       ( UPB dps /= num_dps
+                       | keepsake_fault("discptr buffer is not correct size") );
+
+       INT data_ptr := n_data,
+           dps_ptr := UPB dps,
+           int_ptr := n_ints + 1,
+           int_index := int_size + 1;
+       VECTOR [int_size] CHAR  current_int;
+
+       IF data_ptr /= 0 OREL dps_ptr /= 0
+       THEN READBUFFER read_buffer := setup_readbuffer;
+            VECTOR [block_size] CHAR charbuf;
+            read_block(db, df, read_buffer, charbuf, read_buffer_size, b_num);
+            ( UPB wanted /= 0 | wanted[b_num] := TRUE );
+
+            INT data_code,
+                block_discptrs,
+                block_chars;
+
+            IF char_ptr /= block_size
+            THEN INT lwb = char_ptr MINUSAB data_heading_size - 1;
+                 VECTOR [] CHAR data_heading =
+                            charbuf[lwb : char_ptr + data_heading_size - 1];
+                 data_code := dh_code(data_heading);
+                 block_discptrs := dps_in_block(data_heading);
+                 block_chars := data_in_block(data_heading)
+            ELSE VECTOR [] CHAR block_heading = charbuf[actual_block_size+1 :
+                                         actual_block_size+block_heading_size];
+                 data_code := block_code(block_heading);
+                 read_buffer_size := bh_read_size(block_heading);
+                 char_ptr := data_start(block_heading);
+                 block_discptrs := block_dps(block_heading);
+                 block_chars := block_data(block_heading)
+            FI;
+            ( data_code >= forgery OREL data_code = 0
+                               | sys fault("forgery read from disc") );
+            ( data_code /= code |
+                  keepsake_fault(type_name(code) + " expected, not " +
+                                 type_name(data_code)) );
+
+            FOR i WHILE
+                 read_block(db, df, read_buffer, charbuf,
+                            read_buffer_size, b_num);
+                 ( UPB wanted /= 0 | wanted[b_num] := TRUE );
+                 VECTOR [] CHAR block_heading =
+                                  charbuf[actual_block_size+1 :
+                                          actual_block_size+block_heading_size];
+                 IF i > 1
+                 THEN data_code := block_code(block_heading);
+                      ( data_code >= forgery OREL data_code = 0
+                                    | sys fault("forgery read from disc") );
+                      ( data_code /= code | keepsake_fault(type_name(code) +
+                                  " expected, not " + type_name(data_code)) );
+                      read_buffer_size := bh_read_size(block_heading);
+                      char_ptr := data_start(block_heading);
+                      block_discptrs := block_dps(block_heading);
+                      block_chars := block_data(block_heading)
+                 FI;
+                 FOR j TO block_discptrs
+                 DO   INT lwb = char_ptr MINUSAB discptr_size;
+                      dps[dps_ptr-j+1] :=
+                         chars_to_dp(charbuf[lwb : char_ptr + discptr_size - 1])
+                 OD;
+                 CASE data IN
+                    (RVC  chars)
+                       FOR j FROM data_ptr BY -1 TO data_ptr - block_chars + 1
+                       DO  chars[j] := charbuf[char_ptr MINUSAB 1]
+                       OD,
+                    (RVI  ints)
+                       FOR j TO block_chars
+                       DO  current_int[int_index MINUSAB 1]:=
+                                 charbuf[char_ptr MINUSAB 1];
+                           IF int_index = 1
+                           THEN  ints[int_ptr MINUSAB 1]:= VCTOI current_int;
+                                 int_index:= int_size + 1
+                           FI
+                       OD
+                 ESAC;
+                 char_ptr := block_size;
+                 data_ptr MINUSAB block_chars;
+                 dps_ptr MINUSAB block_discptrs;
+                 data_ptr /= 0 OREL dps_ptr /= 0
+            DO   b_num := next_block(block_heading)
+            OD
+       FI
+      );
+
+   PROC read_ints = (REF DATABASE db, REF VECTOR [] INT data, DISCPTR dp) VOID:
+      read(db, df OF db, data, nodps, nowanted, ints, dp);
+
+   PROC read_freelist = (REF DATABASE db, REF DISCFILE df,
+                                      REF VECTOR [] INT data, DISCPTR dp) VOID:
+      read(db, df, data, nodps, nowanted, freelist_ints, dp);
+
+   PROC read_pagetable = (REF DATABASE db, REF DISCFILE df,
+                                       REF VECTOR [] INT data, DISCPTR dp) VOID:
+      read(db, df, data, nodps, nowanted, pagetable_ints, dp);
+
+   PROC read_chars = (REF DATABASE db, REF VECTOR [] CHAR data, DISCPTR dp)
+                                                                         VOID:
+      read(db, df OF db, data, nodps, nowanted, chars, dp);
+
+   PROC read_chars_dps = (REF DATABASE db, REF VECTOR [] CHAR data,
+                                   REF VECTOR [] DISCPTR dps, DISCPTR dp) VOID:
+      read(db, df OF db, data, dps, nowanted, charsdps, dp);
+
+   PROC read_vax_blocks = (REF DATABASE db, REF DISCFILE df, INT block,
+                           REF VECTOR [] CHAR data, REF VECTOR [] BOOL wanted,
+                                                              DISCPTR dp) VOID:
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_nilptr(df, dp);
+       check_forgery_use(db, dp);
+       ADDRESS addr = get_disc_address(df, dp);
+       INT b_num := block_num OF addr,
+           code,
+           elts;
+       IF first_offset(dp) = 0
+       THEN INDIR ind = fetch_ind(df, dp);
+            code := code OF ind;
+            elts := data_elts OF ind
+       ELSE code := discptr_code(dp);
+            elts := data_elts(dp)
+       FI;
+       INT ow_blocks = elts % block_size,
+           upb = UPB data;
+       INT bufptr := 0;
+       ( code /= overwriteable | keepsake_fault("discptr does not point to "
+                                                "overwriteable area of disc") );
+       INT buffer_needed = elts - (block-1)*block_size;
+       ( upb < buffer_needed | keepsake_fault("buffer is too small") );
+       IF upb /= 0
+       THEN FOR i WHILE
+                 INT block_elts = min(upb-bufptr, max_buffer_size*block_size),
+                     lwb = bufptr + 1;
+                 get_block(file OF df, data[lwb : bufptr PLUSAB block_elts],
+                           b_num, keepsake_msg);
+                 ( UPB wanted /= 0 | wanted[b_num] := TRUE );
+                 read_transfers OF df PLUSAB 1;
+                 bufptr /= upb
+            DO  SKIP
+            OD
+       FI
+      );
+
+   PROC read_overwriteable = (REF DATABASE db, INT block,
+                              REF VECTOR [] CHAR data, DISCPTR dp) VOID:
+      read_vax_blocks(db, df OF db, block, data, nowanted, dp);
+
+  PROC read_indirections = (REF DATABASE db, REF VECTOR [] INDIR indirections,
+                                                               DISCPTR dp) VOID:
+      (VECTOR [UPB indirections*indirection_size] CHAR data;
+       read(db, df OF db, data, nodps, nowanted, indirs, dp);
+       FOR i TO UPB indirections
+       DO   indirections[i] := make_indirection(data[(i-1)*indirection_size+1:
+                                                     i*indirection_size])
+       OD
+      );
+
+   PROC read_discptrs = (REF DATABASE db, REF VECTOR [] DISCPTR data,
+                                                              DISCPTR dp) VOID:
+      read(db, df OF db, nodata, data, nowanted, discptrs, dp);
+
+   PROC hash_val = (REF DATABASE db, DISCPTR dp) INT:
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       check_forgery_use(db, dp);
+       check_gc_nil(df, dp);
+       ( is_nilptr(df, dp) | 0 | address_rep(get_disc_address(df, dp)) )
+      );
+
+   PROC get_free_block = (REF DATABASE db, REF DISCFILE df) INT:
+
+CO  Finds the next free block. Only one block's worth of freelist is held in
+    store at any one time, so every time get_free_block is called, it checks to
+    see whether or not to read in the next block
+CO
+
+      (REF INT current_free = current_free OF df;
+       REF INT last_free = last_free OF df;
+       REF INT size_of_free_space = size_of_free_space OF df;
+       REF INT freelist_index = freelist_index OF df;
+       REF INT freelist_ext_ptr = freelist_ext_ptr OF df;
+       REF INT initial_free_block_dps = initial_free_block_dps OF df;
+       REF INT freeblock_ptr = freeblock_ptr OF df;
+       REF VECTOR [] DISCPTR free_block_dps = free_block_dps OF df;
+       IF (freelist_index PLUSAB 1) > UPB freelist OF df
+       THEN IF freeblock_ptr = initial_free_block_dps
+            THEN INT upb_ext = UPB freelist_ext OF df;
+                 INT new_size = upb_ext - freelist_ext_ptr;
+                 IF new_size > 0
+                 THEN freelist OF df := HEAP VECTOR [new_size] INT
+                        := (freelist_ext OF df)[freelist_ext_ptr+1:upb_ext];
+                      freelist_ext_ptr := upb_ext
+                 ELSE keepsake_fault("no more space on disc - use increase or "
+                                     "garbage collect")
+                 FI
+            ELSE DISCPTR next_ptr = free_block_dps[freeblock_ptr PLUSAB 1];
+                 freelist OF df := HEAP VECTOR [array_size(db, df, next_ptr)]
+                                                                          INT;
+                 read(db, df, freelist OF df, nodps, nowanted,
+                      freelist_ints, next_ptr)
+            FI;
+            freelist_index := 1
+       FI;
+       size_of_free_space OF df MINUSAB 1;
+       last_free := current_free;
+       (freelist OF df)[freelist_index]
+      );
+
+   PROC make_madam_name = (STR name) STR:
+
+CO  converts the name given by the user into the name used by MADAM - does
+    not include the file extension
+CO
+      (VECTOR [UPB name] CHAR madam_name;
+       FOR i TO UPB name
+       DO   INT abs := ABS name[i];
+            madam_name[i] := IF name[i] = "."
+                             THEN "_"
+                             ELIF name[i] = "/"
+                             THEN "-"
+                             ELIF abs >= ABS "a" ANDTH abs <= ABS "z"
+                             THEN REPR (abs MINUSAB 32)
+                             ELSE name[i]
+                             FI
+       OD;
+       madam_name
+      );
+
+   PROC add_chars = (REF REF VECTOR [] CHAR old, VECTOR [] CHAR new,
+                                                            REF INT index) VOID:
+      (INT new_upb = UPB new;
+       INT old_upb = UPB old;
+       IF index + new_upb > old_upb
+       THEN REF VECTOR [] CHAR temp = old;
+            old := HEAP VECTOR [old_upb+block_size] CHAR;
+            old[1 : old_upb] := temp
+       FI;
+       INT lwb = index + 1;
+       old[lwb : index PLUSAB new_upb] := new
+      );
+
+   PROC block_count = (INT data_size, num_elts, BOOL overwriteable,
+                                                       REF INT cbufpos) INT:
+      IF NOT overwriteable
+      THEN INT elts_in_first_block = min(cbufpos % data_size, num_elts);
+           INT max_elts_in_block = actual_block_size % data_size;
+           INT rem_elts = num_elts - elts_in_first_block;
+           IF rem_elts = 0
+           THEN cbufpos PLUSAB num_elts * data_size;
+                1
+           ELSE INT total = (rem_elts - 1) % max_elts_in_block + 1;
+                cbufpos := (rem_elts - (total-1) * max_elts_in_block)
+                                                                 * data_size;
+                total+1
+           FI
+      ELSE num_elts % block_size
+      FI;
+
+   PROC no_of_blocks = (REF DATABASE db, REF INT cbufpos, WRITEDATA data) INT:
+
+      CO delivers the number of times get_free_block would need to be called
+         in order to write away the given data - taking into account the current
+         character position (cbufpos) of the buffer
+      CO
+
+      (INT upper,
+           data_size := 1,
+           result := 0;
+       BOOL overwriteable = FALSE;
+       CASE data IN
+       (VECTOR [] INT i) upper := int_size * UPB i,
+       (VECTOR [] CHAR c) upper := UPB c,
+       (VECTOR [] DISCPTR d) (data_size := discptr_size;
+                              upper := UPB d
+                             )
+       OUT SKIP
+       ESAC;
+       block_count(data_size, upper, overwriteable, cbufpos)
+      );
+
+   PROC can_write = ( REF DATABASE db, VECTOR [] CHAR chars,
+                      VECTOR [] DISCPTR dps ) BOOL:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       INT cbufpos := cbufpos OF df OF db;
+       no_of_blocks(db, cbufpos, chars) +
+       no_of_blocks(db, cbufpos, dps) + 1 < size_of_free_space OF df OF db
+      );
+
+   PROC can_write_ints = (REF DATABASE db, VECTOR [] INT ints) BOOL:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       INT cbufpos := cbufpos OF df OF db;
+       no_of_blocks(db, cbufpos, ints) + 1 < size_of_free_space OF df OF db
+      );
+
+   PROC extend_dps = (REF REF VECTOR [] DISCPTR dps, DISCPTR new_dp) VOID:
+      (REF VECTOR [] DISCPTR temp = dps;
+       INT upb = UPB temp;
+       IF upb = 0
+       THEN dps := HEAP VECTOR [1] DISCPTR;
+            dps[1] := new_dp
+       ELSE dps := HEAP VECTOR [upb+1] DISCPTR;
+            dps[1:upb] := temp;
+            dps[upb+1] := new_dp
+       FI
+      );
+
+   PROC make_shaky = (REF DATABASE db, DISCPTR dp) DISCPTR:
+      (REF DISCFILE df = df OF db;
+       check_valid_db(db);
+       check_nilfile(df);
+       check_forgery_use(db, dp);
+       INT first_offset = first_offset(dp);
+       ADDRESS addr := (first_block(dp), first_offset);
+       BOOL assignable = is_assignable(dp);
+       INT code = discptr_code(dp),
+           data_elts = data_elts(dp),
+           dp_elts = dp_elts(dp),
+           read_size = read_size(dp);
+       INT dp_version;
+       IF first_offset /= 0
+       THEN dp_version := create_indir(df, addr, shaky, data_elts, dp_elts,
+                                       code, read_size, no_indirection);
+            instore_vars OF df := HEAP VARLIST
+                               := (block_num OF addr, instore_vars OF df)
+       ELSE dp_version := version(dp)
+       FI;
+       make_dp(shaky, assignable, code, data_elts, dp_elts, dp_version,
+               read_size, addr)
+      );
+
+   PROC flush_buffer = (REF DATABASE db, REF DISCFILE df) VOID:
+
+CO  Write the contents of the write_buffer to disc  CO
+
+      (REF WRITEBUFFER wb = write_buffer OF df;
+       REF INT upb = upb OF wb,
+               buffer_ptr = buffer_ptr OF wb;
+       INT diff = max_buffer_size - buffer_ptr;
+       IF upb /= 0 ANDTH diff > 0
+       THEN INT start = buffer_ptr * block_size;
+            put_block(file OF df,
+                      (buffer OF wb)[start+1: max_buffer_size*block_size],
+                      upb - diff + 1, keepsake_msg);
+            write_transfers OF df PLUSAB 1;
+            buffer_ptr := max_buffer_size;
+            upb := 0
+       FI
+      );
+
+   PROC add_to_list = (REF REF BLOCKLIST list, INT lwb, BOOL not_contiguous)
+                                                                         VOID:
+      (IF (list IS nilblocklist) OREL not_contiguous
+       THEN list := HEAP BLOCKLIST := (lwb, lwb, list)
+       ELSE lwb OF list := lwb
+       FI
+      );
+
+   PROC write_to_buffer = (REF DATABASE db, REF DISCFILE df) VOID:
+
+      (REF INT last_free = last_free OF df,
+               cbufpos = cbufpos OF df,
+               current_free = current_free OF df;
+       REF VECTOR [] CHAR block_buffer = block_buffer OF df;
+       REF WRITEBUFFER wb = write_buffer OF df;
+       REF INT upb = upb OF wb,
+               buffer_ptr = buffer_ptr OF wb;
+       ( buffer_ptr = max_buffer_size | upb := current_free );
+       last_free := current_free;
+       current_free := get_free_block(db, df);
+       (buffer OF wb)[(buffer_ptr -1)*block_size+1 :
+                      buffer_ptr *block_size] := block_buffer;
+       buffer_ptr MINUSAB 1;
+       BOOL not_contiguous = last_free OF df - current_free /= 1;
+       IF not_contiguous OREL buffer_ptr = 0
+       THEN put_block(file OF df, (buffer OF wb)[buffer_ptr *block_size+1 :
+                                                 max_buffer_size * block_size],
+                      last_free OF df, keepsake_msg);
+            write_transfers OF df PLUSAB 1;
+            clear_rvc(buffer OF wb);
+            buffer_ptr := max_buffer_size;
+            upb := 0
+       FI;
+       add_to_list(list OF wb, current_free, not_contiguous);
+       cbufpos := 0;
+       clear_rvc(block_buffer);
+       block_buffer[actual_block_size+1 : actual_block_size+block_heading_size]
+                        := make_block_heading(0, last_free, 0, 0, 0, 1)
+      );
+
+   PROC optimum_read_size = (REF WRITEBUFFER wb, INT current_free) INT:
+      (INT result := 1;
+       REF REF BLOCKLIST list_ptr := list OF wb;
+       WHILE (list_ptr ISNT nilblocklist) ANDTH result /= max_buffer_size
+       DO   INT min_read = lwb OF list_ptr - current_free,
+                max_read = upb OF list_ptr - current_free;
+            IF min_read >= 0
+            THEN result := ( max_read >= max_buffer_size - 1
+                                  | max_buffer_size | max_read+1 )
+            FI;
+            list_ptr := rest OF list_ptr
+       OD;
+       result
+      );
+
+   PROC check_not_appending = (REF DISCFILE df, VECTOR [] CHAR operation) VOID:
+      ( appending OF df |
+              keepsake_fault(operation + " not allowed whilst appending") );
+
+   PROC add_gc_address = (REF REF TRACED gc_ptrs, ADDRESS old, new) VOID:
+      gc_ptrs := HEAP TRACED := (old, new, gc_ptrs);
+
+   PROC write_dp_copies = (REF DISCFILE df, REF WRITEBUFFER wb,
+                                                       ADDRESS old, new) VOID:
+      (REF REF TRACED traced := gc_ptrs OF df;
+       WHILE traced ISNT niltraced
+       DO   IF old OF traced = old
+            THEN ADDRESS traced_addr = new OF traced;
+                 INT offset = offset OF traced_addr,
+                     block = block_num OF traced_addr;
+                 IF block = current_free OF df
+                 THEN overwrite_address(block_buffer OF df, offset, new)
+                 ELIF in_writebuffer(df, block)
+                 THEN INT start = (max_buffer_size + block -
+                                                 upb OF wb - 1) * block_size;
+                      overwrite_address((buffer OF wb)[start+1:
+                                                       start+block_size],
+                                        offset, new)
+                 ELSE VECTOR [block_size] CHAR buff;
+                      get_block(file OF df, buff, block, keepsake_msg);
+                      overwrite_address(buff, offset, new);
+                      put_block(file OF df, buff, block, keepsake_msg)
+                 FI
+            FI;
+            traced := rest OF traced
+       OD
+{ ; newline(screen) }
+      );
+
+   PROC write = (REF DATABASE db, REF DISCFILE df,
+                 UNION (VECTOR [] CHAR, VECTOR [] INT) data,
+                 VECTOR [] DISCPTR dps, INT data_code, upb_chars, indirection,
+                 BOOL assignable, ADDRESS old, REF VECTOR [] INT deja_vus,
+                                          REF VECTOR [] INT pagetable) DISCPTR:
+
+CO  Writes "data" into file "df" - "data_code" is used for type-checking. The
+    code cannot be deduced from the data - there is more than one type of int
+    which is checked (pagetable_ints, freelist_ints etc). "Indirection" and
+    "pagetable" are for use by the compacting garbage collector. If
+    "indirection" n is given, then the compactor writes away the data and
+    changes the address of the nth indirection (if n=0, then write away data as
+    normal). If "pagetable" isn't nilpagetable (i.e. write has been called by
+    the compactor), then record the position of the data on disc (the pagetable
+    is only in store when the garbage collector is called).
+
+    Data is written from the end of the file towards the beginning - this means
+    that future reads will be more efficient in terms of number of disc accesses
+    optimised, since RMS allows large contiguous reads.
+
+    Within each VAX block, data is written from top to bottom. Except for
+    overwriteable areas of disc, there is always a block_heading (of size
+    block_heading_size) at the end of the block (see PROC make_block_heading in
+    module su_madam_procs).
+CO
+
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_file_writeable(db, df);
+       REF WRITEBUFFER wb = write_buffer OF df;
+       DISCPTR output;
+       REF INT current_free = current_free OF df,
+               cbufpos = cbufpos OF df,
+               appended_data = appended_data OF df;
+       REF REF TRACED gc_ptrs = gc_ptrs OF df;
+       REF VECTOR [] CHAR block_buffer = block_buffer OF df;
+       REF INT last_free = last_free OF df;
+
+       INT upb_data = CASE data IN (VECTOR [] CHAR  chars) UPB chars,
+                                   (VECTOR [] INT ints) UPB ints * int_size
+                      ESAC,
+           upb_dps = UPB dps;
+
+       ADDRESS addr := (1, 1);
+       INT cdata_elt := 0,
+           int_elt := 0,
+           int_index:= int_size,
+           cdps_elt := 0;
+       VECTOR [int_size] CHAR  current_int;
+
+       FOR i WHILE cdata_elt /= upb_data OREL cdps_elt /= upb_dps
+       DO   BOOL continue := TRUE;
+            INT data_elts,
+                dp_elts;
+            WHILE continue
+            DO   ( i > 1 ANDTH UPB pagetable /= 0
+                              | pagetable[current_free] := last_free );
+                 INT charpos := cbufpos;
+                 data_elts := min(upb_data - cdata_elt,
+                                  actual_block_size - charpos);
+                 charpos PLUSAB data_elts;
+                 dp_elts := min(upb_dps - cdps_elt,
+                                (actual_block_size - charpos) % discptr_size);
+                 ( data_elts = 0 ANDTH dp_elts = 0
+                        | write_to_buffer(db, df) | continue := FALSE )
+            OD;
+
+            CASE data IN
+               (VECTOR [] CHAR  chars)
+                   FOR i TO data_elts
+                   DO  block_buffer[cbufpos PLUSAB 1] :=
+                          chars[cdata_elt PLUSAB 1]
+                   OD,
+               (VECTOR [] INT  ints)
+                   FOR i TO data_elts
+                   DO  IF (int_index PLUSAB 1) > int_size
+                       THEN  int_index:= 1;
+                             current_int:= ITOVC ints[int_elt PLUSAB 1]
+                       FI;
+                       block_buffer[cbufpos PLUSAB 1] := current_int[int_index];
+                       cdata_elt PLUSAB 1
+                   OD
+            ESAC;
+
+            FOR i TO dp_elts
+            DO    DISCPTR d = dps[cdps_elt PLUSAB 1];
+                  ADDRESS old_addr = (first_block(d), first_offset(d));
+                  ADDRESS new = (current_free, cbufpos);
+                  FOR j TO UPB deja_vus
+                  DO   ( deja_vus[j] = cdps_elt ANDTH offset OF old_addr /= 0
+                                      | add_gc_address(gc_ptrs, old_addr, new) )
+                  OD;
+                  INT lwb = cbufpos + 1;
+                  block_buffer[lwb : cbufpos PLUSAB discptr_size]
+                                              := dp_to_chars(d);
+                  check_forgery_write(db, d)
+            OD;
+            IF actual_block_size - cbufpos < data_heading_size OREL
+               cdata_elt /= upb_data OREL cdps_elt /= upb_dps
+            THEN INT read_size = optimum_read_size(wb, current_free);
+                 block_buffer[actual_block_size+1 :
+                              actual_block_size+block_heading_size]
+                        := make_block_heading(data_code, last_free,
+                                              data_elts + appended_data,
+                                              dp_elts, cbufpos+1, read_size);
+                 appended_data := 0;
+                 addr := (current_free, block_size);
+                 write_to_buffer(db, df)
+            ELIF NOT appending OF df
+            THEN INT lwb = cbufpos + 1;
+                 block_buffer[lwb : cbufpos PLUSAB data_heading_size]
+                      := make_data_heading(data_code,
+                                           data_elts + appended_data, dp_elts);
+                 appended_data := 0;
+                 addr := (current_free, cbufpos)
+            ELSE appended_data PLUSAB data_elts
+            FI
+       OD;
+
+       IF upb_data = 0 ANDTH upb_dps = 0
+       THEN IF actual_block_size - cbufpos < data_heading_size
+            THEN INT read_size = optimum_read_size(wb, current_free);
+                 block_buffer[actual_block_size+1 :
+                              actual_block_size+block_heading_size]
+                        := make_block_heading(data_code, last_free,
+                                              appended_data, 0,
+                                              cbufpos+1, read_size);
+                 appended_data := 0
+            ELSE INT lwb = cbufpos + 1;
+                 block_buffer[lwb : cbufpos PLUSAB data_heading_size]
+                  := make_data_heading(data_code, appended_data, 0);
+                 appended_data := 0;
+                 addr := (current_free, cbufpos)
+            FI
+       FI;
+
+       INT read_size = optimum_read_size(wb, current_free);
+       list OF wb := nilblocklist;
+       write_dp_copies(df, wb, old, addr);
+
+       INT version := 1;
+       IF assignable
+       THEN version := create_indir(df, addr, not_shaky, upb_chars, upb_dps,
+                                    data_code, read_size, indirection);
+            instore_vars OF df := HEAP VARLIST
+                               := (block_num OF addr, instore_vars OF df)
+       FI;
+       make_dp(not_shaky, assignable, data_code, upb_chars, upb_dps, version,
+               read_size, addr)
+      );
+
+   PROC write_ints = (REF DATABASE db, VECTOR [] INT data, BOOL assignable)
+                                                                     DISCPTR:
+      (check_not_appending(df OF db, "write_ints");
+       write(db, df OF db, data, nodps, ints, UPB data * int_size,
+             no_indirection, assignable, niladdress, noints, nilpagetable)
+      );
+
+   PROC write_chars = (REF DATABASE db, VECTOR [] CHAR data, BOOL assignable)
+                                                                     DISCPTR:
+      (check_not_appending(df OF db, "write_chars");
+       write(db, df OF db, data, nodps, chars, UPB data, no_indirection,
+             assignable, niladdress, noints, nilpagetable)
+      );
+
+   PROC write_chars_dps = (REF DATABASE db, VECTOR [] CHAR data,
+                           VECTOR [] DISCPTR dps, BOOL assignable) DISCPTR:
+      (check_not_appending(df OF db, "write_chars_dps");
+       write(db, df OF db, data, dps, charsdps, UPB data, no_indirection,
+             assignable, niladdress, noints, nilpagetable)
+      );
+
+   PROC write_discptrs = (REF DATABASE db, VECTOR [] DISCPTR data,
+                                                      BOOL assignable) DISCPTR:
+      (check_not_appending(df OF db, "write_discptrs");
+       write(db, df OF db, nodata, data, discptrs, 0, no_indirection,
+             assignable, niladdress, noints, nilpagetable)
+      );
+
+   PROC write_indirs = (REF DATABASE db, VECTOR [] INDIR data) DISCPTR:
+      (check_not_appending(df OF db, "write_indirs");
+       VECTOR [UPB data*indirection_size] CHAR chars;
+       FOR i TO UPB data
+       DO   chars[(i-1)*indirection_size+1:i*indirection_size]
+                                                  := indir_to_chars(data[i])
+       OD;
+       write(db, df OF db, chars, nodps, indirs, UPB chars, no_indirection,
+             not_assignable, niladdress, noints, nilpagetable)
+      );
+
+   PROC write_pagetable = (REF DATABASE db, REF DISCFILE df, VECTOR [] INT data)
+                                                                        DISCPTR:
+      (check_not_appending(df, "write_pagetable");
+       write(db, df, data, nodps, pagetable_ints,
+             UPB data * int_size, no_indirection, not_assignable,
+             niladdress, noints, nilpagetable)
+      );
+
+   PROC write_freelist = (REF DATABASE db, REF DISCFILE df, VECTOR [] INT data)
+                                                                       DISCPTR:
+      (check_not_appending(df, "write_freelist");
+       write(db, df, data, nodps, freelist_ints,
+             UPB data * int_size, no_indirection, not_assignable,
+             niladdress, noints, nilpagetable)
+      );
+
+   PROC start_append = (REF DATABASE db, VECTOR [] CHAR data,
+                                                       BOOL assignable) DISCPTR:
+      (REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       check_not_appending(df, "start_append");
+       appending OF df := HEAP BOOL := TRUE;
+       DISCPTR dp = write(db, df, data, nodps, charsdps, UPB data,
+                          no_indirection, assignable, niladdress, noints,
+                          nilpagetable);
+       append_dp OF df := HEAP DISCPTR := dp
+      );
+
+   PROC append = (REF DATABASE db, VECTOR [] CHAR data, DISCPTR onto) DISCPTR:
+      write(db, df OF db, data, nodps, charsdps, UPB data + data_elts(onto),
+            no_indirection, is_assignable(onto), niladdress, noints,
+            nilpagetable);
+
+   PROC abort_append = (REF DATABASE db) VOID:
+     (REF DISCFILE df = df OF db;
+      appending OF df := HEAP BOOL := FALSE;
+      appended_data OF df := HEAP INT := 0;
+      append_dp OF df := HEAP DISCPTR := nilptr
+     );
+
+   PROC finish_append = (REF DATABASE db, VECTOR [] CHAR data,
+                             VECTOR [] DISCPTR dps, DISCPTR onto) DISCPTR:
+      (appending OF df OF db := HEAP BOOL := FALSE;
+       write(db, df OF db, data, dps, charsdps, UPB data + data_elts(onto),
+             no_indirection, is_assignable(onto), niladdress, noints,
+             nilpagetable)
+      );
+
+   PROC freelist_to_disc = (REF DATABASE db, REF DISCFILE df,
+                                                VECTOR [] INT freelist) VOID:
+
+CO  freelist ptr OF df is a discptr to discptrs to ints - every time
+    PROC increase is called, another discptr to ints is added
+CO
+
+      (INT  count:= 0;
+       INT  ndp = (UPB freelist + max_ints_in_block - 1) OVER max_ints_in_block,
+            old_size = UPB free_block_dps OF df;
+       HEAP VECTOR [ndp + old_size] DISCPTR  new;
+       IF old_size > 0 THEN  new[: old_size]:= free_block_dps OF df  FI;
+       free_block_dps OF df:= new;
+       FORALL dp IN (free_block_dps OF df)[old_size + 1 :]
+       DO   INT  n_ints = min(max_ints_in_block, UPB freelist - count),
+                 lwb = count + 1;
+            dp:= write_freelist(db, df, freelist[lwb : count PLUSAB n_ints])
+       OD
+      );
+
+   PROC overwrite_blocks = (REF DATABASE db, REF DISCFILE df, INT block,
+                                         VECTOR [] CHAR data, DISCPTR dp) VOID:
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_file_writeable(db, df);
+       INT upper = UPB data;
+       ( upper > data_elts(dp) - (block-1)*block_size
+         | keepsake_fault("data will not fit into overwriteable disc space") );
+       ( upper > max_buffer_size * block_size
+              | keepsake_fault("data cannot be written away as one atomic "
+                               "operation") );
+       ADDRESS addr = get_disc_address(df, dp);
+       ( upper > 0 |
+             put_block(file OF df, data, block_num OF addr, keepsake_msg) );
+       write_transfers OF df PLUSAB 1
+      );
+
+   PROC overwrite = (REF DATABASE db, INT block, VECTOR [] CHAR data,
+                                                              DISCPTR dp) VOID:
+      overwrite_blocks(db, df OF db, block, data, dp);
+
+   PROC overwrite_test = (REF DATABASE db, REF DISCFILE df, INT blocks,
+                          REF INT block_ptr, freelist_index, free_space) INT:
+
+CO  Tries to find a number ("blocks") of consecutive VAX blocks and delivers
+    either the number of the first block in the sequence (smallest block number)
+    if it succeeds, or 0 if it fails
+CO
+
+      (INT result := 0;
+       check_valid_db(db);
+       check_nilfile(df);
+       check_file_writeable(db, df);
+       BOOL overwriteable = FALSE;
+       INT size_of_free_space = size_of_free_space OF df;
+       block_ptr := freeblock_ptr OF df;
+       freelist_index := freelist_index OF df;
+       free_space := size_of_free_space OF df;
+       REF VECTOR [] DISCPTR free_block_dps = free_block_dps OF df;
+       REF VECTOR [] INT freelist := HEAP VECTOR [UPB freelist OF df] INT
+                                  := freelist OF df;
+
+       PROC read_next_free = INT:
+          (free_space MINUSAB 1;
+           IF (freelist_index PLUSAB 1) > UPB freelist
+           THEN IF block_ptr = UPB free_block_dps
+                THEN block_ptr PLUSAB 1;
+                     INT upb_ext = UPB freelist_ext OF df;
+                     IF upb_ext > 0
+                     THEN freelist OF df := HEAP VECTOR [upb_ext] INT
+                                         := freelist_ext OF df;
+                          freelist[freelist_index := 1]
+                     ELSE 0
+                     FI
+                ELSE DISCPTR next_ptr = free_block_dps[block_ptr PLUSAB 1];
+                     freelist := HEAP VECTOR [array_size(db, df, next_ptr)] INT;
+                     read(db, df, freelist, nodps, nowanted,
+                          freelist_ints, next_ptr);
+                     freelist[freelist_index := 1]
+                FI
+           ELSE freelist[freelist_index]
+           FI
+          );
+
+       INT current_free := read_next_free;
+       BOOL continue := (current_free /= 0);
+       ( blocks > size_of_free_space | continue := FALSE );
+
+       WHILE continue
+       DO   INT first = current_free;
+            FOR i TO blocks-1
+            WHILE INT next = read_next_free;
+                  continue := (next /= 0);
+                  next = (current_free MINUSAB 1) ANDTH continue
+            DO   ( i = blocks-1 | continue := FALSE; result := next )
+            OD
+       OD;
+       result
+      );
+
+   PROC can_overwrite = (REF DATABASE db, INT blocks) BOOL:
+      (INT dummy1, dummy2, dummy3;
+       overwrite_test(db, df OF db, blocks, dummy1, dummy2, dummy3) /= 0
+      );
+
+   PROC mk_overwrite = (REF DATABASE db, REF DISCFILE df, INT blocks,
+                                     indirection, BOOL assignable) DISCPTR:
+      (check_valid_db(db);
+       check_nilfile(df);
+       check_not_appending(df, "make_overwriteable");
+
+       REF INT current_free = current_free OF df,
+               last_free = last_free OF df,
+               cbufpos = cbufpos OF df;
+
+       HEAP INT freeblock_ptr,
+                freelist_index,
+                free_space;
+       INT first_block = overwrite_test(db, df, blocks, freeblock_ptr,
+                                        freelist_index, free_space);
+       ( first_block = 0 | keepsake_fault("not enough contiguous space on disc "
+                                         "- use increase or garbage collect") );
+
+       flush_buffer(db, df);
+       IF cbufpos OF df > 0
+       THEN put_block(file OF df, block_buffer OF df, current_free,
+                      keepsake_msg);
+            write_transfers OF df PLUSAB 1;
+            clear_rvc(block_buffer OF df);
+            cbufpos := 0
+       FI;
+       size_of_free_space OF df := free_space;
+       freeblock_ptr OF df := freeblock_ptr;
+       freelist_index OF df := freelist_index;
+       current_free := first_block;
+       last_free := 0;
+
+       ADDRESS addr := (first_block, 1);
+       INT data_elts = blocks*block_size,
+           dp_elts   = 0,
+           data_code = overwriteable,
+           read_size = min(max_buffer_size, blocks);
+
+       INT version := 1;
+       IF assignable
+       THEN version := create_indir(df, addr, not_shaky, data_elts, dp_elts,
+                                    data_code, read_size, indirection);
+            instore_vars OF df := HEAP VARLIST
+                               := (block_num OF addr, instore_vars OF df)
+       FI;
+
+       DISCPTR new_dp = make_dp(not_shaky, assignable, data_code,
+                                data_elts, dp_elts, version, read_size, addr);
+       new_dp
+      );
+
+   PROC make_overwriteable = (REF DATABASE db, INT blocks, BOOL assignable)
+                                                                    DISCPTR:
+      mk_overwrite(db, df OF db, blocks, no_indirection, assignable);
+
+   PROC discfile_increase = (REF DATABASE db, REF DISCFILE df, INT by,
+                                               MESSAGEPROC  msg) VOID:
+
+CO the number of blocks added will be by*increase increment CO
+
+      (check_valid_db(db);
+       INT actual_by = ((by+1) * increase_increment - 1) OVER block_size;
+       check_nilfile(df);
+       REF INT size_of_free_space = size_of_free_space OF df,
+               file_size = file_size OF df,
+               old_file_size = old_file_size OF df;
+       REF REF VECTOR [] INT freelist = freelist OF df;
+       REF REF VECTOR [] DISCPTR free_block_dps = free_block_dps OF df;
+       INT old_size = file_size OF df;
+       IF (file_size OF df + actual_by) > max_file_size
+       THEN  keepsake_fault("attempt to increase past file limits")
+       ELIF by < 0
+       THEN  keepsake_fault("attempt to decrease size of file")
+       FI;
+       INT size = increase_db_file(file OF df, actual_by * block_size, msg)
+                      OVER block_size;
+       file_size := size;
+       put_block(file OF df, end_file_block, file_size, keepsake_msg);
+       write_transfers OF df PLUSAB 1;
+       IF UPB freelist_ext OF df = 0
+       THEN freelist_ext OF df := HEAP VECTOR [actual_by] INT;
+            FOR i TO actual_by
+            DO   (freelist_ext OF df)[i] := old_size + actual_by + 1 - i
+            OD
+       ELSE VECTOR [] INT temp = freelist_ext OF df;
+            INT upb_temp = UPB temp;
+            freelist_ext OF df := HEAP VECTOR [upb_temp+actual_by] INT;
+            (freelist_ext OF df)[1:upb_temp] := temp;
+            FOR i TO actual_by
+            DO   (freelist_ext OF df)[upb_temp+i]
+                                         := old_size + actual_by + 1 - i
+            OD
+       FI;
+       IF UPB pagetable_ext OF df = 0
+       THEN pagetable_ext OF df := HEAP VECTOR [actual_by] INT;
+            FOR i TO actual_by - 1
+            DO   (pagetable_ext OF df)[i] := -(old_size+1+i)
+            OD;
+            (pagetable_ext OF df)[actual_by] := -(old_file_size+1)
+       ELSE VECTOR [] INT temp = pagetable_ext OF df;
+            INT upb_temp = UPB temp;
+            pagetable_ext OF df := HEAP VECTOR [upb_temp+actual_by] INT;
+            (pagetable_ext OF df)[1:upb_temp] := temp;
+            FOR i FROM upb_temp+1 TO upb_temp+actual_by-1
+            DO   (pagetable_ext OF df)[i] := -(old_size-upb_temp+1+i)
+            OD;
+            (pagetable_ext OF df)[upb_temp+actual_by] := -(old_file_size+1)
+       FI;
+       old_file_size := old_size;
+       size_of_free_space OF df PLUSAB actual_by
+      );
+
+   PROC increase = (REF DATABASE db, INT by, MESSAGEPROC  msg) VOID:
+      discfile_increase(db, df OF db, by, msg);
+
+   PROC can_increase = (REF DATABASE db, INT by) BOOL:
+      file_size OF df OF db + by*increase_increment <= max_file_size*block_size
+      ANDTH  by >= 0;
+
+   PROC test_and_increase = (REF DATABASE db) VOID:
+
+   CO  Make sure that the size of the file is as expected - if not, write
+       away the extra freelist and pagetable. (The difference can occur because
+       a call of increase does not write away the new freelist and pagetable
+       immediately - since this could interrupt an append)
+   CO
+
+      (REF DISCFILE df = df OF db;
+       REF INT size = file_size OF df,
+               old_file_size = old_file_size OF df;
+       INT actual_size = file_block_size(file OF df);
+       INT size_diff = actual_size - size;
+       IF size_diff > 0
+       THEN VECTOR [size_diff] INT freelist_ext;
+            FOR i TO size_diff
+            DO   freelist_ext[i] := actual_size + 1 - i
+            OD;
+            freelist_to_disc(db, df, freelist_ext);
+            VECTOR [size_diff] INT pagetable;
+            FOR i TO size_diff - 1
+            DO   pagetable[i] := -size+1+i
+            OD;
+            pagetable[size_diff] := -(old_file_size+1);
+            DISCPTR new_dp =
+                   write(db, df OF db, pagetable, nodps, pagetable_ints,
+                         UPB pagetable * int_size, no_indirection,
+                         not_assignable, niladdress, noints, nilpagetable);
+            extend_dps(pagetable_dps OF df, new_dp);
+            old_file_size := size;
+            size := actual_size;
+            size_of_free_space OF df PLUSAB size_diff
+       FI
+      );
+
+   PROC can_finish = (REF DATABASE db) BOOL:
+      (
+
+       PROC block_write = ( REF DATABASE db, REF INT cbufpos,
+                            BOOL freelist,  VECTOR [] INT  ints ) INT:
+          (INT result := ( UPB ints = 0 | 0
+                                     | no_of_blocks(db, cbufpos, ints) );
+           INT upb = ( freelist | result | 1 );
+           VECTOR [upb] DISCPTR dps;
+           result PLUSAB ( UPB dps = 0 | 0 | no_of_blocks(db, cbufpos, dps) );
+           result
+          );
+
+       check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       INT bytes_left = block_size - fixed_in_block;
+       REF VECTOR [] INDIR indirs = indirections OF df;
+       INT indirs_in_fixed = min(bytes_left % indirection_size, UPB indirs);
+       INT cbufpos := cbufpos OF df;
+       VECTOR [(UPB indirs - indirs_in_fixed)*indirection_size] CHAR ind_chars;
+       INT num_blocks := ( UPB indirs = 0 | 0 |
+                                 no_of_blocks(db, cbufpos, ind_chars) );
+       BOOL freelist = TRUE;
+       num_blocks PLUSAB block_write(db, cbufpos, freelist,
+                                     freelist_ext OF df);
+       num_blocks PLUSAB block_write(db, cbufpos, NOT freelist,
+                                     pagetable_ext OF df);
+       num_blocks+1 < size_of_free_space OF df
+      );
+
+   PROC can_commit = (REF DATABASE db) BOOL:
+      (check_valid_db(db);
+       can_finish(db)
+      );
+
+   PROC initialise = (REF DATABASE db, REF DISCFILE df) VOID:
+      (INT freelist_size = file_size OF df - fixed_overhead;
+       VECTOR [freelist_size] INT new_freelist;
+       FOR i TO freelist_size
+       DO   new_freelist[i] := file_size OF df + 1 - i
+       OD;
+       INT size = min(max_ints_in_block, freelist_size);
+       freelist OF df := HEAP VECTOR [size] INT := new_freelist[1 : size];
+       write_transfers OF df := HEAP INT := 0;
+       read_transfers OF df := HEAP INT := 0;
+       free_block_dps OF df := HEAP VECTOR [0] DISCPTR;
+       freelist_to_disc(db, df, new_freelist);
+       INT file_size = file_size OF df;
+       VECTOR [file_size] INT pagetable;
+       pagetable[file_size] := -1;
+       FOR i TO fixed_overhead
+       DO   pagetable[i] := 0
+       OD;
+       FOR i FROM fixed_overhead + 1 TO file_size - 1
+       DO   pagetable[i] := -(i+1)
+       OD;
+       initial_free_block_dps OF df := HEAP INT := UPB free_block_dps OF df;
+       pagetable_dps OF df := HEAP VECTOR [1] DISCPTR
+                           := write(db, df, pagetable, nodps,
+                                    pagetable_ints, UPB pagetable * int_size,
+                                    no_indirection, not_assignable, niladdress,
+                                    noints, nilpagetable);
+       indirs_dp OF df := HEAP DISCPTR := nilptr
+      );
+
+   PROC make_gcnil = (REF INDIR ind) VOID:
+      (INT vn := version OF ind;
+       INT last_version = ABS CASE desc_version_size IN
+                                   16r ff,
+                                   16r ffff,
+                                   16r ffffff,
+                                   16r ffffffff
+                              ESAC;
+       vn := ( vn = last_version | 1 | vn+1 );
+       address OF ind := nilgcaddress;
+       version OF ind := vn
+      );
+
+   PROC hash_index = (INT address_rep) INT:
+      (INT n = address_rep % hashtable_size;
+       address_rep - n * hashtable_size + 1
+      );
+
+   PROC less_than = (INT block_num, offset, old_block, old_offset) BOOL:
+      block_num < old_block OREL
+      (block_num = old_block ANDTH offset < old_offset);
+
+   PROC not_added_to_hashtable = (REF GCDATA gcdata, REF DISCFILE df,
+                                             UNION(DISCPTR, DPDATA) data) BOOL:
+
+       CO  If the discptr/dpdata has not already been added, then adds to the
+           appropriate list in the hashtable (arranged in order of disc address)
+           and delivers FALSE
+       CO
+
+      (BOOL not_already_there := TRUE;
+       INT block_num,
+           offset,
+           index;
+       CASE data IN
+       (DISCPTR dp) (ADDRESS ad = get_disc_address(df, dp);
+                     block_num := block_num OF ad;
+                     offset := offset OF ad;
+                     index := hash_index(address_rep(ad))
+                    ),
+       (DPDATA d) (ADDRESS ad = address OF d;
+                   block_num := block_num OF ad;
+                   offset := offset OF ad;
+                   index := hash_index(address_rep(ad))
+                  )
+       ESAC;
+       REF HASHTABLE hashtable = hashtable OF gcdata;
+       CASE hashtable IN
+            (REF VECTOR [] REF DISCADDRESS address)
+                   (REF REF DISCADDRESS addr = address[index];
+                    IF (addr IS nildisc_address) OREL
+                       less_than(block_num, offset, block_num OF addr,
+                                 offset OF addr)
+                    THEN addr := HEAP DISCADDRESS
+                              := (block_num, offset, addr);
+                         (max_hashlist OF gcinfo OF gcdata)[index] PLUSAB 1
+                    ELSE REF REF DISCADDRESS addr_ptr := addr;
+                         BOOL continue := TRUE;
+                         WHILE (addr_ptr ISNT nildisc_address) ANDTH continue
+                         DO   IF less_than(block_num OF addr_ptr,
+                                           offset OF addr_ptr, block_num,
+                                           offset)
+                              THEN addr_ptr := rest OF addr_ptr
+                              ELIF continue := FALSE;
+                                   block_num OF addr_ptr = block_num ANDTH
+                                   offset OF addr_ptr = offset
+                              THEN not_already_there := FALSE
+                              FI
+                         OD;
+                         IF not_already_there
+                         THEN REF REF DISCADDRESS (addr_ptr)
+                                     := HEAP DISCADDRESS
+                                     := (block_num, offset, addr_ptr);
+                              (max_hashlist OF gcinfo OF gcdata)[index]
+                                                                   PLUSAB 1
+                         FI
+                    FI
+                   ),
+
+            (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (REF REF OLDANDNEW oan = old_and_new[index];
+                    IF (oan IS nilold_and_new) OREL
+                       less_than(block_num, offset, old_block OF oan,
+                                 old_offset OF oan)
+                    THEN oan := HEAP OLDANDNEW
+                             := (block_num, offset, -1, -1, oan);
+                         (max_hashlist OF gcinfo OF gcdata)[index] PLUSAB 1
+                    ELSE REF REF OLDANDNEW start := oan;
+                         BOOL continue := TRUE;
+                         WHILE (start ISNT nilold_and_new) ANDTH continue
+                         DO   IF less_than(old_block OF start,
+                                           old_offset OF start,
+                                           block_num, offset)
+                              THEN start := rest OF start
+                              ELIF continue := FALSE;
+                                   block_num = old_block OF start ANDTH
+                                   offset = old_offset OF start
+                              THEN not_already_there := FALSE
+                              FI
+                         OD;
+                         IF not_already_there
+                         THEN REF REF OLDANDNEW (start)
+                                     := HEAP OLDANDNEW
+                                     := (block_num, offset, -1, -1, start);
+                              (max_hashlist OF gcinfo OF gcdata)[index] PLUSAB 1
+                         FI
+                    FI
+                   )
+       ESAC;
+       not_already_there
+      );
+
+   PROC is_free = (VECTOR [] CHAR wanted, INT block_num) BOOL:
+
+         CO  Has "block_num" been marked as wanted ? (Yes delivers FALSE, no
+             delivers TRUE)
+         CO
+
+      (INT index = (block_num-1) % byte_size + 1;
+       INT element = block_num - (index-1)*byte_size;
+       NOT ((word_size - element + 1) ELEM BIN (ABS wanted[index]))
+      );
+
+   PROC set_indir_wanted = (REF GCDATA gcdata, INT index) VOID:
+      (indirs_wanted OF gcdata)[index] := TRUE;
+
+   PROC initialise_gc = (REF DATABASE db, BOOL compactor, check) REF GCDATA:
+      (REF GCDATA gcdata = HEAP GCDATA;
+       read_buffer OF gcdata := HEAP READBUFFER := setup_readbuffer;
+       REF DISCFILE df = df OF db;
+       check_file_writeable(db, df);
+       IF collectable OF df OREL check
+       THEN pagetable OF gcdata := HEAP VECTOR [file_size OF df] INT;
+            INT ptelts := 0;
+            FOR i TO UPB pagetable_dps OF df
+            DO   DISCPTR ptr = (pagetable_dps OF df)[i];
+                 INT size = size(db, ptr),
+                     lwb = ptelts + 1;
+                 read_pagetable(db, df,
+                                (pagetable OF gcdata)[lwb :
+                                                      ptelts PLUSAB size], ptr)
+            OD;
+            IF compactor
+            THEN compactor OF gcdata := HEAP BOOL := TRUE;
+                 blocks_wanted OF gcdata := HEAP VECTOR [0] CHAR;
+                 VECTOR [hashtable_size] REF OLDANDNEW hashtable;
+                 FOR j TO hashtable_size
+                 DO   hashtable[j] := nilold_and_new
+                 OD;
+                 hashtable OF gcdata := HEAP VECTOR [hashtable_size]
+                                                                 REF OLDANDNEW
+                                     := hashtable
+            ELSE compactor OF gcdata := HEAP BOOL := FALSE;
+                 ( ptelts /= file_size OF df
+                    | (pagetable OF gcdata)[ptelts+1:] := pagetable_ext OF df );
+                 pagetable_ext OF df := HEAP VECTOR [0] INT;
+                 freelist_ext OF df := HEAP VECTOR [0] INT;
+                 INT upb_wanted = (file_size OF df - 1) % byte_size + 1;
+                 blocks_wanted OF gcdata := HEAP VECTOR [upb_wanted] CHAR;
+                 FOR j TO upb_wanted
+                 DO   (blocks_wanted OF gcdata)[j] := REPR ABS BIN 0
+                 OD;
+                 VECTOR [hashtable_size] REF DISCADDRESS hashtable;
+                 FOR j TO hashtable_size
+                 DO   hashtable[j] := nildisc_address
+                 OD;
+                 hashtable OF gcdata
+                    := HEAP VECTOR [hashtable_size] REF DISCADDRESS := hashtable
+            FI;
+            REF GCINFO gcinfo = HEAP GCINFO;
+            max_hashlist OF gcinfo := HEAP VECTOR [hashtable_size] INT;
+            clear_rvi(max_hashlist OF gcinfo);
+            disc_accesses OF gcinfo := HEAP INT := 0;
+            stack_size OF gcinfo := HEAP INT := 0;
+            max_stack_size OF gcinfo := HEAP INT := 0;
+            data_ptrs OF gcinfo := HEAP INT := 0;
+            indirs_wanted OF gcdata := HEAP VECTOR [UPB indirections OF df]
+                                                                          BOOL;
+            clear_rvb(indirs_wanted OF gcdata);
+            gcinfo OF gcdata := HEAP GCINFO := gcinfo;
+            stack OF gcdata := nildpstack;
+            name OF gcdata := MAKERVC name OF df;
+            gcdata
+       ELSE nilgcdata
+       FI
+      );
+
+   PROC make_shaky_list = (REF DATABASE db, REF DISCFILE df, REF GCDATA gcdata)
+                                                                          VOID:
+      (VECTOR [] INDIR indirections = indirections OF df;
+       FOR i TO UPB indirections
+       DO   INDIR ind = indirections[i];
+            ADDRESS addr = address OF ind;
+            IF shaky OF ind ANDTH NOT (addr = nilgcaddress)
+            THEN REF REF SHAKYDATA shaky_ptrs = shaky_ptrs OF gcdata;
+                 IF shaky_ptrs IS nilshakydata
+                 THEN shaky_ptrs := HEAP SHAKYDATA
+                                 := (FALSE, i, addr, addr, shaky_ptrs)
+                 ELSE BOOL continue := TRUE,
+                           not_already_there := TRUE;
+                      REF REF SHAKYDATA list_ptr := shaky_ptrs;
+                      WHILE (list_ptr ISNT nilshakydata) ANDTH continue
+                      DO   ADDRESS current = old_addr OF list_ptr;
+                           IF current < addr
+                           THEN continue := FALSE
+                           ELIF addr = current ANDTH indirection OF list_ptr = i
+                           THEN not_already_there := FALSE;
+                                continue := FALSE
+                           FI;
+                           list_ptr := rest OF list_ptr
+                      OD;
+                      ( not_already_there
+                           | REF REF SHAKYDATA (list_ptr)
+                                 := HEAP SHAKYDATA
+                                 := (FALSE, i, addr, addr, list_ptr) )
+                 FI
+            FI
+       OD
+      );
+
+   PROC shaky_traced = (REF DATABASE db, REF GCDATA gcdata, REF DISCFILE df,
+                                                            REF INDIR ind) BOOL:
+      (BOOL traced := FALSE;
+       REF ADDRESS addr = address OF ind;
+       REF REF SHAKYDATA data := shaky_ptrs OF gcdata;
+       WHILE (data ISNT nilshakydata) ANDTH NOT traced
+       DO   IF addr = old_addr OF data ANDTH wanted OF data
+            THEN traced := TRUE;
+                 addr := new_addr OF data
+            FI;
+            data := rest OF data
+       OD;
+       traced
+      );
+
+   PROC mark_shaky_wanted = (REF DATABASE db, REF GCDATA gcdata,
+                             REF DISCFILE df, ADDRESS old, new) VOID:
+      (BOOL not_found := TRUE;
+       REF REF SHAKYDATA shaky_data := shaky_ptrs OF gcdata;
+       WHILE (shaky_data ISNT nilshakydata) ANDTH not_found
+       DO   ADDRESS old_addr = old_addr OF shaky_data;
+            REF BOOL wanted = wanted OF shaky_data;
+            IF old = old_addr ANDTH NOT wanted
+            THEN wanted := TRUE;
+                 set_indir_wanted(gcdata, indirection OF shaky_data);
+                 ( compactor OF gcdata | new_addr OF shaky_data := new )
+            ELIF old < old_addr
+            THEN not_found := FALSE
+            FI;
+            shaky_data := rest OF shaky_data
+       OD
+      );
+
+   PROC noncompacting_garbage_collect = (REF DATABASE db) VOID:
+
+      (LONG INT start_time = get_time;
+
+       PROC no_of_data_blocks = (REF DATABASE db, BOOL nodps, INT data_elts,
+                                                          dpcode, offset) INT:
+
+         CO  Used for data written since last garbage collection. Calculates
+             how many VAX blocks the data would have been written in, including
+             partially used blocks. If there are no DISCPTRs in the datablock
+             ("nodps" = TRUE), we need to step over the block or dataheading
+         CO
+
+            (INT result := 1;
+             INT data_size = ( dpcode = charsdps | 1 | data_size(dpcode) );
+             INT cbufpos :=
+                        IF nodps
+                        THEN offset - (offset=block_size | block_heading_size
+                                                         | data_heading_size )
+                        ELSE offset
+                        FI;
+             BOOL overwriteable = (dpcode=overwriteable);
+             block_count(data_size, data_elts % data_size, overwriteable,
+                         cbufpos)
+            );
+
+         PROC set_wanted = (REF VECTOR [] CHAR wanted, INT block_num) VOID:
+
+         CO  Marks "block_num" as being wanted  CO
+
+            (INT index = (block_num-1) % byte_size + 1;
+             INT element = block_num - (index-1)*byte_size;
+             BITS bits_wanted = BIN ABS wanted[index];
+             wanted[index] := REPR (ABS (bits_wanted OR CASE element IN
+                                                           2r 00000001,
+                                                           2r 00000010,
+                                                           2r 00000100,
+                                                           2r 00001000,
+                                                           2r 00010000,
+                                                           2r 00100000,
+                                                           2r 01000000,
+                                                           2r 10000000
+                                                        ESAC))
+            );
+
+         PROC read_dpdata = (REF DATABASE db, DISCPTR dp) DPDATA:
+
+         CO  Extracts the relevant data for garbage collection from a discptr
+         CO
+
+            (DPDATA d;
+             address OF d := get_disc_address(df OF db, dp);
+             IF first_offset(dp) = 0
+             THEN VECTOR [] INDIR indirections = indirections OF df OF db;
+                  INDIR ind = indirections[first_block(dp)];
+                  data_elts OF d := data_elts OF ind;
+                  dp_elts OF d := dp_elts OF ind;
+                  code OF d := code OF ind;
+                  read_size OF d := read_size OF ind
+             ELSE data_elts OF d := data_elts(dp);
+                  dp_elts OF d := dp_elts(dp);
+                  code OF d := discptr_code(dp);
+                  read_size OF d := read_size(dp)
+             FI;
+             d
+            );
+
+         PROC trace_data = (REF DATABASE db, REF GCDATA gcdata, BOOL nodps,
+                            INT data_elts, data_code, block_num, offset) VOID:
+            (INT next := block_num;
+             INT no_of_blocks = no_of_data_blocks(db, nodps, data_elts,
+                                                  data_code, offset);
+             REF VECTOR [] INT pagetable = pagetable OF gcdata;
+             FOR i TO no_of_blocks - 1
+             DO   set_wanted(blocks_wanted OF gcdata, next);
+                  next := IF pagetable[next] < -1
+                          THEN
+
+                           CO  Data written since last garbage collection - use
+                               the pagetable generated by the last garbage
+                               collection to work out where the data was
+                               written. Also, assign to the pagetable to produce
+                               the new pagetable
+                           CO
+
+                               pagetable[next] := -pagetable[next]
+                          ELSE
+
+                           CO  Data written before last garbage collection  CO
+
+                               pagetable[next]
+                          FI
+             OD;
+             set_wanted(blocks_wanted OF gcdata, next);
+             data_ptrs OF gcinfo OF gcdata PLUSAB 1
+            );
+
+         PROC add_to_stack = (REF DATABASE db, REF GCDATA gcdata,
+                                           UNION (DISCPTR, DPDATA) data) VOID:
+
+         CO  Adds discptr information to the relevant stack (one stack per
+             discfile - see mode GCDATA) in order of disc address
+         CO
+
+            (DPDATA dpdata;
+             BOOL add_ptr := TRUE;
+             REF DISCFILE df = df OF db;
+             CASE data IN
+             (DISCPTR dp) IF is_forgery(db, dp)
+                          THEN sys fault("trying to add forgery in garbage "
+                                         "collector")
+                          ELIF NOT is_nildp(dp) ANDTH NOT is_gc_nil(df, dp)
+                               ANDTH NOT is_shaky(dp)
+                          THEN dpdata := read_dpdata(db, dp)
+                          ELSE add_ptr := FALSE
+                          FI,
+             (DPDATA dpd) dpdata := dpd
+             ESAC;
+
+             IF add_ptr
+             THEN ADDRESS addr = address OF dpdata;
+                  REF REF DPSTACK stack = stack OF gcdata;
+                  IF (stack IS nildpstack) OREL addr < address OF data OF stack
+                  THEN stack := HEAP DPSTACK := (dpdata, stack);
+                       REF INT stack_size = stack_size OF gcinfo OF gcdata,
+                               max_stack_size = max_stack_size OF gcinfo OF
+                                                                        gcdata;
+                       stack_size PLUSAB 1;
+                       ( stack_size > max_stack_size | max_stack_size PLUSAB 1 )
+                  ELSE REF REF DPSTACK stack_ptr := stack;
+                       BOOL continue := TRUE,
+                            not_already_there := TRUE;
+                       WHILE (stack_ptr ISNT nildpstack) ANDTH continue
+                       DO   IF addr < address OF data OF stack_ptr
+                            THEN continue := FALSE
+                            ELIF addr = address OF data OF stack_ptr
+                            THEN not_already_there := FALSE;
+                                 continue := FALSE
+                            ELSE stack_ptr := rest OF stack_ptr
+                            FI
+                       OD;
+                       IF not_already_there
+                       THEN REF REF DPSTACK (stack_ptr) := HEAP DPSTACK
+                                                        := (dpdata, stack_ptr);
+                            REF INT stack_size =
+                                            stack_size OF gcinfo OF gcdata,
+                                    max_stack_size =
+                                            max_stack_size OF gcinfo OF gcdata;
+                            stack_size PLUSAB 1;
+                            ( stack_size > max_stack_size |
+                                                       max_stack_size PLUSAB 1 )
+                       FI
+                  FI
+             FI
+            );
+
+         PROC (REF DATABASE, REF GCDATA, REF DISCFILE, DPDATA) VOID trace;
+
+         PROC add_or_trace = (REF DATABASE db, REF GCDATA gcdata, DISCPTR dp)
+                                                                        VOID:
+
+             CO  Don't trace nilptrs, garbage collected nilptrs or shakies. For
+                 all other pointers, if the data pointed to is currently in one
+                 of the instore buffers, then read and trace it, otherwise add
+                 the discptr to the appropriate stack
+             CO
+
+            (( discptr_code(dp) >= forgery |
+                              sys fault("trying to trace a forged discptr") );
+             REF DISCFILE df = df OF db;
+             IF NOT is_nildp(dp) ANDTH NOT is_gc_nil(df, dp) ANDTH
+                NOT is_shaky(dp)
+             THEN IF not_added_to_hashtable(gcdata, df, dp)
+                  THEN ADDRESS addr = get_disc_address(df, dp);
+                       INT block_num = block_num OF addr;
+                       DPDATA d = read_dpdata(db, dp);
+                       IF in_readbuffer(read_buffer OF gcdata, block_num) OREL
+                          in_writebuffer(df, block_num)
+                       THEN add_to_stack(db, gcdata, d)
+                       ELIF dp_elts OF d /= 0
+                       THEN trace(db, gcdata, df, d)
+                       ELIF data_elts OF d /= 0
+                       THEN ADDRESS addr = address OF d;
+                            BOOL nodps = TRUE;
+                            trace_data(db, gcdata, nodps, data_elts OF d,
+                                       code OF d, block_num OF addr,
+                                       offset OF addr)
+                       FI
+                  FI
+             FI
+            );
+
+         PROC discptr_trace = (REF DATABASE db, REF GCDATA gcdata,
+                                             REF DISCFILE df, DISCPTR dp) VOID:
+            (INT f_block = first_block(dp);
+             ( first_offset(dp) = 0 ANDTH f_block /= 0
+                                   | set_indir_wanted(gcdata, f_block) );
+             IF NOT is_shaky(dp)
+             THEN IF ((shaky_ptrs OF gcdata) ISNT nilshakydata) ANDTH
+                     NOT is_gc_nil(df, dp) ANDTH NOT is_shaky(dp)
+                  THEN ADDRESS addr = get_disc_address(df, dp);
+                       mark_shaky_wanted(db, gcdata, df, addr, addr)
+                  FI;
+                  INT block_num,
+                      offset,
+                      code,
+                      chars,
+                      dps;
+                  BOOL foreign := FALSE,
+                       gcnil := FALSE;
+
+                  IF first_offset(dp) = 0 ANDTH NOT is_nildp(dp)
+                  THEN INDIR ind = fetch_ind(df, dp);
+                       ADDRESS addr = address OF ind;
+                       block_num := block_num OF addr;
+                       offset := offset OF addr;
+                       code := code OF ind;
+                       chars := data_elts OF ind;
+                       dps := dp_elts OF ind;
+                       gcnil := version OF ind /= version(dp) OREL
+                                (addr = nilgcaddress);
+                       ( NOT gcnil | set_indir_wanted(gcdata, first_block(dp)) )
+                  ELSE block_num := first_block(dp);
+                       offset := first_offset(dp);
+                       chars := data_elts(dp);
+                       dps := dp_elts(dp);
+                       code := discptr_code(dp)
+                  FI;
+                  IF NOT gcnil
+                  THEN IF dps = 0
+                       THEN ( chars /= 0
+                              | BOOL nodps = TRUE;
+                                trace_data(db, gcdata, nodps, chars, code,
+                                           block_num, offset) )
+                       ELSE add_or_trace(db, gcdata, dp)
+                       FI
+
+                  FI
+             FI
+            );
+
+         trace := (REF DATABASE db, REF GCDATA gcdata, REF DISCFILE df,
+                                                           DPDATA data) VOID:
+            (REF DISCFILE df = df OF db;
+             ADDRESS addr = address OF data;
+             INT cpos := offset OF addr,
+                 b_num := block_num OF addr,
+                 next_read_size := read_size OF data;
+             INT num_dps = dp_elts OF data,
+                 num_chars = data_elts OF data,
+                 code = code OF data;
+             REF VECTOR [] CHAR blocks_wanted = blocks_wanted OF gcdata;
+
+             VECTOR [block_size] CHAR buffer;
+             INT dp_count := 0;
+             BOOL is_discptr;
+
+         CO  If data contains discptrs then it must be traced  CO
+
+             ( read_block(db, df, read_buffer OF gcdata, buffer, next_read_size,
+                          b_num)
+                     | disc_accesses OF gcinfo OF gcdata PLUSAB 1 );
+             FOR i WHILE
+                  INT discptrs_in_block;
+                  VECTOR [] CHAR block_heading
+                                 = buffer[actual_block_size+1 :
+                                          actual_block_size+block_heading_size];
+                  set_wanted(blocks_wanted OF gcdata, b_num);
+                  IF cpos = block_size
+                  THEN discptrs_in_block := block_dps(block_heading);
+                       cpos := data_start(block_heading)
+                  ELSE INT lwb = cpos MINUSAB data_heading_size - 1;
+                       VECTOR [] CHAR data_heading
+                           = buffer[lwb : cpos + data_heading_size - 1];
+                       discptrs_in_block := dps_in_block(data_heading)
+                  FI;
+                  FOR k TO discptrs_in_block
+                  DO   INT lwb = cpos MINUSAB discptr_size;
+                       DISCPTR d :=
+                               chars_to_dp(buffer[lwb : cpos+discptr_size-1]);
+                       discptr_trace(db, gcdata, df, d)
+                  OD;
+                  (dp_count PLUSAB discptrs_in_block) /= num_dps
+             DO   b_num := next_block(block_heading);
+                  next_read_size := bh_read_size(block_heading);
+                  ( read_block(db, df, read_buffer OF gcdata, buffer,
+                               next_read_size, b_num)
+                             | disc_accesses OF gcinfo OF gcdata PLUSAB 1 );
+                  cpos := block_size
+             OD;
+             ( num_chars /= 0
+                  | BOOL nodps = FALSE;
+                    trace_data(db, gcdata, nodps, num_chars, code,
+                               b_num, cpos-1) )
+            );
+
+         PROC print_gcinfo = (GCDATA gcdata) VOID:
+            (GCINFO gcinfo = gcinfo OF gcdata;
+             VECTOR [] INT max_hashlist = max_hashlist OF gcinfo;
+             INT max := 0,
+                 min := 1000000,
+                 sum := 0;
+             FOR i TO UPB max_hashlist
+             DO   sum PLUSAB max_hashlist[i];
+                  ( max_hashlist[i] < min | min := max_hashlist[i] );
+                  ( max_hashlist[i] > max | max := max_hashlist[i] )
+             OD;
+             INT avge = sum % UPB max_hashlist;
+             put(screen, (" hashtable size ", UPB max_hashlist, " max ", max,
+                 " min ", min, newline, "avge ", avge, " disc accesses ",
+                 disc_accesses OF gcinfo, " max stack size ",
+                 max_stack_size OF gcinfo, " data_ptrs ", data_ptrs OF gcinfo,
+                 newline, newline))
+            );
+
+       PROC indir_needed = (REF DISCFILE df, REF GCDATA gcdata, INDIR ind,
+                                                            INT index) BOOL:
+          (IF shaky OF ind
+           THEN TRUE
+           ELSE BOOL found := NOT (address OF ind = niladdress) ANDTH
+                              NOT (address OF ind = nilgcaddress) ANDTH
+                              NOT is_free(blocks_wanted OF gcdata,
+                                          block_num OF address OF ind);
+
+     CO  Now search for instore nilvars  CO
+
+                IF NOT found
+                THEN REF VARLIST list := instore_vars OF df;
+                     WHILE (list ISNT nilvarlist) ANDTH NOT found
+                     DO   ( indirection OF list = index | found := TRUE );
+                          list := rest OF list
+                     OD
+                FI;
+                found
+           FI
+          );
+
+       PROC instore_indir = (REF DISCFILE df, INDIR ind, INT index) BOOL:
+
+  CO  Decides whether or not "ind" has been created since the start of the
+      current session
+  CO
+
+          (BOOL found := FALSE;
+           REF VARLIST list := instore_vars OF df;
+           WHILE (list ISNT nilvarlist) ANDTH NOT found
+           DO   ( indirection OF list = index | found := TRUE );
+                list := rest OF list
+           OD;
+           found
+          );
+
+         CO  start of main body of noncompacting_garbage_collect  CO
+
+        check_valid_db(db);
+        REF DISCFILE df = df OF db;
+        check_nilfile(df);
+        check_not_appending(df, "garbage_collection");
+        check_file_writeable(db, df);
+        BOOL noncompactor = FALSE,
+             check = FALSE;
+        REF GCDATA gcdata := initialise_gc(db, noncompactor, check);
+        IF gcdata ISNT nilgcdata
+        THEN make_shaky_list(db, df, gcdata);
+             flush_buffer(db, df);
+             IF cbufpos OF df > 0
+             THEN REF INT current_free = current_free OF df,
+                          cbufpos = cbufpos OF df;
+                  put_block(file OF df, block_buffer OF df, current_free OF df,
+                            keepsake_msg);
+                  write_transfers OF df PLUSAB 1;
+                  clear_rvc(block_buffer OF df);
+                  (block_buffer OF df)[actual_block_size+1 :
+                                  actual_block_size+block_heading_size]
+                                 := make_block_heading(0, 0, 0, 0, 0, 1);
+                  current_free := get_free_block(db, df);
+                  cbufpos := 0;
+                  set_wanted(blocks_wanted OF gcdata, current_free)
+             FI;
+             INT start_writes = write_transfers OF df,
+                 start_reads = read_transfers OF df;
+
+CO  Now protect instore pointers by marking as wanted all blocks written to
+    and all overwriteable regions created since the last garbage collection or
+    the start of the session, whichever came later
+CO
+
+             REF VECTOR [] CHAR blocks_wanted = blocks_wanted OF gcdata;
+             INT next_free := last_free OF df;
+             IF next_free /= 0
+             THEN WHILE next_free /= first_free OF df
+                  DO   set_wanted(blocks_wanted, next_free);
+                       next_free := -(pagetable OF gcdata)[next_free]
+                  OD
+             FI;
+
+             REF VECTOR [] INT pagetable = pagetable OF gcdata;
+             REF VECTOR [] INDIR indirections = indirections OF df;
+             REF REF DPSTACK stack = stack OF gcdata;
+
+             DISCPTR ind_dp = indirs_dp OF df;
+
+             ( data_elts(ind_dp) /= 0
+                 | BOOL nodps = TRUE;
+                   trace_data(db, gcdata, nodps, data_elts(ind_dp),
+                              discptr_code(ind_dp), first_block(ind_dp),
+                              first_offset(ind_dp)) );
+
+             discptr_trace(db, gcdata, df, root OF df);
+             add_to_stack(db, gcdata, pagetable_dp OF df);
+             add_to_stack(db, gcdata, freelist_dp OF df);
+
+             WHILE stack ISNT nildpstack
+             DO   REF REF DPSTACK stack_ptr := stack;
+                  WHILE stack_ptr ISNT nildpstack
+                  DO
+                     CO  Now trace the pointer and remove it after tracing from
+                         the stack
+                     CO
+
+                       ADDRESS caddr = address OF data OF stack_ptr;
+                       trace(db, gcdata, df, data OF stack_ptr);
+
+                     CO  Remember that trace can add a DISCPTR to the stack
+                         at any position (depending on its disc address),
+                         so make sure that the DISCPTR removed is the one
+                         that was traced
+                     CO
+
+                       WHILE NOT (address OF data OF stack_ptr = caddr)
+                       DO   stack_ptr := rest OF stack_ptr
+                       OD;
+                       REF REF DPSTACK (stack_ptr) := rest OF stack_ptr;
+                       stack_size OF gcinfo OF gcdata MINUSAB 1
+                  OD
+             OD;
+             FOR i TO UPB indirections
+             DO   REF INDIR ind = indirections[i];
+                  BOOL wanted = (indirs_wanted OF gcdata)[i];
+                  ( NOT ((shaky OF ind ANDTH wanted ANDTH
+                          shaky_traced(db, gcdata, df, ind)) OREL
+                         (NOT shaky OF ind ANDTH wanted) OREL
+                          instore_indir(df, ind, i)) | make_gcnil(ind) )
+             OD;
+             instore_vars OF df := nilvarlist;
+             VECTOR [max_ints_in_block] INT new_freelist;
+             free_block_dps OF df := HEAP VECTOR [0] DISCPTR;
+             INT count := 0,
+                 last_free_block := 0;
+             BOOL first := TRUE,
+                  first_block := TRUE;
+             REF INT size_of_free_space = size_of_free_space OF df,
+                     freelist_index = freelist_index OF df,
+                     freeblock_ptr = freeblock_ptr OF df,
+                     last_free = last_free OF df,
+                     current_free = current_free OF df,
+                     first_free = first_free OF df;
+             size_of_free_space := 0;
+             INT blocks_used := 0;
+             freelist_index := 1;
+             freeblock_ptr := 1;
+
+             FOR i FROM file_size OF df BY -1 TO fixed_overhead + 1
+               CO  first 'fixed overhead' blocks never free  CO
+             DO   IF is_free(blocks_wanted, i)
+                  THEN IF (count PLUSAB 1) <= max_ints_in_block
+                       THEN new_freelist[count] := i
+                       ELIF first_block
+                       THEN first_block := FALSE;
+                            current_free := new_freelist[1];
+                            first_free := current_free;
+                            freelist OF df := HEAP VECTOR [max_ints_in_block]
+                                                                           INT
+                                           := new_freelist;
+                            freelist_to_disc(db, df, new_freelist);
+                            size_of_free_space := max_ints_in_block;
+                            count := 1;
+                            new_freelist[1] := i
+                       ELSE size_of_free_space PLUSAB max_ints_in_block;
+                            freelist_to_disc(db, df, new_freelist);
+                            count := 1;
+                            new_freelist[1] := i
+                       FI;
+                       pagetable[i] := ( first | first := FALSE; -1
+                                               | -last_free_block );
+                       last_free_block := i
+                  ELSE blocks_used PLUSAB 1
+                  FI
+             OD;
+             size_of_free_space PLUSAB count;
+             IF count /= 0
+             THEN IF first_block
+                  THEN current_free := new_freelist[1];
+                       first_free := current_free OF df;
+                       freelist OF df := HEAP VECTOR [count] INT
+                                      := new_freelist[1 : count]
+                  FI;
+                  freelist_to_disc(db, df, new_freelist[1 : count])
+             FI;
+             initial_free_block_dps OF df := HEAP INT
+                                          := UPB free_block_dps OF df;
+             pagetable_dps OF df := HEAP VECTOR [1] DISCPTR
+                                 := write_pagetable(db, df, pagetable);
+             collectable OF df := HEAP BOOL := FALSE
+         FI
+        );
+
+   PROC pre_df_to_chars = (REF DATABASE db) VOID:
+      (REF DISCFILE df = df OF db;
+       ( UPB freelist_ext OF df /= 0
+                    | freelist_to_disc(db, df, freelist_ext OF df) );
+       freelist_dp OF df := HEAP DISCPTR
+                   := write_discptrs(db, free_block_dps OF df, FALSE);
+       IF UPB pagetable_ext OF df /= 0
+       THEN DISCPTR new_pagetable_dp
+               = write(db, df, pagetable_ext OF df, nodps,
+                       pagetable_ints, UPB pagetable_ext OF df * int_size,
+                       no_indirection, not_assignable, niladdress, noints,
+                       nilpagetable);
+            extend_dps(pagetable_dps OF df, new_pagetable_dp)
+       FI;
+       pagetable_dp OF df := HEAP DISCPTR
+                          := write_discptrs(db, pagetable_dps OF df, FALSE);
+       REF VECTOR [] INDIR indirections = indirections OF df;
+       REF INT current_free = current_free OF df;
+       INT upb_indirs = UPB indirections;
+       INT bytes_left = block_size - fixed_in_block;
+       INT num_indirs = min(bytes_left % indirection_size, upb_indirs);
+       INT next_free;
+       IF num_indirs /= upb_indirs
+       THEN indirs_dp OF df := HEAP DISCPTR
+                := write_indirs(db, indirections[num_indirs+1 : upb_indirs])
+       FI;
+       flush_buffer(db, df);
+       IF cbufpos OF df > 0
+       THEN put_block(file OF df, block_buffer OF df, current_free OF df,
+                      keepsake_msg);
+            write_transfers OF df PLUSAB 1;
+            clear_rvc(block_buffer OF df);
+            (block_buffer OF df)[actual_block_size+1 :
+                                 actual_block_size+block_heading_size]
+                                := make_block_heading(0, 0, 0, 0, 0, 1);
+            current_free := get_free_block(db, df)
+       FI
+      );
+
+   PROC df_to_chars = (REF DATABASE db) VECTOR [] CHAR:
+      (REF DISCFILE df = df OF db;
+       REF INT freeblock_ptr = freeblock_ptr OF df,
+               freelist_index = freelist_index OF df;
+       IF freeblock_ptr OF df > UPB free_block_dps OF df
+       THEN freeblock_ptr := (freelist_index OF df-1) % max_ints_in_block + 1;
+            freelist_index := freelist_index OF df -
+                                     (freeblock_ptr OF df-1) * max_ints_in_block
+       FI;
+       REF INT current_free = current_free OF df;
+       INT ptr := 0;
+       REF VECTOR [] CHAR block_buffer = block_buffer OF df;
+       REF VECTOR [] INDIR indirections = indirections OF df;
+       INT bytes_left = block_size - fixed_in_block;
+       INT num_indirs = min(bytes_left % indirection_size, UPB indirections);
+
+CO convert everything to bytes before writing to disc CO
+
+       INT lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC file_check;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC num_indirs;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB discptr_size] := dp_to_chars(root OF df);
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB discptr_size]
+                               := dp_to_chars(indirs_dp OF df);
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB discptr_size]
+                               := dp_to_chars(freelist_dp OF df);
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB discptr_size]
+                               := dp_to_chars(pagetable_dp OF df);
+
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC generation OF df;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC file_size OF df;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC old_file_size OF df;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC current_free;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC freeblock_ptr OF df;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size] := ITOVC freelist_index OF df;
+       lwb:= ptr + 1;
+       block_buffer[lwb : ptr PLUSAB int_size]
+                                             := ITOVC size_of_free_space OF df;
+       FOR i TO num_indirs
+       DO   lwb:= ptr + 1;
+            block_buffer[lwb : ptr PLUSAB indirection_size]
+                            := indir_to_chars(indirections[i])
+       OD;
+       block_buffer
+      );
+
+   PROC finish_shell = (REF DATABASE db, UNION (REF DISCFILE, DISCPTR) file,
+                                         MESSAGEPROC  msg, BOOL close) VOID:
+      (check_valid_db(db);
+       REF DISCFILE df = df OF db;
+       check_nilfile(df);
+       check_not_appending(df, "finish");
+       DISCPTR root = CASE file IN
+                      (REF DISCFILE df) root OF df,
+                      (DISCPTR dp) dp
+                      ESAC;
+       root OF df := HEAP DISCPTR := root;
+       check_forgery_write(db, root);
+       pre_df_to_chars(db);
+       VECTOR [] CHAR root_block = df_to_chars(db);
+       FOR i TO fixed_overhead
+       DO   put_block(file OF df, root_block, i, keepsake_msg)
+       OD;
+       write_transfers OF df PLUSAB fixed_overhead;
+       IF close
+       THEN  {save_and_close_madam_file}  close_file(file OF df, msg);
+            df OF db := nilfile
+       FI
+      );
+
+   PROC set_up_db = (REF DATABASE db, VECTOR [] CHAR db_name) VOID:
+      (setup OF db := HEAP BITS := is_setup;
+       db_name OF db := MAKERVC db_name
+      );
+
+   PROC use_fixed = (VECTOR [] CHAR fixed, db_name, MADAMFILE file,
+                               BOOL writeable, last_update_failed) REF DATABASE:
+      (HEAP DATABASE db;
+       HEAP DISCFILE new_df;
+       file OF new_df := HEAP MADAMFILE := file;
+       INT ptr := int_size;
+       cbufpos OF new_df := HEAP INT := 0;
+       last_free OF new_df := HEAP INT := 0;
+       block_buffer OF new_df := HEAP VECTOR [block_size] CHAR;
+       INT lwb:= ptr + 1;
+       INT indirs_in_fixed_block = VCTOI fixed[lwb : ptr PLUSAB int_size];
+       read_transfers OF new_df := HEAP INT := fixed_overhead;
+       write_transfers OF new_df := HEAP INT := 0;
+
+       lwb:= ptr + 1;
+       root OF new_df := HEAP DISCPTR
+                      := chars_to_dp(fixed[lwb : ptr PLUSAB discptr_size]);
+       lwb:= ptr + 1;
+       indirs_dp OF new_df := HEAP DISCPTR
+                        := chars_to_dp(fixed[lwb : ptr PLUSAB discptr_size]);
+       lwb:= ptr + 1;
+       freelist_dp OF new_df := HEAP DISCPTR
+                          := chars_to_dp(fixed[lwb : ptr PLUSAB discptr_size]);
+       lwb:= ptr + 1;
+       pagetable_dp OF new_df := HEAP DISCPTR
+                          := chars_to_dp(fixed[lwb : ptr PLUSAB discptr_size]);
+       lwb:= ptr + 1;
+       generation OF new_df := HEAP INT
+                            := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       lwb:= ptr + 1;
+       file_size OF new_df := HEAP INT
+                           := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       lwb:= ptr + 1;
+       old_file_size OF new_df := HEAP INT
+                               := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       lwb:= ptr + 1;
+       current_free OF new_df := HEAP INT
+                              := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       lwb:= ptr + 1;
+       freeblock_ptr OF new_df := HEAP INT
+                               := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       first_free OF new_df := HEAP INT := current_free OF new_df;
+       lwb:= ptr + 1;
+       freelist_index OF new_df := HEAP INT
+                                := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       lwb:= ptr + 1;
+       size_of_free_space OF new_df := HEAP INT
+                                    := VCTOI fixed[lwb : ptr PLUSAB int_size];
+       freelist_ext_ptr OF new_df := HEAP INT := 0;
+       writeable OF new_df := HEAP BOOL := writeable;
+       last_update_failed OF new_df := HEAP BOOL := last_update_failed;
+       appending OF new_df := HEAP BOOL := FALSE;
+       collectable OF new_df := HEAP BOOL := TRUE;
+       append_dp OF new_df := HEAP DISCPTR := nilptr;
+       appended_data OF new_df := HEAP INT := 0;
+       gc_ptrs OF new_df := niltraced;
+       instore_vars OF new_df := nilvarlist;
+       freelist_ext OF new_df := HEAP VECTOR [0] INT;
+       pagetable_ext OF new_df := HEAP VECTOR [0] INT;
+       name OF new_df := MAKERVC db_name;
+       write_buffer OF new_df := HEAP WRITEBUFFER
+                              := setup_writebuffer(generation OF new_df);
+       df OF db := HEAP DISCFILE := new_df;
+
+       set_up_db(db, db_name);
+       REF DISCFILE df = df OF db;
+       REF REF VECTOR [] INDIR indirections = indirections OF df;
+       INT indirs_not_in_fixed;
+       indirections :=
+          IF is_nildp(indirs_dp OF df)
+          THEN HEAP VECTOR [indirs_in_fixed_block] INDIR
+          ELSE indirs_not_in_fixed := array_size(db, df, indirs_dp OF df);
+               HEAP VECTOR [indirs_in_fixed_block+indirs_not_in_fixed] INDIR
+          FI;
+       FOR i TO indirs_in_fixed_block
+       DO   INT lwb = ptr + 1;
+            indirections[i] :=
+                   make_indirection(fixed[lwb : ptr PLUSAB indirection_size])
+       OD;
+       IF NOT is_nildp(indirs_dp OF df)
+       THEN VECTOR [indirs_not_in_fixed*indirection_size] CHAR ind_chars;
+            read(db, df, ind_chars, nodps, nowanted, indirs, indirs_dp OF df);
+            FOR i TO indirs_not_in_fixed
+            DO   INT lwb = ptr + 1;
+                 indirections[i] :=
+                       make_indirection(ind_chars[lwb :
+                                                  ptr PLUSAB indirection_size])
+            OD
+       FI;
+       free_block_dps OF df
+             := HEAP VECTOR [array_size(db, df, freelist_dp OF df)] DISCPTR;
+       initial_free_block_dps OF df := HEAP INT := UPB free_block_dps OF df;
+       read(db, df, nodata, free_block_dps OF df, nowanted, discptrs,
+            freelist_dp OF df);
+       REF INT freeblock_ptr = freeblock_ptr OF df;
+       IF freeblock_ptr <= UPB free_block_dps OF df
+       THEN DISCPTR cptr = (free_block_dps OF df)[freeblock_ptr];
+            freelist OF df := HEAP VECTOR [array_size(db, df, cptr)] INT;
+            read(db, df, freelist OF df, nodps, nowanted,
+                 freelist_ints, cptr);
+            IF freelist_index OF df > UPB freelist OF df
+            THEN INT count := UPB freelist OF df;
+                 BOOL continue := TRUE;
+                 FOR i FROM freeblock_ptr+1 WHILE continue
+                 DO   DISCPTR free_dp = (free_block_dps OF df)[i];
+                      INT size = array_size(db, df, free_dp);
+                      IF (count PLUSAB size) > freelist_index OF df
+                      THEN freelist OF df := HEAP VECTOR [size] INT;
+                           read(db, df, freelist OF df, nodps,
+                                nowanted, freelist_ints, free_dp);
+                           freeblock_ptr := i;
+                           freelist_index OF df MINUSAB count - size;
+                           continue := FALSE
+                      FI
+                 OD
+            FI
+       FI;
+       IF freeblock_ptr <= UPB free_block_dps OF df
+       THEN DISCPTR cptr = (free_block_dps OF df)[freeblock_ptr];
+            freelist OF df := HEAP VECTOR [array_size(db, df, cptr)] INT;
+            read(db, df, freelist OF df, nodps, nowanted,
+                 freelist_ints, cptr)
+       FI;
+       pagetable_dps OF df
+           := HEAP VECTOR [array_size(db, df, pagetable_dp OF df)] DISCPTR;
+       read(db, df, nodata, pagetable_dps OF df, nowanted, discptrs,
+            pagetable_dp OF df);
+       db
+      );
+
+   PROC open_shell = (MADAMFILE file, VECTOR [] CHAR db_name,
+                      BOOL writeable) DATABASE:
+      (HEAP DATABASE db;
+       VECTOR [fixed_overhead] VECTOR [block_size] CHAR fixed;
+       FOR i TO fixed_overhead-1
+       DO   get_block(file, fixed[i], i, keepsake_msg)
+       OD;
+       INT first_fixed1 = VCTOI fixed[1][1 : int_size];
+       INT first_fixed2 = VCTOI fixed[2][1 : int_size];
+       BOOL f1_is_f2 = compare(fixed[1], fixed[2]),
+            last_update_failed = TRUE;
+       INT usable_fixed := 0;
+       IF f1_is_f2
+       THEN IF first_fixed1 /= file_check
+            THEN filetype_check(first_fixed1)
+            ELSE db := use_fixed(fixed[1], db_name, file,
+                                 writeable, NOT last_update_failed)
+            FI
+       ELIF get_block(file, fixed[fixed_overhead], fixed_overhead,
+                      keepsake_msg);
+            compare(fixed[2], fixed[3])
+       THEN IF first_fixed2 /= file_check
+            THEN filetype_check(first_fixed2)
+            ELSE db := use_fixed(fixed[2], db_name, file,
+                                 writeable, last_update_failed)
+            FI
+       ELIF first_fixed1 /= file_check
+       THEN filetype_check(first_fixed1)
+       ELSE db := use_fixed(fixed[1], db_name, file,
+                            writeable, NOT last_update_failed)
+       FI;
+       read_transfers OF df OF db
+                     PLUSAB ( f1_is_f2 | fixed_overhead-1 | fixed_overhead );
+       test_and_increase(db);
+       db
+      );
+
+   PROC open_db = (MADAMFILE  file,  BOOL  writeable) DATABASE:
+      (  STR  madam_name = file_name(file);
+         open_shell(file, madam_name, writeable)
+      );
+
+   PROC initialise_db = (MADAMFILE  file,  BOOL  writeable) DATABASE:
+
+CO  initialises a freshly created database and sets it up for for writing
+CO
+
+      (DATABASE db;
+       STR  madam_name = file_name(file);
+       IF NOT writeable
+       THEN  keepsake_fault("File not opened to write")
+       FI;
+       set_up_db(db, madam_name);
+       df OF db := HEAP DISCFILE := set_up(db, file, 1);
+       REF DISCFILE df = df OF db;
+       root OF df := HEAP DISCPTR := nilptr;
+       initialise(db, df);
+       db
+      );
+
+
+   PROC compacting_garbage_collect = ( MADAMFILE  old_file,  new_file,
+                                       MESSAGEPROC  msg ) VOID:
+
+      (PROC add_new_address = (REF DATABASE db, REF DISCFILE old_df, new_df,
+                               REF HASHTABLE hashtable, ADDRESS old_addr,
+                                                           DISCPTR new) VOID:
+         (CASE hashtable IN
+          (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (ADDRESS new_addr = get_disc_address(new_df, new);
+                    INT old_address = address_rep(old_addr);
+                    INT old_block_num = block_num OF old_addr,
+                        old_offset = offset OF old_addr,
+                        index = hash_index(old_address);
+                    REF REF OLDANDNEW oan := old_and_new[index];
+                    ( oan IS nilold_and_new |
+                         sys fault("error in add_new_address in garbage "
+                                   "collector") );
+                    BOOL continue := TRUE;
+                    WHILE (oan ISNT nilold_and_new) ANDTH continue
+                    DO   IF less_than(old_block OF oan, old_offset OF oan,
+                                      old_block_num, old_offset)
+                         THEN oan := rest OF oan
+                         ELIF old_block OF oan = old_block_num ANDTH
+                              old_offset OF oan = old_offset
+                         THEN continue := FALSE;
+                              REF REF OLDANDNEW (oan) := HEAP OLDANDNEW
+                                 := (old_block OF oan, old_offset OF oan,
+                                     block_num OF new_addr, offset OF new_addr,
+                                     rest OF oan)
+                         ELSE sys fault("error in add_new_address in garbage "
+                                        "collector")
+                         FI
+                    OD
+                   )
+          ESAC
+         );
+
+     PROC change_address = (REF DISCFILE df, ADDRESS address,
+                                    UNION (REF DISCPTR, REF ADDRESS) item) VOID:
+        (CASE item IN
+         (REF DISCPTR dp)
+                 IF first_offset(dp) = 0
+                 THEN address OF (indirections OF df)[first_block(dp)]
+                                                       := address
+                 ELSE change_dp_address(dp, address)
+                 FI,
+         (REF ADDRESS addr) addr := address
+         ESAC
+        );
+
+      PROC already_written = (REF DATABASE db, REF GCDATA gcdata,
+                                                      ADDRESS addr) ADDRESS:
+
+{ If the DISCPTR has been written, deliver the new disc address
+  (deliver niladdress otherwise) }
+
+         (ADDRESS result := niladdress;
+          INT old_address = address_rep(addr);
+          INT n = old_address % hashtable_size;
+          INT index = old_address - n * hashtable_size + 1;
+          BOOL not_found := TRUE;
+          REF HASHTABLE hashtable = hashtable OF gcdata;
+          CASE hashtable IN
+          (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (REF REF OLDANDNEW oan := old_and_new[index];
+                    WHILE (oan ISNT nilold_and_new) ANDTH result = niladdress
+                    DO   ( old_block OF oan = block_num OF addr ANDTH
+                           new_block OF oan /= -1 ANDTH new_offset OF oan /= -1
+                             | result := (new_block OF oan, new_offset OF oan)
+                             | oan := rest OF oan )
+                    OD
+                   )
+          ESAC;
+          result
+         );
+
+      PROC already_found = (REF DATABASE db, REF DISCFILE df,
+                                       REF GCDATA gcdata, REF DISCPTR dp) BOOL:
+         (ADDRESS addr = get_disc_address(df, dp);
+          INT old_address = address_rep(addr);
+          INT n = old_address % hashtable_size;
+          INT index = old_address - n * hashtable_size + 1;
+          BOOL found := FALSE;
+          REF HASHTABLE hashtable = hashtable OF gcdata;
+          CASE hashtable IN
+               (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (REF REF OLDANDNEW oan := old_and_new[index];
+                    WHILE (oan ISNT nilold_and_new) ANDTH NOT found
+                    DO   IF old_block OF oan = block_num OF addr ANDTH
+                            old_offset OF oan = offset OF addr
+                         THEN found := TRUE;
+                              ( new_block OF oan /= -1 ANDTH
+                                new_offset OF oan /= -1
+                                      | ADDRESS new = (new_block OF oan,
+                                                       new_offset OF oan);
+                                        change_address(df, new, dp) )
+                         ELSE oan := rest OF oan
+                         FI
+                    OD
+                   )
+          ESAC;
+          found
+         );
+
+      PROC compactor_trace = (REF DATABASE db, REF DISCFILE old_df, new_df,
+                                  REF GCDATA gcdata, REF DISCPTR dp) DISCPTR:
+         (INT f_block = first_block(dp);
+          ( first_offset(dp) = 0 ANDTH f_block /= 0
+                                  | set_indir_wanted(gcdata, f_block) );
+          IF NOT is_nilptr(old_df, dp) ANDTH
+             NOT is_gc_nil(old_df, dp) ANDTH
+             NOT is_shaky(dp)
+          THEN ( is_forgery(db, dp) |
+                        sys fault("trying to trace a forged discptr") );
+               ADDRESS old_addr = get_disc_address(old_df, dp);
+               INT num_chars,
+                   data_code,
+                   indirection := 0;
+               BOOL assignable = is_assignable(dp);
+
+               not_added_to_hashtable(gcdata, old_df, dp);
+               REF HASHTABLE hashtable = hashtable OF gcdata;
+               REF VECTOR [] INT pagetable = pagetable OF gcdata;
+
+               IF first_offset(dp) = 0
+               THEN INDIR ind = (indirections OF old_df)[f_block];
+                    num_chars := data_elts OF ind;
+                    data_code := code OF ind;
+                    indirection := f_block
+               ELSE num_chars := data_elts(dp);
+                    data_code := discptr_code(dp)
+               FI;
+               ADDRESS address = already_written(db, gcdata, old_addr);
+
+               DISCPTR new =
+
+                 CASE data_code IN
+
+                 CO charsdps CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [data_array_size(db, old_df, dp)] CHAR ch_array;
+                       VECTOR [dp_array_size(db, old_df, dp)] DISCPTR ptr_array;
+                       read(db, old_df, ch_array, ptr_array, nowanted,
+                            charsdps, dp);
+                       VECTOR [UPB ptr_array] INT deja_vus;
+                       INT dvcount := 0;
+                       FOR i TO UPB ptr_array
+                       DO   ptr_array[i] :=
+                                IF is_gc_nil(old_df, ptr_array[i])
+                                THEN ptr_array[i]
+                                ELIF already_found(db, old_df, gcdata,
+                                                   ptr_array[i])
+                                THEN deja_vus[dvcount PLUSAB 1] := i;
+                                     ptr_array[i]
+                                ELSE compactor_trace(db, old_df, new_df,
+                                                     gcdata, ptr_array[i])
+                                FI
+                       OD;
+                       DISCPTR new_dp = write(db, new_df, ch_array, ptr_array,
+                                              charsdps, UPB ch_array,
+                                              indirection, assignable,
+                                              old_addr, deja_vus, pagetable);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 ),
+
+                 CO ints CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] INT int_array;
+                       read(db, old_df, int_array, nodps, nowanted,
+                            ints, dp);
+                       DISCPTR new_dp = write(db, new_df, int_array,
+                                          nodps, ints, UPB int_array * int_size,
+                                          indirection, assignable,
+                                          niladdress, noints, pagetable);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 ),
+
+                 CO chars CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] CHAR char_array;
+                       read(db, old_df, char_array, nodps, nowanted, chars, dp);
+                       DISCPTR new_dp = write(db, new_df, char_array, nodps,
+                                              chars, UPB char_array,
+                                              indirection, assignable,
+                                              niladdress, noints, pagetable);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 ),
+
+                 CO discptrs CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] DISCPTR dp_array;
+                       read(db, old_df, nodata, dp_array, nowanted,
+                            discptrs, dp);
+                       VECTOR [UPB dp_array] INT deja_vus;
+                       INT dvcount := 0;
+                       FOR i TO UPB dp_array
+                       DO   dp_array[i] :=
+                                 IF is_gc_nil(old_df, dp_array[i])
+                                 THEN dp_array[i]
+                                 ELIF already_found(db, old_df, gcdata,
+                                                    dp_array[i])
+                                 THEN deja_vus[dvcount PLUSAB 1] := i;
+                                      dp_array[i]
+                                 ELSE compactor_trace(db, old_df, new_df,
+                                                      gcdata, dp_array[i])
+                                 FI
+                       OD;
+                       DISCPTR new_dp = write(db, new_df, nodata, dp_array,
+                                              discptrs, 0, indirection,
+                                              assignable, old_addr, deja_vus,
+                                              nilpagetable);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 ),
+
+                 CO  overwriteable  CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] CHAR ow_chars;
+                       read_vax_blocks(db, old_df, 1, ow_chars, nowanted, dp);
+                       DISCPTR new_dp =
+                                mk_overwrite(db, new_df, num_chars % block_size,
+                                             indirection, assignable);
+                       overwrite_blocks(db, old_df, 1, ow_chars, new_dp);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 ),
+
+                 CO  indirections  CO
+
+                 (IF address = niladdress
+                  THEN INT num_inds = array_size(db, old_df, dp);
+                       VECTOR [num_inds*indirection_size] CHAR ind_chars;
+                       read(db, old_df, ind_chars, nodps, nowanted, indirs, dp);
+                       DISCPTR new_dp = write(db, new_df, ind_chars, nodps,
+                                              indirs, UPB ind_chars,
+                                              indirection, assignable,
+                                              niladdress, noints, pagetable);
+                       add_new_address(db, old_df, new_df, hashtable,
+                                       old_addr, new_dp);
+                       new_dp
+                  ELSE change_address(new_df, address, dp);
+                       dp
+                  FI
+                 )
+
+                 OUT sys fault("error in code in compacting garbage collector");
+                     dp
+                 ESAC;
+                 ( (shaky_ptrs OF gcdata) ISNT nilshakydata
+                      | mark_shaky_wanted(db, gcdata, new_df, old_addr,
+                                          get_disc_address(old_df, new)) );
+                 new
+          ELSE dp
+          FI
+         );
+
+     BOOL writeable = TRUE,
+          compactor = TRUE,
+          check = FALSE;
+     DATABASE db := open_db(old_file, TRUE { writeable });
+     REF GCDATA gcdata := initialise_gc(db, compactor, check);
+     REF DISCFILE old_df = df OF db;
+     make_shaky_list(db, old_df, gcdata);
+
+           CO  Initialise new generation of file - read from old_df, write to
+               new_df
+           CO
+
+     IF file_block_size(new_file) <
+                file_size OF old_df - size_of_free_space OF old_df
+     THEN  keepsake_fault("New data base is not big enough")
+     FI;
+     DATABASE  new_db:= initialise_db(new_file, TRUE { writeable });
+     { Now override generation of the new database }
+     REF DISCFILE  new_df = df OF new_db;
+     REF INT (generation OF write_buffer OF new_df):=
+            REF INT (generation OF new_df):=  generation OF old_df + 1;
+     freelist_dp OF new_df := HEAP DISCPTR
+                           := write(db, new_df, nodata,
+                                    free_block_dps OF new_df,
+                                    discptrs, 0, no_indirection, not_assignable,
+                                    niladdress, noints, nilpagetable);
+     VECTOR [] INDIR old_inds = indirections OF old_df;
+     indirections OF new_df := HEAP VECTOR [UPB old_inds] INDIR := old_inds;
+     root OF new_df := HEAP DISCPTR
+                    := compactor_trace(db, old_df, new_df, gcdata,
+                                       root OF old_df);
+     indirs_dp OF new_df := HEAP DISCPTR
+                               := compactor_trace(db, old_df, new_df, gcdata,
+                                                  indirs_dp OF old_df);
+     pagetable_dps OF new_df := HEAP VECTOR [1] DISCPTR;
+     (pagetable_dps OF new_df)[1]
+                   := write(db, new_df, pagetable OF gcdata, nodps,
+                            pagetable_ints, UPB pagetable OF gcdata * int_size,
+                            no_indirection, not_assignable, niladdress,
+                            noints, nilpagetable);
+     pagetable_ext OF new_df := HEAP VECTOR [0] INT;
+     pagetable_dp OF new_df := HEAP DISCPTR
+                   := write(db, new_df, nodata, pagetable_dps OF new_df,
+                            discptrs, 0, no_indirection, not_assignable,
+                            niladdress, noints, nilpagetable);
+
+     FOR i TO UPB indirections OF new_df
+     DO   BOOL wanted = (indirs_wanted OF gcdata)[i];
+          REF INDIR ind = (indirections OF new_df)[i];
+          IF NOT ((shaky OF ind ANDTH wanted ANDTH
+                   shaky_traced(db, gcdata, new_df, ind)) OREL
+                  (NOT shaky OF ind ANDTH wanted))
+          THEN make_gcnil(ind)
+          ELSE REF ADDRESS addr = address OF ind;
+               INT address = address_rep(addr);
+               INT index = hash_index(address);
+               CASE hashtable OF gcdata IN
+                         (REF VECTOR [] REF OLDANDNEW old_and_new)
+                             (BOOL not_found := TRUE;
+                              REF REF OLDANDNEW oan := old_and_new[index];
+
+           CO  Now check all indirections - if the address in the indirection is
+               the same as an 'old' address in the hashtable (i.e. a discptr
+               which has already been traced and rewritten), then change the
+               indirection address to the 'new' address.
+           CO
+
+                              WHILE (oan ISNT nilold_and_new) ANDTH not_found
+                              DO   IF old_block OF oan = block_num OF addr ANDTH
+                                      old_offset OF oan = offset OF addr
+                                   THEN not_found := FALSE;
+                                        ADDRESS new = (new_block OF oan,
+                                                       new_offset OF oan);
+                                        change_address(new_df, new, addr)
+                                   ELSE oan := rest OF oan
+                                   FI
+                              OD
+                             )
+               ESAC
+          FI
+     OD;
+     flush_buffer(db, new_df);
+     gc_ptrs OF new_df := niltraced;
+     {save_and_close_madam_file}  close_file(file OF old_df, msg);
+     BOOL close_files = TRUE;
+     REF DISCFILE (old_df) := new_df;
+     finish_shell(db, df OF db, msg, close_files)
+    );
+
+   PROC check_database = (REF DATABASE db) VOID:
+
+      (PROC change_address = (REF DISCFILE df, ADDRESS address,
+                                    UNION (REF DISCPTR, REF ADDRESS) item) VOID:
+        (CASE item IN
+         (REF DISCPTR dp)
+                 IF first_offset(dp) = 0
+                 THEN address OF (indirections OF df)[first_block(dp)]
+                                                       := address
+                 ELSE change_dp_address(dp, address)
+                 FI,
+         (REF ADDRESS addr) addr := address
+         ESAC
+        );
+
+     PROC already_written = (REF DATABASE db, REF GCDATA gcdata, ADDRESS addr)
+                                                                       ADDRESS:
+
+{ If the DISCPTR has been written, deliver the new disc address
+  (deliver niladdress otherwise) }
+
+         (ADDRESS result := niladdress;
+          INT old_address = address_rep(addr);
+          INT n = old_address % hashtable_size;
+          INT index = old_address - n * hashtable_size + 1;
+          BOOL not_found := TRUE;
+          REF HASHTABLE hashtable = hashtable OF gcdata;
+          CASE hashtable IN
+          (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (REF REF OLDANDNEW oan := old_and_new[index];
+                    WHILE (oan ISNT nilold_and_new) ANDTH result = niladdress
+                    DO   ( old_block OF oan = block_num OF addr ANDTH
+                           new_block OF oan /= -1 ANDTH new_offset OF oan /= -1
+                             | result := (new_block OF oan, new_offset OF oan)
+                             | oan := rest OF oan )
+                    OD
+                   )
+          ESAC;
+          result
+         );
+
+      PROC already_found = (REF DATABASE db, REF DISCFILE df,
+                                       REF GCDATA gcdata, REF DISCPTR dp) BOOL:
+         (ADDRESS addr = get_disc_address(df, dp);
+          INT old_address = address_rep(addr);
+          INT n = old_address % hashtable_size;
+          INT index = old_address - n * hashtable_size + 1;
+          BOOL found := FALSE;
+          REF HASHTABLE hashtable = hashtable OF gcdata;
+          CASE hashtable IN
+               (REF VECTOR [] REF OLDANDNEW old_and_new)
+                   (REF REF OLDANDNEW oan := old_and_new[index];
+                    WHILE (oan ISNT nilold_and_new) ANDTH NOT found
+                    DO   IF old_block OF oan = block_num OF addr ANDTH
+                            old_offset OF oan = offset OF addr
+                         THEN found := TRUE;
+                              ( new_block OF oan /= -1 ANDTH
+                                new_offset OF oan /= -1
+                                      | ADDRESS new = (new_block OF oan,
+                                                       new_offset OF oan);
+                                        change_address(df, new, dp) )
+                         ELSE oan := rest OF oan
+                         FI
+                    OD
+                   )
+          ESAC;
+          found
+         );
+
+      PROC trace = (REF DATABASE db, REF DISCFILE old_df, DISCPTR dp,
+                    REF GCDATA gcdata, REF VECTOR [] BOOL wanted) VOID:
+         (INT f_block = first_block(dp);
+          ( first_offset(dp) = 0 ANDTH f_block /= 0
+                                  | set_indir_wanted(gcdata, f_block) );
+          IF NOT is_nilptr(old_df, dp) ANDTH
+             NOT is_gc_nil(old_df, dp) ANDTH
+             NOT is_shaky(dp)
+          THEN ( is_forgery(db, dp) |
+                        sys fault("trying to trace a forged discptr") );
+               ADDRESS old_addr = get_disc_address(old_df, dp);
+               INT num_chars,
+                   data_code,
+                   indirection := 0;
+               BOOL assignable = is_assignable(dp);
+
+               not_added_to_hashtable(gcdata, old_df, dp);
+               REF HASHTABLE hashtable = hashtable OF gcdata;
+               REF VECTOR [] INT pagetable = pagetable OF gcdata;
+
+               IF first_offset(dp) = 0
+               THEN INDIR ind = (indirections OF old_df)[f_block];
+                    num_chars := data_elts OF ind;
+                    data_code := code OF ind;
+                    indirection := f_block
+               ELSE num_chars := data_elts(dp);
+                    data_code := discptr_code(dp)
+               FI;
+               ADDRESS address = already_written(db, gcdata, old_addr);
+
+               CASE data_code IN
+
+                 CO charsdps CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [data_array_size(db, old_df, dp)] CHAR ch_array;
+                       VECTOR [dp_array_size(db, old_df, dp)] DISCPTR ptr_array;
+                       read(db, old_df, ch_array, ptr_array, wanted, charsdps,
+                            dp);
+                       VECTOR [UPB ptr_array] INT deja_vus;
+                       INT dvcount := 0;
+                       FOR i TO UPB ptr_array
+                       DO   IF (NOT is_gc_nil(old_df, ptr_array[i])) ANDTH
+                               already_found(db, old_df, gcdata, ptr_array[i])
+                            THEN deja_vus[dvcount PLUSAB 1] := i
+                            ELSE trace(db, old_df, ptr_array[i], gcdata, wanted)
+                            FI
+                       OD
+                  FI
+                 ),
+
+                 CO ints CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] INT int_array;
+                       read(db, old_df, int_array, nodps, wanted, ints, dp)
+                  FI
+                 ),
+
+                 CO chars CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] CHAR char_array;
+                       read(db, old_df, char_array, nodps, wanted, chars, dp)
+                  FI
+                 ),
+
+                 CO discptrs CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] DISCPTR dp_array;
+                       read(db, old_df, nodata, dp_array, wanted, discptrs, dp);
+                       VECTOR [UPB dp_array] INT deja_vus;
+                       INT dvcount := 0;
+                       FOR i TO UPB dp_array
+                       DO   IF (NOT is_gc_nil(old_df, dp_array[i])) ANDTH
+                               already_found(db, old_df, gcdata, dp_array[i])
+                            THEN deja_vus[dvcount PLUSAB 1] := i
+                            ELSE trace(db, old_df, dp_array[i], gcdata, wanted)
+                            FI
+                       OD
+                  FI
+                 ),
+
+                 CO  overwriteable  CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] CHAR ow_chars;
+                       read_vax_blocks(db, old_df, 1, ow_chars, wanted, dp)
+                  FI
+                 ),
+
+                 CO  indirections  CO
+
+                 (IF address = niladdress
+                  THEN INT num_inds = array_size(db, old_df, dp);
+                       VECTOR [num_inds*indirection_size] CHAR ind_chars;
+                       read(db, old_df, ind_chars, nodps, wanted, indirs, dp)
+                  FI
+                 ),
+
+                 CO freelist ints CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] INT int_array;
+                       read(db, old_df, int_array, nodps, wanted,
+                            freelist_ints, dp)
+                  FI
+                 ),
+
+                 CO pagetable ints CO
+
+                 (IF address = niladdress
+                  THEN VECTOR [array_size(db, old_df, dp)] INT int_array;
+                       read(db, old_df, int_array, nodps, wanted,
+                            pagetable_ints, dp)
+                  FI
+                 )
+
+                 OUT sys fault("error in code in trace")
+                 ESAC
+          FI
+         );
+
+     PROC print_list = (REF REF BLOCKLIST list, STR message) VOID:
+        (REF REF BLOCKLIST ptr := list;
+         put(screen, (message, newline));
+         WHILE ptr ISNT nilblocklist
+         DO   INT lwb = lwb OF ptr,
+                  upb = upb OF ptr;
+              IF lwb = upb
+              THEN put(screen, (lwb, spaces(1)))
+              ELSE put(screen, (lwb OF ptr, "..", upb OF ptr, spaces(1)))
+              FI;
+              ptr := rest OF ptr
+         OD;
+         newline(screen)
+        );
+
+     BOOL compactor = TRUE,
+          check = TRUE;
+     REF GCDATA gcdata := initialise_gc(db, compactor, check);
+     REF DISCFILE df = df OF db;
+
+     VECTOR [] INDIR old_inds = indirections OF df;
+     VECTOR [file_size OF df] BOOL wanted;
+     FOR i TO UPB wanted
+     DO   wanted[i] := FALSE
+     OD;
+     trace(db, df, root OF df, gcdata, wanted);
+     trace(db, df, indirs_dp OF df, gcdata, wanted);
+     trace(db, df, freelist_dp OF df, gcdata, wanted);
+     trace(db, df, pagetable_dp OF df, gcdata, wanted);
+
+     VECTOR [file_size OF df - fixed_overhead] INT freelist;
+     INT elts := 0,  lwb := 1;
+     freelist[lwb : elts PLUSAB UPB freelist OF df] := freelist OF df;
+     FOR i FROM freeblock_ptr OF df + 1 TO UPB free_block_dps OF df
+     DO  DISCPTR ptr = (free_block_dps OF df)[i];
+         lwb := elts + 1;
+         read_freelist(db, df, freelist[lwb : elts PLUSAB size(db, ptr)], ptr)
+     OD;
+     INT upb_ext = UPB freelist_ext OF df;
+     IF upb_ext /= 0
+     THEN  lwb := elts + 1;
+           freelist[lwb : elts PLUSAB upb_ext] := freelist_ext OF df
+     FI;
+
+     REF BLOCKLIST corrupt_freelist := nilblocklist;
+     REF BLOCKLIST space_thief := nilblocklist;
+     INT last_free := freelist[freelist_index OF df],
+         last_corrupt_free := 0,
+         last_space_thief := 0;
+
+     FOR i FROM (freelist_index OF df)+1 TO elts
+     DO   INT n = freelist[i];
+          BOOL corrupt_not_contiguous = (last_corrupt_free /= n+1);
+          IF wanted[n]
+          THEN add_to_list(corrupt_freelist, n, corrupt_not_contiguous);
+               last_corrupt_free := n
+          ELSE FOR j FROM last_free-1 BY -1 TO n+1
+               DO   BOOL not_contiguous = (last_space_thief /= j+1);
+                    IF NOT wanted[j]
+                    THEN add_to_list(space_thief, j, not_contiguous);
+                         last_space_thief := j
+                    FI
+               OD
+          FI;
+          last_free := n
+     OD;
+     IF (corrupt_freelist IS nilblocklist) ANDTH (space_thief IS nilblocklist)
+     THEN put(screen, ("database ok", newline))
+     ELSE put(screen, ("database inconsistency -", newline))
+     FI;
+     ( corrupt_freelist ISNT nilblocklist
+      | print_list(corrupt_freelist, "blocks in both freelist and database:") );
+     (space_thief ISNT nilblocklist
+      | print_list(space_thief, "blocks in neither freelist nor database:") )
+    );
+
+   PROC get_root = (REF DATABASE db) DISCPTR:
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       root OF df OF db
+      );
+
+   PROC make_logical_name = (VECTOR [] CHAR name) VECTOR [] CHAR:
+      name_to_uc(name);    CO  converts user-name to operating system name  CO
+
+   PROC quit = (REF DATABASE db, MESSAGEPROC  msg) VOID:
+
+CO  Close without updating  CO
+
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       close_file(file OF df OF db, msg);
+       df OF db := nilfile
+      );
+
+   PROC finish = (REF DATABASE db, DISCPTR root) VOID:
+
+CO  Writes away new root and indirections but does not close files CO
+
+      (check_valid_db(db);
+       BOOL close_file = FALSE;
+       finish_shell(db, root, keepsake_msg, close_file);
+       db := open_shell(file OF df OF db, db_name OF db, writeable OF df OF db)
+      );
+
+   PROC finish_and_close = (REF DATABASE db, DISCPTR root, MESSAGEPROC  msg)
+                                                                           VOID:
+
+CO  As finish, but does close file  CO
+
+      (check_valid_db(db);
+       BOOL close_file = TRUE;
+       finish_shell(db, root, msg, close_file)
+      );
+
+   PROC commit = (REF DATABASE db) VOID:
+
+CO  Calls finish on last root - writes away new indirections  CO
+
+      (check_valid_db(db);
+       check_nilfile(df OF db);
+       BOOL close_file = FALSE;
+       finish_shell(db, root OF df OF db, keepsake_msg, close_file)
+      );
+
+
+SKIP
+
+KEEP DATABASE, DISCPTR,
+
+     nildb, nilfile, nilptr, illegalptr, discfile_size, block_size,
+
+     last_update_failed, overhead, size_of_free_space, discptr_type,
+     discptr_data, read_chars_dps, read_ints, read_chars, read_discptrs,
+     read_freelist, read_pagetable,
+     write_chars_dps, write_ints, write_chars, write_discptrs,
+     start_append, append, finish_append, abort_append,
+     make_overwriteable, overwrite, can_overwrite, read_overwriteable,
+     hash_val, same_data, same_discptr,
+
+     create_db_file, finish, finish_and_close, quit, initialise_db,
+     open_db, size, num_chars, num_discptrs,
+     make_shaky, increase, can_increase, assign_to_var, var_to_ptr,
+     can_write, can_write_ints,
+     can_finish, commit, can_commit, get_root, keepsake_fault,
+     compacting_garbage_collect, noncompacting_garbage_collect,
+     make_nilvar, is_shaky, is_assignable, is_nildp, increase_increment,
+     keepsake_file, check_database
+FINISH

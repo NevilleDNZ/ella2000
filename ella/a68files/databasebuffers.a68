@@ -1,0 +1,545 @@
+DECS  databasebuffers  CONTEXT VOID  USE  putstrings,  messageproc,
+      libmessages,  osinterface,  basics,  su_keepsake:
+
+{ " Id: keepsakebuffers.sta,v 1.1 91/10/14 14:29:42 edcad Exp $" }
+configinfo A68CONFIG "$Id: databasebuffers.a68,v 34.2 1995/03/29 13:03:23 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1988
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+03:05:88  created to provide IO buffers to ADAM database.
+14:07:88  Modified for use with EPI: call to epi_send_message added to
+             increase_library. BGH
+30:01:89  Changed to use MESSAGEPROC - epi removed.  EVW
+13:04:89  R4B293. Error in readiltok if id >10 chars at end of buffer. MGH
+08:09:89  CR 636. Merged with SIMFILEBASICS, KEEPSAKE changes added.  EVW
+08:08:90  Reorganisation of readiltok and outid2. EVW
+28:11:90  Inhibitted automatic increase library removed.  DCT
+29:01:91  initptr redefined to match change in DISCPTR for Ctrans.  DCT
+18:02:91  initptr now defined to be illegalptr, kept from keepsake.  DCT
+21:02:91  Now acts as sole interface to KEEPSAKE for ELLA.  DCT
+25:03:91  Modify for more general form of MSGNO, see messageproc. DJS
+11:06:91  R6B44:  read il tok incorrectly read in nilid. EVW
+04:07:91  increase_library messages corrected.  DCT
+13:09:91  Modified for Ids hashing in assmodes -
+              ***** warning "read il tok" now trims into buffer.  DCT
+20:11:91  Module renamed to decouple from database name.  (This module
+             (with osinterface) should completely shell the database).  DCT
+08:02:93  add nilbuffer. read buffer delivers nilbuffer for nilptr. EVW
+23:02:93  Spec of increase changed for OSIF level 1.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.017 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+VECTOR [0] DISCPTR nodps;
+
+COMMENT
+
+This assumes that there are 8 bits in a byte and no more than 32 bits in a
+signed int.
+
+ "tokens"
+   0
+   |         IL Tokens  from 0 -> 157
+   |
+   158 long_tok          following char gives tokens from 158 -> 255
+   159 ident_tok         followed by int length, then chars*length
+   160 ident_range_start
+   |
+   |         idents of length 0 to 9, followed by chars*length
+   169
+   170 start_int_value
+   |
+   |         ints in the range -20 -> +60
+   250
+   251 in1bytetok
+   |
+   |         Other ints
+   254 in4bytetok
+   255       not used - available for long ints
+
+COMMENT
+
+INT  numb_tok = 126,
+     long_tok = 158, ident_tok = 159,
+     ident_range_start = 160,
+     start_int_value = 170,
+     in1bytetok = 251, in2bytetok = 252, in3bytetok = 253, in4bytetok = 254,
+
+     min_int_value = -20,
+     max_int_value = +60,   {changed from +70 during fntype work 3/4/90 }
+     int_offset = 190,
+     max_ident_size = 10;
+
+
+INT  max int in char = in1bytetok - 1,
+     int mask        = max char - 1;
+
+
+MODE RVCLIST = STRUCT (REF VECTOR [] CHAR rvc, REF RVCLIST rest);
+REF RVCLIST nilrvclist = NIL;
+
+MODE DISCFILE =
+     STRUCT ( REF DATABASE database,   { KEEPSAKE database mode       }
+              RVC description          { e.g "Simulator" or "Library" }
+            ),
+
+     BUFF = STRUCT
+            (DISCFILE df,        { see above                           }
+             RVCLIST head,       { list of buffers used in writing     }
+                                 { - just one element when reading     }
+             REF RVCLIST current,{ pointer to current buffer           }
+             INT index,          { number of chars read/written from   }
+                                 { current buffer                      }
+             INT type,           { whether buffer used for reading etc }
+             ID ident,           { used in token reads of idents       }
+             INT int             {  "    "   "     "    "  ints        }
+            );
+
+MODE BUFFER = REF BUFF;
+
+BUFFER nilbuffer = NIL;
+
+{ Values for type field }
+INT invalid = -1, validread  = 0, validwrite= 2;
+
+PROC isnilptr = (REF DISCFILE df, DISCPTR dp) BOOL:
+   discptr_data(database OF df, dp) = 2;
+
+
+PROC make buffer = (REF DISCFILE df, UNION (INT, RVC) discbuff, INT type)
+                                                                      BUFFER:
+BEGIN
+   REF VECTOR [] CHAR b =
+     CASE discbuff IN (INT  s) HEAP VECTOR [s] CHAR, (RVC  buf) buf  ESAC;
+   HEAP BUFF ans := (df, (b, nilrvclist), NIL, 0, type, nilid, 0);
+   current OF ans := head OF ans;
+   ans
+END;
+
+PROC reset buffer = (BUFFER buffer) VOID:
+BEGIN
+   {{ This resets the current buffer to be the head of the buffer list
+      thus allowing the HEAP already assigned to the buffer to be reused }}
+   index OF buffer := 0;
+   current OF buffer := head OF buffer
+END;
+
+PROC read buffer = (REF DISCFILE df, DISCPTR dp) BUFFER:
+BEGIN
+   IF isnilptr(df, dp)
+   THEN nilbuffer
+   ELSE HEAP VECTOR [num_chars(database OF df, dp)] CHAR discbuff;
+        read_chars_dps(database OF df, discbuff, nodps, dp);
+        make buffer(df, discbuff, validread)
+   FI
+END;
+
+PROC end read = (BUFFER buffer) VOID: type OF buffer := invalid;
+
+
+{ =================  Token IO Routines ================================= }
+
+PROC out of range = CHAR:
+(  sys fault("index out of range in readchar"); REPR 0 );
+
+PROC read il tok = (BUFFER buffer)INT:
+( { NOTE when reading only one element of buffer list is used.  ident OF buffer
+    is now only a reference into rvc OF current OF buffer - copy if needed }
+  INT upb = UPB (rvc OF current OF buffer);
+  INT i = ABS IF index OF buffer >= upb
+              THEN  out of range
+              ELSE  (rvc OF current OF buffer)[index OF buffer PLUSAB 1]
+              FI;
+  IF i < long_tok
+  THEN i
+  ELIF i = long_tok
+  THEN ABS IF index OF buffer >= upb
+           THEN  out of range
+           ELSE  (rvc OF current OF buffer)[index OF buffer PLUSAB 1]
+           FI
+  ELIF i= ident_tok
+  THEN INT length :=
+         ABS IF index OF buffer >= upb
+             THEN  out of range
+             ELSE  (rvc OF current OF buffer)[index OF buffer PLUSAB 1]
+             FI;
+       IF length = 0
+       THEN SKIP
+       ELIF length < in1bytetok
+       THEN length := length - int_offset
+       ELSE index OF buffer MINUSAB 1;
+            read il tok(buffer);
+            length := int OF buffer
+       FI;
+       ident OF buffer :=
+        IF length = 0
+        THEN  nullstr
+        ELIF  (index OF buffer PLUSAB length) > upb
+          THEN  out of range; nullstr
+          ELSE  (rvc OF current OF buffer)
+                          [index OF buffer - length+1: index OF buffer]
+        FI;
+       ident_tok
+  ELIF i < start_int_value
+  THEN INT idlength = i - ident_range_start;
+       ident OF buffer :=
+         IF idlength = 0
+         THEN nullstr
+         ELIF (index OF buffer PLUSAB idlength) > upb
+           THEN  out of range; nullstr
+           ELSE  (rvc OF current OF buffer)
+                            [index OF buffer - idlength+1: index OF buffer]
+         FI;
+       ident_tok
+  ELIF i < in1bytetok
+  THEN int OF buffer := i - int_offset; numb_tok
+  ELIF i <= in4bytetok
+  THEN REF INT int = (int OF buffer := 0);
+       INT  size = 4 - (in4bytetok - i);
+       TO  size
+       DO  int:= ABS (BIN int SHL bits per char) +
+                 ABS IF index OF buffer >= upb
+                      THEN  out of range
+                      ELSE  (rvc OF current OF buffer)
+                                         [index OF buffer PLUSAB 1]
+                     FI
+       OD;
+       numb_tok
+  ELSE sys fault("invalid token"); i
+  FI
+);
+
+
+{ ================= Read Procedures ==================================== }
+
+PROC read char = (BUFFER buffer) CHAR:
+BEGIN
+   IF index OF buffer >= UPB (rvc OF current OF buffer)
+   THEN  sys fault("index out of range in readchar"); REPR 0
+   ELSE  (rvc OF current OF buffer)[index OF buffer PLUSAB 1]
+   FI
+END;
+
+PROC read chars = (BUFFER buffer, REF VECTOR [] CHAR result) VOID:
+BEGIN
+   { vector passed in as parameter to avoid uneccessary HEAP generation }
+   INT length = UPB result;
+   IF (index OF buffer PLUSAB length) > UPB (rvc OF current OF buffer)
+   THEN  sys fault("index out of range in read chars")
+   FI;
+   result :=
+     (rvc OF current OF buffer)[index OF buffer - length + 1 : index OF buffer]
+END;
+
+PROC in2 = (BUFFER buffer) INT:
+( INT i =  read il tok(buffer);
+  IF i = numb_tok
+    THEN int OF buffer
+    ELSE i
+  FI
+);
+
+PROC inid2 = (BUFFER buffer) ID:
+( INT i =  read il tok(buffer);
+  IF i = ident_tok
+    THEN  MAKERVC ident OF buffer { ident OF buffer now references - make copy }
+    ELSE sys fault("inid2: name expected"); nilid
+  FI
+);
+
+PROC read bool = (BUFFER buffer) BOOL:
+( INT flag = in2(buffer);
+  IF flag = 0 THEN FALSE
+  ELIF flag = 1 THEN TRUE
+  ELSE sys fault("error in read bool"); FALSE
+  FI
+);
+
+
+{ ============== KEEPSAKE writing routines =========================== }
+
+PROC  increase_library = (REF DISCFILE  df,  MESSAGEPROC  msg) VOID:
+BEGIN
+   INT  unit = 1;
+   PROC  notenough = VOID: msg(lib_msg(4), description OF df);
+                           {"There is not enough space in the * file."}
+
+   IF NOT can_increase(database OF df, unit)
+   THEN  notenough;
+         msg( lib_msg(5),
+              description OF df {"The * file is too big to increase"} )
+   FI;
+
+   PROC  newmsg = (MSGNO  no,  VECSTR  params) VOID:
+      IF error_msg(no)
+      THEN  notenough;
+            RVC  mess = text OF translate_msg(no, params);
+            msg(lib_msg(6), (description OF df, mess));
+                {"An attempt to increase the * file size has failed with the "
+                 "message: ""*"".  Please check your file store."}
+            msg(lib_msg(7), nullmsg {"Not enough space available"})
+      ELSE  msg(no, params)
+      FI;
+
+   increase(database OF df, unit, newmsg);
+   INT filesize = discfile_size(database OF df);
+   msg( lib_msg(8) {"The * file has been increased to * bytes"},
+        (description OF df, intchars(filesize * block_size)) )
+END;
+
+
+PROC mywritechars = (REF DISCFILE df, VECTOR[]CHAR buffer, MESSAGEPROC msg)
+                                                                   DISCPTR:
+BEGIN
+   IF can_write(database OF df, buffer, nodps)
+   THEN  write_chars_dps(database OF df, buffer, nodps, FALSE)
+   ELSE  increase_library(df, msg);
+         mywritechars(df, buffer, msg)
+   FI
+END;
+
+PROC mywritediscptrs = (REF DISCFILE df, VECTOR [] DISCPTR buffer,
+                                                   MESSAGEPROC msg) DISCPTR:
+BEGIN
+   VECTOR [0] CHAR nochars;
+   IF can_write(database OF df, nochars, buffer)
+   THEN  write_discptrs(database OF df, buffer, FALSE)
+   ELSE  increase_library(df, msg);
+         mywritediscptrs(df, buffer, msg)
+   FI
+END;
+
+
+
+{ ============== KEEPSAKE reading routines =========================== }
+
+PROC  nchars = (REF DISCFILE  df,  DISCPTR  dp,  MESSAGEPROC  msg) INT:
+   IF discptr_data(database OF df, dp) = 3
+   THEN  num_chars(database OF df, dp)
+   ELSE  size(database OF df, dp)
+   FI;
+
+PROC  ndiscptrs = (REF DISCFILE  df,  DISCPTR  dp,  MESSAGEPROC  msg) INT:
+   IF discptr_data(database OF df, dp) = 3
+   THEN  num_discptrs(database OF df, dp)
+   ELSE  size(database OF df, dp)
+   FI;
+
+PROC  myreadchars = ( REF DISCFILE  df,  RVC  buffer,  DISCPTR  dp,
+                      MESSAGEPROC  msg ) VOID:
+   IF discptr_data(database OF df, dp) = 3
+   THEN  read_chars_dps(database OF df, buffer, nodps, dp)  { 3 = charsdp }
+   ELSE  read_chars(database OF df, buffer, dp)             { 5 = chars }
+   FI;
+
+PROC  myreaddiscptrs = ( REF DISCFILE  df,  REF VECTOR [] DISCPTR  buffer,
+                         DISCPTR  dp,  MESSAGEPROC  msg ) VOID:
+   IF discptr_data(database OF df, dp) = 3
+   THEN  read_chars_dps(database OF df, nullstr, buffer, dp)  { 3 = charsdp }
+   ELSE  read_discptrs(database OF df, buffer, dp)            { 6 = discptrs }
+   FI;
+
+
+
+
+{ ============== BUFFER writing routines =========================== }
+
+PROC start write = (REF DISCFILE df, UNION(INT, RVC) discbuff) BUFFER:
+   make buffer(df, discbuff, validwrite);
+
+PROC write buffer = (BUFFER buffer, MESSAGEPROC msg) VOID:
+BEGIN
+   IF rest OF current OF buffer IS nilrvclist
+   THEN HEAP VECTOR [UPB rvc OF head OF buffer] CHAR empty;
+        rest OF current OF buffer := HEAP RVCLIST:= (empty, nilrvclist)
+   FI;
+   current OF buffer := rest OF current OF buffer;
+   index OF buffer := 0
+END;
+
+PROC end write = (BUFFER buffer, MESSAGEPROC msg) DISCPTR:
+BEGIN
+   { Uses the Keepsake append procedures to write away the list of buffers.
+     current OF buffer is the last filled buffer in the list     }
+   REF DATABASE dbase = database OF df OF buffer;
+   DISCPTR dp := nilptr;
+   REF RVCLIST ptr := head OF buffer;
+   BOOL first := TRUE, last := FALSE;
+   WHILE NOT last
+   DO  REF VECTOR [] CHAR data =
+          IF REF RVCLIST (ptr) IS current OF buffer
+          THEN  last := TRUE;  (rvc OF ptr)[:index OF buffer]
+          ELSE  rvc OF ptr
+          FI;
+       WHILE NOT can_write(dbase, data, nodps)
+       DO  increase_library(df OF buffer, msg)  OD;
+       dp := IF first ANDTH last
+             THEN  write_chars_dps(dbase, data, nodps, FALSE)
+             ELIF first
+             THEN first := FALSE; start_append(dbase, data, FALSE)
+             ELIF last
+             THEN finish_append(dbase, data, nodps, dp)
+             ELSE append(dbase, data, dp)
+             FI;
+       ptr := rest OF ptr
+   OD;
+   dp
+END;
+
+PROC  chars written = (BUFFER  buffer) INT:
+BEGIN
+   { Only part of buffer list may be in use, so only part of list searched }
+   INT buffersize = UPB rvc OF head OF buffer;
+   INT  n := index OF buffer;
+   REF RVCLIST bufs := head OF buffer;
+   WHILE REF RVCLIST (bufs) ISNT (current OF buffer)
+      DO n PLUSAB buffersize;  bufs := rest OF bufs OD;
+   n
+END;
+
+
+
+PROC outchar = (CHAR c, BUFFER buffer, MESSAGEPROC msg) INT:
+BEGIN
+   (rvc OF current OF buffer)[index OF buffer PLUSAB 1] := c;
+   IF index OF buffer = UPB (rvc OF current OF buffer)
+   THEN  write buffer(buffer, msg)
+   FI;
+   1 {number of chars written}
+END;
+
+PROC  outchars = (VECTOR [] CHAR  str,  BUFFER  buffer,  MESSAGEPROC  msg) INT:
+BEGIN
+   INT upb = UPB (rvc OF current OF buffer);
+   IF upb - index OF buffer < UPB str
+   THEN  INT  firstpart = upb - index OF buffer;
+         outchars(str[: firstpart], buffer, msg);
+         outchars(str[firstpart + 1 :], buffer, msg)
+   ELSE  index OF buffer PLUSAB UPB str;
+         (rvc OF current OF buffer)
+            [index OF buffer - UPB str + 1 : index OF buffer]:= str;
+         IF index OF buffer = upb
+         THEN  write buffer(buffer, msg)
+         FI
+   FI;
+   UPB str
+END;
+
+{ no longer used
+PROC outint = (INT i, BUFFER buffer, MESSAGEPROC msg) VOID:
+BEGIN
+   out il int( (CHAR c)VOID: (outchar(c, buffer, msg)), i)
+END;
+
+PROC outid = (ID id, BUFFER buffer, MESSAGEPROC msg) VOID:
+BEGIN
+   outint(UPB id, buffer, msg);
+   outchars(id, buffer, msg)
+END;
+}
+
+PROC outint2 = (INT i, BUFFER buffer, MESSAGEPROC msg) INT:
+BEGIN
+     IF i >= min_int_value ANDTH i <= max_int_value
+     THEN outchar(REPR(i+int_offset), buffer, msg)
+
+     ELIF (i <= max int in char) ANDTH (i > max_int_value)
+     THEN  outchar(REPR in1bytetok, buffer, msg);
+           outchar(REPR i, buffer, msg); 2
+
+     ELSE  VECTOR [chars per int] CHAR  line;
+           INT  l:= chars per int + 1;
+           BITS  b:= BIN i;
+           WHILE  line[l MINUSAB 1]:= REPR ABS (b AND BIN int mask);
+                b:= b SHR bits per char;
+                b /= 8r0
+           DO  SKIP  OD;
+           INT charcount := outchar(REPR(in4bytetok + 1 - l), buffer, msg);
+           charcount PLUSAB outchars(line[l:], buffer, msg);
+           charcount
+     FI
+END;
+
+PROC outid2 = (ID id, BUFFER buffer, MESSAGEPROC msg) INT:
+BEGIN
+   INT charcount := 0;
+   IF id IS nilid
+   THEN charcount := outchar(REPR ident_tok, buffer, msg);
+        charcount PLUSAB outchar(REPR 0, buffer, msg)
+
+   ELIF UPB id < max_ident_size  {i.e 0 - 9 characters }
+   THEN charcount := outchar(REPR(ident_range_start+UPB id), buffer, msg);
+        charcount PLUSAB outchars(id, buffer, msg)
+
+   ELSE charcount := outchar(REPR ident_tok, buffer, msg);
+        charcount PLUSAB outint2(UPB id, buffer, msg);
+        charcount PLUSAB outchars(id, buffer, msg)
+   FI;
+   charcount
+END;
+
+PROC outbool = (BOOL flag, BUFFER buffer, MESSAGEPROC msg) INT:
+  IF flag THEN outint2(1, buffer, msg)
+  ELSE outint2(0, buffer, msg)
+  FI;
+
+DISCPTR initptr = illegalptr;
+
+PROC (REF DATABASE) FILE  database_file = keepsake_file;
+
+
+SKIP
+KEEP  { First items from KEEPSAKE needed by ELLA }
+
+      DISCFILE,  DATABASE,  DISCPTR,  nilptr,  nildb,  same_discptr,
+      discptr_data,  get_root,
+      create_db_file,
+      open_db,  initialise_db,  can_finish,  finish,  finish_and_close,  quit,
+      block_size,  increase_increment,  can_increase,  increase,
+      database_file,  discfile_size,  size_of_free_space,
+      noncompacting_garbage_collect,  compacting_garbage_collect,
+
+      { Items defined in this Module to support buffered IO }
+
+      lib_msg,  initptr,  isnilptr,
+      RVCLIST,  nilrvclist,  BUFF,  BUFFER, nilbuffer,
+      invalid,  validread,  validwrite,
+      make buffer,  reset buffer,  read buffer,  end read,
+      read char,  read chars,  read bool,  in2,  inid2,
+      increase_library,  mywritechars,  mywritediscptrs,
+      nchars,  ndiscptrs,  myreadchars,  myreaddiscptrs,
+      start write,  write buffer,  end write,  chars written,
+      outchar,  outchars, {outint,  outid,}  outint2,  outid2,  outbool,
+      ident_tok, numb_tok, read il tok
+FINISH
