@@ -1,0 +1,1156 @@
+DECS su_keepsake_interface CONTEXT VOID USE  putstrings, messageproc,
+     osinterface, basics:
+
+{ " Id: su_keepsake_interface.sta,v 1.1 91/10/14 14:31:49 edcad Exp $" }
+configinfo A68CONFIG "$Id: su_keepsake_interface.a68,v 34.2 1995/03/29 13:03:34 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1989
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+25:08:89 Keepsake received from Roy Milner and placed above osinterface
+06:12:89 New version taken.
+30:10:90 Interface for file creating changed.  DCT
+27:11:90 Extra procedures added to support new change in interface.  DCT
+30:11:90 Increase_increment should not be redefined - defined in os int.  DCT
+10:01:91 save_and_close_madam_file added, some unused objects removed.  DCT
+29:01:91 DISCPTR now (STRUCT 24 CHAR) (not 23) for Ctrans alignment bug.  DCT
+13:02:91 Mapping of INT to Vec Char different for non-VAX
+15:02:91 DISCPTR redefined - make files portable on 4 * 8 bit machines.  DCT
+18:02:91 Merged su_keepsake_procs with su_keepsake_modes to bring definition
+            of MODE DISCPTR into one place.  DCT
+22:02:93 Hacked for new OSIF.  DCT
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.011 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+CO ======================== Part I:  MODE declarations ====================== CO
+
+
+   MODE
+
+   MADAMFILE = FILE,
+
+   DISCPTR = STRUCT ( BITS  code,        { shaky/assignable, read size, sort }
+                      INT  first_block,  { disc block containing start }
+                           first_offset, { offset in disc block of start }
+                           data_elts,    { number of scalers in block }
+                           dp_elts,      { number of discptrs in block }
+                           version,      { version of dp wrt garbage collector }
+                      BITS  sumcheck     { sum check to give some protection }
+                     ),                  { NB:  this mode is private !!! }
+
+CO  The first five fields are written to disc as a byte stream - the sumcheck
+    is used to help prevent forgery in memory.
+CO
+
+
+
+
+CO  Region/partitions are accessed by name or by pointer  CO
+
+   WRITEDATA = UNION (VECTOR [] INT,
+                      VECTOR [] CHAR,
+                      VECTOR [] DISCPTR
+                     ),
+
+   BLOCKLIST = STRUCT (INT lwb,
+                           upb,
+                       REF BLOCKLIST rest
+                      ),
+
+   ADDRESS = STRUCT (INT block_num,
+                         offset
+                    ),
+
+CO  All fields of mode INDIR (except version) can be altered by a call of
+    assign_to_discref. When type-checking against information stored on disc,
+    check against the indirection rather than against the discptr. The version
+    is only altered by the garbage collector; if it finds that an indirection is
+    no longer needed, it increases the version by one and sets the address to a
+    'nil' value. A version is also stored in the discptr and if the two versions
+    fail to match, a read using the discptr will fail
+CO
+
+   INDIR = STRUCT (BOOL shaky,
+                   ADDRESS address,
+                   INT data_elts,
+                       dp_elts,
+                       code,
+                       version,
+                       read_size
+                  ),
+
+   DPLIST = STRUCT (DISCPTR dp,
+                    REF DPLIST rest
+                   ),
+
+   VARLIST = STRUCT (INT indirection,
+                     REF VARLIST rest
+                    ),
+
+   WRITEBUFFER = STRUCT (RVC buffer,
+                         REF BLOCKLIST list,  CO used to store block numbers, so
+                                                 that the optimum read size can
+                                                 be calculated
+                                              CO
+                         REF INT buffer_ptr,
+                                 upb,
+                                 generation
+                        ),
+
+   TRACED = STRUCT (ADDRESS old,
+                            new,
+                    REF TRACED rest
+                   ),
+
+
+   DISCFILE = STRUCT (REF DISCPTR root,
+                                  indirs_dp,
+                                  freelist_dp,
+                                  pagetable_dp,
+
+                  CO  The freelist is stored as a discptr to discptrs
+                      (freelist_ptr to free_block_ptrs), which point to freelist
+                      ints. Likewise, the pagetable is stored as pagetable_ptr
+                      to pagetable_ptrs
+                  CO
+
+                                  append_dp,
+
+                  CO  Keep the current append pointer to make sure it is not
+                      assigned to during the append process (see PROC
+                      assign_to_var)
+                  CO
+
+                      REF VECTOR [] DISCPTR free_block_dps,
+                                            pagetable_dps,
+                      REF MADAMFILE file,
+                                    test_file, CO  corresponds to the read/write
+                                                   file which has to be tested
+                                                   whenever access to a file is
+                                                   requested
+                                               CO
+                      REF WRITEBUFFER write_buffer,
+                      RVC name,
+                          block_buffer, CO local buffer - when full, written to
+                                           write buffer of db
+                                        CO
+                      REF INT generation,
+                              file_size,
+                              old_file_size,
+                              freelist_index,
+                              current_free,
+                              first_free,
+                                     CO not written to disc - this is the first
+                                        free block of a new session. Used by the
+                                        non-compacting garbage collector to
+                                        protect instore pointers
+                                     CO
+                              last_free,
+                              cbufpos,
+                                     CO the current character position in the
+                                        buffer 'block_buffer' (not written to
+                                        disc)
+                                     CO
+                              freeblock_ptr,
+                                     CO freelist is read in one block at a
+                                        time when needed - free list ptrs
+                                        indexed by cfree ptr
+                                     CO
+                              freelist_ext_ptr,
+                                     CO indicates how much of the freelist
+                                        extension has been used
+                                     CO
+                              initial_free_block_dps,
+                                     CO the number of 'freeblock_ptrs' at
+                                        the start of the session (used by
+                                        PROC get_free_block to decide when
+                                        to use the freelist_ext)
+                                     CO
+                              size_of_free_space,
+                                     CO the number of partly or entirely free
+                                        VAX blocks
+                                     CO
+                              unusable_bytes,
+                                     CO the number of bytes that could be
+                                        recovered by calling the compacting
+                                        garbage collector - this is only a
+                                        rough estimate
+                                     CO
+                              appended_data, CO not written to disc CO
+                              read_transfers, CO not written to disc CO
+                              write_transfers, CO not written to disc CO
+                      REF VECTOR [] INT freelist,
+                                        freelist_ext,
+                                        pagetable_ext,
+                                    CO freelist_ext and pagetable_ext both not
+                                       written to disc - written to when the
+                                       file is increased
+                                    CO
+                      REF TRACED gc_ptrs,
+                      REF VARLIST instore_vars,
+                      REF VECTOR [] INDIR indirections,
+                      REF BOOL writeable, CO not written to disc CO
+                               last_update_failed,
+                                          CO whether or not the old
+                                             root has been reverted to
+                                          CO
+                               appending, CO not written to disc CO
+                               collectable
+                     ),
+
+    CO A 'readbuffer' is only set up locally within a PROC that uses it (PROC
+       read and PROC garbage_collect)
+    CO
+
+        READBUFFER = STRUCT (RVC buffer,
+                             REF INT lwb,
+                                     upb
+                            ),
+
+    CO  All MADAM writes are of size "buffer size OF write_buffer OF db"
+        (wherever possible). The write buffer is written from the 'top'
+        (the upb field) with a pointer to show which block in the buffer is
+        currently being written to. This information is checked before reading
+        from disc to prevent data being read from disc when it is in store. The
+        write_buffer is used for all regions/partitions currently open, so make
+        sure that the correct file is being written to!
+    CO
+
+        DATABASE = STRUCT (RVC logical_name,
+                               db_name,
+
+                      CO db_name is the name supplied by the user and is used
+                         to generate a logical name which is the name the host
+                         o/s knows about
+                      CO
+                           REF BITS setup,
+
+                      CO contains a special bit-pattern as a test for a valid
+                         database. The bit-pattern is set by a call of open_db
+                         or create_db and reset by a call of close_db
+                      CO
+
+                           REF DISCFILE df
+                          ),
+
+           DPDATA = STRUCT (ADDRESS address,
+                            INT data_elts,
+                                dp_elts,
+                                code,
+                                read_size
+                           ),
+
+           DISCADDRESS = STRUCT(INT block_num,
+                                    offset,
+                                REF DISCADDRESS rest
+                               ),
+
+           OLDANDNEW = STRUCT(INT old_block,
+                                  old_offset,
+                                  new_block,
+                                  new_offset,
+                              REF OLDANDNEW rest
+                             ),
+
+       CO  In mode HASHTABLE, DISCADDRESS is for the non-compactor, OLDANDNEW
+           is for the compactor. The hash index is calculated using the disc
+           address (see PROC hash_index) and within each entry of the array,
+           the lists ordered by disc address. Each discptr traced is added to
+           the hashtable (unless there already); for the non-compactor, this
+           simply shows whether or not to trace the discptr; for the compactor,
+           the mode OLDANDNEW holds both old and new disc addresses, so when a
+           previously traced discptr is found, the old disc address in the
+           discptr can be changed to the new one.
+       CO
+
+           HASHTABLE = UNION (REF VECTOR [] REF DISCADDRESS,
+                              REF VECTOR [] REF OLDANDNEW,
+                              BOOL
+                             ),
+
+           DPSTACK = STRUCT (DPDATA data,
+                             REF DPSTACK rest
+                            ),
+
+           GCINFO = STRUCT (REF VECTOR [] INT max_hashlist,
+                            INT stack_size,
+                                max_stack_size,
+                                disc_accesses,
+                                data_ptrs
+                           ),
+
+           SHAKYDATA = STRUCT (BOOL wanted,
+                               INT indirection,
+                               ADDRESS old_addr,
+                                       new_addr,
+                               REF SHAKYDATA rest
+                              ),
+
+           CO  In mode GCDATA:
+               bytes_used - used only by the non-compactor. Shows the number of
+                            bytes that have been written to.
+                            Number of blocks wanted - bytes_used * block_size
+                            gives (approximately !) the number of bytes that
+                            are effectively unusable because of the fragmented
+                            free-list and which could be recovered by calling
+                            the compactor
+               pagetable - gives information about the freelist and the data
+                           written at the time of the last garbage collection.
+                           Both stored as linked lists within the array. Free
+                           blocks are indicated by ints < 0, data blocks by
+                           ints > 0
+               blocks_wanted - used only by the non-compactor. Marks the blocks
+                               that are currently being wholly or partially used
+                               or. One bit for each VAX block (1=wanted, 0=free)
+               indirs_wanted - used to mark indirections - in fact only
+                               necessary to keep alive nilrefs: all other
+                               discrefs are added to the stack for tracing
+               hashtable - stores information about all discptrs traced. Used by
+                           both compactor and non-compactor (only in non-prepass
+                           phase). See comments about MODE HASHTABLE
+               stack - stores information about discptrs that have yet to be
+                       traced. Used only by non-compactor in non-prepass phase,
+                       by both compactor and non-compactor in prepass phase
+               shaky_ptrs - a list of shaky ptrs (initialised before the trace
+                            phase); the wanted field is marked when a firm
+                            pointer to the same disc address is found
+               gcinfo - for diagnostic purposes only
+           CO
+
+           GCDATA = STRUCT (RVC name,
+                            BOOL compactor,
+                            REF READBUFFER read_buffer,
+                            REF VECTOR [] INT pagetable,
+                            REF VECTOR [] CHAR blocks_wanted,
+                            REF VECTOR [] BOOL indirs_wanted,
+                            HASHTABLE hashtable,
+                            REF DPSTACK stack,
+                            REF SHAKYDATA shaky_ptrs,
+                            REF GCINFO gcinfo
+                           );
+
+   CO  status values - delivered by PROC open CO
+
+   INT completed_ok = 0,
+       last_update_failed = 1;
+
+   INT byte_size = 8,
+       discptr_mask = 26710,
+       pass_mask = 237685011;
+
+   VECTOR [] CHAR dna = ".sum";   CO default type & latest version for
+                                     opening and creating files
+                                  CO
+
+   INT hashtable_size = 256,       CO for compacting garbage collector CO
+       extend_allocation = -1;      CO blocks; for automatic extension, this
+                                       will appear to RMS as 65535 so making
+                                       any automatic extension immediately
+                                       apparent
+                                    CO
+
+   INT fixed_overhead = 3;          CO
+                                        gives the number of blocks that get
+                                        overwritten.  when "finish" is called
+                                        on a discfile
+                                    CO
+
+       { increase_increment:= 192   defined in vmsinterface }
+                                    CO
+                                       in blocks. gives the number of blocks
+                                       that file increases are always a multiple
+                                       of
+                                    CO
+
+   BITS is_setup = 16r8afe7913;  CO
+                                     random password that allows a check for
+                                     an invalid database
+                                 CO
+   BITS hash_mask = 16r aaaaaaaa;
+   INT hash_size = 10000;
+
+
+{ OSIF Level 1 interface shell }
+
+
+PROC  keepsake_msg = (MSGNO  no,  VECSTR  params) VOID:
+   IF error_msg(no)
+   THEN  global_msg( system, concat(( "KEEPSAKE error:  ",
+                                      text OF translate_msg(no, params) )) )
+   ELSE  global_msg(no, params)
+   FI;
+
+PROC  keepsake_fault = (STR  s) VOID:  keepsake_msg(system, s);
+
+
+
+
+
+{ The concept of a "block" should now be private to KEEPSAKE }
+
+INT  block_size = 512,      { unit of transfer - currently fixed absolutely }
+     increase_inc = 1000,   { minimum increase file size increment (blocks) }
+     max_blocks = 128,      { maximum number of blocks per transfer }
+     max_buffer_size = 16,  { maximum buffer size in blocks (!!!) }
+     increase_increment = increase_inc * block_size;
+LONG INT  long_block_size = LENG block_size;
+
+STRUCT 512 CHAR  end_file_block =
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE"
+            "END FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILEEND FILE";
+
+PROC  file_open_to_write = (FILE  file,  MESSAGEPROC  msg) BOOL:  TRUE;
+
+PROC  get_block = ( FILE  file,  RVC  buffer,  INT  block,
+                    MESSAGEPROC  msg ) VOID:
+BEGIN
+ { put(screen, ("Read ", block, "  ", UPB buffer, newline)); }
+   LONG INT  byte = LENG block * long_block_size;
+   set_file_position(file, byte, msg);
+   INT  chars_read:= -1;
+   { reply on msg parameter to report errors for the time bieng }
+   read_buffer(file, buffer, chars_read, msg);
+   IF chars_read /= UPB buffer
+   THEN  msg(system, "get_block:  read size does not match buffer")
+   FI
+END;
+
+
+PROC  put_block = ( FILE  file,  STR  buffer,  INT  block,
+                    MESSAGEPROC  msg ) VOID:
+BEGIN
+ { put(screen, ("Write ", block, "  ", UPB buffer, newline)); }
+   LONG INT  byte = LENG block * long_block_size;
+   set_file_position(file, byte, msg);
+   { reply on msg parameter to report errors for the time bieng }
+   write_buffer(file, buffer, msg)
+END;
+
+
+PROC  file_block_size = (FILE  file) INT:
+BEGIN
+   LONG INT  size = size OF get_file_details(file, keepsake_msg);
+   SHORTEN (size OVER long_block_size)
+END;
+
+
+PROC  increase_db_file = (FILE  file,  INT  extra_bytes,  MESSAGEPROC  msg) INT:
+BEGIN
+   LONG INT  current_pos,  size:= size OF get_file_details(file, msg);
+   IF get_file_position(file, current_pos, msg) = io_ok
+   THEN  INT  extra = ((extra_bytes + 1) OVER block_size) * block_size;
+         size PLUSAB LENG extra;
+         LONG INT  last_block_pos = size - long_block_size;
+         set_file_position(file, last_block_pos, msg);
+         write_buffer(file, end_file_block, msg);
+         set_file_position(file, current_pos, msg)
+   FI;
+   SHORTEN size
+END;
+
+
+
+PROC create_db_file = (STR name, INT  size,  MESSAGEPROC  msg) MADAMFILE:
+BEGIN
+                { Create a new file or truncate an existing one - zero size }
+   MADAMFILE  file = open_file(name, block_update_truncate_access, msg);
+   { Force file to size (bytes) }
+   LONG INT  last_block_pos = LENG size - long_block_size;
+   LONG INT  start_pos;
+   get_file_position(file, start_pos, msg);
+   set_file_position(file, last_block_pos, msg);
+   write_buffer(file, end_file_block, msg);
+   set_file_position(file, start_pos, msg);
+   file
+END;
+
+PROC  synchronise_file = (MADAMFILE  file) VOID:
+   update_disk(file, keepsake_msg);
+
+
+
+
+
+
+
+CO =========== Part II:  Procedural interface for processing modes ========== CO
+
+
+CHAR blank_char = REPR 0;
+
+PROC clear_rvc = (REF VECTOR [] CHAR rvc)VOID:
+   FORALL c IN rvc DO  c := blank_char  OD;
+
+PROC clear_rvi = (REF VECTOR [] INT rvi)VOID:
+   FORALL i IN rvi DO  i := 0  OD;
+
+PROC clear_rvb = (REF VECTOR [] BOOL rvb)VOID:
+   FORALL b IN rvb DO  b := FALSE  OD;
+
+PROC min = (INT a, b) INT:  ( a < b | a | b );
+
+OP XOR = (BITS a, b) BITS:  (a AND NOT b) OR (NOT a AND b);
+
+
+BITS  byte_mask = BIN ((2**byte_size) - 1);
+
+
+{ Note:  These two procedures define the mapping between integers and a stream
+         of characters.  This mapping is also done explicitly (for efficiency)
+         later in this Module and in PROCs "read" and "write" in su_keepsake.
+         Any change in this mapping must be done consistantly.  DCT  20:02:91
+}
+
+OP VCTOI = (VECTOR [] CHAR  chars) INT:
+   IF UPB chars = int_size
+   THEN  INT  ans:= ABS chars[1];
+         FORALL c IN chars[2:]
+         DO  ans:= ABS ((BIN ans SHL byte_size) OR BIN ABS c)  OD;
+         ans
+   ELSE  keepsake_fault("VCTOI - wrong size");  0
+   FI;
+
+OP  ITOVC = (INT  integer) VECTOR [] CHAR:
+BEGIN
+   VECTOR [int_size] CHAR  ans;
+   BITS  int:= BIN integer;
+   FOR i FROM int_size BY -1 TO 1
+   DO  ans[i]:= REPR ABS (int AND byte_mask);
+       int:= int SHR byte_size
+   OD;
+   ans
+END;
+
+
+
+INT file_check         = 160234450,
+    out_of_date_file   = 34589012,
+    desc_file_size     = 3,  CO  The number of bytes needed to describe the
+                                 maximum file size allowed in blocks
+                             CO
+    max_file_size      = 2**(desc_file_size*byte_size-1)-1,
+                             CO  in blocks (approx. 9 Gbytes with byte_size=8
+                                 desc_file_size=3 and block_size=512
+                             CO
+    desc_block_size    = 2, CO  The number of bytes needed to describe the
+                                maximum block size (in bytes)
+                            CO
+    desc_version_size  = 2, CO  The number of bytes needed to describe the
+                                maximum version size
+                            CO
+    desc_buffer_size   = 1,  CO  The number of bytes needed to describe the
+                                 maximum buffer size (in blocks)
+                             CO
+    desc_mask_size     = 2;  CO  The number of bytes needed to describe the
+                                 discptr mask size
+                             CO
+
+COMMENT ========================================================================
+|
+| Each DISCPTR is stored as a standard ALGOL68 structure with PROCs defined
+| to access each field and to convert to and from a VECTOR [] CHAR for writing
+| to disc.  Check that the sizes shown are consistent with the above.
+|
+|   code         1     []         Type of data written
+|   shaky        2.1   [          Is the discptr to be shaky?
+|   assignable   2.2    ]         Is the discptr to be assignable?
+|   addr/block   3:5   [][][]     Disc block containing start (block_num OF add)
+|   addr/offset  6:7   [][]       Disc address offset (offset OF add)
+|   data_elts    8:11  [][][][]   Number of data elements written away
+|   dp_elts     12:15  [][][][]   Number of discptrs written away
+|   version     16:17  [][]       Used with discrefs - See notes for INDIR
+|   read_size   18     []         Optimal number of blocks to read
+|
+|   NB:  MODE DISCPTR is defined on the assumption that the above sizes (in
+|        Bytes) fit into 4-byte aligned data as follows.  This representation
+|        has been chosen as a compromise between portability, efficiency and
+|        compactness:
+|
+|  DISCPTR = STRUCT ( BITS  code,        { shaky/assignable, read size, sort }
+|                     INT  first_block,  { disc block containing start }
+|                          first_offset, { offset in disc block of start }
+|                          data_elts,    { number of scalers in block }
+|                          dp_elts,      { number of discptrs in block }
+|                          version,      { version of dp wrt garbage collector }
+|                     BITS  sumcheck     { sum check to give some protection }
+|                    )                   { NB:  this mode is private !!! }
+|
+==================================================================== COMMENT
+
+
+INT  discptr_size      = 2 + desc_file_size + desc_block_size + 2 * int_size +
+                         desc_version_size + desc_buffer_size,  { 18 Bytes }
+     read_size_offset  = 2 * byte_size,  { Bits }
+     boolean_offset    = byte_size,      { Bits }
+     code_index        = 1,
+     boolean_index     = 2;
+
+BITS  dpsc_mask        = ( BITS  p:= 16r3c;   { NB assumes int_size >= 6 bits }
+                           TO int_size-1
+                           DO  p:= (p SHL byte_size) OR p  OD;
+                           p
+                         ),   { Used to create sumcheck }
+      shaky_mask       = 16r1 SHL byte_size,
+      assignable_mask  = 16r2 SHL byte_size,
+      indirection_mask = 16r3 SHL byte_size,
+      boolean_mask     = byte_mask SHL byte_size,
+      no_mask          = 16r0,
+      code_mask        = byte_mask,
+      read_size_mask   = byte_mask SHL (2 * byte_size);
+
+
+PROC sumcheck = (DISCPTR dp) BITS:
+   dpsc_mask  XOR  code OF dp  XOR  BIN first_offset OF dp  XOR
+   BIN first_block OF dp  XOR  BIN data_elts OF dp  XOR  BIN dp_elts OF dp  XOR
+   BIN version OF dp;
+
+COMMENT ====================================================================
+|       PROC make_dp - creates a DISCPTR (having written some data)
+==================================================================== COMMENT
+
+PROC make_dp = (BOOL shaky, assignable, INT discptr_code, data_elts, dp_elts,
+                version, read_size, ADDRESS addr) DISCPTR:
+BEGIN
+   DISCPTR  dp:= ( IF shaky THEN  shaky_mask  ELSE  no_mask  FI  OR
+                     IF assignable THEN  assignable_mask  ELSE  no_mask  FI  OR
+                     (BIN read_size SHL read_size_offset)  OR
+                      BIN  discptr_code,
+                   block_num OF addr, offset OF addr, data_elts, dp_elts,
+                   version, 16r0
+                 );
+   sumcheck OF dp:= sumcheck(dp);
+   dp
+END;
+
+
+COMMENT ====================================================================
+|       PROC chars_to_dp - Makes a DISCPTR from characters retrieved
+|                          from a file on disc
+==================================================================== COMMENT
+
+PROC chars_to_dp = (VECTOR [] CHAR chars) DISCPTR:
+BEGIN   { Defined in terms of a Byte stream - should be portable }
+   INT  code = ABS chars[code_index],  booleans = ABS chars[boolean_index];
+   INT  index:= boolean_index,  block:= 0,  offset:= 0,  data_elts:= 0,
+        dp_elts:= 0,  version:= 0,  read_size:= 0;
+
+   TO desc_file_size
+   DO  block:= ABS ( (BIN block SHL byte_size)  OR
+                     BIN ABS chars[index PLUSAB 1] )
+   OD;
+   TO desc_block_size
+   DO  offset:= ABS ( (BIN offset SHL byte_size)  OR
+                      BIN ABS chars[index PLUSAB 1] )
+   OD;
+   TO int_size
+   DO  data_elts:= ABS ( (BIN data_elts SHL byte_size)  OR
+                         BIN ABS chars[index PLUSAB 1] )
+   OD;
+   TO int_size
+   DO  dp_elts:= ABS ( (BIN dp_elts SHL byte_size)  OR
+                       BIN ABS chars[index PLUSAB 1] )
+   OD;
+   TO desc_version_size
+   DO  version:= ABS ( (BIN version SHL byte_size)  OR
+                       BIN ABS chars[index PLUSAB 1] )
+   OD;
+   TO desc_buffer_size
+   DO  read_size:= ABS ( (BIN read_size SHL byte_size) OR
+                         BIN ABS chars[index PLUSAB 1] )
+   OD;
+
+   DISCPTR  dp:= ( (BIN booleans SHR boolean_offset)  OR  BIN  code
+                        OR  (BIN read_size SHL read_size_offset),
+                   block, offset, data_elts, dp_elts, version, 16r0
+                 );
+   sumcheck OF dp:= sumcheck(dp);
+   dp
+END;
+
+
+PROC  dp_to_chars = (DISCPTR  dp) VECTOR [] CHAR:
+BEGIN
+   VECTOR [discptr_size] CHAR  chars;
+   chars[code_index]:= REPR ABS (code OF dp AND code_mask);
+   chars[boolean_index]:= REPR ABS ( (code OF dp AND boolean_mask) SHR
+                                       boolean_offset );
+   INT  index:= boolean_index;
+   BITS  block:= BIN first_block OF dp,  offset:= BIN first_offset OF dp,
+         data_elts:= BIN data_elts OF dp,  dp_elts:= BIN dp_elts OF dp,
+         version:= BIN version OF dp,
+         read_size:= (code OF dp AND read_size_mask) SHR read_size_offset;
+
+   chars[index PLUSAB desc_file_size]:= REPR ABS (block AND byte_mask);
+   FOR i TO desc_file_size - 1
+   DO  block:= block SHR byte_size;
+       chars[index - i]:= REPR ABS (block AND byte_mask)
+   OD;
+   chars[index PLUSAB desc_block_size]:= REPR ABS (offset AND byte_mask);
+   FOR i TO desc_block_size - 1
+   DO  offset:= offset SHR byte_size;
+       chars[index - i]:= REPR ABS (offset AND byte_mask)
+   OD;
+   chars[index PLUSAB int_size]:= REPR ABS (data_elts AND byte_mask);
+   FOR i TO int_size - 1
+   DO  data_elts:= data_elts SHR byte_size;
+       chars[index - i]:= REPR ABS (data_elts AND byte_mask)
+   OD;
+   chars[index PLUSAB int_size]:= REPR ABS (dp_elts AND byte_mask);
+   FOR i TO int_size - 1
+   DO  dp_elts:= dp_elts SHR byte_size;
+       chars[index - i]:= REPR ABS (dp_elts AND byte_mask)
+   OD;
+   chars[index PLUSAB desc_version_size]:=
+       REPR ABS (version AND byte_mask);
+   FOR i TO desc_version_size - 1
+   DO  version:= version SHR byte_size;
+       chars[index - i]:= REPR ABS (version AND byte_mask)
+   OD;
+   chars[index PLUSAB desc_buffer_size]:= REPR ABS (read_size AND byte_mask);
+   TO desc_buffer_size - 1
+   DO  read_size:= read_size SHR byte_size;
+       chars[index MINUSAB 1]:= REPR ABS (read_size AND byte_mask)
+   OD;
+   chars
+END;
+
+
+COMMENT ====================================================================
+| PROCs for decomposing a discptr into its individual fields:
+|
+|           discptr_code, is_shaky, is_assignable, first_block, first_offset,
+|           data_elts, dp_elts, read_size, version.
+|
+| Since these are called frequently (by the garbage collector in particular),
+| they have been written efficiently but in a non-portable way - the portable
+| version of each PROC has been commented out.
+==================================================================== COMMENT
+
+PROC discptr_code = (DISCPTR dp) INT:  ABS (code OF dp AND code_mask);
+
+PROC is_shaky = (DISCPTR dp) BOOL:  (code OF dp AND shaky_mask) = shaky_mask;
+
+PROC is_assignable = (DISCPTR dp)BOOL:
+   (code OF dp AND assignable_mask) = assignable_mask;
+
+PROC first_block = (DISCPTR dp) INT:  first_block OF dp;
+
+PROC first_offset = (DISCPTR dp) INT:  first_offset OF dp;
+
+PROC data_elts = (DISCPTR dp) INT:  data_elts OF dp;
+
+PROC dp_elts = (DISCPTR dp) INT:  dp_elts OF dp;
+
+PROC version = (DISCPTR dp) INT:  version OF dp;
+
+PROC read_size = (DISCPTR dp) INT:
+   ABS ((code OF dp AND read_size_mask) SHR read_size_offset);
+
+PROC incorrect_sumcheck = (DISCPTR dp) BOOL:
+   sumcheck(dp) /= sumcheck OF dp;
+
+PROC change_dp_address = (REF DISCPTR dp, ADDRESS address) VOID:
+BEGIN
+   first_block OF dp:= block_num OF address;
+   first_offset OF dp:= offset OF address;
+   sumcheck OF dp:= sumcheck(dp)
+END;
+
+PROC overwrite_address = (REF VECTOR [] CHAR chars, INT offset, ADDRESS new)
+                                                                        VOID:
+BEGIN   { Used in the compactor to overwrite disc addresses }
+   INT  index:= offset + boolean_index + desc_file_size + desc_block_size;
+   BITS  off:= BIN offset OF new,  addr:= BIN block_num OF new;
+   chars[index]:= REPR ABS (off AND byte_mask);
+   TO desc_block_size - 1
+   DO  off:= off SHR byte_size;
+       chars[index MINUSAB 1]:= REPR ABS (off AND byte_mask)
+   OD;
+   chars[index MINUSAB 1]:= REPR ABS (addr AND byte_mask);
+   FOR i TO desc_file_size - 1
+   DO  addr:= addr SHR byte_size;
+       chars[index MINUSAB 1]:= REPR ABS (addr AND byte_mask)
+   OD
+END;
+
+
+OP  =  = (DISCPTR  a, b) BOOL:
+   code OF a = code OF b  ANDTH  first_block OF a = first_block OF b  ANDTH
+   first_offset OF a = first_offset OF b  ANDTH
+   data_elts OF a = data_elts OF b  ANDTH  dp_elts OF a = dp_elts OF b  ANDTH
+   version OF a = version OF b  ANDTH  sumcheck OF a = sumcheck OF b;
+
+
+
+
+
+ADDRESS niladdress = (0, 1);       { cf nilptr }
+ADDRESS nilgcaddress = (0, 2);
+
+OP = = (ADDRESS a, b) BOOL:
+    block_num OF a = block_num OF b ANDTH offset OF a = offset OF b;
+
+DISCPTR  nilptr = ( 16r0, 0, 1, 0, 0, 0,
+                    (dpsc_mask AND NOT 16r1)  OR  (NOT dpsc_mask AND 16r1)
+                  ),   { cf niladdress }
+         illegalptr = (16r7777, 33, 77, 33, 77, 33, 16r7777);
+
+CO A test for a nil non-assignable discptr CO
+
+PROC is_nildp = (DISCPTR dp) BOOL:   dp = nilptr;
+
+
+
+
+CO an Indirection CO
+
+INT indirection_size = discptr_size;
+
+PROC make_indirection = (VECTOR [] CHAR chars) INDIR:
+BEGIN
+   DISCPTR  dp = chars_to_dp(chars);
+   IF (code OF dp AND indirection_mask) /= indirection_mask
+   THEN  keepsake_fault("Illegal indirection")
+   FI;
+   ( is_shaky(dp), (first_block(dp), first_offset(dp)), data_elts(dp),
+     dp_elts(dp), discptr_code(dp), version(dp), read_size(dp) )
+END;
+
+PROC indir_to_chars = (INDIR indir) VECTOR [] CHAR:
+BEGIN
+   DISCPTR  dp:= make_dp( shaky OF indir, FALSE, code OF indir,
+                          data_elts OF indir, dp_elts OF indir,
+                          version OF indir, read_size OF indir,
+                          address OF indir );
+   code OF dp:= (code OF dp AND indirection_mask);
+   dp_to_chars(dp)
+END;
+
+
+
+
+
+COMMENT ========================================================================
+| The following constants define the offset, end and width of each field
+| within a block_heading
+==================================================================== COMMENT
+
+INT bh_wid_data_code   = 1,
+    bh_end_data_code   = 1,
+    bh_end_next_block  = desc_file_size+1,
+    bh_wid_next_block  = desc_file_size,
+    bh_end_block_data  = desc_file_size+desc_block_size+1,
+    bh_wid_block_data  = desc_block_size,
+    bh_end_block_dps   = desc_file_size+2*desc_block_size+1,
+    bh_wid_block_dps   = desc_block_size,
+    bh_end_data_start  = desc_file_size+3*desc_block_size+1,
+    bh_wid_data_start  = desc_block_size,
+    bh_end_read_size   = desc_file_size+3*desc_block_size+desc_buffer_size+1,
+    bh_wid_read_size   = desc_buffer_size,
+    block_heading_size = desc_file_size+3*desc_block_size+desc_buffer_size+1;
+
+COMMENT ====================================================================
+| Make_block_heading produces a block heading which always occupies a fixed
+| number (block_heading_size=10) of chars at the end of a VAX block; it
+| provides the information needed when reading a discptr.
+|
+|   block_code      1    []     Type-checking information
+|   next_block      2    [][]   The next VAX block to be read (= 0 if no more)
+|   block_data      2    [][]   The number of data elements in the VAX block
+|   block_dps       2    [][]   The number of discptrs in the VAX block
+|   data_start      2    [][]   Where the data starts in the VAX block
+|   bh_read_size    1    []     Optimal number of blocks to read
+==================================================================== COMMENT
+
+
+PROC make_block_heading = (INT block_code, next_block, block_data, block_dps,
+                               data_start, bh_read_size) VECTOR [] CHAR:
+BEGIN
+   BITS  code:= BIN block_code,  next:= BIN next_block,  data:= BIN block_data,
+         dps:= BIN block_dps,  start:= BIN data_start,  size:= BIN bh_read_size;
+   VECTOR [block_heading_size] CHAR  bh;
+   INT  ind:= 0;
+   TO bh_wid_data_code
+   DO  bh[ind PLUSAB 1]:= REPR ABS (code AND byte_mask);
+       code:= code SHR byte_size
+   OD;
+   TO bh_wid_next_block
+   DO  bh[ind PLUSAB 1]:=  REPR ABS (next AND byte_mask);
+       next:= next SHR byte_size
+   OD;
+   TO bh_wid_block_data
+   DO  bh[ind PLUSAB 1]:=  REPR ABS (data AND byte_mask);
+       data:= data SHR byte_size
+   OD;
+   TO bh_wid_block_dps
+   DO  bh[ind PLUSAB 1]:=  REPR ABS (dps AND byte_mask);
+       dps:= dps SHR byte_size
+   OD;
+   TO bh_wid_data_start
+   DO  bh[ind PLUSAB 1]:=  REPR ABS (start AND byte_mask);
+       start:= start SHR byte_size
+   OD;
+   TO bh_wid_read_size
+   DO  bh[ind PLUSAB 1]:= REPR ABS (size AND byte_mask);
+       size:= size SHR byte_size
+   OD;
+   bh
+END;
+
+
+COMMENT ====================================================================
+| PROCs for decomposing a block_heading into its individual fields:
+|
+|    block_code, next_block, block_data, block_dps, data_start, bh_read_size
+==================================================================== COMMENT
+
+PROC block_code = (VECTOR [] CHAR chars) INT:
+( INT  code:= ABS chars[bh_end_data_code];
+  FOR i TO bh_wid_data_code - 1
+  DO  code:= ABS ( BIN code SHL byte_size OR
+                   BIN ABS chars[bh_end_data_code - i] )
+  OD;
+  code
+);
+
+PROC next_block = (VECTOR [] CHAR chars) INT:
+( INT  next:= ABS chars[bh_end_next_block];
+  FOR i TO bh_wid_next_block - 1
+  DO  next:= ABS ( BIN next SHL byte_size OR
+                    BIN ABS chars[bh_end_next_block - i] )
+  OD;
+  next
+);
+
+PROC block_data = (VECTOR [] CHAR chars) INT:
+( INT  data:= ABS chars[bh_end_block_data];
+  FOR i TO bh_wid_block_data - 1
+  DO  data:= ABS ( BIN data SHL byte_size OR
+                    BIN ABS chars[bh_end_block_data - i] )
+  OD;
+  data
+);
+
+PROC block_dps = (VECTOR [] CHAR chars) INT:
+( INT  dps:= ABS chars[bh_end_block_dps];
+  FOR i TO bh_wid_block_dps - 1
+  DO  dps:= ABS ( BIN dps SHL byte_size OR
+                  BIN ABS chars[bh_end_block_dps - i] )
+  OD;
+  dps
+);
+
+PROC data_start = (VECTOR [] CHAR chars) INT:
+( INT  start:= ABS chars[bh_end_data_start];
+  FOR i TO bh_wid_data_start - 1
+  DO  start:= ABS ( BIN start SHL byte_size OR
+                    BIN ABS chars[bh_end_data_start - i] )
+  OD;
+  start
+);
+
+PROC bh_read_size = (VECTOR [] CHAR chars) INT:
+( INT  read:= ABS chars[bh_end_read_size];
+  FOR i TO bh_wid_read_size - 1
+  DO  read:= ABS ( BIN read SHL byte_size OR
+                    BIN ABS chars[bh_end_read_size - i] )
+  OD;
+  read
+);
+
+
+
+
+COMMENT ========================================================================
+| The following constants define the offset, end and width of each field
+| within a data_heading
+==================================================================== COMMENT
+
+INT dh_wid_data_code     = 1,
+    dh_end_data_code     = 1,
+    dh_end_data_in_block = desc_block_size+1,
+    dh_wid_data_in_block = desc_block_size,
+    dh_end_dps_in_block  = 2*desc_block_size+1,
+    dh_wid_dps_in_block  = desc_block_size,
+    dh_end_check_heading = 2*desc_block_size+desc_mask_size+1,
+    dh_wid_check_heading = desc_mask_size,
+    data_heading_size    = 2*desc_block_size+desc_mask_size+1;
+
+COMMENT ====================================================================
+| Make_data_heading produces a data_heading which is stored on disc directly
+| preceding the start of the data (unless there would be an overlap into the
+| next VAX block, in which case the function of the data_heading is performed
+| by the appropriate block_heading).
+|
+|   dh_code         1    []     Type-checking information
+|   data_in_block   2    [][]   The number of data elements in the VAX block
+|                               which are accessed by the discptr (this is NOT
+|                               the same as the total number of data elements
+|                               in the VAX block, since more than one data
+|                               block can be packed into the same VAX block
+|   dps_in_block    2    [][]   The number of discptrs in the VAX block
+|   check_heading   2    [][]   discptr_mask
+|
+| A data_heading also contains a known bit-pattern so that data_headings can
+| be recognised - this is useful to help reconstruct a MADAM database from a
+| corrupt disc.
+==================================================================== COMMENT
+
+PROC make_data_heading = (INT dh_code, data_in_block, dps_in_block)
+                                                           VECTOR [] CHAR:
+BEGIN
+   BITS  code:= BIN dh_code,  data:= BIN data_in_block,
+         dps:= BIN dps_in_block,  check:= BIN discptr_mask;
+   VECTOR [data_heading_size] CHAR  dh;
+   INT  ind:= 0;
+   TO dh_wid_data_code
+   DO  dh[ind PLUSAB 1]:=  REPR ABS (code AND byte_mask);
+       code:= code SHR byte_size
+   OD;
+   TO dh_wid_data_in_block
+   DO  dh[ind PLUSAB 1]:=  REPR ABS (data AND byte_mask);
+       data:= data SHR byte_size
+   OD;
+   TO dh_wid_dps_in_block
+   DO  dh[ind PLUSAB 1]:=  REPR ABS (dps AND byte_mask);
+       dps:= dps SHR byte_size
+   OD;
+   TO dh_wid_check_heading
+   DO  dh[ind PLUSAB 1]:=  REPR ABS (check AND byte_mask);
+       check:= check SHR byte_size
+   OD;
+   dh
+END;
+
+COMMENT ====================================================================
+| PROCs for decomposing a data_heading into its individual fields:
+|
+|           dh_code, data_in_block, dps_in_block
+|
+| and a test for a data_heading (is_data_heading).
+|
+|==================================================================== COMMENT
+
+
+PROC dh_code = (VECTOR [] CHAR chars) INT:
+( INT  code:= ABS chars[dh_end_data_code];
+  FOR i TO dh_wid_data_code - 1
+  DO  code:= ABS ( BIN code SHL byte_size OR
+                   BIN ABS chars[dh_end_data_code - i] )
+  OD;
+  code
+);
+
+PROC data_in_block = (VECTOR [] CHAR chars) INT:
+( INT  data:= ABS chars[dh_end_data_in_block];
+  FOR i TO dh_wid_data_in_block - 1
+  DO  data:= ABS ( BIN data SHL byte_size OR
+                    BIN ABS chars[dh_end_data_in_block - i] )
+  OD;
+  data
+);
+
+PROC dps_in_block = (VECTOR [] CHAR chars) INT:
+( INT  dps:= ABS chars[dh_end_dps_in_block];
+  FOR i TO dh_wid_dps_in_block - 1
+  DO  dps:= ABS ( BIN dps SHL byte_size OR
+                  BIN ABS chars[dh_end_dps_in_block - i] )
+  OD;
+  dps
+);
+
+PROC is_data_heading = (VECTOR [] CHAR chars) BOOL:
+( INT  check:= ABS chars[dh_end_check_heading];
+  FOR i TO dh_wid_check_heading - 1
+  DO  check:= ABS ( BIN check SHL byte_size OR
+                  BIN ABS chars[dh_end_check_heading - i] )
+  OD;
+  check = discptr_mask
+);
+
+
+
+INT actual_block_size  = block_size - block_heading_size,
+    max_ints_in_block  = actual_block_size % int_size,
+    fixed_in_block     = 4*discptr_size + 11*int_size;
+
+SKIP
+
+KEEP  { Part I }
+
+      STR, RVC, MESSAGEPROC, DISCPTR, INDIR, DISCFILE, MADAMFILE, ADDRESS,
+      DPLIST, DATABASE, READBUFFER, WRITEBUFFER, BLOCKLIST, WRITEDATA,
+      DPDATA, DISCADDRESS, OLDANDNEW, HASHTABLE, DPSTACK, GCINFO, VARLIST,
+      TRACED, SHAKYDATA, GCDATA,
+
+      file_name, close_file, file_block_size, create_db_file, increase_db_file,
+      end_file_block, pass_mask, block_size, word_size,
+      max_blocks, increase_increment, is_setup, keepsake_msg, keepsake_fault,
+      sys fault, get_block, put_block, byte_size,
+      int_size, hashtable_size, get_time, dna,
+      screen, fixed_overhead, discptr_mask, hash_mask,
+      hash_size, max_buffer_size,
+
+
+      { Part II }
+
+      blank_char, clear_rvc, clear_rvi, clear_rvb,
+      VCTOI (VECTOR [] CHAR), ITOVC (INT),
+      = (ADDRESS, ADDRESS), = (DISCPTR, DISCPTR),
+
+      file_check, out_of_date_file, desc_file_size, desc_block_size,
+      desc_version_size, desc_buffer_size, discptr_size,
+      indirection_size, block_heading_size, actual_block_size,
+      data_heading_size, max_ints_in_block, fixed_in_block, max_file_size,
+
+      nilptr, illegalptr, make_dp, chars_to_dp, dp_to_chars, change_dp_address,
+      overwrite_address, discptr_code, is_shaky, is_assignable, first_block,
+      first_offset, data_elts, dp_elts, version, read_size, sumcheck, is_nildp,
+      incorrect_sumcheck, niladdress, nilgcaddress,
+
+      make_indirection, indir_to_chars,
+
+      make_block_heading,
+      block_code, next_block, block_data, block_dps, data_start, bh_read_size,
+
+      make_data_heading,  dh_code, data_in_block, dps_in_block, is_data_heading
+
+FINISH
