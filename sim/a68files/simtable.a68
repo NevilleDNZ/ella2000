@@ -1,0 +1,424 @@
+DECS simtable CONTEXT VOID  USE  putstrings, basics, kernel:
+
+{ " Id: simtable.sta,v 2.1 91/02/22 18:37:14 edcad Exp$" }
+configinfo A68CONFIG "$Id: simtable.a68,v 34.2 1995/03/29 13:05:03 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1993
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+14:12:89 New module to provide mapping of symbolic names onto various
+            types of kernel and shell data. MDR.
+16:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  30.004 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+{ MODES AND CONSTANTS }
+{ =================== }
+
+{
+   The mode PATH is used throughout to handle node names.  It is used
+   for the nodes in the parse tree, and is then further processed to
+   include all the information required to make use of the name.
+   The 'aliasname' of the tail end of the path will be the
+   same as the name bound to it by this table.
+   So we can print it easily in simmonitor. See SMALLNAME in simnode.
+
+   The mode BIND is associates upper and lower case
+   names with an MNODE description of an ELLA 'invocation' (input, MAKE or LET)
+}
+
+MODE OPERATOR = CHAR,
+     BIND     = STRUCT (ID uname, lname, REF MNODE node),
+     PATH     = STRUCT (INT repeat, ID name, ID aliasname,
+                        OPERATOR op, REF BIND bind, REF PATH rest);
+
+
+{ Values for the 'op' fields of paths }
+CHAR go past = ";",
+     go in   = ".",
+     no op   = " ";
+
+
+{ Useful NILs }
+REF PATH nilpath = NIL;
+REF BIND nilbind = NIL;
+
+
+{ GLOBAL DATA }
+{ =========== }
+
+{
+   The following are names of important path mappings, the user can
+   never change them as they are not valid identifiers. (They could
+   be protected with the 'internal name' scope integer if need be.)
+
+   The path bound to 'simulated function name' will be a linked
+   list with exactly one element.  The 'bind' field of this element
+   contains the upper case name and 'MNODE' description of the
+   simulated function.
+
+   The path bound to 'monitoring pointer name' will be a
+   supersequence of that bound to 'simulated function name'.
+
+   These names are set up by simtable init.
+
+}
+ID monitoring pointer name;
+ID simulated function name;
+
+
+{ The following modes describe the basic elements needed to provide
+  a table which can be used to map user defined names onto various
+  kernel and shell data types.
+
+  The rationale for implementation of this table was to provide the
+  user with a mechanism to specify aliases for node names, if this
+  were it's only use then it would logicaly be part of SIMNODE.
+  However, the ability to allow lookup of symbolic constants could
+  easily be of wider use within the shell, so the table has been
+  generalised to support integer and svalue lookup which are the
+  best contenders in the symbolic constant stakes.
+
+  Note that the 'discard' operations will leave holes in the table.
+  This shouldn't be significant as the number of table entries will be
+  small anyway.
+}
+
+MODE VALUE = UNION (REF PATH, INT, SVALUE);
+MODE TABLEENTRY = STRUCT(ID name, VALUE value, INT scope);
+MODE SIMTABLE = STRUCT (INT top, REF VECTOR [] TABLEENTRY table);
+SIMTABLE simtable;
+
+{ The INSCOPE operator allows mapping from name to value to be
+  grouped by use. eg, we don't want to allow the user to change
+  probe names, but they must have access to alias names.}
+INT any           =0,
+    probe name    =1,
+    alias name    =2,
+    internal name =4;
+
+OP INSCOPE = (TABLEENTRY e, INT s)BOOL:
+   (s = 0 OREL scope OF e = s);
+
+{This procedure finds a name in the table which is in scope, and
+ returns the index for that table entry}
+PROC find name in scope = (ID name, INT scope) INT: {table index}
+BEGIN
+   INT table index := 0;
+   FOR i TO top OF simtable WHILE table index = 0 DO
+     IF ((table OF simtable)[i] INSCOPE scope) ANDTH
+        name OF (table OF simtable)[i] = name
+     THEN
+        table index := i
+     FI
+  OD;
+  table index
+END;
+
+PROC find base in scope = (INT base, scope) INT: {table index}
+BEGIN
+   INT table index := 0;
+   FOR i TO top OF simtable WHILE table index = 0 DO
+     IF ((table OF simtable)[i] INSCOPE scope) THEN
+        CASE value OF (table OF simtable)[i] IN
+        (REF PATH p):
+           IF base OF node OF bind OF p = base THEN table index := i FI
+        OUT SKIP
+        ESAC
+     FI
+  OD;
+  table index
+END;
+
+{This procedure ensures that enough room is free in the table to
+ allow addition of another entry. This could be a good place to
+ garbage collect in future if needed.}
+PROC extend table = VOID:
+   IF INT upb = UPB table OF simtable; upb < (top OF simtable +:=1) THEN
+      REF VECTOR [] TABLEENTRY new table = HEAP VECTOR [upb*2] TABLEENTRY;
+      new table[1:upb] := table OF simtable;
+      table OF simtable := new table
+   FI;
+
+{Exported Procedures}
+PROC simtable init = VOID:
+BEGIN
+   monitoring pointer name := MAKEID "_";
+   simulated function name := MAKEID "__";
+   simtable := (0, HEAP VECTOR [32] TABLEENTRY)
+END;
+
+PROC simtable discard = VOID:
+   simtable := (0, NIL);
+
+PROC simtable add binding = (ID name, INT scope, VALUE value)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     extend table;
+     (table OF simtable)[top OF simtable] := (name, value, scope);
+     TRUE
+  ELSE
+     FALSE
+  FI;
+
+PROC simtable replace binding = (ID name, INT scope, VALUE value)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     extend table;
+     (table OF simtable)[top OF simtable] := (name, value, scope);
+     FALSE
+  ELSE
+     value OF (table OF simtable)[index] := value;
+     TRUE
+  FI;
+
+PROC simtable discard binding = (ID name, INT scope)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     FALSE
+  ELSE
+     (table OF simtable)[index] := (nullid, 0, 0);
+     TRUE
+  FI;
+
+PROC simtable discard bindings by base = (INT base) BOOL:
+BEGIN
+   BOOL found := FALSE;
+   FOR i TO top OF simtable DO
+     CASE value OF (table OF simtable)[i] IN
+     (REF PATH p):
+        IF base OF node OF bind OF p = base THEN
+           (table OF simtable)[i] := (nullid, 0, 0);
+           found := TRUE
+        FI
+     OUT SKIP
+     ESAC
+   OD;
+   found
+END;
+
+PROC simtable lookup path = (ID name, INT scope, REF REF PATH path)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     FALSE
+  ELSE
+     CASE value OF (table OF simtable)[index] IN
+     (REF PATH p):(path := p; TRUE)
+     OUT FALSE
+     ESAC
+  FI;
+
+PROC simtable lookup circuit by base = (INT base, REF INT circuit) BOOL:
+  IF INT index = find base in scope (base, any); index = 0 THEN
+     FALSE
+  ELSE
+     CASE value OF (table OF simtable)[index] IN
+     (REF PATH p):(circuit := circuit OF node OF bind OF p; TRUE)
+     ESAC
+  FI;
+
+PROC simtable lookup path by base = (INT base, scope, REF REF PATH path) BOOL:
+  IF INT index = find base in scope (base, scope); index = 0 THEN
+     FALSE
+  ELSE
+     CASE value OF (table OF simtable)[index] IN
+     (REF PATH p):(path := p; TRUE)
+     ESAC
+  FI;
+
+PROC simtable lookup svalue = (ID name, INT scope, REF SVALUE svalue)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     FALSE
+  ELSE
+     CASE value OF (table OF simtable)[index] IN
+     (SVALUE sv):(svalue := sv; TRUE)
+     OUT FALSE
+     ESAC
+  FI;
+
+PROC simtable lookup int = (ID name, INT scope, REF INT int)BOOL:
+  IF INT index = find name in scope (name, scope); index = 0 THEN
+     FALSE
+  ELSE
+     CASE value OF (table OF simtable)[index] IN
+     (INT i): (int := i; TRUE)
+     OUT FALSE
+     ESAC
+  FI;
+
+INT next path name;
+PROC simtable start listing path names = VOID:
+   next path name := 0;
+
+PROC simtable more path names = BOOL:
+BEGIN
+   BOOL found := FALSE;
+   WHILE NOT found ANDTH (next path name +:=1) <= top OF simtable DO
+      CASE value OF (table OF simtable)[next path name] IN
+      (REF PATH): found := TRUE
+      OUT SKIP
+      ESAC
+  OD;
+  found
+END;
+
+PROC simtable next path name = ID:
+   name OF ((table OF simtable)[next path name]);
+
+PROC simtable next path = REF PATH:
+   CASE value OF ((table OF simtable)[next path name]) IN
+   (REF PATH p): p
+   ESAC;
+
+INT next int name;
+PROC simtable start listing int names = VOID:
+   next int name := 0;
+
+PROC simtable more int names = BOOL:
+BEGIN
+   BOOL found := FALSE;
+   WHILE NOT found ANDTH (next int name +:=1) <= top OF simtable DO
+      CASE value OF (table OF simtable)[next int name] IN
+      (INT): found := TRUE
+      OUT SKIP
+      ESAC
+  OD;
+  found
+END;
+
+PROC simtable next int name = ID:
+   name OF ((table OF simtable)[next int name]);
+
+
+INT next svalue name;
+PROC simtable start listing svalue names = VOID:
+   next svalue name := 0;
+
+PROC simtable more svalue names = BOOL:
+BEGIN
+   BOOL found := FALSE;
+   WHILE NOT found ANDTH (next svalue name +:=1) <= top OF simtable DO
+      CASE value OF (table OF simtable)[next svalue name] IN
+      (SVALUE): found := TRUE
+      OUT SKIP
+      ESAC
+  OD;
+  found
+END;
+
+PROC simtable next svalue name = ID:
+   name OF ((table OF simtable)[next svalue name]);
+
+INT save path = 1,
+    save int  = 2,
+    save svalue = 3;
+PROC simtable save state =
+   (PROC (REF PATH)VOID write pathlist,
+    PROC (ID)VOID write id,
+    PROC (INT)VOID write int,
+    PROC (SVALUE)VOID write svalue)VOID:
+BEGIN
+   write int(UPB table OF simtable);
+   write int(top OF simtable);
+   FOR i TO top OF simtable DO
+      {write tableentry(table OF simtable[i])}
+      write id(name OF (table OF simtable)[i]);
+      write int(scope OF (table OF simtable)[i]);
+      CASE value OF (table OF simtable)[i] IN
+      (REF PATH p): (write int(save path); write pathlist(p)),
+      (INT i):      (write int(save int); write int(i)),
+      (SVALUE sv):  (write int(save svalue); write svalue(sv))
+      ESAC
+   OD
+ END;
+
+PROC simtable restore state =
+   (PROC REF PATH read pathlist,
+    PROC ID read id,
+    PROC INT read int,
+    PROC SVALUE read svalue)VOID:
+BEGIN
+
+   INT upb = read int;
+   top OF simtable := read int;
+   table OF simtable := HEAP VECTOR [upb] TABLEENTRY;
+   FOR i TO top OF simtable DO
+      {read tableentry((table OF simtable)[i])}
+      name OF (table OF simtable)[i] := read id;
+      scope OF (table OF simtable)[i] := read int;
+      value OF (table OF simtable)[i] :=
+         CASE read int IN
+         {(REF PATH p):} read pathlist,
+         {(INT i):}      read int,
+         {(SVALUE sv):}  read svalue
+         ESAC
+   OD
+END
+
+
+KEEP
+   { MODES AND CONSTANTS }
+   OPERATOR, PATH, nilpath, go in, go past, no op, BIND, nilbind,
+   any, probe name, alias name, internal name,
+
+   { GLOBAL DATA }
+   monitoring pointer name, simulated function name,
+
+   {SIMTABLE OPERATIONS}
+   simtable init,                       {create a new table}
+   simtable discard,                    {clear the memory held by the table}
+   simtable add binding,                {bind a name by scope to a value}
+   simtable replace binding,            {replace the value bound to a name}
+   simtable discard binding,            {remove a name & value from the table}
+   simtable discard bindings by base,   {remove all names & values from the
+                                         table if the path contains 'base'}
+   simtable lookup path,                {find a path by name & scope}
+   simtable lookup circuit by base,     {find a circuit number by mnode base}
+   simtable lookup path by base,        {find a path by mnode base}
+
+   simtable lookup svalue,              {find an svalue by name & scope}
+   simtable lookup int,                 {find an int by name & scope}
+
+   simtable start listing path names,   {list all the names bound to paths}
+   simtable more path names,
+   simtable next path name,
+   simtable next path,
+
+   simtable start listing int names,    {list all the names bound to ints}
+   simtable more int names,
+   simtable next int name,
+
+   simtable start listing svalue names, {list all the names bound to svalues}
+   simtable more svalue names,
+   simtable next svalue name,
+
+   simtable save state,                 {save the tables entire state}
+   simtable restore state               {get the state back}
+
+FINISH
