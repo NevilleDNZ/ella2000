@@ -1,0 +1,1815 @@
+DECS fntype CONTEXT VOID  USE  putstrings,  messageproc,  assmodes,  modeprocs,
+     closureprocs, transformprocs, options:
+
+{ " Id: none available $" }
+configinfo A68CONFIG "$Id: fntype.a68,v 34.2 1995/03/29 13:02:54 ella Exp $";
+
+
+COMMENT 
+    ************************************************************************
+    This Program is the property of the Secretary of State for Defence
+    (United Kingdom) acting through the Defence Research Agency (DRA). Use,
+    reproduction, production of amended versions and/or transfer of this
+    Program is permitted provided that:
+
+  (a)  this legend be preserved on any such reproduction and amended version,
+  (b)  any amended version of this Program be clearly marked to show the
+       nature of the amendment and of the name of the amending organisation,
+  and
+  (c)  any recipient  of such reproduction or amended version accept the
+       conditions set out in this legend.
+
+                         Crown Copyright, (c)   1987
+
+                             All rights reserved.
+
+    The Secretary of State for Defence (United Kingdom) acting through his
+    Defence Research Agency (DRA) gives no warranty that any element of the
+    Software is suitable for any purpose and he shall not be liable for any
+    loss or damage including loss or damage resulting in injury or death
+    howsoever caused which results from the use of the Software, or any
+    developments adaptions modifications translations and enhancements
+    thereof.
+
+    The original authors may be contacted via email on ella@dra.hmg.gb or by
+    writing to ELLA Office, DRA, St Andrews Road, Malvern, Worcs WR14 3PS, UK.
+    ************************************************************************
+
+17:11:87   Module created to contain transforms on assembler modes.  EVW
+10:05:88   Seperated to contain only fntype transformation.  EVW
+31:10:88   INT sort added to INPUT. EVW
+17:11:88   Internal TYPE declarations containing fntypes now removed. EVW
+22:12:88   Terminator for PROC sequence_fntype.  EVW
+07:02:89   CR 642.  Updated for kernel (CR642).  EVW
+27:02:90   R4B???.  PROC typedec_fntype now handles niltypedec. EVW
+15:02:89   R4B129.  New environ added to PROC fndec_fntype parameters.  EVW
+28:02:89   Recursion removed form sequence, fntype and ustr procs.  EVW
+14:04:89   R4B271.  useries_end, usequence_end added.  EVW
+02:04:90   CR 643.  New fntype transformation. EVW
+04:07:90   Now delivers CLOSUREC,  Some HEAP optimisations.  DCT
+06:08:90   joincheck changed from VECTOR to list. EVW
+20:01:91   R6B7:  Named outputs wrong.  Unnessary marking in add_join. EVW
+17:02:91   R6B15:  remove_ufn built on top of nulltprocs. EVW
+13:08:91   Updated to version 7 of assembler modes. EVW
+17:10:91   R6B82:  handles Fntype spec and ALIEN. EVW
+16:12:91   UTERMINDEX added and BODYDATA removed. EVW
+21:01:92   R6B96:  correct typo in remove_ufn. EVW
+03:03:92   Declaration attributes added. EVW
+01:04:92   Abstract local uses of make_newtprocs. EVW
+12:05:92   New spec fo fndec_tfn. DJS
+14:05:92   Pre-pass added. EVW
+21:05:92   Reworking of algorithm. EVW
+28:07:92   UTERMINDEX changed to UPORTNAME and null_const removed. JIT
+19:08:92   R6B127: Unull must not become cvoid in CASE test. JIT
+04:11:92   outer -> outerdec and local -> localdec. JIT
+01:12:92   R6B135: Changes made in PROC unit_fntype for UINDEX and UTRIM. JIT
+17:02:93   R6B145: Error message if portnames present. EVW
+26:03:93   Change IS/ISNT nullid tests to UPB tests.  DJS
+13:05:93   rmove replnames from FNDEC. EVW
+28:06:93   R6B159:  correction to type_unit for TROW of size 1. EVW
+23:08:93   option 1 now retains UFN, default = remove UFN. EVW
+14:06:94  33.001  ELLA  NewConFig Entered in new config system previous version
+                                  number  31.033 
+29:03:95  34.002  ELLA  Modcprght Change copyright header
+??:??:??   ?.???  ????
+COMMENT
+
+
+PROC fntype_keep_ufn = OPTIONS: MAKEOPTIONS 1;
+
+VECTOR [] VECTOR [] CHAR fntype_options =
+     ( "Retains occurances of UFN." );
+
+
+PROC transform_fntypes = (CLOSURE oldclosure, OPTIONS options, MESSAGEPROC msg)
+                                                                       CLOSUREC:
+BEGIN
+
+
+PROC null_formulas = (REF FORMULAS f, TRANSFORMPROCS tprocs) FORMULASC:
+                     (f, FALSE);
+
+TRANSFORMPROCS defaulttprocs = make_newtprocs(nulltprocs,
+    ( null_attr, null_formula, null_formulas,  null_type));
+
+
+NAMETYPE nullnametype = (nullid, tnull, attrnull);
+
+PROC  sys fault = (STR  s) VOID:  msg(system, s);
+
+PROC make_name = (ID name, INT no) ID:
+   IF UPB name = 0 THEN oneline(("_f", no)) ELSE oneline(("_f_", name)) FI;
+
+REF ENVIRON environ;           { non-local to optimise calls of make_newtprocs}
+REF VECTOR [] BOOL environ_specs;
+
+PROC has_type_fntype = (TYPE t) BOOL:
+   CASE t IN
+   (REF TNAME tn)
+      ( CASE body OF (types OF environ)[typeno OF tn] IN
+        (REF TYPETAG tg)  has_type_fntype(tag OF tg)
+        OUT FALSE
+        ESAC
+      ),
+   (REF TROW tr)   has_type_fntype(elem OF tr),
+   (REF TSTR ts)   ( ts ISNT niltstr ) ANDTH
+                      ( has_type_fntype(elem OF ts) OREL
+                        has_type_fntype(rest OF ts) ),
+   (REF TFN tfn)   TRUE,
+   (REF TBRACKET tb) has_type_fntype(type OF tb)
+   OUT FALSE
+   ESAC;
+
+
+VECTOR [maxclosureno(oldclosure)] BOOL closure_specs;
+FORALL c IN closure_specs DO c := FALSE OD;
+
+BOOL expand := FALSE;
+
+TRANSFORMPROCS search_unit = make_newtprocs(defaulttprocs,
+  ( (UNIT u, TRANSFORMPROCS tp) UNITC:
+      ( CASE u IN
+        (REF UNAME un) IF (sort OF un = uiosource) OREL (sort OF un = uiosink)
+                       THEN expand := TRUE
+                       FI
+        OUT (unit OF nulltprocs)(u, tp)
+        ESAC;
+        (u, FALSE)
+      )
+  ));
+
+PROC pre_pass_outerfn = (OUTER o) BOOL:
+BEGIN
+   BOOL expandfn := FALSE;
+   environ := environ OF o;
+   FORALL type IN types OF environ WHILE NOT expandfn
+   DO CASE body OF type IN
+      (REF TYPETAG tg) expandfn := has_type_fntype(tag OF tg)
+      OUT SKIP
+      ESAC
+   OD;
+
+   REF FNDEC fdec = (fns OF environ)[1];
+   REF TFN tf = fndec_tfn(fdec);
+   BOOL specchange = has_type_fntype(from OF tf) OREL
+                     has_type_fntype(to OF tf);
+   closure_specs[closureno OF usage OF fdec] := specchange;
+   IF specchange THEN expandfn := TRUE FI;
+
+   FORALL f IN fns OF environ WHILE NOT expandfn
+   DO IF sort OF f = outerdec
+      THEN expandfn := closure_specs[closureno OF usage OF f]
+      ELIF (sort OF f = localdec)
+      THEN REF TFN tfn = fndec_tfn(f);
+           expandfn := has_type_fntype(from OF tfn) OREL
+                       has_type_fntype(to OF tfn)
+      FI
+   OD;
+   IF NOT expandfn
+   THEN expand := FALSE;
+        (outer OF nulltprocs)(o, search_unit);
+        IF expand THEN expandfn := TRUE FI
+   FI;
+   expandfn
+END;
+
+
+{{ Does the unit contain declaration of possible monitoring points }}
+BOOL with_monitor := FALSE;
+
+TRANSFORMPROCS contains_diagnosticprocs = make_newtprocs(defaulttprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+      (  CASE unit IN
+         (UNION (REF UCASE, REF UMINST, REF UDINST, REF USERIES, REF USEQUENCE))
+             with_monitor := TRUE
+         OUT (unit OF nulltprocs)(unit, tprocs)
+         ESAC;
+         (unit, FALSE)
+      )
+   ));
+
+PROC contains_diagnostics = (UNIT u) BOOL:
+( with_monitor := FALSE;
+  (unit OF contains_diagnosticprocs)(u, contains_diagnosticprocs);
+  with_monitor
+);
+
+
+{ This procedure is used to swap top-level So/Si to cope with names of outputs }
+
+TRANSFORMPROCS swap_ufn = make_newtprocs(defaulttprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+        CASE unit IN
+        (REF UFN uf)
+           ( HEAP UFN := (source OF uf, sink OF uf), TRUE ),
+        (UNION (REF USTR, REF UROW, REF UBRACKET, REF UATTR, REF UCHECK) )
+           (unit OF nulltprocs)(unit, tprocs)
+        OUT  ( HEAP UFN := (unit, unull), TRUE )
+        ESAC
+   ));
+
+
+{ This procedure is used to swap top-level So/Si to cope with names of outputs }
+
+TRANSFORMPROCS swap_tfn = make_newtprocs(defaulttprocs,
+   ( (TYPE type, TRANSFORMPROCS tprocs) TYPEC:
+        CASE type IN
+        (REF TFN tf)
+           ( HEAP TFN := (to OF tf, from OF tf), TRUE ),
+        ( UNION (REF TNAME, REF TSTRING, REF TNULL, REF TVOID) )
+           ( HEAP TFN := (type, tnull), TRUE )
+        OUT (type OF nulltprocs)(type, tprocs)
+        ESAC
+   ));
+
+
+
+PROC has_unit_null = (UNIT u) BOOL:
+BEGIN
+   CASE u IN
+   (REF UNULL)    TRUE,
+   (REF UROW ur)  has_unit_null(elem OF ur),
+   (REF USTR us)  IF us IS nilustr THEN FALSE
+                  ELSE has_unit_null(elem OF us) OREL has_unit_null(rest OF us)
+                  FI
+   OUT FALSE
+   ESAC
+END;
+
+PROC unit_trim = (UNITC unitc, FORMULA flwb, fupb) UNITC:
+BEGIN
+   { Can directly trim/index since know will never contain diagnostic points }
+   INT lwb = int(flwb),
+       upb = int(fupb);
+   BOOL trim = (upb /= 0);
+   CASE u OF unitc IN
+   (REF UNULL)    (unull, TRUE),
+   (REF UROW ur)  IF trim
+                  THEN (HEAP UROW := (MAKEFINT(upb-lwb+1), elem OF ur), TRUE)
+                  ELSE (elem OF ur, TRUE)
+                  FI,
+   (REF USTR us)  ( REF USTR ust := us;
+                    TO lwb - 1 DO ust := rest OF ust OD;
+                    IF trim
+                    THEN REF USTR newust := nilustr;
+                         REF REF USTR newptr := newust;
+                         TO upb - lwb + 1
+                         DO REF REF USTR (newptr) := HEAP USTR
+                                                  := (elem OF ust, nilustr);
+                            newptr := rest OF newptr;
+                            ust := rest OF ust
+                         OD;
+                         (newust, TRUE)
+                    ELSE (elem OF ust, TRUE)
+                    FI
+                  )
+   OUT IF trim
+       THEN (HEAP UTRIM := (u OF unitc, (flwb, fupb)), c OF unitc)
+       ELSE (HEAP UINDEX := (u OF unitc, flwb), c OF unitc)
+       FI
+   ESAC
+END;
+
+PROC is_null_void = (UNIT u) BOOL:
+   CASE u IN (REF UNULL) TRUE, (REF CVOID) TRUE OUT FALSE ESAC;
+
+PROC remove_null_elem = (UNIT u) UNIT:
+BEGIN
+{{?? RAtionalise This - is conc etc involved }}
+   CASE u IN
+   (REF UNULL)   u,
+   (REF UROW ur)
+      (  UNIT r = remove_null_elem(elem OF ur);
+         CASE r IN
+         (REF UNULL)  unull
+         OUT HEAP UROW := (size OF ur, r)
+         ESAC
+       ),
+    (REF USTR us)
+       ( REF USTR ust := us;
+         REF USTR newust := nilustr;
+         REF REF USTR newptr := newust;
+         WHILE ust ISNT nilustr
+         DO  UNIT elem = remove_null_elem(elem OF ust);
+             CASE elem IN
+             (REF UNULL)  SKIP
+             OUT REF REF USTR (newptr) := HEAP USTR := (elem, nilustr);
+                 newptr := rest OF newptr
+             ESAC;
+             ust := rest OF ust
+         OD;
+         IF newust IS nilustr
+         THEN unull
+         ELIF rest OF newust IS nilustr
+         THEN elem OF newust
+         ELSE newust
+         FI
+       )
+   OUT u
+   ESAC
+END;
+
+PROC remove_null_void = (UNIT a, b) STRUCT 2 UNIT:
+BEGIN
+   BOOL all_null_void := FALSE;
+   BOOL remove := FALSE;
+   CASE a IN
+   (REF USTR ua)
+      ( CASE b IN
+        (REF USTR ub)
+          ( REF USTR usa := ua;
+            WHILE (usa ISNT nilustr) ANDTH NOT remove
+            DO  IF has_unit_null(elem OF usa) THEN remove := TRUE FI;
+                usa := rest OF usa
+            OD
+          ),
+        (REF UROW br)
+            CASE elem OF br IN
+            (REF UNULL) all_null_void := TRUE
+            OUT         IF has_unit_null(elem OF br) THEN remove := TRUE FI
+            ESAC
+        OUT SKIP
+        ESAC
+      ),
+   (REF UROW ar)
+       CASE elem OF ar IN
+       (REF UNULL)  all_null_void := TRUE
+       OUT          IF has_unit_null(elem OF ar) THEN remove := TRUE FI
+       ESAC
+   OUT SKIP
+   ESAC;
+
+   IF all_null_void
+   THEN (unull, unull)
+   ELIF remove
+   THEN (remove_null_elem(a), remove_null_elem(b))
+   ELSE (a, b)
+   FI
+END;
+
+
+
+BOOL extra := FALSE;
+
+TRANSFORMPROCS extra_stepprocs = make_newtprocs(nulltprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+      (  CASE unit IN
+         (REF UMINST um)
+             IF environ_specs[fnno OF inst OF um] THEN extra := TRUE FI,
+         (REF UDINST ud)
+             IF environ_specs[fnno OF inst OF ud] THEN extra := TRUE FI
+         OUT SKIP
+         ESAC;
+         IF NOT extra THEN (unit OF nulltprocs)(unit, tprocs) FI;
+         (unit, FALSE)
+      )
+   ));
+
+PROC extra_step = (UNIT u) BOOL:
+BEGIN
+   extra := FALSE;
+   (unit OF extra_stepprocs)(u, extra_stepprocs);
+   extra
+END;
+
+PROC unit_uname = (UNIT u) REF UNAME:
+   CASE u IN
+   (REF UNAME un)     un,
+   (REF UPORTNAME ut) unit_uname(unit OF ut),
+   (REF UINDEX ui)    unit_uname(unit OF ui),
+   (REF UTRIM ut)     unit_uname(unit OF ut),
+   (REF UBRACKET ub)  unit_uname(unit OF ub),
+   (REF UCHECK uc)    unit_uname(unit OF uc),
+   (REF UATTR ua)     unit_uname(unit OF ua)
+   OUT HEAP UNAME := (0, 0)
+   ESAC;
+
+PROC unit_nameno = (UNIT u) INT:
+(  INT nameno = nameno OF unit_uname(u);
+   IF nameno = 0 THEN sysfault("unit_nameno")  FI;
+   nameno
+);
+
+
+
+
+
+PROC remove_named_fntype = (TYPE type, TRANSFORMPROCS tprocs) TYPEC:
+   CASE type IN
+   (REF TNAME tn)
+      CASE body OF (types OF environ)[typeno OF tn] IN
+      (REF TYPETAG tg)
+         IF has_type_fntype(tag OF tg)
+         THEN  TYPEC tc = (type OF nulltprocs)(tag OF tg, tprocs);
+               (t OF tc, TRUE)
+         ELSE  (type, FALSE)
+         FI
+      OUT (type, FALSE)
+      ESAC
+   OUT (type OF nulltprocs)(type, tprocs)
+   ESAC;
+
+
+PROC add_reform = (REF TFN tfn, REF ENVIRON newenv) INT:
+BEGIN
+   {{ Creates the FNDEC mode representing FN _F = (ty) -> ty: REFORM: }}
+   HEAP NAMES inputs := (1, nilnames);
+   HEAP NAMES outputs := (2, nilnames);
+   HEAP VECTOR [2] NAMETYPE nametypes;
+   nametypes[1] := (nullid, from OF tfn, attrnull);
+   nametypes[2] := (nullid, to OF tfn, attrnull);
+
+   REF REF VECTOR [] REF FNDEC fns = fns OF newenv;
+   INT max := UPB fns;
+   HEAP VECTOR [max + 1] REF FNDEC newfns;
+   newfns[:max] := fns;
+   fns := newfns;
+
+   ID newname = oneline(("_F", max PLUSAB 1));
+   HEAP FNDEC fdec := (localdec, FALSE, newname, nullmacspecs, attrnull,
+                       inputs, outputs, nametypes, reform, nilusage);
+   fns[max] := fdec;
+   max
+END;
+
+{ ********************** PROC transform_type ***************************** }
+
+PROC trans_type = (TYPE t, BOOL source) REF TFN:
+BEGIN
+   {{ This procedure flattens out all fntypes, in other words it gathers }}
+   {{ all the from parts and all the to parts together.  The result of   }}
+   {{ the procedure is a TFN of (from parts, to parts).                  }}
+
+   PROC tstr_type = (REF TSTR tst) TYPE:
+      IF tst IS niltstr            THEN tnull
+      ELIF rest OF tst IS niltstr  THEN elem OF tst
+      ELSE tst
+      FI;
+
+   PROC make_tstr = (TYPE ty) REF TSTR:
+      CASE ty IN (REF TSTR ts) ts OUT HEAP TSTR := (ty, niltstr) ESAC;
+
+   PROC append_tstr = (TYPE a, b) TYPE:
+      CASE b IN (REF TNULL) a
+      OUSE a IN (REF TNULL) b
+      OUT HEAP TSTR := (a, HEAP TSTR := (b, niltstr))
+      ESAC;
+
+
+   CASE t IN
+   (REF TNAME tn)
+      ( CASE body OF (types OF environ)[typeno OF tn] IN
+        (REF TYPETAG tg)
+           IF has_type_fntype(tag OF tg)
+           THEN  trans_type(tag OF tg, source)
+           ELSE  HEAP TFN := IF source THEN (tnull, t) ELSE (t, tnull) FI
+           FI
+        OUT  HEAP TFN := IF source THEN (tnull, t) ELSE (t, tnull) FI
+        ESAC
+      ),
+   (REF TROW tr)
+      ( REF TFN tfn = trans_type(elem OF tr, source);
+        TYPE from = CASE from OF tfn IN
+                    (REF TNULL) tnull
+                    OUT HEAP TROW := (size OF tr, from OF tfn)
+                    ESAC;
+        TYPE to = CASE to OF tfn IN
+                  (REF TNULL) tnull
+                  OUT HEAP TROW := (size OF tr, to OF tfn)
+                  ESAC;
+        HEAP TFN := (from, to)
+      ),
+   (REF TSTR ts)
+      ( REF TSTR tst := ts;
+        REF TSTR tfrom := niltstr;   REF REF TSTR fromptr := tfrom;
+        REF TSTR tto := niltstr;     REF REF TSTR toptr := tto;
+        WHILE tst ISNT niltstr
+        DO  REF TFN tfn = trans_type(elem OF tst, source);
+            CASE (from OF tfn) IN
+            (REF TNULL) SKIP
+            OUT  REF REF TSTR (fromptr):= HEAP TSTR := (from OF tfn, niltstr);
+                 fromptr := rest OF fromptr
+            ESAC;
+            CASE (to OF tfn) IN
+            (REF TNULL) SKIP
+            OUT  REF REF TSTR (toptr):= HEAP TSTR := (to OF tfn, niltstr);
+                 toptr := rest OF toptr
+            ESAC;
+            tst := rest OF tst
+        OD;
+        HEAP TFN := (tstr_type(tfrom), tstr_type(tto))
+      ),
+   (REF TFN tf)
+      ( REF TFN from = trans_type(from OF tf, NOT source),
+                to = trans_type(to OF tf, source);
+        TYPE nfrom = IF source
+                     THEN append_tstr(from OF from, from OF to)
+                     ELSE append_tstr(from OF to, from OF from)
+                     FI,
+               nto = IF source
+                     THEN append_tstr(to OF to, to OF from)
+                     ELSE append_tstr(to OF from, to OF to)
+                     FI;
+        HEAP TFN := (nfrom, nto)
+      ),
+   (REF TBRACKET tb)
+      ( trans_type(type OF tb, source) )
+   OUT  HEAP TFN := IF source THEN (tnull, t) ELSE (t, tnull) FI
+   ESAC
+END;
+
+PROC transform_type = (TYPE t) REF TFN: trans_type(t, TRUE);
+{ assumes type of the format: sink part -> source part }
+
+{ ***************** PROC transform_unit **********************************}
+
+PROC trans_unit = (UNIT u, BOOL issource) REF UFN:
+BEGIN
+   {{ This procedure flattens out all fntypes, in other words it gathers }}
+   {{ all the sink parts and all the source parts together.  The result  }}
+   {{ of the procedure is a UFN of (sink parts, source parts).           }}
+   {{ The format of the procedure is similar to PROC transform_type    }}
+
+   PROC ustr_unit = (REF USTR ust) UNIT:
+      IF ust IS nilustr            THEN unull
+      ELIF rest OF ust IS nilustr  THEN elem OF ust
+      ELSE ust
+      FI;
+
+   PROC make_ustr = (UNIT u) REF USTR:
+      CASE u IN (REF USTR us) us OUT HEAP USTR := (u, nilustr) ESAC;
+
+   PROC append_ustr = (UNIT a, b) UNIT:
+      CASE b IN (REF UNULL) a
+      OUSE a IN (REF UNULL) b
+      OUT HEAP USTR := (a, HEAP USTR := (b, nilustr))
+      ESAC;
+
+
+   CASE u IN
+   (REF UROW ur)
+      ( REF UFN ufn = trans_unit(elem OF ur, issource);
+        UNIT usink = CASE sink OF ufn IN
+                     (REF UNULL) unull
+                     OUT HEAP UROW := (size OF ur, sink OF ufn)
+                     ESAC;
+        UNIT usource = CASE source OF ufn IN
+                       (REF UNULL) unull
+                       OUT HEAP UROW := (size OF ur, source OF ufn)
+                       ESAC;
+        HEAP UFN := (usink, usource)
+      ),
+   (REF USTR us)
+      ( REF USTR ust := us;
+        REF USTR ssink := nilustr;     REF REF USTR siptr := ssink;
+        REF USTR ssource := nilustr;   REF REF USTR soptr := ssource;
+        WHILE ust ISNT nilustr
+        DO  REF UFN ufn = trans_unit(elem OF ust, issource);
+            CASE sink OF ufn IN
+            (REF UNULL) SKIP
+            OUT  REF REF USTR (siptr):= HEAP USTR := (sink OF ufn, nilustr);
+                 siptr := rest OF siptr
+            ESAC;
+            CASE source OF ufn IN
+            (REF UNULL) SKIP
+            OUT  REF REF USTR (soptr) := HEAP USTR := (source OF ufn, nilustr);
+                 soptr := rest OF soptr
+            ESAC;
+            ust := rest OF ust
+        OD;
+        HEAP UFN := (ustr_unit(ssink), ustr_unit(ssource))
+      ),
+   (REF UFN uf)
+      ( REF UFN fsink = trans_unit(sink OF uf, NOT issource),
+                fsource = trans_unit(source OF uf, issource);
+        UNIT usink = IF issource
+                     THEN append_ustr(sink OF fsink, sink OF fsource)
+                     ELSE append_ustr(sink OF fsource, sink OF fsink)
+                     FI,
+           usource = IF issource
+                     THEN append_ustr(source OF fsource, source OF fsink)
+                     ELSE append_ustr(source OF fsink, source OF fsource)
+                     FI;
+        HEAP UFN := (usink, usource)
+      ),
+   (REF UINDEX ui)
+      ( REF UFN ufi = trans_unit(unit OF ui, issource);
+        UNIT siindex = CASE sink OF ufi IN
+                       (REF UNULL) unull
+                       OUT HEAP UINDEX := (sink OF ufi, index OF ui)
+                       ESAC;
+        UNIT soindex = CASE source OF ufi IN
+                       (REF UNULL) unull
+                       OUT HEAP UINDEX := (source OF ufi, index OF ui)
+                       ESAC;
+        HEAP UFN := (siindex, soindex)
+      ),
+   (REF UTRIM ut)
+      ( REF UFN uft = trans_unit(unit OF ut, issource);
+        UNIT sitrim = CASE sink OF uft IN
+                      (REF UNULL) unull
+                      OUT HEAP UTRIM := (sink OF uft, range OF ut)
+                      ESAC;
+        UNIT sotrim = CASE source OF uft IN
+                      (REF UNULL) unull
+                      OUT HEAP UTRIM := (source OF uft, range OF ut)
+                      ESAC;
+        HEAP UFN := (sitrim, sotrim)
+      ),
+   (REF UCONC uc)
+      ( REF UFN lhs = trans_unit(left OF uc, issource),
+                rhs = trans_unit(right OF uc, issource);
+        UNIT siconc = CASE sink OF lhs IN
+                      (REF UNULL) unull
+                      OUT HEAP UCONC := (string OF uc, sort OF uc,
+                                         sink OF lhs, sink OF rhs)
+                      ESAC;
+        UNIT soconc = CASE source OF lhs IN
+                      (REF UNULL) unull
+                      OUT HEAP UCONC := (string OF uc, sort OF uc,
+                                         source OF lhs, source OF rhs)
+                      ESAC;
+        HEAP UFN := (siconc, soconc)
+      ),
+   (REF UATTR ua)
+      ( REF UFN ufa = trans_unit(unit OF ua, issource);
+        UNIT siattr = CASE sink OF ufa IN
+                      (REF UNULL) unull
+                      OUT HEAP UATTR := (sink OF ufa, attr OF ua)
+                      ESAC;
+        UNIT soattr = CASE source OF ufa IN
+                      (REF UNULL) unull
+                      OUT HEAP UATTR := (source OF ufa, attr OF ua)
+                      ESAC;
+        HEAP UFN := (siattr, soattr)
+      ),
+   (REF UBRACKET ub)  trans_unit(unit OF ub, issource),
+   (REF UPORTNAME up)
+      ( sys fault
+          ("portnames must be transformed out before fntype transformation");
+        SKIP
+      )
+   OUT HEAP UFN := IF issource THEN (unull, u) ELSE (u, unull) FI
+   ESAC
+END;
+
+PROC transform_unit = (UNIT u) REF UFN: trans_unit(u, TRUE);
+{ assumes unit of the format: sink part -> source part }
+
+
+{ ************ Procedures to simplify UNIT/TYPE for option 1 *********** }
+
+
+TRANSFORMPROCS remove_ufnprocs = make_newtprocs(defaulttprocs,
+   ( (UNIT unit, TRANSFORMPROCS tp) UNITC:
+      (  CASE unit IN
+         (REF UFN uf)  (source OF transform_unit(uf), TRUE)
+         OUT (unit OF nulltprocs)(unit, tp)
+         ESAC
+      )
+   ));
+
+{The following two procedures have been added to prevent the test field being
+transformed by the unit procedure in unull_procs. It was changing the unull in
+the else or noelse arms into cvoid which caused the simulator to crash.}
+
+PROC uchoices = (REF UCHOICES u, TRANSFORMPROCS tprocs) UCHOICESC:
+   IF u IS niluchoices
+   THEN  (u, FALSE)
+   ELSE  UNITC ans = (unit OF tprocs)(output OF u, tprocs);
+         UCHOICESC rest = (uchoices OF tprocs)(rest OF u, tprocs);
+         IF c OF rest  OREL  c OF ans
+         THEN  (HEAP UCHOICES:= (check OF u, sort OF u, test OF u, u OF ans,
+                                 u OF rest), TRUE)
+         ELSE  (u, FALSE)
+         FI
+   FI;
+
+PROC  seqchoices = (REF SEQCHOICES  sc, TRANSFORMPROCS  tprocs) SEQCHOICESC:
+   IF sc IS nilseqchoices
+   THEN  (sc, FALSE)
+   ELSE  SEQSTEPC  out = (seqstep OF tprocs)(output OF sc, tprocs);
+         SEQCHOICESC  rest = (seqchoices OF tprocs)(rest OF sc, tprocs);
+         IF c OF out  OREL  c OF rest
+         THEN  ( HEAP SEQCHOICES:= ( check OF sc, sort OF sc, test OF sc,
+                                     s OF out, s OF rest ), TRUE )
+         ELSE  (sc, FALSE)
+         FI
+   FI;
+
+TRANSFORMPROCS unull_procs = make_newtprocs(defaulttprocs,
+   ( (UNIT unit, TRANSFORMPROCS tp) UNITC:
+      (  CASE unit IN
+         (REF UNULL)  (cvoid, TRUE)  { set to CVOID for monitoring purposes }
+         OUT (unit OF nulltprocs)(unit, tp)
+         ESAC
+      ), uchoices, seqchoices
+   ));
+
+PROC remove_ufn = (UNIT u) UNITC:
+BEGIN
+   UNITC uc = (unit OF remove_ufnprocs)(u, remove_ufnprocs);
+   UNITC rc = (unit OF unull_procs)(u OF uc, unull_procs);
+   (u OF rc, c OF uc OREL c OF rc)
+END;
+
+TRANSFORMPROCS remove_tfnprocs = make_newtprocs(defaulttprocs,
+   ( (TYPE type, TRANSFORMPROCS tp) TYPEC:
+      (  CASE type IN
+         (REF TFN tf)  (to OF transform_type(tf), TRUE)
+         OUT (type OF nulltprocs)(type, tp)
+         ESAC
+      )
+   ));
+
+TRANSFORMPROCS tnull_procs = make_newtprocs(defaulttprocs,
+   ( (TYPE type, TRANSFORMPROCS tp) TYPEC:
+      (  CASE type IN
+         (REF TNULL) (tvoid, TRUE) { set to TVOID for monitoring purposes }
+         OUT (type OF nulltprocs)(type, tp)
+         ESAC
+      )
+   ));
+
+PROC remove_tfn = (TYPE t) TYPEC:
+BEGIN
+   TYPEC tc = (type OF remove_tfnprocs)(t, remove_tfnprocs);
+   TYPEC rc = (type OF tnull_procs)(t OF tc, tnull_procs);
+   (t OF rc, c OF tc OREL c OF rc)
+END;
+
+
+{************************* PROC make_unitlink ********************************}
+
+
+PROC make_unitlink = (TYPE ty, UNIT source, sink) UNIT:
+BEGIN
+   PROC is_same_sort = (TYPE ty, BOOL sort) BOOL:
+     CASE ty IN
+     (REF TNAME tn)
+        ( CASE body OF (types OF environ)[typeno OF tn] IN
+          (REF TYPETAG tg)  is_same_sort(tag OF tg, sort)
+          OUT sort
+          ESAC
+        ),
+     (REF TFN tf)
+        is_same_sort(to OF tf, sort) OREL is_same_sort(from OF tf, NOT sort),
+     (REF TSTR ts)
+        ( ts ISNT niltstr ) ANDTH
+        ( is_same_sort(elem OF ts, sort) OREL is_same_sort(rest OF ts, sort) ),
+     (REF TROW tr)      is_same_sort(elem OF tr, sort),
+     (REF TBRACKET tb)  is_same_sort(type OF tb, sort)
+     OUT {TVOID, TNULL, TSTRING}  sort
+     ESAC;
+
+   PROC add_ind = (REF INT ind, REF FORMULAS inds, BOOL add) REF FORMULAS:
+     IF add
+     THEN  HEAP FORMULAS := (MAKEFINT(ind PLUSAB 1), inds)
+     ELSE  inds
+     FI;
+
+   PROC make_uindex = (BOOL issource, REF FORMULAS inds) UNIT:
+     IF inds IS nilformulas
+     THEN  IF issource THEN source ELSE sink FI
+     ELSE  HEAP UINDEX := (make_uindex(issource, rest OF inds), formula OF inds)
+     FI;
+
+   PROC type_unit = (TYPE t, BOOL issource, REF FORMULAS so_inds, si_inds) UNIT:
+   BEGIN
+      CASE t IN
+      (REF TNAME tn)
+         ( CASE body OF (types OF environ)[typeno OF tn] IN
+           (REF TYPETAG tg)
+              IF has_type_fntype(tag OF tg)
+              THEN  type_unit(tag OF tg, issource, so_inds, si_inds)
+              ELSE  make_uindex(issource, (issource|so_inds|si_inds))
+              FI
+           OUT  make_uindex(issource, (issource|so_inds|si_inds))
+           ESAC
+         ),
+      (REF TFN tf)
+         ( INT f_so := 0, f_si := 0;
+           BOOL index_so = is_same_sort(from OF tf, NOT issource) ANDTH
+                           is_same_sort(to OF tf, issource),
+                index_si = is_same_sort(from OF tf, issource) ANDTH
+                           is_same_sort(to OF tf, NOT issource);
+
+
+           REF FORMULAS
+                so_1 = add_ind(f_so, so_inds, index_so),
+                so_2 = add_ind(f_so, so_inds, index_so),
+                si_1 = add_ind(f_si, si_inds, index_si),
+                si_2 = add_ind(f_si, si_inds, index_si);
+
+           REF FORMULAS
+               to_so = IF issource THEN so_1 ELSE so_2 FI,
+             from_so = IF issource THEN so_2 ELSE so_1 FI,
+             from_si = IF issource THEN si_1 ELSE si_2 FI,
+               to_si = IF issource THEN si_2 ELSE si_1 FI;
+
+           UNIT
+             from= type_unit(from OF tf, NOT issource, from_so, from_si),
+              to = type_unit(to OF tf, issource, to_so, to_si);
+           HEAP UFN := (from, to)
+         ),
+      (REF TROW tr)
+         ( REF USTR ans := nilustr;  REF REF USTR nextans := ans;
+           INT trsize = int(size OF tr);
+           INT r_so := 0, r_si := 0;
+           BOOL index_rso = is_same_sort(elem OF tr, issource),
+                index_rsi = is_same_sort(elem OF tr, NOT issource);
+
+           TO trsize
+           DO REF FORMULAS
+                  row_so = add_ind(r_so, so_inds, index_rso),
+                  row_si = add_ind(r_si, si_inds, index_rsi);
+              UNIT elem = type_unit(elem OF tr, issource, row_so, row_si);
+              REF REF USTR (nextans) := HEAP USTR := (elem, nilustr);
+              nextans := rest OF nextans
+           OD;
+           IF trsize = 1
+           THEN HEAP UROW := (size OF tr, elem OF ans)
+           ELSE ans
+           FI
+         ),
+      (REF TSTR ts)
+         ( REF TSTR tst := ts;
+           REF USTR ust := nilustr;   REF REF USTR nextitem := ust;
+           INT t_so := 0, t_si := 0;
+           WHILE tst ISNT niltstr
+           DO  REF FORMULAS
+                 tst_so = add_ind(t_so, so_inds,
+                                  is_same_sort(elem OF tst, issource) ANDTH
+                                  (t_so > 0 OREL
+                                   is_same_sort(rest OF tst, issource)) ),
+                 tst_si = add_ind(t_si, si_inds,
+                                  is_same_sort(elem OF tst, NOT issource) ANDTH
+                                  (t_si > 0 OREL
+                                   is_same_sort(rest OF tst, NOT issource)) );
+
+               UNIT elem =
+                  type_unit(elem OF tst, issource, tst_so, tst_si);
+               REF REF USTR (nextitem):= HEAP USTR := (elem, nilustr);
+               nextitem := rest OF nextitem;
+               tst := rest OF tst
+           OD;
+           ust
+         ),
+      (REF TBRACKET tb)  type_unit(type OF tb,issource, so_inds, si_inds),
+      (REF TNULL tn)     unull
+      OUT { TVOID, TSTRING }
+          make_uindex(issource, (issource|so_inds|si_inds))
+      ESAC
+   END;
+
+   type_unit(ty, TRUE, nilformulas, nilformulas)
+END;
+
+
+{{ ******************** Handling UFN ********************************** }}
+INT sort := 0;
+
+TRANSFORMPROCS coerce_ufn_procs = make_newtprocs(defaulttprocs,
+   ( (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+        CASE unit IN
+        (REF UNAME un)
+           IF (sort = usource OREL sort = uiosource)
+           THEN (un, FALSE)
+           ELSE (unull, TRUE)
+           FI,
+        (REF UFN uf)
+           IF   sort = usource   THEN  (source OF uf, TRUE)
+           ELIF sort = usink     THEN  (sink OF uf, TRUE)
+           ELIF sort = uiosink
+             THEN  (HEAP UFN := (source OF uf, sink OF uf), TRUE)
+             ELSE  (unit, FALSE)
+           FI
+        OUT (unit OF nulltprocs)(unit, tprocs)
+        ESAC
+   ));
+
+PROC coerce_ufn = (UNIT u, INT seed_sort) UNITC:
+BEGIN
+   sort := seed_sort;
+   (unit OF coerce_ufn_procs)(u, coerce_ufn_procs)
+END;
+
+PROC unitlink_source = (UNIT u) UNIT: u OF coerce_ufn(u, usource);
+
+PROC unitlink_sink = (UNIT u) UNIT: u OF coerce_ufn(u, usink);
+
+
+
+{ ****************** Start of FNDEC transformation ************************ }
+
+PROC fndec_fntype = (REF FNDEC fdec, TRANSFORMPROCS tprocs,
+                     INT fnno, REF ENVIRON newenv) FNDECC:
+BEGIN
+   INT upb = UPB nametypes OF fdec;
+   VECTOR [upb] UNIT unitlink;
+
+   BOOL nametypechange := FALSE;
+   INT nametypeno := 0;
+
+   HEAP FNDEC newfdec := fdec;
+
+   BOOL sequencechanged := FALSE;
+   REF SEQUENCE newsequence := nilsequence;
+   REF REF SEQUENCE sequenceptr;
+
+   PROC start_sequence = VOID:
+   (  sequencechanged := FALSE;
+      newsequence := nilsequence;
+      sequenceptr := newsequence
+   );
+
+   PROC finish_sequence = SEQUENCEC: (newsequence, sequencechanged);
+
+   PROC add_seqstep = (SEQSTEPC sc) VOID:
+   (  IF c OF sc THEN sequencechanged := TRUE FI;
+      REF REF SEQUENCE(sequenceptr):=
+           HEAP SEQUENCE := (s OF sc, nilsequence);
+      sequenceptr := rest OF sequenceptr
+   );
+
+   PROC add_sequence = (SEQUENCEC sc) VOID:
+   (  IF c OF sc THEN sequencechanged := TRUE FI;
+      REF REF SEQUENCE (sequenceptr) := s OF sc;
+      WHILE sequenceptr ISNT nilsequence DO sequenceptr:= rest OF sequenceptr OD
+   );
+
+
+   BOOL serieschanged := FALSE;
+   REF SERIES newseries := nilseries;
+   REF REF SERIES seriesptr;
+
+   MODE SERIESLIST = STRUCT (REF SERIES series, REF REF SERIES sptr,
+                             BOOL changed, REF SERIESLIST rest);
+   REF SERIESLIST nilserieslist = NIL;
+   REF SERIESLIST serieslist := nilserieslist;
+
+   PROC start_series = VOID:
+   (  serieslist := HEAP SERIESLIST
+                 := (newseries, seriesptr, serieschanged, serieslist);
+      serieschanged := FALSE;
+      newseries := nilseries;
+      seriesptr := newseries
+   );
+
+   PROC finish_series = SERIESC:
+   (  SERIESC sc = (newseries, serieschanged);
+      newseries := series OF serieslist;
+      seriesptr := sptr OF serieslist;
+      serieschanged := changed OF serieslist;
+      serieslist := rest OF serieslist;
+      sc
+   );
+
+   PROC add_step = (STEPC sc) VOID:
+   (  IF c OF sc THEN serieschanged := TRUE FI;
+      REF REF SERIES(seriesptr):= HEAP SERIES := (s OF sc, nilseries);
+      seriesptr := rest OF seriesptr
+   );
+
+   PROC add_series = (SERIESC sc) VOID:
+   (  IF c OF sc THEN serieschanged := TRUE FI;
+      REF REF SERIES (seriesptr) := s OF sc;
+      WHILE seriesptr ISNT nilseries DO seriesptr := rest OF seriesptr OD
+   );
+
+   PROC add_join = (UNIT lhs, rhs, BOOL changed) VOID:
+   (  STRUCT 2 UNIT lr = remove_null_void(lhs, rhs);
+      IF is_null_void(lr[1]) OREL is_null_void(lr[2])
+      THEN SKIP  { No JOIN }
+      ELSE add_step((HEAP JOIN := (lr[1], lr[2]), changed))
+      FI
+   );
+
+   PROC add_nametype = (INT oldindex, BOOL newname, NAMETYPE oldnt, TYPEC tc)
+                                                                           INT:
+   BEGIN
+      nametypeno PLUSAB 1;
+      REF REF VECTOR [] NAMETYPE nametypes = nametypes OF newfdec;
+      INT max = UPB nametypes;
+      IF NOT nametypechange ANDTH
+            (c OF tc OREL newname OREL (nametypeno /= oldindex))
+      THEN  nametypechange := TRUE;
+            nametypes := HEAP VECTOR [max] NAMETYPE := nametypes
+      FI;
+      IF nametypeno > max
+      THEN  HEAP VECTOR [max + 10] NAMETYPE newtypes;
+            newtypes[:max] := nametypes;
+            nametypes := newtypes
+      FI;
+      ID name = IF newname
+                THEN make_name(nullid, nametypeno)
+                ELSE name OF oldnt
+                FI;
+      IF nametypechange
+      THEN nametypes[nametypeno] := (name, t OF tc, attr OF oldnt)
+      FI;
+      nametypeno
+   END;
+
+   PROC remove_let_ufn = (REF NAMES ns, UNIT u) UNIT:
+   BEGIN
+      IF NOT (options INCLUDES fntype_keep_ufn)
+      THEN
+        UNITC ufc = remove_ufn(u);
+        IF c OF ufc
+        THEN REF VECTOR [] NAMETYPE nametypes = nametypes OF newfdec;
+             REF NAMES n := ns;
+             WHILE n ISNT nilnames
+             DO INT nameno = nameno OF n;
+                TYPEC tc = remove_tfn(type OF nametypes[nameno]);
+                IF c OF tc THEN type OF nametypes[nameno] := t OF tc FI;
+                n := rest OF n
+             OD
+        FI;
+        u OF ufc
+      ELSE u
+      FI
+   END;
+
+
+   PROC make_let = (NAMETYPE nt, UNIT value, TYPE t) REF LET:
+   BEGIN
+      INT nameno = add_nametype(0, UPB name OF nt = 0, nt, (t, TRUE));
+      REF NAMES names := HEAP NAMES:= (nameno, nilnames);
+      UNIT u = remove_let_ufn(names, value);
+      HEAP LET := (names, u)
+   END;
+
+   PROC names_nameno = (REF NAMES namelist, TRANSFORMPROCS tprocs, BOOL source)
+                                                                      NAMESC:
+   BEGIN
+      IF namelist IS nilnames
+      THEN (nilnames, FALSE)
+      ELSE INT nameno = nameno OF namelist;
+           NAMETYPE nametype = (nametypes OF fdec)[nameno];
+           TYPEC tc = (type OF tprocs)(type OF nametype, tprocs);
+           INT newnameno = add_nametype(nameno, FALSE, nametype, tc);
+           unitlink[nameno] :=
+              IF source
+              THEN HEAP UNAME := (usource, newnameno)
+              ELSE HEAP UFN := (HEAP UNAME := (usink, newnameno), unull)
+              FI;
+           NAMESC rest = names_nameno(rest OF namelist, tprocs, source);
+           IF c OF rest OREL (newnameno /= nameno)
+           THEN (HEAP NAMES := (newnameno, n OF rest), TRUE)
+           ELSE (namelist, FALSE)
+           FI
+      FI
+   END;
+
+   PROC let_unitlink = (REF NAMES names, UNIT u) VOID:
+   BEGIN
+      IF names IS nilnames
+      THEN SKIP
+      ELIF rest OF names IS nilnames
+      THEN IF has_type_fntype(type OF (nametypes OF fdec)[nameno OF names])
+           THEN unitlink[nameno OF names] := u
+           FI
+      ELSE REF USTR rhs :=
+                 CASE u IN (REF USTR us) us OUT nilustr ESAC;
+           REF NAMES ns := names;
+           WHILE ns ISNT nilnames
+           DO  NAMETYPE nametype = (nametypes OF fdec)[nameno OF ns];
+               IF has_type_fntype(type OF nametype)
+               THEN unitlink[nameno OF ns] := elem OF rhs
+               FI;
+               ns := rest OF ns;
+               IF rhs ISNT nilustr THEN rhs := rest OF rhs FI
+{{?? check this for LET (a, b) = non-ustr }}
+           OD
+      FI
+   END;
+
+   PROC let_fntype = (REF LET l, TRANSFORMPROCS tprocs) VOID:
+   BEGIN
+      NAMESC nc = names_nameno(letnames OF l, tprocs, TRUE);
+      UNITC uc := (unit OF tprocs)(unit OF l, tprocs);
+      let_unitlink(letnames OF l, u OF uc);
+      u OF uc := remove_let_ufn(n OF nc, u OF uc);
+      IF c OF nc OREL c OF uc
+      THEN  add_step((HEAP LET := (n OF nc, u OF uc), TRUE))
+      ELSE  add_step((l, FALSE))
+      FI
+   END;
+
+   PROC join_fntype = (REF JOIN jn, TRANSFORMPROCS tprocs) VOID:
+   BEGIN
+      UNITC fromc = (unit OF tprocs)(from OF jn, tprocs),
+              toc = (unit OF tprocs)(to OF jn, tprocs);
+
+      REF UFN from = transform_unit(u OF fromc),
+              to = transform_unit(u OF toc);
+
+      { original JOIN }
+      add_join(source OF from, source OF to, FALSE);
+      { Generated Joins }
+      add_join(sink OF to, sink OF from, TRUE)
+   END;
+
+   PROC repljoin_fntype =(REF REPLJOIN rj, TRANSFORMPROCS  tprocs) VOID:
+   BEGIN
+      start_series;
+      REF JOINS js := joins OF rj;
+      WHILE js ISNT niljoins
+      DO  IF extra_step(from OF join OF js)
+          THEN sys fault("Generated steps not allowed in REPLJOIN")
+          FI;
+          join_fntype(join OF js, tprocs);
+          js := rest OF js
+      OD;
+      SERIESC sc := finish_series;
+      IF c OF sc
+      THEN  REF SERIES ser := s OF sc;
+            js := niljoins;
+            REF REF JOINS jsptr := js;
+            WHILE ser ISNT nilseries
+            DO CASE step OF ser IN
+               (REF JOIN j)
+                  ( REF REF JOINS (jsptr) := HEAP JOINS := (j, niljoins);
+                    jsptr := rest OF jsptr
+                  )
+               OUT sys fault("Non JOIN in REPLJOIN")
+               ESAC;
+               ser := rest OF ser
+            OD;
+
+            add_step((HEAP REPLJOIN := (repls OF rj, js), TRUE))
+      ELSE  add_step((rj, FALSE))
+      FI
+   END;
+
+   PROC make_fntype = (REF MAKE make, TRANSFORMPROCS tprocs) VOID:
+   BEGIN
+      PROC make_names = (REF NAMES nlist, TYPEC tc) NAMESC:
+      (  IF nlist IS nilnames
+         THEN (nilnames, FALSE)
+         ELSE NAMETYPE nt = (nametypes OF fdec)[nameno OF nlist];
+              INT newnameno = add_nametype(nameno OF nlist, FALSE, nt, tc);
+              NAMESC rest = make_names(rest OF nlist, tc);
+              IF c OF rest OREL (nameno OF nlist /= newnameno)
+              THEN (HEAP NAMES := (newnameno, n OF rest), TRUE)
+              ELSE (nlist, FALSE)
+              FI
+         FI
+      );
+
+      FORMULASC fc = (formulas OF tprocs)(sizes OF make, tprocs);
+      INSTANCEC ic = (instance OF tprocs)(inst OF make, tprocs);
+
+      REF NAMES oldnames := makenames OF make;
+      BOOL specchanged = environ_specs[fnno OF inst OF make];
+
+      IF specchanged
+      THEN  (declaration OF tprocs)(MAKEFNNAME fnno OF i OF ic, tprocs)
+            { updates FNDEC in newenv to have transformed spec }
+      FI;
+
+      TYPE oldtype = type OF (nametypes OF fdec)[nameno OF oldnames],
+           oldmaketype = t OF (type OF tprocs)(oldtype, tprocs);
+      TYPE newmaketype =
+        IF specchanged
+        THEN  transform_type(oldmaketype)
+        ELSE  oldmaketype
+        FI;
+
+      NAMESC nc = make_names(oldnames, (newmaketype, specchanged));
+
+      STEPC mc =
+         IF specchanged OREL c OF nc OREL c OF fc OREL c OF ic
+         THEN (HEAP MAKE := (f OF fc, i OF ic, n OF nc), TRUE)
+         ELSE (make, FALSE)
+         FI;
+      add_step(mc);
+
+      REF NAMES newnames := n OF nc;
+      WHILE newnames ISNT nilnames
+      DO INT oldnameno = nameno OF oldnames;
+         INT newnameno = nameno OF newnames;
+         IF specchanged
+         THEN  UNIT link =
+                 make_unitlink(oldmaketype, HEAP UNAME := (usource, newnameno),
+                                            HEAP UNAME := (usink, newnameno));
+               unitlink[oldnameno] := link;
+               NAMETYPE nametype = (nametypes OF fdec)[oldnameno];
+               ID newname = make_name(name OF nametype, 0);
+               REF LET let= make_let((newname, tnull, attr OF nametype),
+                                     link, oldmaketype);
+               add_step((let, TRUE))
+         ELSE  unitlink[oldnameno] :=
+                    HEAP UFN := (HEAP UNAME := (usink, newnameno),
+                                 HEAP UNAME := (usource, newnameno)
+                                )
+         FI;
+         newnames := rest OF newnames;
+         oldnames := rest OF oldnames
+      OD
+   END;
+
+   PROC series_fntype = (REF SERIES ser, TRANSFORMPROCS tprocs) VOID:
+   BEGIN
+      REF SERIES s := ser;
+      WHILE s ISNT nilseries
+      DO  CASE step OF s IN
+          (REF LET l)       let_fntype(l, tprocs),
+          (REF JOIN jn)     join_fntype(jn, tprocs),
+          (REF REPLJOIN rj) repljoin_fntype(rj, tprocs),
+          (REF MAKE mk)     make_fntype(mk, tprocs),
+          (TNAME tdecl)     ( STEPC tdc = (step OF nulltprocs)(tdecl, tprocs);
+                              IF NOT c OF tdc THEN add_step(tdc) FI
+                            )
+          OUT ( STEPC sc = (step OF nulltprocs)(step OF s, tprocs);
+                add_step(sc)
+              )
+          ESAC;
+          s := rest OF s
+      OD
+   END;
+
+
+   PROC seq_unit = (UNIT u, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      start_series;
+      UNITC uc = (unit OF tprocs)(u, tprocs);
+      SERIESC sc = finish_series;
+      IF c OF sc
+      THEN (HEAP USERIES := (s OF sc, u OF uc), TRUE)
+      ELSE uc
+      FI
+   END;
+
+   PROC seqstep_fntype = (SEQSTEP ss, TRANSFORMPROCS tprocs) SEQSTEPC:
+   BEGIN
+      CASE ss IN
+      (REF SEQLET sl)
+         ( NAMESC nlc = (names OF tprocs)(letnames OF seqlet OF sl, tprocs);
+           UNITC ulc := seq_unit(unit OF seqlet OF sl, tprocs);
+           let_unitlink(letnames OF seqlet OF sl, u OF ulc);
+           u OF ulc := remove_let_ufn(n OF nlc, u OF ulc);
+           IF c OF nlc OREL c OF ulc
+           THEN HEAP SEQLET  s;
+                seqlet OF s:= HEAP LET := (n OF nlc, u OF ulc);
+                (s, TRUE)
+           ELSE (sl, FALSE)
+           FI
+         ) ,
+      (REF SEQVAR sv)
+         ( NAMESC nvc = (names OF tprocs)(letnames OF seqvar OF sv, tprocs);
+           UNITC uvc = seq_unit(unit OF seqvar OF sv, tprocs);
+           let_unitlink(letnames OF seqvar OF sv, u OF uvc);
+           IF c OF nvc OREL c OF uvc
+           THEN HEAP SEQVAR  v;
+                seqvar OF v:= HEAP LET := (n OF nvc, u OF uvc);
+                (v, TRUE)
+           ELSE (sv, FALSE)
+           FI
+         ) ,
+      (REF SEQASSIGN sa)
+         ( UNITC to = (unit OF tprocs)(to OF sa, tprocs),
+                 from = seq_unit(from OF sa, tprocs);
+           IF c OF to  OREL  c OF from
+           THEN  (HEAP SEQASSIGN:= (u OF to, u OF from), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         ) ,
+      (REF SEQCASE sc)
+         ( UNITC  input = seq_unit(input OF sc, tprocs);
+           SEQCHOICESC  choices = (seqchoices OF tprocs)(choices OF sc, tprocs);
+           IF c OF input  OREL  c OF choices
+           THEN  (HEAP SEQCASE:= (u OF input, s OF choices), TRUE)
+           ELSE  (ss, FALSE)
+           FI
+         )
+      OUT  (seqstep OF nulltprocs)(ss, tprocs)
+      ESAC
+   END;
+
+   PROC sequence_fntype = (REF SEQUENCE ss, TRANSFORMPROCS tprocs) SEQUENCEC:
+   BEGIN
+      IF ss IS nilsequence
+      THEN  (ss, FALSE)
+      ELSE  BOOL remove := FALSE;
+            SEQSTEPC sc = (seqstep OF tprocs)(step OF ss, tprocs);
+            CASE s OF sc IN
+            (TNAME tn) remove := c OF sc
+            OUT SKIP
+            ESAC;
+            SEQUENCEC seq = (sequence OF tprocs)(rest OF ss, tprocs);
+            IF remove
+            THEN seq
+            ELIF c OF seq  OREL  c OF sc
+            THEN  (HEAP SEQUENCE:= (s OF sc, s OF seq), TRUE)
+            ELSE  (ss, FALSE)
+            FI
+      FI
+   END;
+
+
+
+{{ **************** changes to UNIT modes ******************************* }}
+
+
+
+   PROC uname_fntype = (REF UNAME un) UNITC:
+   BEGIN
+      UNIT ul = unitlink[nameno OF un];
+      BOOL changed =
+         CASE ul IN
+         (REF UNAME new) nameno OF un /= nameno OF new,
+         (REF UFN uf)
+             CASE source OF uf IN
+             (REF UNULL) CASE sink OF uf IN
+                         (REF UNAME n) nameno OF un /= nameno OF n
+                         OUT TRUE
+                         ESAC
+             OUT TRUE
+             ESAC
+         OUT TRUE
+         ESAC;
+      UNITC uc = coerce_ufn(ul, sort OF un);
+      (u OF uc, changed OREL c OF uc)
+   END;
+
+
+   PROC uinst_fntype = (UNIT uinst, TRANSFORMPROCS tprocs) UNITC:
+   BEGIN
+      INSTANCE inst;  UNIT left, right;
+      CASE uinst IN
+      (REF UMINST um)
+         ( inst := inst OF um;
+           left := unull;  right := right OF um
+         ),
+      (REF UDINST ud)
+         ( inst := inst OF ud;
+           left := left OF ud;  right := right OF ud
+         )
+      OUT sys fault("uinst")
+      ESAC;
+
+      BOOL specchanged = environ_specs[fnno OF inst];
+
+      IF specchanged
+      THEN  { Updates FNDEC in newenv to be translated spec }
+            DECLARATIONC dc =
+               (declaration OF tprocs)(MAKEFNNAME fnno OF inst, tprocs);
+            REF FNDEC olddec = (fns OF environ)[fnno OF inst];
+            REF FNDEC newdec = (fns OF newenv)[fnno OF inst];
+            TYPE oldtype = fndec_tfn(olddec);
+            TYPE newtype = fndec_tfn(newdec);
+
+            UNITC leftc := (unit OF tprocs)(left, tprocs);
+            IF contains_diagnostics(u OF leftc)
+            THEN  TYPE ltype = unit_type(u OF leftc, fdec, environ);
+                  REF LET llet = make_let(nullnametype, u OF leftc, ltype);
+                  add_step((llet, TRUE));
+                  HEAP UNAME luname:= (usource, nameno OF letnames OF llet);
+                  leftc := (luname, TRUE)
+            FI;
+
+            INT nameno = add_nametype(0, TRUE, nullnametype, (newtype, TRUE));
+            HEAP NAMES makename:= (nameno, nilnames);
+            HEAP MAKE make := (nilformulas, inst, makename);
+            add_step((make, TRUE));
+
+            UNITC rightc = (unit OF tprocs)(right, tprocs);
+
+            UNIT joinlhs =
+               CASE u OF leftc IN
+               (REF UNULL)  u OF rightc
+               OUT HEAP USTR:= (u OF leftc, HEAP USTR:= (u OF rightc, nilustr))
+               ESAC;
+
+            UNIT unitrhs =
+                 make_unitlink(oldtype, HEAP UNAME := (usource, nameno),
+                                        HEAP UNAME := (usink, nameno));
+            UNIT rhssource = unitlink_source(unitrhs),
+                   rhssink = unitlink_sink(unitrhs);
+
+
+            REF UFN from = transform_unit(joinlhs),
+                    to = transform_unit(rhssink);
+
+            { JOIN to instance }
+            add_join(source OF from, source OF to, TRUE);
+            { Generated from instance to parameters }
+            add_join(sink OF to, sink OF from, TRUE);
+
+            (rhssource, TRUE)
+
+      ELSE  (unit OF nulltprocs)(uinst, tprocs)
+      FI
+   END;
+
+
+   PROC unit_fntype = (UNIT unit, TRANSFORMPROCS tprocs) UNITC:
+      CASE unit IN
+      (REF UNAME un)     uname_fntype(un),
+      (REF UMINST um)    uinst_fntype(um, tprocs),
+      (REF UDINST ud)    uinst_fntype(ud, tprocs),
+      (REF UINDEX ui)
+         ( UNITC uic = unit_fntype(unit OF ui, tprocs);
+           IF contains_diagnostics(u OF uic)
+           THEN IF c OF uic
+                THEN (HEAP UINDEX := (u OF uic, index OF ui), TRUE)
+                ELSE (ui, FALSE)
+                FI
+           ELSE unit_trim(uic, index OF ui, MAKEFINT(0))
+           FI
+         ),
+      (REF UTRIM ut)
+         ( UNITC utc = unit_fntype(unit OF ut, tprocs);
+           IF contains_diagnostics(u OF utc)
+           THEN IF c OF utc
+                THEN (HEAP UTRIM := (u OF utc, range OF ut), TRUE)
+                ELSE (ut, FALSE)
+                FI
+           ELSE unit_trim(utc, lwb OF range OF ut, upb OF range OF ut)
+           FI
+         ),
+      (REF USERIES us)
+         ( TYPE t = unit_type(output OF us, fdec, environ);
+           BOOL output_tfn = has_type_fntype(t);
+           IF NOT output_tfn THEN start_series FI;
+           series_fntype(body OF us, tprocs);
+           UNITC urc = (unit OF tprocs)(output OF us, tprocs);
+           IF NOT output_tfn
+           THEN UNIT out = source OF transform_unit(u OF urc);
+                SERIESC src = finish_series;
+                ( HEAP USERIES := (s OF src, out), c OF urc OREL c OF src)
+           ELSE (urc)
+           FI
+         )
+      OUT  (unit OF nulltprocs)(unit, tprocs)
+      ESAC;
+
+
+{{ ****************** Transforming the spec ****************************** }}
+
+   PROC terminals_fntype = (REF NAMES terminals, TRANSFORMPROCS tprocs,
+                            BOOL input, TYPEC tc) REF NAMES:
+   BEGIN
+      IF c OF tc
+      THEN  INT newnameno =
+               add_nametype(0, FALSE, nullnametype, (t OF tc, TRUE));
+            HEAP NAMES := (newnameno, nilnames)
+      ELSE  n OF names_nameno(terminals, tprocs, input)
+      FI
+   END;
+
+   PROC output_fntype = (UNIT output, TRANSFORMPROCS tprocs, UNIT outputlink,
+                                                  BOOL specchanged) UNITC:
+   BEGIN
+      UNITC uc = (unit OF tprocs)(output, tprocs);
+      IF specchanged  ANDTH
+         CASE u OF uc IN (REF UNULL) FALSE OUT TRUE ESAC
+      THEN  REF UFN spec = transform_unit(outputlink),
+                     out = transform_unit(u OF uc);
+            add_join(source OF out, sink OF spec, TRUE);
+            add_join(source OF spec, sink OF out, TRUE);
+            (unull, TRUE)
+      ELSE  ( source OF transform_unit(u OF uc), c OF uc)
+      FI
+   END;
+
+   PROC add_terminal_names = (REF NAMES ts, TRANSFORMPROCS tprocs, UNIT link,
+                              BOOL input, seq) VOID:
+   BEGIN
+      REF NAMES terms := ts;
+      REF USTR namelink :=
+        IF rest OF terms IS nilnames
+        THEN  HEAP USTR := (link, nilustr)
+        ELSE  CASE link IN (REF USTR ust) ust OUT nilustr ESAC
+        FI;
+
+      WHILE terms ISNT nilnames
+      DO  INT nameno = nameno OF terms;
+          unitlink[nameno] := elem OF namelink;
+          NAMETYPE nametype = (nametypes OF fdec)[nameno];
+          TYPEC tyc = (type OF tprocs)(type OF nametype, tprocs);
+          TYPE t = IF input
+                   THEN t OF tyc
+                   ELSE t OF (type OF swap_tfn)(t OF tyc, swap_tfn)
+                   FI;
+          REF LET let = make_let(nametype, elem OF namelink, t);
+          IF seq
+          THEN  HEAP SEQLET sl; seqlet OF sl := let;
+                add_seqstep((sl, TRUE))
+          ELSE  add_step((let, TRUE))
+          FI;
+          namelink := rest OF namelink;
+          terms := rest OF terms
+      OD
+   END;
+
+   PROC fnbody_fntype = (FNBODY fnbody, TRANSFORMPROCS tprocs, BOOL specchanged,
+                         UNIT link, REF TFN spectype, REF ENVIRON newenv)
+                                                                      FNBODYC:
+   BEGIN
+      UNIT outputlink = unitlink_source(link);
+      UNIT linkso = unitlink_sink(link),
+           linksi = u OF (unit OF swap_ufn)(outputlink, swap_ufn);
+
+      CASE fnbody IN
+      (REF UNITTAG tag)
+         CASE tag OF tag IN
+         (REF USERIES us)
+            ( start_series;
+              IF specchanged
+              THEN add_terminal_names(inputs OF fdec, tprocs, linkso, TRUE,
+                                      FALSE);
+                   add_terminal_names(outputs OF fdec, tprocs, linksi, FALSE,
+                                      FALSE)
+              FI;
+              series_fntype(body OF us, tprocs);
+              UNITC urc =
+                 output_fntype(output OF us, tprocs, linksi, specchanged);
+              SERIESC src = finish_series;
+              IF c OF src OREL c OF urc
+              THEN  HEAP USERIES ser := (s OF src, u OF urc);
+                    (MAKEUNITTAG(ser), TRUE)
+              ELSE  (tag, FALSE)
+              FI
+            ),
+         (REF USEQUENCE uq)
+            ( start_sequence;
+              IF specchanged
+              THEN add_terminal_names(inputs OF fdec, tprocs, linkso, TRUE,
+                                      TRUE);
+                   add_terminal_names(outputs OF fdec, tprocs, linksi, FALSE,
+                                      TRUE)
+              FI;
+              SEQUENCEC sqc = (sequence OF tprocs)(body OF uq, tprocs);
+              add_sequence(sqc);
+              start_series;
+              UNITC qc =
+                output_fntype(output OF uq, tprocs, linksi, specchanged);
+              SERIESC sqrc = finish_series;
+              IF c OF sqrc
+              THEN  HEAP USERIES outputser := (s OF sqrc, cvoid);
+                    HEAP SEQLET sl;
+                    seqlet OF sl:= make_let(nullnametype, outputser, tvoid);
+                    add_seqstep((sl, TRUE))
+              FI;
+              SEQUENCEC seqc = finish_sequence;
+              IF c OF seqc OREL c OF qc
+              THEN  HEAP USEQUENCE seq := (s OF seqc, u OF qc);
+                    (MAKEUNITTAG(seq), TRUE)
+              ELSE  (tag, FALSE)
+              FI
+            )
+          OUT start_series;
+              IF specchanged
+              THEN add_terminal_names(inputs OF fdec, tprocs, linkso, TRUE,
+                                      FALSE);
+                   add_terminal_names(outputs OF fdec, tprocs, linksi, FALSE,
+                                      FALSE)
+              FI;
+              UNITC uc =
+                output_fntype(tag OF tag, tprocs, linksi, specchanged);
+              UNIT out = source OF transform_unit(u OF uc);
+              SERIESC sc = finish_series;
+              UNIT result =
+                 IF c OF sc
+                 THEN  HEAP USERIES := (s OF sc, out)
+                 ELSE  out
+                 FI;
+              IF c OF uc OREL c OF sc
+              THEN  (MAKEUNITTAG(result), TRUE)
+              ELSE  (tag, FALSE)
+              FI
+          ESAC,
+{{What about FASTER/SLOWER??}}
+      (REF REFORM rf)
+          IF specchanged
+          THEN start_series;
+               IF specchanged
+               THEN add_terminal_names(inputs OF fdec, tprocs, linkso, TRUE,
+                                       FALSE);
+                    add_terminal_names(outputs OF fdec, tprocs, linksi, FALSE,
+                                       FALSE)
+               FI;
+               IF serieschanged
+               THEN INT fnno = add_reform(spectype, newenv); {updates newenv}
+                    add_step((MAKEFNNAME fnno, TRUE));
+                    SERIESC rc = finish_series;
+                    INSTANCE inst = (fnno, nilmacparams, attrnull);
+                    HEAP UMINST rout := (inst, HEAP UNAME:=(usource, 1));
+                    ( MAKEUNITTAG(HEAP USERIES := (s OF rc, rout)), TRUE )
+               ELSE finish_series;  {No extra names}
+                    (fnbody, FALSE)
+               FI
+          ELSE (fnbody, FALSE)
+          FI
+      OUT (fnbody, FALSE)
+      ESAC
+   END;
+
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+    ( seqstep_fntype,
+      sequence_fntype,
+      unit_fntype,
+      (REF NAMES n, TRANSFORMPROCS tp) NAMESC: names_nameno(n, tp, TRUE)
+    ));
+
+
+   REF TFN iotype = fndec_tfn(fdec);
+   BOOL specchanged =
+      has_type_fntype(from OF iotype) OREL has_type_fntype(to OF iotype);
+   environ_specs[fnno] := specchanged;
+
+   UNIT link =
+      IF specchanged
+      THEN make_unitlink(iotype, HEAP UNAME := (usink, 2{output nameno}),
+                                 HEAP UNAME := (usource, 1{input nameno}) )
+      ELSE HEAP UFN := (unull, unull)
+      FI;
+   REF TFN spectype =
+      IF specchanged
+      THEN transform_type(iotype)
+      ELSE HEAP TFN := (tnull, tnull)
+      FI;
+
+   inputs OF newfdec := terminals_fntype(inputs OF fdec, newtprocs, TRUE,
+                                            (from OF spectype, specchanged));
+   outputs OF newfdec := terminals_fntype(outputs OF fdec, newtprocs, FALSE,
+                                            (to OF spectype, specchanged));
+
+   FNBODYC fc = fnbody_fntype(fnbody OF fdec, newtprocs, specchanged,
+                              link, spectype, newenv);
+
+   discard_tprocs(newtprocs);
+
+   IF specchanged OREL c OF fc
+   THEN  IF nametypeno < UPB nametypes OF newfdec
+         THEN nametypes OF newfdec := (nametypes OF newfdec)[:nametypeno]
+         FI;
+         fnbody OF newfdec := f OF fc;
+         (newfdec, TRUE)
+   ELSE  (fdec, FALSE)
+   FI
+END;  {{ of fndec_fntype }}
+
+
+PROC typedec_fntype = (REF TYPEDEC tdec) TYPEDECC:
+BEGIN
+   IF tdec ISNT niltypedec
+   THEN CASE body OF tdec IN
+        (REF TYPETAG tg)  IF has_type_fntype(tag OF tg)
+                          THEN  (niltypedec, TRUE)
+                          ELSE  (tdec, FALSE)
+                          FI
+        OUT (tdec, FALSE)
+        ESAC
+   ELSE (tdec, FALSE)
+   FI
+END;
+
+
+PROC outerfn_fntype = (OUTER ofn, TRANSFORMPROCS tprocs) OUTERC:
+BEGIN
+   HEAP ENVIRON newenv := environ OF ofn;
+   environ_specs := HEAP VECTOR [UPB fns OF newenv] BOOL;
+   VECTOR [UPB fns OF newenv] BOOL updated;
+
+   FORALL specs IN environ_specs, fns IN fns OF newenv, u IN updated
+   DO  u := FALSE;
+       specs := IF sort OF fns = outerdec
+                THEN  closure_specs[closureno OF usage OF fns]
+                ELSE  FALSE
+                FI
+   OD;
+
+   BOOL  tc:= FALSE,  fc:= FALSE;
+   REF REF VECTOR [] REF TYPEDEC types = types OF newenv;
+   REF REF VECTOR [] REF FNDEC fns = fns OF newenv;
+
+   PROC  declaration = (DECLARATION dec, TRANSFORMPROCS tprocs) DECLARATIONC:
+   BEGIN
+      BOOL decchange := FALSE;
+      CASE dec IN
+      (TNAME  tno)
+         ( REF TYPEDEC tdec = types[typeno OF tno];
+           TYPEDECC  tdecc = typedec_fntype(tdec);
+           IF c OF tdecc
+           THEN  decchange := TRUE;
+                 IF tc
+                 THEN  types[typeno OF tno]:= t OF tdecc
+                 ELSE  tc:= TRUE;
+                       types := HEAP VECTOR [UPB types]REF TYPEDEC := types;
+                       types[typeno OF tno]:= t OF tdecc
+                 FI
+           FI
+         ),
+      (FNNAME  fno)
+         ( IF NOT updated[fnno OF fno]
+           THEN REF FNDEC fdec = fns[fnno OF fno];
+                FNDECC fdecc = fndec_fntype(fdec, tprocs, fnno OF fno, newenv);
+                IF c OF fdecc
+                THEN  decchange := TRUE;
+                      IF fc
+                      THEN  fns[fnno OF fno]:= f OF fdecc
+                      ELSE  fc:= TRUE;
+                            fns:= HEAP VECTOR [UPB fns] REF FNDEC := fns;
+                            fns[fnno OF fno]:= f OF fdecc
+                      FI
+                FI;
+                updated[fnno OF fno] := TRUE
+           FI
+         )
+      OUT SKIP
+      ESAC;
+      (dec, decchange)
+   END;
+
+   REF FNDEC fdec = get_outerfn(ofn);
+
+   TRANSFORMPROCS newtprocs = make_newtprocs(tprocs,
+    ( remove_named_fntype,
+      declaration
+    ));
+
+   FNDECC fdecc= fndec_fntype(fdec, newtprocs, 1, newenv);
+   IF c OF fdecc
+   THEN  IF fc
+         THEN  fns[1]:= f OF fdecc
+         ELSE  fc:= TRUE;
+               fns:= HEAP VECTOR [UPB fns] REF FNDEC := fns;
+               fns[1]:= f OF fdecc
+         FI
+   FI;
+
+   FOR tno TO UPB types
+   DO TYPEDECC tdecc = typedec_fntype(types[tno]);
+      IF c OF tdecc
+      THEN IF tc
+           THEN  types[tno] := niltypedec
+           ELSE  tc:= TRUE;
+                 types := HEAP VECTOR [UPB types]REF TYPEDEC := types;
+                 types[tno]:= niltypedec
+           FI
+      FI
+   OD;
+
+   discard_tprocs(newtprocs);
+
+   IF tc  OREL  fc
+   THEN  ((closureno OF ofn, outerfn, newenv), TRUE)
+   ELSE  (ofn, FALSE)
+   FI
+END; { of outerfn_fntype }
+
+
+{  *** body of transform_fntypes *** }
+
+
+
+    BOOL  changed:= FALSE;
+    CLOSURE newclosure := oldclosure;
+    REF REF OUTERS newptr := outers OF newclosure;
+
+    WHILE newptr ISNT nilouters
+    DO  OUTER o = outer OF newptr;
+        environ := environ OF o;
+        OUTERC oc =
+           IF sort OF o = outertype
+           THEN REF TYPEDEC tdec = get_outertype(o);
+                TYPEDECC tdc = typedec_fntype(tdec);
+                (o, c OF tdc)
+           ELIF sort OF o = outerfn
+           THEN IF pre_pass_outerfn(o)
+                THEN outerfn_fntype(o, defaulttprocs)
+                ELSE (o, FALSE)
+                FI
+           ELSE (o, FALSE)
+           FI;
+       IF c OF oc
+       THEN IF NOT changed
+            THEN changed:= TRUE;
+                 newclosure := copy_closure(newclosure, msg);
+                 { Now refind the current place in the outers list }
+                 INT  place = closureno OF outer OF newptr;
+                 newptr:= outers OF newclosure;
+                 WHILE closureno OF outer OF newptr /= place
+                   DO  newptr:= rest OF newptr  OD
+            FI;
+            IF sort OF o OF oc = outertype
+            THEN free_outers(newptr, newclosure, msg)
+                 { dont add to list }
+            ELSE outer OF newptr := o OF oc;
+                 newptr := rest OF newptr
+            FI
+       ELSE newptr := rest OF newptr
+       FI
+   OD;
+   (newclosure, changed)
+END;
+
+
+SKIP
+KEEP   transform_fntypes, fntype_keep_ufn,  fntype_options
+FINISH
